@@ -63,7 +63,7 @@ model:
 train:
   output_dir: /mnt/processed/wolffjoa/hic-multiome/runs/akita_2kb_seq
   cache_dir: cache/akita_full_2kb
-  batch_size: 2
+  batch_size: 4
   lr: 0.0003
   max_steps: 2000000000
   max_minutes: 1440

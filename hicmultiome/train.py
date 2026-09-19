@@ -85,18 +85,22 @@ def _fasta_map(cfg: Config) -> dict:
 def batch_onehot(coords, idx, rmask, W, binsize, fasta_map, device):
     """One-hot DNA (len(idx), 4, W*binsize) for the given rank-local rows.
     `rmask` (bool per row) requests the reverse complement, matching the
-    reverse-strand augmentation applied to the rest of the conditioning."""
+    reverse-strand augmentation applied to the rest of the conditioning.
+
+    The CPU only slices raw base codes (cheap); the small uint8 buffer is sent to
+    the GPU and the one-hot scatter runs there, so the GPU is not stalled waiting
+    on a Python one-hot loop."""
     chroms, starts, samples = coords
     L = W * binsize
-    oh = torch.zeros(len(idx), 4, L, dtype=torch.float32)
-    ar = torch.arange(L)
+    codes = np.empty((len(idx), L), dtype=np.uint8)
     for k, i in enumerate(idx):
-        codes = window_codes(fasta_map[samples[i]], chroms[i], int(starts[i]),
-                             W, binsize, revcomp=bool(rmask[k]))
-        c = torch.from_numpy(codes.astype(np.int64))
-        m = c < 4                                   # N stays all-zero
-        oh[k, c[m], ar[m]] = 1.0
-    return oh.to(device, non_blocking=True)
+        codes[k] = window_codes(fasta_map[samples[i]], chroms[i], int(starts[i]),
+                                W, binsize, revcomp=bool(rmask[k]))
+    c = torch.from_numpy(codes).to(device, non_blocking=True).long()   # (B, L)
+    oh = torch.zeros(len(idx), 4, L, device=device)
+    oh.scatter_(1, c.clamp(max=3).unsqueeze(1), 1.0)   # 1 at [b, base, l]
+    oh.mul_((c < 4).unsqueeze(1).to(oh.dtype))         # N (code 4) -> all zero
+    return oh
 
 
 def masked_pair_loss(pred, tgt, bait):
