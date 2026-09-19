@@ -179,6 +179,8 @@ def _plot_curve(rows, out_png):
 
 
 def train(cfg: Config):
+    if cfg.train.stream:
+        return train_stream(cfg)
     rank, world, local_rank = ddp_env()
     is_ddp = world > 1
     if is_ddp:
@@ -485,6 +487,211 @@ def train(cfg: Config):
                 wtr.writerows(curve)
             _plot_curve(curve, out_dir / "learning_curve.png")
             log.info("wrote %s", out_dir / "learning_curve.png")
+    if is_ddp:
+        dist.destroy_process_group()
+
+
+def train_stream(cfg: Config):
+    """Train from windows streamed off the cooler on the fly (any stride,
+    including the dense high-overlap regime). Reuses the fitted normalisers in
+    cache_dir; supports the Hi-C channel with the sequence encoder and DDP."""
+    from torch.utils.data import DataLoader, Subset
+    from torch.utils.data.distributed import DistributedSampler
+
+    from .stream import StreamWindowDataset, collate
+
+    rank, world, local_rank = ddp_env()
+    is_ddp = world > 1
+    if is_ddp:
+        dist.init_process_group("nccl")
+        torch.cuda.set_device(local_rank)
+    is_main = rank == 0
+    set_seed(cfg.train.seed)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True
+    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    out_dir = Path(cfg.train.output_dir)
+    cache_dir = Path(cfg.train.cache_dir)
+    if is_main:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    ds = StreamWindowDataset(cfg, "train", str(cache_dir), stride=cfg.train.stream_stride)
+    if ds.n_out != 1:
+        raise NotImplementedError(
+            "streaming path handles the Hi-C channel only (no capture) for now")
+    channels = ds.channels
+    n_motifs = len(channels["motif_ids"])
+    offset = len(channels["tracks"]) + len(channels["seq_features"])
+    n_sym = len(channels["sym_rows"])
+
+    rng = np.random.default_rng(cfg.train.seed)
+    mask = rng.random(len(ds)) < cfg.train.val_fraction
+    all_idx = np.arange(len(ds))
+    val_idx = all_idx[mask][:400]              # bounded held-out monitor
+    train_ds = Subset(ds, all_idx[~mask].tolist())
+
+    use_seq = cfg.sequence.uses_encoder
+    binsize = int(cfg.data.resolution)
+    fasta_map = _fasta_map(cfg)
+    W = ds.size
+    emb = cfg.sequence.embed_dim if use_seq else 0
+    in_ch = n_cond_channels(n_sym + emb, n_motifs, 0, cfg.model.cond_mode)
+    backbone = build_backbone(cfg.model.kind, in_ch, out_ch=1,
+                              base=cfg.model.base_channels, depth=cfg.model.depth)
+    encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
+               if use_seq else None)
+    model = HiCModel(backbone, cfg.model.cond_mode, encoder).to(device)
+    if is_ddp:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
+    core = model.module if is_ddp else model
+    if cfg.train.compile:
+        model = torch.compile(model)
+    opt = torch.optim.AdamW(model.parameters(), lr=cfg.train.lr)
+    hic_loss = build_loss(cfg.train.loss, max_dist=cfg.train.loss_max_dist,
+                          stride=cfg.train.loss_stride)
+
+    vdata_d = None
+    val_coords = None
+    if is_main and len(val_idx):
+        vt = torch.stack([ds[i]["target"] for i in val_idx])
+        vc = torch.stack([ds[i]["cond"] for i in val_idx])
+        vdata_d = {"target": vt.to(device), "cond": vc.to(device),
+                   "bait": torch.zeros(len(val_idx), W, device=device)}
+        if use_seq:
+            vi = [ds.index[i] for i in val_idx]
+            val_coords = ([c for _, c, _ in vi],
+                          np.array([s for _, _, s in vi]),
+                          [n for n, _, _ in vi])
+
+    sampler = (DistributedSampler(train_ds, num_replicas=world, rank=rank, shuffle=True)
+               if is_ddp else None)
+    loader = DataLoader(
+        train_ds, batch_size=cfg.train.batch_size, sampler=sampler,
+        shuffle=(sampler is None), num_workers=cfg.train.num_workers,
+        collate_fn=collate, pin_memory=True, drop_last=True,
+        persistent_workers=cfg.train.num_workers > 0,
+        prefetch_factor=4 if cfg.train.num_workers > 0 else None)
+    if is_main:
+        log.info("stream training: %d train, %d val, in_ch %d, %.2fM params, "
+                 "stride %d (%.1f%% overlap), %d workers",
+                 len(train_ds), len(val_idx), in_ch,
+                 sum(p.numel() for p in core.parameters()) / 1e6, ds.stride,
+                 max(0.0, 100 * (1 - ds.stride / W)), cfg.train.num_workers)
+
+    amp_dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(cfg.train.amp)
+    step = epoch = 0
+    best = float("-inf")
+    curve: list[dict] = []
+    t0 = last_log = time.time()
+    last_eval = 0
+    seen = 0
+
+    def save(name, ptr):
+        if not is_main:
+            return
+        ck = out_dir / name
+        ck.mkdir(parents=True, exist_ok=True)
+        torch.save(core.state_dict(), ck / "model.pt")
+        for s in list(cache_dir.glob("norm_*.json")) + [cache_dir / "channels.json"]:
+            if s.exists():
+                (ck / s.name).write_text(s.read_text())
+        cfg.save(ck / "config.yaml")
+        (out_dir / ptr).write_text(name)
+
+    def stop_flag(val: bool) -> bool:
+        if not is_ddp:
+            return val
+        t = torch.tensor([1.0 if val else 0.0], device=device)
+        dist.all_reduce(t, op=dist.ReduceOp.MAX)
+        return bool(t.item() > 0)
+
+    def validate(cur_loss):
+        nonlocal best, last_eval
+        last_eval = step
+        save("checkpoint-latest", "latest")
+        if not is_main:
+            return
+        r = float("nan")
+        if vdata_d is not None:
+            seq_fn = None
+            if use_seq and val_coords is not None:
+                seq_fn = lambda i, n: batch_onehot(
+                    val_coords, list(range(i, i + n)), [False] * n, W, binsize,
+                    fasta_map, device)
+            r = val_distance_pearson(
+                model, vdata_d, device,
+                max(1, min(cfg.train.batch_size, vdata_d["target"].shape[0])),
+                offset, n_motifs, capin=False, cond_mode=cfg.model.cond_mode,
+                seq_fn=seq_fn)
+            if r > best:
+                best = r
+                save("checkpoint-best", "best")
+            log.info("  [val] epoch %d step %d  dist-pearson=%.4f%s",
+                     epoch, step, r, "  <- best" if r >= best else "")
+        curve.append({"step": step, "loss": cur_loss, "val_pearson": r})
+
+    stop = False
+    loss_val = float("nan")
+    while step < cfg.train.max_steps and not stop:
+        if sampler is not None:
+            sampler.set_epoch(epoch)
+        epoch += 1
+        for batch in loader:
+            timed_out = bool(cfg.train.max_minutes
+                             and (time.time() - t0) / 60.0 >= cfg.train.max_minutes)
+            if stop_flag(timed_out):
+                stop = True
+                break
+            cond_b = batch["cond"].to(device, non_blocking=True)
+            tgt = batch["target"].to(device, non_blocking=True)
+            bs = cond_b.shape[0]
+            rev_mask = None
+            if cfg.train.augment_reverse:
+                rev_mask = torch.rand(bs, device=device) < 0.5
+                if rev_mask.any():
+                    cond_r = reverse_cond(cond_b, offset, n_motifs)
+                    m1 = rev_mask[:, None, None]
+                    cond_b = torch.where(m1, cond_r, cond_b)
+                    tgt = torch.where(rev_mask[:, None, None, None],
+                                      torch.flip(tgt, dims=[-1, -2]), tgt)
+            sym, pairs = split_cond(cond_b, offset, n_motifs)
+            seq_oh = None
+            if use_seq:
+                coords = (batch["chrom"], np.asarray(batch["start"]), batch["sample"])
+                rmask_cpu = (rev_mask.detach().cpu().tolist()
+                             if rev_mask is not None else [False] * bs)
+                seq_oh = batch_onehot(coords, list(range(bs)), rmask_cpu, W, binsize,
+                                      fasta_map, device)
+            with torch.autocast("cuda", dtype=amp_dtype, enabled=amp_dtype is not None):
+                pred = model(cond_b, pairs, None, seq_oh)
+            loss = hic_loss(pred[:, 0].float(), tgt[:, 0])
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            opt.step()
+            step += 1
+            seen += bs * world
+            loss_val = loss.item()
+            now = time.time()
+            if is_main and now - last_log >= 15.0:
+                log.info("epoch %d step %d  loss=%.4f  %.0f win/s  %.1fmin",
+                         epoch, step, loss_val, seen / (now - t0), (now - t0) / 60.0)
+                last_log = now
+            if step >= cfg.train.max_steps:
+                stop = True
+                break
+            if step - last_eval >= cfg.train.eval_every:
+                validate(loss_val)
+        if not stop and is_main:
+            log.info("epoch %d done (step %d)", epoch, step)
+    if step != last_eval:
+        validate(loss_val)
+    if is_main and curve:
+        with open(out_dir / "learning_curve.csv", "w", newline="") as f:
+            wtr = csv.DictWriter(f, fieldnames=["step", "loss", "val_pearson"])
+            wtr.writeheader()
+            wtr.writerows(curve)
+        _plot_curve(curve, out_dir / "learning_curve.png")
+        log.info("done. %d steps, best val dist-pearson=%.4f", step, best)
     if is_ddp:
         dist.destroy_process_group()
 

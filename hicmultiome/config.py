@@ -280,6 +280,13 @@ class TrainConfig:
     # keep every k-th training window (effective stride = window.stride * k); a
     # cheap way to sweep training-set size without re-precomputing the cache
     window_subsample: int = 1
+    # stream windows from the cooler on the fly instead of the resident cache,
+    # so any stride works (incl. the dense, high-overlap regime). Reuses the
+    # fitted normalisers in cache_dir. stream_stride overrides window.stride for
+    # the streamed windows; num_workers feeds the DataLoader.
+    stream: bool = False
+    stream_stride: int | None = None
+    num_workers: int = 4
 
 
 @dataclass
