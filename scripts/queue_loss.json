@@ -1,0 +1,42 @@
+{
+  "logdir": "runs/runner_loss",
+  "jobs": [
+    {
+      "name": "loss_scc_25kb",
+      "config": "configs/loss_scc_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/loss_scc_25kb/pred_even.cool",
+      "eval_out": "runs/loss_scc_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "loss_sccpure_25kb",
+      "config": "configs/loss_sccpure_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/loss_sccpure_25kb/pred_even.cool",
+      "eval_out": "runs/loss_sccpure_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "loss_ssim_25kb",
+      "config": "configs/loss_ssim_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/loss_ssim_25kb/pred_even.cool",
+      "eval_out": "runs/loss_ssim_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    }
+  ],
+  "post": []
+}

@@ -1,0 +1,208 @@
+{
+  "logdir": "runs/runner",
+  "jobs": [
+    {
+      "name": "oe_25kb",
+      "config": "configs/oe_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/oe_25kb",
+      "cache_manifest": "cache/oe_25kb/manifest.json",
+      "pred_out": "runs/oe_25kb/pred_even.cool",
+      "eval_out": "runs/oe_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "best_25kb",
+      "config": "configs/best_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/best_25kb",
+      "cache_manifest": "cache/best_25kb/manifest.json",
+      "pred_out": "runs/best_25kb/pred_even.cool",
+      "eval_out": "runs/best_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "meth_25kb",
+      "config": "configs/meth_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/meth_25kb",
+      "cache_manifest": "cache/meth_25kb/manifest.json",
+      "pred_out": "runs/meth_25kb/pred_even.cool",
+      "eval_out": "runs/meth_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "methonly_25kb",
+      "config": "configs/methonly_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/methonly_25kb",
+      "cache_manifest": "cache/methonly_25kb/manifest.json",
+      "pred_out": "runs/methonly_25kb/pred_even.cool",
+      "eval_out": "runs/methonly_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "methseq_25kb",
+      "config": "configs/methseq_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/methseq_25kb",
+      "cache_manifest": "cache/methseq_25kb/manifest.json",
+      "pred_out": "runs/methseq_25kb/pred_even.cool",
+      "eval_out": "runs/methseq_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "dropout_25kb",
+      "config": "configs/dropout_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/dropout_25kb",
+      "cache_manifest": "cache/dropout_25kb/manifest.json",
+      "pred_out": "runs/dropout_25kb/pred_even.cool",
+      "eval_out": "runs/dropout_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "pchic_unet",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/gm12878_25kb.unet.yaml",
+      "cache_dir": "cache/pchic_25kb",
+      "cache_manifest": "cache/pchic_25kb/manifest.json",
+      "pred_out": "runs/pchic_unet/pred_capture_even.cool",
+      "eval_out": "runs/pchic_unet/metrics.json"
+    },
+    {
+      "name": "pchic_dilated",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/gm12878_25kb.dilated.yaml",
+      "cache_dir": "cache/pchic_25kb",
+      "cache_manifest": "cache/pchic_25kb/manifest.json",
+      "pred_out": "runs/pchic_dilated/pred_capture_even.cool",
+      "eval_out": "runs/pchic_dilated/metrics.json"
+    },
+    {
+      "name": "pchic_axial",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/gm12878_25kb.axial.yaml",
+      "cache_dir": "cache/pchic_25kb",
+      "cache_manifest": "cache/pchic_25kb/manifest.json",
+      "pred_out": "runs/pchic_axial/pred_capture_even.cool",
+      "eval_out": "runs/pchic_axial/metrics.json"
+    },
+    {
+      "name": "pchic_pixelmlp",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/gm12878_25kb.pixelmlp.yaml",
+      "cache_dir": "cache/pchic_25kb",
+      "cache_manifest": "cache/pchic_25kb/manifest.json",
+      "pred_out": "runs/pchic_pixelmlp/pred_capture_even.cool",
+      "eval_out": "runs/pchic_pixelmlp/metrics.json"
+    },
+    {
+      "name": "pchic_dropout",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/gm12878_25kb.dropout.yaml",
+      "cache_dir": "cache/pchic_25kb",
+      "cache_manifest": "cache/pchic_25kb/manifest.json",
+      "pred_out": "runs/pchic_dropout/pred_capture_even.cool",
+      "eval_out": "runs/pchic_dropout/metrics.json"
+    }
+  ],
+  "post": [
+    {
+      "name": "minset_hic",
+      "resource": "gpu",
+      "deps": [
+        "dropout_25kb.predict"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "scripts/minimal_set.py",
+        "--config",
+        "configs/dropout_25kb.yaml",
+        "--mode",
+        "hic",
+        "--chrom",
+        "2",
+        "--out",
+        "runs/dropout_25kb/minimal_set_hic.json"
+      ]
+    },
+    {
+      "name": "minset_pchic",
+      "resource": "gpu",
+      "cwd": "../pchic-unet",
+      "deps": [
+        "pchic_dropout.predict"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/scripts/minimal_set.py",
+        "--config",
+        "configs/gm12878_25kb.dropout.yaml",
+        "--mode",
+        "pchic",
+        "--chrom",
+        "2",
+        "--out",
+        "runs/pchic_dropout/minimal_set_pchic.json"
+      ]
+    },
+    {
+      "name": "twostage_predict",
+      "resource": "gpu",
+      "deps": [
+        "pchic_unet.predict"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "hicmultiome.predict",
+        "--config",
+        "configs/capin_25kb.yaml",
+        "--chroms",
+        "test",
+        "--capture-cool",
+        "/home/mh-hannover.local/wolffjoa/src/pchic-unet/runs/pchic_unet/pred_capture_even.cool",
+        "--out",
+        "runs/capin_25kb/pred_even_from_predcap.cool"
+      ]
+    },
+    {
+      "name": "twostage_eval",
+      "resource": "cpu",
+      "deps": [
+        "twostage_predict"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "hicmultiome.evaluate",
+        "--config",
+        "configs/capin_25kb.yaml",
+        "--pred",
+        "runs/capin_25kb/pred_even_from_predcap.cool",
+        "--chroms",
+        "test",
+        "--out",
+        "runs/capin_25kb/scc_from_predcap.json"
+      ]
+    }
+  ]
+}

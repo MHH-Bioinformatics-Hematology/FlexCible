@@ -1,0 +1,36 @@
+{
+  "logdir": "runs/runner_pcres",
+  "jobs": [
+    {
+      "name": "pchic_5kb",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic_5kb.yaml",
+      "cache_dir": "cache/pchic_5kb",
+      "cache_manifest": "cache/pchic_5kb/manifest.json",
+      "pred_out": "runs/pchic_5kb/pred_capture_even.cool",
+      "eval_out": "runs/pchic_5kb/metrics.json"
+    },
+    {
+      "name": "pchic_2kb",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic_2kb.yaml",
+      "cache_dir": "cache/pchic_2kb",
+      "cache_manifest": "cache/pchic_2kb/manifest.json",
+      "pred_out": "runs/pchic_2kb/pred_capture_even.cool",
+      "eval_out": "runs/pchic_2kb/metrics.json"
+    },
+    {
+      "name": "pchic_1kb",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic_1kb.yaml",
+      "cache_dir": "cache/pchic_1kb",
+      "cache_manifest": "cache/pchic_1kb/manifest.json",
+      "pred_out": "runs/pchic_1kb/pred_capture_even.cool",
+      "eval_out": "runs/pchic_1kb/metrics.json"
+    }
+  ],
+  "post": []
+}

@@ -1,0 +1,54 @@
+{
+  "logdir": "runs/runner_gpu1",
+  "jobs": [
+    {
+      "name": "flipseed1_25kb",
+      "config": "configs/flipseed1_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/flipseed1_25kb/pred_even.cool",
+      "eval_out": "runs/flipseed1_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "flipseed2_25kb",
+      "config": "configs/flipseed2_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/flipseed2_25kb/pred_even.cool",
+      "eval_out": "runs/flipseed2_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "multiome_5kb",
+      "config": "configs/multiome_5kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_5kb",
+      "cache_manifest": "cache/multiome_5kb/manifest.json",
+      "pred_out": "runs/multiome_5kb/pred_even.cool",
+      "eval_out": "runs/multiome_5kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "multiome_2kb",
+      "config": "configs/multiome_2kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_2kb",
+      "cache_manifest": "cache/multiome_2kb/manifest.json",
+      "pred_out": "runs/multiome_2kb/pred_even.cool",
+      "eval_out": "runs/multiome_2kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    }
+  ],
+  "post": []
+}

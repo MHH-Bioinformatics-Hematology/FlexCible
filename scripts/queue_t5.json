@@ -1,0 +1,54 @@
+{
+  "logdir": "runs/runner_t5",
+  "jobs": [
+    {
+      "name": "t5_l1mse",
+      "config": "configs/t5_l1mse.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/t5_l1mse/pred_even.cool",
+      "eval_out": "runs/t5_l1mse/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "t5_scc",
+      "config": "configs/t5_scc.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/t5_scc/pred_even.cool",
+      "eval_out": "runs/t5_scc/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "t5_sccpure",
+      "config": "configs/t5_sccpure.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/t5_sccpure/pred_even.cool",
+      "eval_out": "runs/t5_sccpure/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    },
+    {
+      "name": "t5_ssim",
+      "config": "configs/t5_ssim.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/multiome_25kb",
+      "cache_manifest": "cache/multiome_25kb/manifest.json",
+      "pred_out": "runs/t5_ssim/pred_even.cool",
+      "eval_out": "runs/t5_ssim/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    }
+  ],
+  "post": []
+}

@@ -1,0 +1,46 @@
+data:
+  tracks:
+  - name: CTCF
+    type: tf
+    motif: MA0139.2
+  - name: H3K27ac
+    type: histone
+  resolution: 25000
+  train_parity: odd
+  test_parity: even
+  samples:
+  - name: gm12878
+    cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GM12878_25kb_cooler_coarsen.cool
+    bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+window:
+  size: 128
+  stride: 64
+  transform: log1p
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+train:
+  batch_size: 16
+  lr: 0.0003
+  max_steps: 2000000
+  max_minutes: 30
+  eval_every: 150
+  val_fraction: 0.1
+  seed: 0
+  output_dir: runs/abl_ctcf_h3k27ac
+  cache_dir: cache/abl_ctcf_h3k27ac
+capture:
+  format: mifsud
+  min_score: 0.0
+  loss_weight: 0.5
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  score_frac: 0.8
+  enabled: false
+predict:
+  merge: hann

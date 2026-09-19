@@ -1,0 +1,69 @@
+# Ablation baseline: the same 14 protein tracks but NO DNA sequence, NO motif
+# channels, NO capture supervision -- equivalent to the original hic-unet
+# all14 setup, retrained here so the multi-omic gains are measured
+# like-for-like (same code, split, and budget as multiome_25kb).
+data:
+  cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GM12878_25kb_cooler_coarsen.cool
+  bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+  tracks:
+    - {name: CTCF,     type: tf,            motif: MA0139.2}
+    - {name: RAD21,    type: cofactor,      motif: MA0139.2}
+    - {name: SMC3,     type: cofactor,      motif: MA0139.2}
+    - {name: DNase,    type: accessibility}
+    - {name: H3K27ac,  type: histone}
+    - {name: H3K27me3, type: histone}
+    - {name: H3K36me3, type: histone}
+    - {name: H3K4me1,  type: histone}
+    - {name: H3K4me2,  type: histone}
+    - {name: H3K4me3,  type: histone}
+    - {name: H3K79me2, type: histone}
+    - {name: H3K9ac,   type: histone}
+    - {name: H3K9me3,  type: histone}
+    - {name: H4K20me1, type: histone}
+  resolution: 25000
+  chroms: null
+  train_parity: odd
+  test_parity: even
+
+# motifs still declared above (config policy: every DNA-binding protein names
+# its motif) but no fasta -> no sequence/motif channels are built.
+sequence:
+  fasta: null
+  features: []
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+
+capture:
+  interactions: null
+
+window:
+  size: 128
+  stride: 64
+  transform: log1p
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+
+track:
+  transform: log1p
+  norm: zscore
+
+model:
+  base_channels: 48
+  depth: 4
+
+train:
+  output_dir: runs/chip_only_25kb
+  cache_dir: cache/chip_only_25kb
+  batch_size: 16
+  lr: 3.0e-4
+  max_steps: 200000
+  max_minutes: 30
+  eval_every: 150
+  val_fraction: 0.1
+  seed: 0
+
+predict:
+  merge: hann
+  out_cool: runs/chip_only_25kb/pred.cool

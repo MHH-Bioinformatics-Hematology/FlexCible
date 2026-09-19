@@ -1,0 +1,82 @@
+data:
+  cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GM12878_25kb_cooler_coarsen.cool
+  bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+  tracks:
+  - name: CTCF
+    type: tf
+    motif: MA0139.2
+  - name: RAD21
+    type: cofactor
+    motif: MA0139.2
+  - name: SMC3
+    type: cofactor
+    motif: MA0139.2
+  - name: DNase
+    type: accessibility
+  - name: H3K27ac
+    type: histone
+  - name: H3K27me3
+    type: histone
+  - name: H3K36me3
+    type: histone
+  - name: H3K4me1
+    type: histone
+  - name: H3K4me2
+    type: histone
+  - name: H3K4me3
+    type: histone
+  - name: H3K79me2
+    type: histone
+  - name: H3K9ac
+    type: histone
+  - name: H3K9me3
+    type: histone
+  - name: H4K20me1
+    type: histone
+  resolution: 25000
+  chroms: null
+  train_parity: odd
+  test_parity: even
+sequence:
+  fasta: /mnt/processed/wolffjoa/vardictcpp_validation_zenodo/reference/hg19.fa
+  features:
+  - gc
+  - cpg
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  score_frac: 0.8
+  directed_pairs: true
+capture:
+  interactions: /home/mh-hannover.local/wolffjoa/data/hic-multiome/pchic/TS5_GM12878_promoter-other_significant_interactions.txt
+  format: mifsud
+  min_score: 0.0
+  loss_weight: 0.2
+  clip_quantile: 0.999
+  use_as_input: true
+  input_dropout: 0.5
+window:
+  size: 128
+  stride: 64
+  transform: log1p
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+train:
+  output_dir: runs/capin_25kb
+  cache_dir: cache/capin_25kb
+  batch_size: 16
+  lr: 0.0003
+  max_steps: 200000
+  max_minutes: 60
+  eval_every: 150
+  val_fraction: 0.1
+  seed: 0
+predict:
+  merge: hann
+  out_cool: runs/multiome_25kb/pred.cool

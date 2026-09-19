@@ -1,0 +1,18 @@
+{
+  "logdir": "runs/runner_xmotif",
+  "jobs": [
+    {
+      "name": "crossspecies_motif",
+      "config": "configs/crossspecies_motif.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/crossspecies_motif",
+      "cache_manifest": "cache/crossspecies_motif/manifest.json",
+      "pred_out": "runs/crossspecies_motif/pred_even.cool",
+      "eval_out": "runs/crossspecies_motif/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    }
+  ],
+  "post": []
+}

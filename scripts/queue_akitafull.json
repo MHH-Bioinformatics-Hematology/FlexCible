@@ -1,0 +1,15 @@
+{
+  "logdir": "runs/runner_akitafull",
+  "jobs": [
+    {
+      "name": "akita_full_2kb",
+      "config": "configs/akita_full_2kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/akita_full_2kb",
+      "cache_manifest": "cache/akita_full_2kb/manifest.json",
+      "pred_out": "runs/akita_full_2kb/pred_holdout.cool",
+      "eval_out": "runs/akita_full_2kb/scc.json"
+    }
+  ],
+  "post": []
+}

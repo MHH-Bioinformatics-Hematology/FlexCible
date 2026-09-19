@@ -1,0 +1,51 @@
+data:
+  cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GM12878_25kb_cooler_coarsen.cool
+  bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+  tracks:
+  - name: Methylation
+    type: methylation
+  resolution: 25000
+  chroms: null
+  train_parity: odd
+  test_parity: even
+sequence:
+  fasta: null
+  features: []
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  score_frac: 0.8
+  directed_pairs: true
+  enabled: false
+capture:
+  interactions: /home/mh-hannover.local/wolffjoa/data/hic-multiome/pchic/TS5_GM12878_promoter-other_significant_interactions.txt
+  format: mifsud
+  min_score: 0.0
+  loss_weight: 0.5
+  clip_quantile: 0.999
+window:
+  size: 128
+  stride: 64
+  transform: log1p
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+train:
+  output_dir: runs/methonly_25kb
+  cache_dir: cache/methonly_25kb
+  batch_size: 16
+  lr: 0.0003
+  max_steps: 200000
+  max_minutes: 30
+  eval_every: 150
+  val_fraction: 0.1
+  seed: 0
+  augment_reverse: true
+predict:
+  merge: hann
+  out_cool: runs/multiome_25kb/pred.cool

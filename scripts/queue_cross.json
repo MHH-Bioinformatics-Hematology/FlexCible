@@ -1,0 +1,18 @@
+{
+  "logdir": "runs/runner_cross",
+  "jobs": [
+    {
+      "name": "crossspecies_25kb",
+      "config": "configs/crossspecies_25kb.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/crossspecies_25kb",
+      "cache_manifest": "cache/crossspecies_25kb/manifest.json",
+      "pred_out": "runs/crossspecies_25kb/pred_even.cool",
+      "eval_out": "runs/crossspecies_25kb/scc.json",
+      "predict_extra": [
+        "--tta"
+      ]
+    }
+  ],
+  "post": []
+}

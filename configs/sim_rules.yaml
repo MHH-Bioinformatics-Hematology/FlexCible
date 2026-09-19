@@ -1,0 +1,39 @@
+data:
+  tracks:
+  - name: active
+    type: histone
+  - name: repressed
+    type: histone
+  samples:
+  - name: sim
+    cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GM12878_25kb_cooler_coarsen.cool
+    bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+  resolution: 25000
+sequence:
+  fasta: null
+  features:
+  - gc
+  - cpg
+  cache_dir: cache/genome
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  enabled: false
+window:
+  size: 128
+  stride: 64
+model:
+  base_channels: 48
+  depth: 4
+train:
+  output_dir: runs/sim_rules
+  cache_dir: cache/sim_rules
+  batch_size: 16
+  lr: 0.0003
+  max_steps: 2000000
+  max_minutes: 35
+  eval_every: 200
+  val_fraction: 0.1
+  seed: 0
+  augment_reverse: true
+predict:
+  merge: hann

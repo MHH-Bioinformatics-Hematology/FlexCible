@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hi-C prediction explorer</title>
+<style>
+  :root { --bg:#12151c; --panel:#1b1f29; --line:#2c3242; --fg:#e6e9f0;
+          --muted:#98a2b8; --accent:#4c8bc9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,sans-serif; background:var(--bg);
+         color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line);
+           display:flex; gap:18px; align-items:baseline; flex-wrap:wrap; }
+  h1 { font-size:16px; margin:0; font-weight:600; }
+  .muted { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns:320px 1fr; gap:0; height:calc(100vh - 55px); }
+  aside { padding:16px 18px; border-right:1px solid var(--line); overflow:auto;
+          background:var(--panel); }
+  section { padding:16px; overflow:auto; }
+  label { display:block; margin:12px 0 4px; font-size:12px; color:var(--muted); }
+  input, select, button { width:100%; padding:7px 9px; border-radius:6px;
+    border:1px solid var(--line); background:#0e1117; color:var(--fg); font:inherit; }
+  button { background:var(--accent); border-color:var(--accent); color:#fff;
+           cursor:pointer; font-weight:600; margin-top:14px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .chip { padding:4px 8px; border:1px solid var(--line); border-radius:999px;
+          cursor:pointer; font-size:12px; user-select:none; }
+  .chip.on { background:#7a2f3a; border-color:#a8414f; }
+  .edit { border:1px solid var(--line); border-radius:6px; padding:8px;
+          margin-top:8px; font-size:12px; position:relative; }
+  .edit button { position:absolute; right:6px; top:6px; width:auto; padding:2px 7px;
+                 background:transparent; color:var(--muted); border:none; margin:0; }
+  canvas { border:1px solid var(--line); border-radius:6px; image-rendering:pixelated;
+           cursor:crosshair; }
+  .legend { display:flex; gap:20px; margin:10px 0; font-size:12px; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px;
+            margin-right:6px; vertical-align:middle; }
+  #status { margin-top:10px; font-size:12px; color:var(--muted); min-height:18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hi-C prediction explorer</h1>
+  <span class="muted" id="cfgline">loading…</span>
+</header>
+<main>
+<aside>
+  <label>Region</label>
+  <input id="region" value="chr2:20000000-24000000">
+
+  <label>Sample</label>
+  <select id="sample"></select>
+
+  <label>Upper triangle (baseline)</label>
+  <select id="baseline">
+    <option value="measured">measured Hi-C</option>
+    <option value="reference">reference-sequence prediction</option>
+  </select>
+
+  <label>Knock out these assays genome-wide</label>
+  <div class="chips" id="kos"></div>
+
+  <label>Regional knockout (assay absent only in a region)</label>
+  <div class="row">
+    <select id="rktrack"></select>
+    <button id="addrk" style="margin:0">add</button>
+  </div>
+  <div class="muted" style="margin-top:6px">
+    drag on the map to pick the interval, choose the assay, then add
+  </div>
+  <div id="rks"></div>
+
+  <label>Sequence edits</label>
+  <div class="row">
+    <select id="ekind">
+      <option value="del">deletion</option>
+      <option value="dup">duplication</option>
+      <option value="ins">insertion</option>
+      <option value="sub">substitution</option>
+    </select>
+    <button id="addedit" style="margin:0">add</button>
+  </div>
+  <div class="muted" style="margin-top:6px">
+    drag on the diagonal of the map to choose the interval, then press add
+  </div>
+  <div id="edits"></div>
+
+  <button id="run">Predict</button>
+  <div id="status"></div>
+</aside>
+
+<section>
+  <div class="legend">
+    <span><span class="swatch" style="background:#4c8bc9"></span><b id="upperlab">upper: measured</b></span>
+    <span><span class="swatch" style="background:#cf5b56"></span><b id="lowerlab">lower: prediction</b></span>
+    <span class="muted" id="regionlab"></span>
+  </div>
+  <canvas id="map" width="900" height="900"></canvas>
+  <div class="muted" id="hint" style="margin-top:8px">
+    The square is one matrix: above the diagonal the baseline, below it the
+    prediction. Edited intervals are drawn as hatched bands on both axes, so an
+    insertion or deletion stays visible on the unedited side.
+  </div>
+</section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let CFG = null, EDITS = [], SEL = null, LAST = null;
+
+async function boot() {
+  CFG = await (await fetch('/api/config')).json();
+  $('#cfgline').textContent =
+    `${CFG.config} · ${CFG.resolution/1000} kb bins · ${CFG.tracks.length} assays`;
+  $('#sample').innerHTML = CFG.samples.map(s => `<option>${s}</option>`).join('');
+  $('#kos').innerHTML = CFG.knockoutable
+    .map(t => `<span class="chip" data-t="${t}">${t}</span>`).join('');
+  $('#rktrack').innerHTML = CFG.knockoutable
+    .map(t => `<option>${t}</option>`).join('');
+  $('#kos').onclick = (e) => {
+    if (e.target.classList.contains('chip')) e.target.classList.toggle('on');
+  };
+}
+
+let RKOS = [];
+function renderRKs() {
+  $('#rks').innerHTML = RKOS.map((k, i) =>
+    `<div class="edit"><button onclick="dropRK(${i})">✕</button>
+     <b>${k.track}</b> absent in ${k.chrom}:${k.start.toLocaleString()}-${k.end.toLocaleString()}
+     </div>`).join('');
+}
+window.dropRK = (i) => { RKOS.splice(i, 1); renderRKs(); draw(); };
+
+function activeKOs() {
+  return [...document.querySelectorAll('#kos .chip.on')].map(c => c.dataset.t);
+}
+
+function renderEdits() {
+  $('#edits').innerHTML = EDITS.map((e, i) =>
+    `<div class="edit"><button onclick="dropEdit(${i})">✕</button>
+     <b>${e.kind}</b> ${e.chrom}:${e.start.toLocaleString()}-${e.end.toLocaleString()}
+     <span class="muted">(${(e.end - e.start).toLocaleString()} bp)</span></div>`
+  ).join('');
+}
+window.dropEdit = (i) => { EDITS.splice(i, 1); renderEdits(); draw(); };
+
+$('#addedit').onclick = () => {
+  if (!SEL) { $('#status').textContent = 'drag on the map first'; return; }
+  const [chrom] = $('#region').value.split(':');
+  EDITS.push({chrom, start: SEL[0], end: SEL[1], kind: $('#ekind').value,
+              sequence: ''});
+  SEL = null; renderEdits(); draw();
+};
+
+$('#addrk').onclick = () => {
+  if (!SEL) { $('#status').textContent = 'drag on the map first'; return; }
+  const [chrom] = $('#region').value.split(':');
+  RKOS.push({track: $('#rktrack').value, chrom, start: SEL[0], end: SEL[1]});
+  SEL = null; renderRKs(); draw();
+};
+
+$('#run').onclick = async () => {
+  $('#run').disabled = true; $('#status').textContent = 'predicting…';
+  try {
+    const body = {region: $('#region').value, sample: $('#sample').value,
+                  edits: EDITS, knockouts: activeKOs(),
+                  regional_knockouts: RKOS,
+                  baseline: $('#baseline').value};
+    const r = await fetch('/api/predict', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    LAST = await r.json();
+    $('#upperlab').textContent = 'upper: ' + LAST.upper_label;
+    $('#lowerlab').textContent = 'lower: ' + LAST.lower_label;
+    $('#regionlab').textContent =
+      `${LAST.region.chrom}:${LAST.region.start.toLocaleString()}-` +
+      `${LAST.region.end.toLocaleString()} · ${LAST.region.bins} bins`;
+    $('#status').textContent = 'done';
+    draw();
+  } catch (err) {
+    $('#status').textContent = 'error: ' + err.message;
+  } finally { $('#run').disabled = false; }
+};
+
+function draw() {
+  const cv = $('#map'), ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!LAST) return;
+  const m = LAST.matrix, n = m.length, px = cv.width / n, vmax = LAST.vmax || 1;
+  const img = ctx.createImageData(n, n);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const v = Math.max(0, Math.min(1, m[i][j] / vmax));
+    const k = 4 * (i * n + j);
+    // blue above the diagonal (baseline), red below it (prediction)
+    const up = j > i;
+    img.data[k]   = up ? 255 * (1 - v) : 255;
+    img.data[k+1] = 255 * (1 - v);
+    img.data[k+2] = up ? 255 : 255 * (1 - v);
+    img.data[k+3] = 255;
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = n;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, 0, 0, cv.width, cv.height);
+  ctx.strokeStyle = 'rgba(255,255,255,.35)';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(cv.width, cv.height); ctx.stroke();
+  const {start, resolution} = LAST.region;
+  const toPx = (bp) => ((bp - start) / resolution) * px;
+  for (const g of [...EDITS, ...(LAST.edit_gaps || [])]) {
+    const a = toPx(g.start), b = Math.max(toPx(g.end), a + 2);
+    ctx.fillStyle = 'rgba(255,215,0,.22)';
+    ctx.fillRect(a, 0, b - a, cv.height);
+    ctx.fillRect(0, a, cv.width, b - a);
+  }
+  for (const k of [...RKOS, ...(LAST.ko_regions || [])]) {
+    const a = toPx(k.start), b = Math.max(toPx(k.end), a + 2);
+    ctx.fillStyle = 'rgba(200,80,90,.20)';     // regional knockout band
+    ctx.fillRect(a, 0, b - a, cv.height);
+    ctx.fillRect(0, a, cv.width, b - a);
+  }
+  if (SEL) {
+    const a = toPx(SEL[0]), b = Math.max(toPx(SEL[1]), a + 2);
+    ctx.fillStyle = 'rgba(120,220,160,.30)';
+    ctx.fillRect(a, 0, b - a, cv.height);
+    ctx.fillRect(0, a, cv.width, b - a);
+  }
+}
+
+// drag along the diagonal to pick an interval to edit
+let dragFrom = null;
+const cv = $('#map');
+const bpAt = (ev) => {
+  if (!LAST) return null;
+  const r = cv.getBoundingClientRect();
+  const frac = (ev.clientX - r.left) / r.width;
+  const {start, end} = LAST.region;
+  return Math.round(start + frac * (end - start));
+};
+cv.addEventListener('mousedown', (e) => { dragFrom = bpAt(e); });
+cv.addEventListener('mousemove', (e) => {
+  if (dragFrom === null) return;
+  const to = bpAt(e);
+  SEL = [Math.min(dragFrom, to), Math.max(dragFrom, to)];
+  draw();
+});
+window.addEventListener('mouseup', () => { dragFrom = null; });
+
+boot();
+</script>
+</body>
+</html>

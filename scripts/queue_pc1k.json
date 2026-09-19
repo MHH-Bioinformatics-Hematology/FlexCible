@@ -1,0 +1,57 @@
+{
+  "logdir": "runs/runner_pc1k",
+  "jobs": [
+    {
+      "name": "pchic1k_dilated",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic1k_dilated.yaml",
+      "cache_dir": "cache/pchic_1kb",
+      "cache_manifest": "cache/pchic_1kb/manifest.json",
+      "pred_out": "runs/pchic1k_dilated/pred_capture_even.cool",
+      "eval_out": "runs/pchic1k_dilated/metrics.json"
+    },
+    {
+      "name": "pchic1k_pixelmlp",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic1k_pixelmlp.yaml",
+      "cache_dir": "cache/pchic_1kb",
+      "cache_manifest": "cache/pchic_1kb/manifest.json",
+      "pred_out": "runs/pchic1k_pixelmlp/pred_capture_even.cool",
+      "eval_out": "runs/pchic1k_pixelmlp/metrics.json"
+    },
+    {
+      "name": "pchic1k_dropout",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic1k_dropout.yaml",
+      "cache_dir": "cache/pchic_1kb",
+      "cache_manifest": "cache/pchic_1kb/manifest.json",
+      "pred_out": "runs/pchic1k_dropout/pred_capture_even.cool",
+      "eval_out": "runs/pchic1k_dropout/metrics.json"
+    }
+  ],
+  "post": [
+    {
+      "name": "minset_pchic_1kb",
+      "resource": "gpu",
+      "cwd": "../pchic-unet",
+      "deps": [
+        "pchic1k_dropout.predict"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/scripts/minimal_set.py",
+        "--config",
+        "configs/pchic1k_dropout.yaml",
+        "--mode",
+        "pchic",
+        "--chrom",
+        "2",
+        "--out",
+        "runs/pchic1k_dropout/minimal_set_1kb.json"
+      ]
+    }
+  ]
+}

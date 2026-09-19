@@ -1,0 +1,30 @@
+{
+  "logdir": "runs/runner_compile",
+  "jobs": [
+    {
+      "name": "c2k_plain",
+      "config": "configs/c2k_plain.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/akita_full_2kb",
+      "cache_manifest": "cache/akita_full_2kb/manifest.json",
+      "train_only": true
+    },
+    {
+      "name": "c2k_compile",
+      "config": "configs/c2k_compile.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/akita_full_2kb",
+      "cache_manifest": "cache/akita_full_2kb/manifest.json",
+      "train_only": true
+    },
+    {
+      "name": "c2k_dcorr",
+      "config": "configs/c2k_dcorr.yaml",
+      "module": "hicmultiome",
+      "cache_dir": "cache/akita_full_2kb",
+      "cache_manifest": "cache/akita_full_2kb/manifest.json",
+      "train_only": true
+    }
+  ],
+  "post": []
+}

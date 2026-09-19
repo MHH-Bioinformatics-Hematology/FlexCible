@@ -1,0 +1,94 @@
+# 1 kb GM12878 model (hg19). Same inputs as multiome_2kb.yaml, one resolution
+# finer. The Hi-C target is the Rao 2014 GSE63525 GM12878 in-situ combined map
+# at its 1 kb level, read straight from the .mcool (raw counts, log1p) so no
+# multi-GB re-extraction is needed. Everything stays hg19: the bigWigs, the
+# pcHi-C capture file, hg19.fa and the motif set all match this target.
+#
+# Only GM12878 is at 1 kb here: K562's hg19 Rao map stops at 5 kb, and the 4DN
+# 1 kb maps are hg38 (a different build from these inputs). Adding K562 at 1 kb
+# would mean moving the whole pipeline to hg38.
+#
+# Window is 1024 bins so the receptive field stays ~1 Mb (as at 2 kb); at 1 kb
+# that is 4x the pixels of the 2 kb window, so batch_size is dropped to 1.
+data:
+  tracks:
+  - name: CTCF
+    type: tf
+    motif: MA0139.2
+  - name: RAD21
+    type: cofactor
+    motif: MA0139.2
+  - name: SMC3
+    type: cofactor
+    motif: MA0139.2
+  - name: DNase
+    type: accessibility
+  - name: H3K27ac
+    type: histone
+  - name: H3K27me3
+    type: histone
+  - name: H3K36me3
+    type: histone
+  - name: H3K4me1
+    type: histone
+  - name: H3K4me2
+    type: histone
+  - name: H3K4me3
+    type: histone
+  - name: H3K79me2
+    type: histone
+  - name: H3K9ac
+    type: histone
+  - name: H3K9me3
+    type: histone
+  - name: H4K20me1
+    type: histone
+  resolution: 1000
+  train_parity: odd
+  test_parity: even
+  samples:
+  - name: gm12878
+    cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GSE63525_GM12878_insitu_primary+replicate_combined_30.mcool::/resolutions/1000
+    bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+    capture_interactions: /home/mh-hannover.local/wolffjoa/data/hic-multiome/pchic/TS5_GM12878_promoter-other_significant_interactions.txt
+window:
+  size: 1024
+  stride: 512
+  transform: log1p
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+train:
+  batch_size: 1
+  lr: 0.0003
+  max_steps: 2000000
+  max_minutes: 150
+  eval_every: 300
+  val_fraction: 0.1
+  seed: 0
+  # on /mnt/processed (7.5 TB): the 1 kb window cache and checkpoints are large,
+  # and root is nearly full
+  output_dir: /mnt/processed/wolffjoa/hic-multiome/runs/multiome_1kb
+  cache_dir: /mnt/processed/wolffjoa/hic-multiome/cache/multiome_1kb
+  augment_reverse: true
+capture:
+  format: mifsud
+  min_score: 0.0
+  loss_weight: 0.5
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  score_frac: 0.8
+  enabled: true
+predict:
+  merge: hann
+sequence:
+  fasta: /mnt/processed/wolffjoa/vardictcpp_validation_zenodo/reference/hg19.fa
+  features:
+  - gc
+  - cpg
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache

@@ -1,0 +1,391 @@
+{
+  "logdir": "runs/runner_pair2",
+  "jobs": [],
+  "post": [
+    {
+      "name": "pairbuild_1",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "1"
+      ]
+    },
+    {
+      "name": "pairbuild_2",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "2"
+      ]
+    },
+    {
+      "name": "pairbuild_3",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "3"
+      ]
+    },
+    {
+      "name": "pairbuild_4",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "4"
+      ]
+    },
+    {
+      "name": "pairbuild_5",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "5"
+      ]
+    },
+    {
+      "name": "pairbuild_6",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "6"
+      ]
+    },
+    {
+      "name": "pairbuild_7",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "7"
+      ]
+    },
+    {
+      "name": "pairbuild_8",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "8"
+      ]
+    },
+    {
+      "name": "pairbuild_9",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "9"
+      ]
+    },
+    {
+      "name": "pairbuild_10",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "10"
+      ]
+    },
+    {
+      "name": "pairbuild_11",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "11"
+      ]
+    },
+    {
+      "name": "pairbuild_12",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "12"
+      ]
+    },
+    {
+      "name": "pairbuild_13",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "13"
+      ]
+    },
+    {
+      "name": "pairbuild_14",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "14"
+      ]
+    },
+    {
+      "name": "pairbuild_15",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "15"
+      ]
+    },
+    {
+      "name": "pairbuild_16",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "16"
+      ]
+    },
+    {
+      "name": "pairbuild_17",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "17"
+      ]
+    },
+    {
+      "name": "pairbuild_18",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "18"
+      ]
+    },
+    {
+      "name": "pairbuild_19",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "19"
+      ]
+    },
+    {
+      "name": "pairbuild_20",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "20"
+      ]
+    },
+    {
+      "name": "pairbuild_21",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "21"
+      ]
+    },
+    {
+      "name": "pairbuild_22",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml",
+        "--chroms",
+        "22"
+      ]
+    },
+    {
+      "name": "pairwise_train2",
+      "resource": "gpu",
+      "cwd": "../pchic-unet",
+      "deps": [
+        "pairbuild_1",
+        "pairbuild_2",
+        "pairbuild_3",
+        "pairbuild_4",
+        "pairbuild_5",
+        "pairbuild_6",
+        "pairbuild_7",
+        "pairbuild_8",
+        "pairbuild_9",
+        "pairbuild_10",
+        "pairbuild_11",
+        "pairbuild_12",
+        "pairbuild_13",
+        "pairbuild_14",
+        "pairbuild_15",
+        "pairbuild_16",
+        "pairbuild_17",
+        "pairbuild_18",
+        "pairbuild_19",
+        "pairbuild_20",
+        "pairbuild_21",
+        "pairbuild_22"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "train",
+        "--config",
+        "configs/pairwise.yaml"
+      ]
+    },
+    {
+      "name": "pairwise_eval2",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "deps": [
+        "pairwise_train2"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "evaluate",
+        "--config",
+        "configs/pairwise.yaml",
+        "--out",
+        "runs/pairwise/metrics.json"
+      ]
+    }
+  ]
+}

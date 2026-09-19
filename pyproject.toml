@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hic-multiome-unet"
+version = "0.1.0"
+description = "Predict Hi-C contact matrices from protein tracks, DNA sequence, binding motifs, and capture Hi-C supervision with a spatial-conditioning U-Net"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pyyaml",
+    "tqdm",
+    "torch",
+    "cooler",
+    "pyBigWig",
+    "pyfaidx",
+    "scipy",
+    "matplotlib",
+]
+
+[tool.setuptools]
+packages = ["hicmultiome"]

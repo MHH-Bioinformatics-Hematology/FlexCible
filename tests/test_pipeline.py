@@ -1,0 +1,1195 @@
+"""End-to-end test on a tiny synthetic genome (CPU, seconds).
+
+Builds two mini chromosomes with a planted convergent-motif loop structure,
+writes cool/bigwig/fasta/jaspar/capture fixtures, then runs precompute ->
+train (a few steps) -> predict -> evaluate/loops and asserts the plumbing:
+shapes, masks, normaliser round-trips, config validation, and that predicted
+cool files are valid and non-empty.
+
+Run:  python -m pytest tests/ -x -q     (needs torch, cooler, pyBigWig, pyfaidx)
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from hicmultiome.config import Config  # noqa: E402
+
+BINSIZE = 1000
+CHROMS = {"chr1": 96 * BINSIZE, "chr2": 80 * BINSIZE}
+MOTIF = "MA9999.1"
+
+
+# --------------------------------------------------------------------------- #
+# fixtures
+# --------------------------------------------------------------------------- #
+def _write_fasta(path: Path) -> None:
+    rng = np.random.default_rng(0)
+    with open(path, "w") as f:
+        for chrom, ln in CHROMS.items():
+            seq = rng.choice(list("ACGT"), size=ln)
+            # plant forward motif sites early, reverse sites later (convergent)
+            site = "ACGTACGTAC"
+            rc = "GTACGTACGT"
+            for start in (5 * BINSIZE, 20 * BINSIZE, 40 * BINSIZE):
+                seq[start : start + 10] = list(site)
+            for start in (12 * BINSIZE, 30 * BINSIZE, 55 * BINSIZE):
+                seq[start : start + 10] = list(rc)
+            f.write(f">{chrom}\n")
+            s = "".join(seq)
+            for i in range(0, ln, 60):
+                f.write(s[i : i + 60] + "\n")
+
+
+def _write_jaspar(path: Path) -> None:
+    # PFM matching ACGTACGTAC exactly
+    site = "ACGTACGTAC"
+    counts = {b: [(90 if c == b else 3) for c in site] for b in "ACGT"}
+    with open(path, "w") as f:
+        f.write(f">{MOTIF}\tTESTMOTIF\n")
+        for b in "ACGT":
+            f.write(f"{b} [ " + " ".join(str(x) for x in counts[b]) + " ]\n")
+
+
+def _write_bigwig(path: Path, peak_bins: dict[str, list[int]]) -> None:
+    import pyBigWig
+
+    bw = pyBigWig.open(str(path), "w")
+    bw.addHeader([(c, ln) for c, ln in CHROMS.items()])
+    for chrom, ln in CHROMS.items():
+        nb = ln // BINSIZE
+        vals = np.full(nb, 1.0, dtype=np.float64)
+        for b in peak_bins.get(chrom, []):
+            vals[b] = 25.0
+        bw.addEntries([chrom] * nb, [i * BINSIZE for i in range(nb)],
+                      ends=[(i + 1) * BINSIZE for i in range(nb)],
+                      values=[float(v) for v in vals])
+    bw.close()
+
+
+def _write_cool(path: Path) -> None:
+    import cooler
+    import pandas as pd
+
+    bins = []
+    for chrom, ln in CHROMS.items():
+        for s in range(0, ln, BINSIZE):
+            bins.append((chrom, s, min(s + BINSIZE, ln)))
+    bins = pd.DataFrame(bins, columns=["chrom", "start", "end"])
+    rng = np.random.default_rng(1)
+    px = []
+    offset = 0
+    for chrom, ln in CHROMS.items():
+        nb = ln // BINSIZE
+        for i in range(nb):
+            for j in range(i, min(i + 40, nb)):
+                base = 60.0 / (1 + (j - i)) + rng.random()
+                px.append((offset + i, offset + j, base))
+        offset += nb
+    pixels = pd.DataFrame(px, columns=["bin1_id", "bin2_id", "count"])
+    cooler.create_cooler(str(path), bins=bins, pixels=pixels,
+                         dtypes={"count": "float64"}, symmetric_upper=True,
+                         ordered=True)
+
+
+def _write_capture(path: Path) -> None:
+    hdr = ("chr bait\tstart bait\tend bait\tSymbol\tEnsembl Gene ID\t"
+           "expresssion quartile\tchr\tstart\tend\traw count\t"
+           "log(observed/expected)\n")
+    rows = []
+    for chrom in CHROMS:
+        for bait_bin, other_bin, score in ((5, 12, 9.0), (20, 30, 12.0), (40, 55, 7.5)):
+            rows.append(
+                f"{chrom}\t{bait_bin * BINSIZE}\t{bait_bin * BINSIZE + 900}\tGENE\tENSG\t1\t"
+                f"{chrom}\t{other_bin * BINSIZE}\t{other_bin * BINSIZE + 900}\t50\t{score}\n"
+            )
+    # one trans interaction that must be ignored
+    rows.append("chr1\t1000\t1900\tG\tE\t1\tchr2\t1000\t1900\t9\t8.0\n")
+    path.write_text(hdr + "".join(rows))
+
+
+@pytest.fixture(scope="module")
+def workdir(tmp_path_factory):
+    root = tmp_path_factory.mktemp("hicmu")
+    _write_fasta(root / "genome.fa")
+    _write_jaspar(root / f"{MOTIF}.jaspar")
+    _write_cool(root / "target.cool")
+    _write_bigwig(root / "CTCF.bigwig",
+                  {"chr1": [5, 12, 20, 30, 40, 55], "chr2": [5, 12, 20, 30]})
+    _write_bigwig(root / "H3K27ac.bigwig", {"chr1": [10, 11, 12], "chr2": [8, 9]})
+    _write_capture(root / "capture.txt")
+    return root
+
+
+@pytest.fixture(scope="module")
+def cfg(workdir):
+    raw = {
+        "data": {
+            "cool_path": str(workdir / "target.cool"),
+            "bigwig_dir": str(workdir),
+            "tracks": [
+                {"name": "CTCF", "type": "tf", "motif": MOTIF},
+                {"name": "H3K27ac", "type": "histone"},
+            ],
+            "resolution": BINSIZE,
+        },
+        "sequence": {"fasta": str(workdir / "genome.fa"),
+                     "cache_dir": str(workdir / "gcache")},
+        "motifs": {"dir": str(workdir), "score_frac": 0.8},
+        "capture": {"interactions": str(workdir / "capture.txt")},
+        "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99},
+        "model": {"base_channels": 16, "depth": 2},
+        "train": {
+            "output_dir": str(workdir / "run"),
+            "cache_dir": str(workdir / "cache"),
+            "batch_size": 8, "max_steps": 60, "eval_every": 30,
+            "val_fraction": 0.2, "lr": 1e-3,
+        },
+    }
+    return Config.from_dict(raw)
+
+
+# --------------------------------------------------------------------------- #
+# unit-level checks
+# --------------------------------------------------------------------------- #
+def test_motif_required_for_tf():
+    with pytest.raises(ValueError, match="binding\\s+motif"):
+        from hicmultiome.config import TrackSpec
+
+        TrackSpec(name="CTCF", type="tf")
+
+
+def test_motif_rejected_for_histone():
+    from hicmultiome.config import TrackSpec
+
+    with pytest.raises(ValueError, match="does not apply"):
+        TrackSpec(name="H3K27ac", type="histone", motif="MA0139.2")
+
+
+def test_motif_scan_finds_planted_sites(workdir):
+    from hicmultiome.motifs import cached_motif_tracks
+
+    tr = cached_motif_tracks(str(workdir / "genome.fa"), "chr1", MOTIF,
+                             str(workdir), CHROMS["chr1"] // BINSIZE, BINSIZE,
+                             0.8, str(workdir / "gcache"))
+    fwd, rev = tr
+    assert fwd[5] >= 1 and fwd[20] >= 1 and fwd[40] >= 1
+    assert rev[12] >= 1 and rev[30] >= 1 and rev[55] >= 1
+
+
+def test_sequence_features(workdir):
+    from hicmultiome.sequence import cached_sequence_features
+
+    nb = CHROMS["chr1"] // BINSIZE
+    feats = cached_sequence_features(str(workdir / "genome.fa"), "chr1",
+                                     ["gc", "cpg"], nb, BINSIZE,
+                                     str(workdir / "gcache"))
+    assert feats.shape == (2, nb)
+    assert 0.2 < feats[0].mean() < 0.8          # GC of random sequence
+    assert (feats[1] >= 0).all() and feats[1].mean() > 0
+
+
+def test_capture_binning_and_mask(workdir, cfg):
+    from hicmultiome.capture import CaptureData
+
+    cap = CaptureData(cfg.capture.interactions, "mifsud", 0.0)
+    nb = CHROMS["chr1"] // BINSIZE
+    cc = cap.chrom("chr1", nb, BINSIZE)
+    assert cc.scores[5, 12] == pytest.approx(9.0)
+    assert cc.scores[12, 5] == pytest.approx(9.0)     # symmetric
+    assert cc.bait_bins[5] == 1 and cc.bait_bins[20] == 1
+    assert cc.scores[1, 1] == 0.0                      # trans line ignored
+
+
+def test_directed_cond_channels():
+    import torch
+
+    from hicmultiome.model import build_spatial_cond, n_cond_channels
+
+    sym = torch.randn(2, 5, 16)
+    pairs = torch.randn(2, 1, 2, 16)
+    img = build_spatial_cond(sym, pairs)
+    assert img.shape == (2, n_cond_channels(5, 1), 16, 16)
+    # the fwd_i*rev_j plane must be the transpose of rev_i*fwd_j
+    conv, divr = img[:, 15], img[:, 16]
+    assert torch.allclose(conv, divr.transpose(-1, -2), atol=1e-5)
+
+
+# --------------------------------------------------------------------------- #
+# pipeline
+# --------------------------------------------------------------------------- #
+def test_precompute_train_predict_evaluate(workdir, cfg):
+    from hicmultiome import loops, precompute, predict, train
+    from hicmultiome.dataset import WindowDataset
+
+    manifest = precompute.build(cfg)
+    assert manifest["motif_ids"] == [MOTIF]
+    assert manifest["has_capture"] is True
+    assert manifest["sym_rows"] == [
+        "CTCF", "H3K27ac", "seq:gc", "seq:cpg",
+        f"motif:{MOTIF}:fwd", f"motif:{MOTIF}:rev",
+    ]
+
+    ds = WindowDataset(cfg.train.cache_dir, "train")
+    assert len(ds) > 0
+    it = ds[0]
+    assert it["target"].shape == (2, 32, 32)
+    assert it["cond"].shape == (6, 32)
+    assert it["bait"].shape == (32,)
+    assert ds.motif_row_offset() == 4
+
+    train.train(cfg)
+    out = Path(cfg.train.output_dir)
+    assert (out / "best").exists() or (out / "latest").exists()
+    assert (out / "learning_curve.png").exists()
+
+    pred_cool = str(Path(cfg.train.output_dir) / "pred.cool")
+    cap_cool = str(Path(cfg.train.output_dir) / "pred_capture.cool")
+    predict.predict(cfg, "all", pred_cool, batch=4, pchic_out=cap_cool)
+
+    import cooler
+
+    clr = cooler.Cooler(pred_cool)
+    m = clr.matrix(balance=False).fetch("chr1")
+    assert np.nansum(m) > 0
+    assert cooler.Cooler(cap_cool).info["nnz"] > 0
+
+    res = loops.evaluate(cfg, pred_cool, cap_cool, "all")
+    assert "chr1" in res["per_chrom"]
+    assert np.isfinite(res["mean_insulation_pearson"])
+    ep = res["per_chrom"]["chr1"].get("loops_capture_channel", {})
+    assert ep.get("n_pairs", 0) > 0
+
+
+def test_chip_only_ablation(workdir):
+    """No fasta -> no seq/motif channels, no capture -> 1 output channel."""
+    from hicmultiome import precompute
+
+    raw = {
+        "data": {
+            "cool_path": str(workdir / "target.cool"),
+            "bigwig_dir": str(workdir),
+            "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                       {"name": "H3K27ac", "type": "histone"}],
+            "resolution": BINSIZE,
+        },
+        "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99},
+        "train": {"cache_dir": str(workdir / "cache_ablation"),
+                  "output_dir": str(workdir / "run_ablation")},
+    }
+    cfg = Config.from_dict(raw)
+    assert cfg.active_motif_ids == []
+    manifest = precompute.build(cfg)
+    assert manifest["sym_rows"] == ["CTCF", "H3K27ac"]
+    assert manifest["has_capture"] is False
+
+
+def test_multisample_degron_and_perturb(workdir, cfg):
+    """Two samples (one degron with zeroed CTCF): raw-zero encoding + perturb CLI."""
+    import numpy as np
+
+    from hicmultiome import perturb, precompute, train
+    from hicmultiome.config import Config
+    from hicmultiome.dataset import WindowDataset
+
+    raw = {
+        "data": {
+            "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                       {"name": "H3K27ac", "type": "histone"}],
+            "resolution": BINSIZE,
+            "samples": [
+                {"name": "wt", "cool_path": str(workdir / "target.cool"),
+                 "bigwig_dir": str(workdir),
+                 "capture_interactions": str(workdir / "capture.txt")},
+                {"name": "degron", "cool_path": str(workdir / "target.cool"),
+                 "bigwig_dir": str(workdir),
+                 "zeroed_tracks": ["CTCF"]},
+            ],
+        },
+        "sequence": {"fasta": str(workdir / "genome.fa"),
+                     "cache_dir": str(workdir / "gcache")},
+        "motifs": {"dir": str(workdir), "score_frac": 0.8},
+        "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99},
+        "model": {"base_channels": 16, "depth": 2},
+        "train": {"output_dir": str(workdir / "run_ms"),
+                  "cache_dir": str(workdir / "cache_ms"),
+                  "batch_size": 8, "max_steps": 40, "eval_every": 20,
+                  "val_fraction": 0.2, "lr": 1e-3},
+    }
+    mcfg = Config.from_dict(raw)
+    manifest = precompute.build(mcfg)
+    assert set(x["sample"] for x in manifest["shards"]) == {"wt", "degron"}
+    assert manifest["has_capture"] is True
+
+    ds = WindowDataset(mcfg.train.cache_dir, "train")
+    ctcf_row = manifest["sym_rows"].index("CTCF")
+    wt_vals, degron_vals = [], []
+    for i in range(len(ds)):
+        it = ds[i]
+        (wt_vals if it["sample"] == "wt" else degron_vals).append(
+            it["cond"][ctcf_row].numpy())
+    # degron CTCF rows must be constant (the normalised raw-zero level)
+    dv = np.concatenate(degron_vals)
+    assert dv.std() < 1e-4
+    assert np.concatenate(wt_vals).std() > 0.1
+    # degron windows carry no capture -> bait all zero
+    for i in range(len(ds)):
+        it = ds[i]
+        if it["sample"] == "degron":
+            assert float(it["bait"].sum()) == 0.0
+
+    train.train(mcfg)
+    out = perturb.perturb(
+        mcfg, f"chr1:{5 * BINSIZE}-{15 * BINSIZE}", ["CTCF"],
+        str(workdir / "perturb.png"), sample_name="wt", zero_motifs=True)
+    assert Path(out).exists()
+
+
+def test_capture_as_optional_input(workdir):
+    """Capture-input mode: trains with modality dropout, predicts in BOTH
+    modes (tracks-only default; --capture-input when data available)."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome import precompute, predict, train
+    from hicmultiome.config import Config
+
+    raw = {
+        "data": {
+            "cool_path": str(workdir / "target.cool"),
+            "bigwig_dir": str(workdir),
+            "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                       {"name": "H3K27ac", "type": "histone"}],
+            "resolution": BINSIZE,
+        },
+        "sequence": {"fasta": str(workdir / "genome.fa"),
+                     "cache_dir": str(workdir / "gcache")},
+        "motifs": {"dir": str(workdir), "score_frac": 0.8},
+        "capture": {"interactions": str(workdir / "capture.txt"),
+                    "use_as_input": True, "input_dropout": 0.5},
+        "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99},
+        "model": {"base_channels": 16, "depth": 2},
+        "train": {"output_dir": str(workdir / "run_capin"),
+                  "cache_dir": str(workdir / "cache_capin"),
+                  "batch_size": 8, "max_steps": 40, "eval_every": 20,
+                  "val_fraction": 0.2, "lr": 1e-3},
+    }
+    cfg = Config.from_dict(raw)
+    manifest = precompute.build(cfg)
+    assert manifest["capture_input"] is True
+
+    train.train(cfg)
+
+    out1 = str(workdir / "pred_capin_absent.cool")
+    predict.predict(cfg, "all", out1, batch=4)                 # tracks-only
+    out2 = str(workdir / "pred_capin_fed.cool")
+    predict.predict(cfg, "all", out2, batch=4, capture_input=True)
+    m1 = cooler.Cooler(out1).matrix(balance=False).fetch("chr1")
+    m2 = cooler.Cooler(out2).matrix(balance=False).fetch("chr1")
+    assert np.nansum(m1) > 0 and np.nansum(m2) > 0
+    # the two modes must actually differ (the input plane is used)
+    assert not np.allclose(np.nan_to_num(m1), np.nan_to_num(m2))
+
+
+def test_obs_exp_roundtrip():
+    """obs_exp encode/decode inverts exactly within the clip range, and
+    decode_oe returns the decay-free ratio."""
+    import numpy as np
+
+    from hicmultiome.matrix import MatrixNormalizer
+
+    rng = np.random.default_rng(0)
+    w = 32
+    d = np.abs(np.subtract.outer(np.arange(w), np.arange(w)))
+    blocks = [(50.0 / (1 + d)) * rng.uniform(0.5, 2.0, size=(w, w))
+              for _ in range(30)]
+    norm = MatrixNormalizer(transform="obs_exp", clip_quantile=0.999)
+    norm.fit_obs_exp(blocks)
+    b = blocks[0]
+    rec = norm.decode(norm.encode(b))
+    oe_true = (1 + b) / (1 + np.asarray(norm.expected)[d])
+    inside = np.abs(np.log(oe_true)) < norm.scale * 0.98
+    assert np.allclose(rec[inside], b[inside], rtol=1e-4, atol=1e-3)
+    ratio = norm.decode_oe(norm.encode(b))
+    assert np.allclose(ratio[inside], oe_true[inside], rtol=1e-4)
+    assert 0.5 < np.median(ratio) < 2.0            # decay removed
+
+
+def test_obs_exp_smooth_reverse_tta(workdir):
+    """obs_exp target + smoothing + reversal augmentation trains; predict
+    works plain, with --tta, and with --obs-exp output."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome import precompute, predict, train
+    from hicmultiome.config import Config
+
+    raw = {
+        "data": {
+            "cool_path": str(workdir / "target.cool"),
+            "bigwig_dir": str(workdir),
+            "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                       {"name": "H3K27ac", "type": "histone"}],
+            "resolution": BINSIZE,
+        },
+        "sequence": {"fasta": str(workdir / "genome.fa"),
+                     "cache_dir": str(workdir / "gcache")},
+        "motifs": {"dir": str(workdir), "score_frac": 0.8},
+        "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99,
+                   "transform": "obs_exp", "smooth_sigma": 0.75},
+        "model": {"base_channels": 16, "depth": 2},
+        "train": {"output_dir": str(workdir / "run_oe"),
+                  "cache_dir": str(workdir / "cache_oe"),
+                  "batch_size": 8, "max_steps": 40, "eval_every": 20,
+                  "val_fraction": 0.2, "lr": 1e-3, "augment_reverse": True},
+    }
+    cfg = Config.from_dict(raw)
+    precompute.build(cfg)
+    train.train(cfg)
+
+    out = str(workdir / "pred_oe.cool")
+    predict.predict(cfg, "all", out, batch=4, tta=True)
+    m = cooler.Cooler(out).matrix(balance=False).fetch("chr1")
+    assert np.nansum(m) > 0
+    # counts mode must show distance decay; obs/exp mode must not
+    out2 = str(workdir / "pred_oe_ratio.cool")
+    predict.predict(cfg, "all", out2, batch=4, obs_exp_out=True)
+    r = np.nan_to_num(cooler.Cooler(out2).matrix(balance=False).fetch("chr1"))
+    near = np.nanmean(np.diagonal(r, 1))
+    far = np.nanmean(np.diagonal(r, 20))
+    assert 0.2 < far / max(near, 1e-9) < 5.0       # ratio is decay-free
+
+
+def test_cond_modes_restrict_information():
+    """The conditioning ablation must actually withhold information:
+    'tile' is constant along j (pixel (i,j) cannot see locus j) and 'pair'
+    keeps both endpoints but drops the product/diff/distance features."""
+    import torch
+
+    from hicmultiome.model import build_spatial_cond, n_cond_channels
+
+    sym = torch.randn(2, 5, 16)
+    pairs = torch.randn(2, 1, 2, 16)
+
+    full = build_spatial_cond(sym, pairs, None, "full")
+    assert full.shape[1] == n_cond_channels(5, 1, 0, "full") == 3 * 5 + 2 + 1
+
+    tile = build_spatial_cond(sym, pairs, None, "tile")
+    assert tile.shape[1] == n_cond_channels(5, 1, 0, "tile") == 5
+    # constant along the j axis => no information about the second locus
+    assert torch.allclose(tile[:, :, :, 0], tile[:, :, :, -1])
+    # and it is exactly t_i broadcast
+    assert torch.allclose(tile[:, :, :, 3], sym)
+
+    tiled = build_spatial_cond(sym, pairs, None, "tile_dist")
+    assert tiled.shape[1] == 6
+    assert not torch.allclose(tiled[:, -1, :, 0], tiled[:, -1, :, -1])   # distance varies
+
+    pair = build_spatial_cond(sym, pairs, None, "pair")
+    assert pair.shape[1] == n_cond_channels(5, 1, 0, "pair") == 10
+    assert torch.allclose(pair[:, :5], tile)                    # t_i half
+    assert torch.allclose(pair[:, 5:], sym[:, :, None, :].expand(2, 5, 16, 16))
+    # pair mode must NOT contain the product feature anywhere
+    prod = (sym[:, :, :, None] * sym[:, :, None, :])
+    assert not any(torch.allclose(pair[:, c], prod[:, 0]) for c in range(10))
+
+    with pytest.raises(ValueError, match="cond mode"):
+        build_spatial_cond(sym, pairs, None, "nonsense")
+
+
+def test_cond_mode_trains_end_to_end(workdir, cfg):
+    """A tile-mode model builds with the right input width and trains."""
+    import dataclasses
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    c2 = dataclasses.replace(
+        cfg,
+        model=dataclasses.replace(cfg.model, cond_mode="tile_dist"),
+        train=dataclasses.replace(cfg.train, max_steps=10, eval_every=5,
+                                  output_dir=str(workdir / "run_tile"),
+                                  cache_dir=str(workdir / "cache_tile")))
+    hprep.build(c2)
+    htrain.train(c2)
+    assert (Path(c2.train.output_dir) / "latest").exists()
+
+
+def test_interaction_strength_metrics(workdir, cfg):
+    """Interaction-level scoring: perfect prediction -> r=1 and full recovery;
+    a prediction that misses interactions -> strength 0 for those."""
+    import numpy as np
+
+    from hicmultiome.capture import CaptureData
+    from hicmultiome.loops import interaction_strength_metrics
+
+    cap = CaptureData(cfg.capture.interactions, "mifsud", 0.0)
+    nb = CHROMS["chr1"] // BINSIZE
+    cc = cap.chrom("chr1", nb, BINSIZE)
+
+    # perfect prediction = the true binned map
+    m = interaction_strength_metrics(cc.scores, cap, "chr1", nb, BINSIZE, 64)
+    assert m["n_interactions"] == 3                     # (5,12) (20,30) (40,55)
+    assert m["recovery_rate"] == 1.0
+    assert m["strength_pearson"] == pytest.approx(1.0, abs=1e-6)
+    assert m["mean_true_strength"] == pytest.approx(m["mean_pred_strength"])
+
+    # a model that predicts nothing: every interaction scores strength 0
+    zero = np.zeros_like(cc.scores)
+    m0 = interaction_strength_metrics(zero, cap, "chr1", nb, BINSIZE, 64)
+    assert m0["n_recovered"] == 0 and m0["recovery_rate"] == 0.0
+    assert m0["mean_pred_strength"] == 0.0
+
+    # a model that predicts one of the three interactions
+    partial = np.zeros_like(cc.scores)
+    partial[20, 30] = partial[30, 20] = 12.0
+    m1 = interaction_strength_metrics(partial, cap, "chr1", nb, BINSIZE, 64)
+    assert m1["n_recovered"] == 1
+    assert m1["recovery_rate"] == pytest.approx(1 / 3)
+
+    # a model that predicts everything high must NOT look good on the control
+    flat = np.full_like(cc.scores, 9.0)
+    mf = interaction_strength_metrics(flat, cap, "chr1", nb, BINSIZE, 64)
+    assert mf["recovery_rate"] == 1.0
+    assert mf["auroc_vs_distance_matched"] == pytest.approx(0.5, abs=0.05)
+
+
+def test_capture_guards_against_dense_blowup(workdir, cfg):
+    """A whole-chromosome capture matrix is refused at fine resolution, and
+    the score sample no longer needs one."""
+    from hicmultiome.capture import CaptureData
+
+    cap = CaptureData(cfg.capture.interactions, "mifsud", 0.0)
+    with pytest.raises(MemoryError, match="GiB"):
+        cap.chrom("chr1", 250000, 1000)          # 1 kb chr1 -> 231 GiB
+    # the normaliser sample comes from the interaction list, no matrix at all
+    v = cap.train_score_sample(["chr1"], lambda c: 250000, 1000)
+    assert v.size > 0 and v.min() > 0
+
+
+def test_interaction_metrics_from_cool_matches_dense(workdir, cfg):
+    """The streaming scorer reproduces the in-memory one on the same data."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome.capture import CaptureData
+    from hicmultiome.loops import (interaction_metrics_from_cool,
+                                   interaction_strength_metrics)
+
+    cap = CaptureData(cfg.capture.interactions, "mifsud", 0.0)
+    nb = CHROMS["chr1"] // BINSIZE
+    cc = cap.chrom("chr1", nb, BINSIZE)
+    # write the true capture map as a cool, then score it both ways
+    import pandas as pd
+
+    bins = pd.DataFrame({"chrom": ["chr1"] * nb,
+                         "start": np.arange(nb) * BINSIZE,
+                         "end": (np.arange(nb) + 1) * BINSIZE})
+    i, j = np.triu_indices(nb)
+    v = cc.scores[i, j]
+    px = pd.DataFrame({"bin1_id": i[v > 0], "bin2_id": j[v > 0],
+                       "count": v[v > 0].astype(np.float64)})
+    out = str(workdir / "cap_truth.cool")
+    cooler.create_cooler(out, bins=bins, pixels=px, dtypes={"count": "float64"},
+                         symmetric_upper=True, ordered=True)
+    a = interaction_strength_metrics(cc.scores, cap, "chr1", nb, BINSIZE, 64)
+    b = interaction_metrics_from_cool(out, cap, "chr1", nb, BINSIZE, 64)
+    assert a["n_interactions"] == b["n_interactions"]
+    assert b["strength_pearson"] == pytest.approx(a["strength_pearson"], abs=1e-6)
+    assert b["mean_pred_strength"] == pytest.approx(a["mean_pred_strength"], rel=1e-6)
+
+
+def test_predictions_are_float_expectations_by_default(workdir, cfg):
+    """The model predicts an expected contact count, which is fractional; an
+    integer count matrix is available but opt-in, and never for obs/exp."""
+    import dataclasses
+
+    import cooler
+    import numpy as np
+
+    from hicmultiome import predict as hpred
+
+    out = str(workdir / "pred_float.cool")
+    hpred.predict(cfg, "all", out, batch=4)
+    v = cooler.Cooler(out).pixels()[:]["count"].values
+    assert np.issubdtype(v.dtype, np.floating)
+    assert not np.allclose(v, np.rint(v))       # genuinely fractional
+
+    c2 = dataclasses.replace(
+        cfg, predict=dataclasses.replace(cfg.predict, integer_counts=True))
+    out2 = str(workdir / "pred_int.cool")
+    hpred.predict(c2, "all", out2, batch=4)
+    v2 = cooler.Cooler(out2).pixels()[:]["count"].values
+    assert np.issubdtype(v2.dtype, np.integer) and (v2 > 0).all()
+
+
+def test_streaming_scc_matches_dense(workdir, cfg):
+    """The slice-streaming SCC reproduces the in-memory one exactly."""
+    import numpy as np
+
+    from hicmultiome import predict as hpred
+    from hicmultiome.evaluate import scc, scc_streaming
+    from hicmultiome.matrix import fetch_chrom_matrix
+
+    out = str(workdir / "pred_scc.cool")
+    hpred.predict(cfg, "all", out, batch=4)
+    truth = cfg.get_sample(None).cool_path
+    a = fetch_chrom_matrix(truth, "chr1")
+    b = fetch_chrom_matrix(out, "chr1")
+    n = min(a.shape[0], b.shape[0])
+    dense = scc(b[:n, :n], a[:n, :n], max_dist_bins=32, h=1)
+    streamed = scc_streaming(truth, out, "chr1", max_dist_bins=32, h=1,
+                             core_bins=20)      # force several slices
+    assert streamed == pytest.approx(dense, abs=0.02)
+
+
+def test_liftover_maps_and_rejects():
+    """Liftover maps coordinates and refuses intervals that do not map
+    cleanly, so a rearranged region is dropped instead of silently distorted."""
+    import gzip
+    import tempfile
+    from pathlib import Path
+
+    from hicmultiome.liftover import LiftOver
+
+    # a chain mapping chr1:1000-2000 (source) onto chr1:5000-6000 (target)
+    chain = ("chain 1000 chr1 100000 + 1000 2000 chr1 100000 + 5000 6000 1\n"
+             "1000\n\n")
+    p = Path(tempfile.mkdtemp()) / "t.chain.gz"
+    with gzip.open(p, "wt") as f:
+        f.write(chain)
+    lo = LiftOver(p)
+    assert lo.convert("chr1", 1000) == ("chr1", 5000)
+    assert lo.convert("chr1", 1500) == ("chr1", 5500)
+    assert lo.convert("chr1", 50) is None            # outside any block
+    assert lo.convert_interval("chr1", 1000, 1500) == ("chr1", 5000, 5500)
+    assert lo.convert_interval("chr1", 900, 1500) is None   # start unmapped
+
+
+def test_bed_holdout_split_and_prescaled(workdir, cfg):
+    """A BED holdout splits by region, not by chromosome: training windows must
+    never touch a held-out region and test windows must lie inside one."""
+    import dataclasses
+    import json
+
+    import numpy as np
+
+    from hicmultiome import precompute as hprep
+
+    bed = workdir / "holdout.bed"
+    # hold out one interval on each chromosome
+    bed.write_text("chr1\t40000\t70000\nchr2\t20000\t50000\n")
+    c = dataclasses.replace(
+        cfg,
+        data=dataclasses.replace(cfg.data, holdout_bed=str(bed)),
+        window=dataclasses.replace(cfg.window, transform="prescaled"),
+        train=dataclasses.replace(cfg.train, cache_dir=str(workdir / "cache_bed")))
+    man = hprep.build(c)
+    assert man["shards"], "no windows cached"
+    regions = {"chr1": (40000, 70000), "chr2": (20000, 50000)}
+    for sh in man["shards"]:
+        z = np.load(sh["path"])
+        lo, hi = regions[sh["chrom"]]
+        for st in z["start"]:
+            s_bp, e_bp = int(st) * BINSIZE, (int(st) + c.window.size) * BINSIZE
+            if sh["split"] == "train":
+                assert e_bp <= lo or s_bp >= hi, "train window touches holdout"
+            else:
+                assert s_bp >= lo and e_bp <= hi, "test window outside holdout"
+    # prescaled keeps negative values intact
+    n = json.loads((Path(c.train.cache_dir) / "norm_matrix_default.json").read_text())
+    assert n["transform"] == "prescaled"
+
+
+def test_edit_coordinate_map_and_kinds():
+    """Insertions, deletions and tandem duplications map coordinates
+    correctly, and novel inserted sequence is marked as unmeasured."""
+    import numpy as np
+
+    from hicmultiome.variants import Edit, apply_edits
+
+    seq = "AAAACCCCGGGGTTTT"          # 16 bp
+    # deletion of CCCC
+    ed, pos, src = apply_edits(seq, [Edit("chr1", 4, 8, "")])
+    assert ed == "AAAAGGGGTTTT"
+    assert (pos[4:8] == -1).all()      # deleted bases have no target
+    assert pos[8] == 4                 # first base after the deletion
+    assert (src >= 0).all()            # every remaining base has a source
+
+    # tandem duplication of CCCC: BOTH copies come from the same source, so
+    # nothing is novel -- each copy inherits the source's chromatin state
+    ed, pos, src = apply_edits(seq, [Edit("chr1", 4, 8, "CCCCCCCC")])
+    assert ed == "AAAACCCCCCCCGGGGTTTT"
+    assert pos[4] == 4 and pos[7] == 7
+    assert (src[4:8] == np.arange(4, 8)).all()
+    assert (src[8:12] == np.arange(4, 8)).all()
+    assert (src >= 0).all()
+
+    # a pure insertion of NEW sequence has no source: it is truly unmeasured
+    ed, pos, src = apply_edits(seq, [Edit("chr1", 8, 8, "TTT")])
+    assert ed == "AAAACCCCTTTGGGGTTTT"
+    assert (src[8:11] == -1).all()
+    assert pos[8] == 11                # bases after the insert shift right
+
+    with pytest.raises(ValueError, match="overlapping"):
+        apply_edits(seq, [Edit("chr1", 0, 6, ""), Edit("chr1", 4, 8, "")])
+
+
+def test_edit_changes_motif_channels(workdir, cfg):
+    """Destroying a planted motif with a small edit must change the motif
+    channel, which is how a sub-bin variant reaches the model at all."""
+    import numpy as np
+
+    from hicmultiome.precompute import assemble_chrom, sample_track_files
+    from hicmultiome.variants import Edit, edited_rows
+
+    s = cfg.get_sample(None)
+    nb = CHROMS["chr1"] // BINSIZE
+    ref = assemble_chrom(cfg, s, sample_track_files(cfg, s), "chr1", nb)
+    rows = [i for i, n in enumerate(
+        ["CTCF", "H3K27ac", "seq:gc", "seq:cpg",
+         f"motif:{MOTIF}:fwd", f"motif:{MOTIF}:rev"]) if n.startswith("motif")]
+    fwd_row = rows[0]
+    # the fixture plants a forward site at 5*BINSIZE; scramble it
+    site = 5 * BINSIZE
+    ed = Edit("chr1", site, site + 10, "AAAAAAAAAA", "kill motif")
+    out, nb_ed, novel = edited_rows(cfg, s, "chr1", [ed], ref, nb)
+    assert nb_ed == nb                             # same length edit
+    assert ref[fwd_row][5] >= 1                    # site present in reference
+    assert out[fwd_row][5] < ref[fwd_row][5]       # and destroyed after the edit
+
+
+def test_large_deletion_shrinks_the_map(workdir, cfg):
+    """A deletion big enough to span bins removes them from the edited map."""
+    from hicmultiome.precompute import assemble_chrom, sample_track_files
+    from hicmultiome.variants import Edit, edited_rows
+
+    s = cfg.get_sample(None)
+    nb = CHROMS["chr1"] // BINSIZE
+    ref = assemble_chrom(cfg, s, sample_track_files(cfg, s), "chr1", nb)
+    ed = Edit("chr1", 20 * BINSIZE, 30 * BINSIZE, "", "10 kb deletion")
+    out, nb_ed, novel = edited_rows(cfg, s, "chr1", [ed], ref, nb)
+    assert nb_ed == nb - 10
+
+
+def test_combined_upper_lower_cool(workdir, cfg):
+    """One cool, measured above the diagonal and predicted below it."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome import predict as hpred
+    from hicmultiome.combine import combine_matrices, write_combined
+    from hicmultiome.matrix import fetch_chrom_matrix
+
+    a = np.array([[0.0, 1, 2], [1, 0, 3], [2, 3, 0]])
+    b = np.array([[0.0, 7, 8], [7, 0, 9], [8, 9, 0]])
+    c = combine_matrices(a, b)
+    assert c[0, 1] == 1 and c[0, 2] == 2      # upper from a
+    assert c[1, 0] == 7 and c[2, 0] == 8      # lower from b
+    assert not np.allclose(c, c.T)            # genuinely non-symmetric
+
+    pred = str(workdir / "pred_comb.cool")
+    hpred.predict(cfg, "chr1", pred, batch=4)
+    out = write_combined(cfg.get_sample(None).cool_path, pred, "chr1",
+                         str(workdir / "combined.cool"))
+    clr = cooler.Cooler(out)
+    m = clr.matrix(balance=False).fetch("chr1")
+    truth = fetch_chrom_matrix(cfg.get_sample(None).cool_path, "chr1")
+    n = min(m.shape[0], truth.shape[0])
+    assert np.allclose(np.nan_to_num(m[:n, :n])[np.triu_indices(n, 1)],
+                       truth[:n, :n][np.triu_indices(n, 1)], rtol=1e-5)
+
+
+def test_prescaled_headroom_keeps_targets_off_the_tanh_asymptote():
+    """With a tanh head, targets must not sit exactly at +/-1."""
+    import numpy as np
+
+    from hicmultiome.matrix import MatrixNormalizer
+
+    # Akita-like data: clipped at -2, mass sitting exactly on the bound
+    v = np.concatenate([np.full(2000, -2.0), np.random.uniform(-2, 1.9, 20000)])
+    n = MatrixNormalizer(transform="prescaled", clip_quantile=0.999,
+                         headroom=0.9).fit(v)
+    enc = n.encode(v.reshape(-1, 1))
+    assert np.abs(enc).max() <= 0.9 + 1e-6, "clip bound reaches the asymptote"
+    assert np.isclose(n.decode(enc).ravel()[0], -2.0, atol=1e-4)   # exact inverse
+
+    # without headroom the bound lands on the asymptote
+    n1 = MatrixNormalizer(transform="prescaled", clip_quantile=0.999,
+                          headroom=1.0).fit(v)
+    assert np.isclose(np.abs(n1.encode(v.reshape(-1, 1))).max(), 1.0, atol=1e-6)
+
+
+def test_row_layout_is_consistent_across_samples(workdir, cfg):
+    """Samples may carry different genomes, but every sample must produce the
+    SAME conditioning rows -- they are stacked into one tensor."""
+    import dataclasses
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        sym_row_names)
+
+    base = cfg.get_sample(None)
+    with_fa = dataclasses.replace(base, name="with_fasta",
+                                  fasta=str(workdir / "genome.fa"))
+    without = dataclasses.replace(base, name="no_fasta", fasta=None)
+    c = dataclasses.replace(
+        cfg,
+        data=dataclasses.replace(cfg.data, samples=[with_fa, without]),
+        sequence=dataclasses.replace(cfg.sequence, fasta=None))
+    assert c.any_fasta                       # one sample has a genome
+    expect = len(sym_row_names(c))
+    nb = CHROMS["chr1"] // BINSIZE
+    for s in (with_fa, without):
+        rows = assemble_chrom(c, s, sample_track_files(c, s), "chr1", nb)
+        assert rows.shape[0] == expect, f"{s.name}: {rows.shape[0]} != {expect}"
+
+
+def test_mixed_track_availability_train_and_predict_subset(workdir, cfg):
+    """Sample A has both assays, sample B only one, and prediction then runs
+    from an even smaller subset. Assays are matched BY NAME, so the same
+    histone always occupies the same conditioning row."""
+    import dataclasses
+
+    import cooler
+    import numpy as np
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome import train as htrain
+    from hicmultiome.tracks import TrackNormalizer
+
+    base = cfg.get_sample(None)
+    rich = dataclasses.replace(base, name="rich")                  # CTCF + H3K27ac
+    poor = dataclasses.replace(base, name="poor",
+                               missing_tracks=["H3K27ac"])         # CTCF only
+    c = dataclasses.replace(
+        cfg,
+        data=dataclasses.replace(cfg.data, samples=[rich, poor]),
+        train=dataclasses.replace(cfg.train,
+                                  cache_dir=str(workdir / "cache_mixed"),
+                                  output_dir=str(workdir / "run_mixed"),
+                                  track_dropout=0.3, max_steps=40, eval_every=20))
+    man = hprep.build(c)
+    # one row layout keyed by name, shared by both samples
+    assert man["tracks"] == ["CTCF", "H3K27ac"]
+    assert {s["sample"] for s in man["shards"]} == {"rich", "poor"}
+
+    # the missing assay must not drag the normaliser of the sample that has it
+    tn = TrackNormalizer.load(Path(c.train.cache_dir) / "norm_tracks.json")
+    solo = dataclasses.replace(c, data=dataclasses.replace(c.data, samples=[rich]),
+                               train=dataclasses.replace(
+                                   c.train, cache_dir=str(workdir / "cache_solo")))
+    hprep.build(solo)
+    tn_solo = TrackNormalizer.load(Path(solo.train.cache_dir) / "norm_tracks.json")
+    i = man["tracks"].index("H3K27ac")
+    assert tn.mean[i] == pytest.approx(tn_solo.mean[i], rel=1e-6)
+
+    htrain.train(c)
+    # predict from a SMALLER subset than either sample was trained with
+    out = str(workdir / "pred_subset.cool")
+    hpred.predict(c, "all", out, batch=4, sample_name="rich",
+                  zero_tracks=["H3K27ac"])
+    m = cooler.Cooler(out).matrix(balance=False).fetch("chr1")
+    assert np.nansum(np.nan_to_num(m)) > 0
+
+
+def test_regional_knockout_only_affects_its_interval(workdir, cfg):
+    """Knocking an assay out on an interval must change the prediction there
+    and leave a distant region untouched."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome import predict as hpred
+
+    full = str(workdir / "pred_rk_none.cool")
+    hpred.predict(cfg, "chr1", full, batch=4)
+    ko = str(workdir / "pred_rk_region.cool")
+    # remove H3K27ac only over bins 8-14 (the fixture's peak sits at bin 10)
+    hpred.predict(cfg, "chr1", ko, batch=4,
+                  zero_regions=[("H3K27ac", "chr1", 8 * BINSIZE, 14 * BINSIZE)])
+    a = np.nan_to_num(cooler.Cooler(full).matrix(balance=False).fetch("chr1"))
+    b = np.nan_to_num(cooler.Cooler(ko).matrix(balance=False).fetch("chr1"))
+    n = min(a.shape[0], b.shape[0])
+    inside = np.abs(a[8:14, 8:14] - b[8:14, 8:14]).sum()
+    far = np.abs(a[60:n, 60:n] - b[60:n, 60:n]).sum()
+    assert inside > 0, "regional knockout changed nothing inside its interval"
+    assert far < inside, "a distant region moved as much as the knocked-out one"
+
+
+def test_regional_knockout_rejects_unknown_track(workdir, cfg):
+    from hicmultiome import predict as hpred
+
+    with pytest.raises(ValueError, match="unknown track"):
+        hpred.predict(cfg, "chr1", str(workdir / "x.cool"), batch=4,
+                      zero_regions=[("NoSuchMark", "chr1", 0, 10000)])
+
+
+def test_knockout_removes_protein_but_keeps_the_binding_site(workdir, cfg):
+    """A knockout mutes the measured protein signal; the DNA is untouched, so
+    the motif channels still report the site. Removing the site itself is a
+    separate, explicit operation."""
+    import numpy as np
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        sym_row_names)
+
+    s = cfg.get_sample(None)
+    import dataclasses
+
+    ko = dataclasses.replace(s, name="ko", zeroed_tracks=["CTCF"])
+    nb = CHROMS["chr1"] // BINSIZE
+    rows = sym_row_names(cfg)
+    ctcf = rows.index("CTCF")
+    fwd = rows.index(f"motif:{MOTIF}:fwd")
+
+    ref = assemble_chrom(cfg, s, sample_track_files(cfg, s), "chr1", nb)
+    out = assemble_chrom(cfg, ko, sample_track_files(cfg, ko), "chr1", nb)
+    assert ref[ctcf].max() > 0 and out[ctcf].max() == 0     # protein gone
+    assert np.array_equal(ref[fwd], out[fwd])               # site still there
+
+
+def test_regional_site_removal_targets_motif_rows(workdir, cfg):
+    """Naming a motif in a regional knockout removes the site instead of the
+    protein, and an unknown name is rejected with both options listed."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome import predict as hpred
+
+    prot = str(workdir / "ko_protein.cool")
+    site = str(workdir / "ko_site.cool")
+    hpred.predict(cfg, "chr1", prot, batch=4,
+                  zero_regions=[("CTCF", "chr1", 4 * BINSIZE, 8 * BINSIZE)])
+    hpred.predict(cfg, "chr1", site, batch=4,
+                  zero_regions=[(f"motif:{MOTIF}", "chr1", 4 * BINSIZE, 8 * BINSIZE)])
+    a = np.nan_to_num(cooler.Cooler(prot).matrix(balance=False).fetch("chr1"))
+    b = np.nan_to_num(cooler.Cooler(site).matrix(balance=False).fetch("chr1"))
+    assert not np.allclose(a, b), "removing the protein and the site did the same"
+
+    with pytest.raises(ValueError, match="motifs:"):
+        hpred.predict(cfg, "chr1", str(workdir / "z.cool"), batch=4,
+                      zero_regions=[("motif:NOPE", "chr1", 0, 10000)])
+
+
+def test_all_three_perturbations_compose(workdir, cfg):
+    """Protein removal, binding-site removal and a real DNA edit each change
+    the prediction, and a deletion changes the edited chromosome's length."""
+    import cooler
+    import numpy as np
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome import train as htrain
+    from hicmultiome.variants import Edit, predict_edited
+
+    if not (Path(cfg.train.output_dir) / "latest").exists():
+        if not (Path(cfg.train.cache_dir) / "manifest.json").exists():
+            hprep.build(cfg)
+        htrain.train(cfg)
+
+    base = str(workdir / "p3_ref.cool")
+    hpred.predict(cfg, "chr1", base, batch=4)
+    n_chr1 = CHROMS["chr1"] // BINSIZE
+
+    # 1) protein gone, site intact
+    prot = str(workdir / "p3_protein.cool")
+    hpred.predict(cfg, "chr1", prot, batch=4,
+                  zero_regions=[("CTCF", "chr1", 4 * BINSIZE, 10 * BINSIZE)])
+    # 2) binding site gone
+    site = str(workdir / "p3_site.cool")
+    hpred.predict(cfg, "chr1", site, batch=4,
+                  zero_regions=[(f"motif:{MOTIF}", "chr1", 4 * BINSIZE, 10 * BINSIZE)])
+    # 3) DNA actually deleted, and combined with a protein knockout
+    ed = str(workdir / "p3_edit.cool")
+    info = predict_edited(cfg, "chr1",
+                          [Edit("chr1", 20 * BINSIZE, 28 * BINSIZE, "", "8 kb del")],
+                          ed, zero_regions=[("CTCF", "chr1", 4 * BINSIZE,
+                                             10 * BINSIZE)])
+    assert info["n_bins"] == info["n_bins_reference"] - 8   # genome got shorter
+    # the edited cool carries ONLY the edited chromosome, with its new length
+    assert cooler.Cooler(ed).bins()[:].shape[0] == n_chr1 - 8
+    assert cooler.Cooler(ed).chromnames == ["chr1"]
+
+    def m(path, n):
+        a = np.nan_to_num(cooler.Cooler(path).matrix(balance=False).fetch("chr1"))
+        return a[:n, :n]
+    n = 20
+    b, p, s = m(base, n), m(prot, n), m(site, n)
+    assert not np.allclose(b, p), "protein knockout changed nothing"
+    assert not np.allclose(b, s), "site removal changed nothing"
+    assert not np.allclose(p, s), "protein and site removal are not distinct"
+
+
+def test_resume_continues_instead_of_restarting(workdir, cfg):
+    """A resumed run picks up the step counter, weights and optimizer state
+    rather than starting from zero."""
+    import dataclasses
+    import json
+
+    import torch
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    c = dataclasses.replace(
+        cfg,
+        train=dataclasses.replace(cfg.train, cache_dir=str(workdir / "cache_res"),
+                                  output_dir=str(workdir / "run_res"),
+                                  max_steps=20, eval_every=10, resume=False))
+    hprep.build(c)
+    htrain.train(c)
+    ck = Path(c.train.output_dir) / (Path(c.train.output_dir) / "latest").read_text().strip()
+    first = json.loads((ck / "progress.json").read_text())
+    assert first["step"] >= 20 and (ck / "optim.pt").exists()
+    w1 = torch.load(ck / "model.pt", map_location="cpu")
+
+    c2 = dataclasses.replace(
+        c, train=dataclasses.replace(c.train, max_steps=40, resume=True))
+    htrain.train(c2)
+    ck2 = Path(c.train.output_dir) / (Path(c.train.output_dir) / "latest").read_text().strip()
+    second = json.loads((ck2 / "progress.json").read_text())
+    assert second["step"] > first["step"], "resume restarted the step counter"
+    w2 = torch.load(ck2 / "model.pt", map_location="cpu")
+    k = next(iter(w1))
+    assert not torch.allclose(w1[k], w2[k]), "weights did not move after resume"
+
+
+def test_fold_edited_duplication_back_to_reference():
+    """Reads from a tandem duplication map onto the source interval, so the
+    folded prediction must place both copies there and conserve total signal."""
+    import numpy as np
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from mundlos_test import fold_edited_to_reference
+
+    res = 10
+    # reference has 6 bins; duplicate bins 2-4 -> edited has 8
+    n_ref, a, b = 6, 2, 4
+    n_ed = n_ref + (b - a)
+    ed = np.zeros((n_ed, n_ed))
+    ed[2, 3] = ed[3, 2] = 1.0          # inside copy 1
+    ed[4, 5] = ed[5, 4] = 2.0          # the same pair inside copy 2
+    out = fold_edited_to_reference(ed, (a * res, b * res), res, 0)
+    assert out.shape == (n_ref, n_ref)
+    # both copies land on the same reference pair and add up
+    assert out[2, 3] == pytest.approx(3.0)
+    assert out.sum() == pytest.approx(ed.sum())    # signal conserved
+
+
+def test_unseen_cell_type_borrows_a_normaliser(workdir, cfg):
+    """Predicting a cell type absent from training must work: the model is
+    cell-type agnostic, so only the tracks change."""
+    import dataclasses
+
+    import cooler
+    import numpy as np
+
+    from hicmultiome import predict as hpred
+
+    base = cfg.get_sample(None)
+    unseen = dataclasses.replace(base, name="never_trained_on_this")
+    c = dataclasses.replace(
+        cfg, data=dataclasses.replace(cfg.data, samples=[base, unseen]))
+    out = str(workdir / "pred_unseen.cool")
+    hpred.predict(c, "chr1", out, batch=4, sample_name="never_trained_on_this")
+    m = np.nan_to_num(cooler.Cooler(out).matrix(balance=False).fetch("chr1"))
+    assert m.sum() > 0
+
+
+def test_motifs_without_any_chip_track(workdir, cfg):
+    """A binding site is a property of the DNA: motif channels must be
+    available even when no ChIP track declares the motif, which is what lets
+    the model see a duplicated boundary ELEMENT."""
+    import dataclasses
+
+    from hicmultiome.precompute import sym_row_names
+
+    histones_only = [t for t in cfg.data.tracks if t.type == "histone"]
+    c = dataclasses.replace(
+        cfg,
+        data=dataclasses.replace(cfg.data, tracks=histones_only),
+        motifs=dataclasses.replace(cfg.motifs, enabled=True, extra=[MOTIF]))
+    assert c.active_motif_ids == [MOTIF]
+    rows = sym_row_names(c)
+    assert f"motif:{MOTIF}:fwd" in rows and f"motif:{MOTIF}:rev" in rows
+
+
+def test_duplicated_copy_inherits_signal_no_false_cliff(workdir, cfg):
+    """A tandem duplication copies the DNA, so both copies must carry the same
+    chromatin signal. Zeroing the second copy would put an artificial cliff at
+    the junction and invite a spurious boundary call."""
+    import numpy as np
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        sym_row_names)
+    from hicmultiome.variants import Edit, apply_edits, edited_rows
+
+    # source map: every copy of a tandem duplication points at the source
+    seq = "AAAACCCCGGGGTTTT"
+    ed, pos, src = apply_edits(seq, [Edit("chr1", 4, 8, "CCCCCCCC")])
+    assert ed == "AAAACCCCCCCCGGGGTTTT"
+    assert (src[4:8] == np.arange(4, 8)).all()      # copy 1 -> source
+    assert (src[8:12] == np.arange(4, 8)).all()     # copy 2 -> the SAME source
+    assert (src >= 0).all()                          # nothing is unmeasured
+
+    s = cfg.get_sample(None)
+    nb = CHROMS["chr1"] // BINSIZE
+    ref = assemble_chrom(cfg, s, sample_track_files(cfg, s), "chr1", nb)
+    rows = sym_row_names(cfg)
+    ctcf = rows.index("CTCF")
+    a, b = 8 * BINSIZE, 16 * BINSIZE                 # duplicate 8 bins
+    out, nb_ed, novel = edited_rows(
+        cfg, s, "chr1", [Edit("chr1", a, b, None or "")], ref, nb) if False else (None,)*3
+    dup = Edit("chr1", a, b, "")                     # placeholder replaced below
+    from hicmultiome.variants import read_chrom_seq
+    src_seq = read_chrom_seq(cfg.sample_fasta(s), "chr1")[a:b]
+    out, nb_ed, novel = edited_rows(
+        cfg, s, "chr1", [Edit("chr1", a, b, src_seq + src_seq)], ref, nb)
+    assert nb_ed == nb + 8
+    assert novel.sum() == 0, "a tandem duplication has no unmeasured sequence"
+    # the two copies carry the same signal
+    copy1 = out[ctcf][8:16]
+    copy2 = out[ctcf][16:24]
+    assert np.allclose(copy1, copy2, atol=1e-5), "copies differ in signal"
+    assert copy2.max() > 0, "the second copy was left empty"
+
+
+def test_hic_backbones_are_selectable(workdir, cfg):
+    """The Hi-C side must not be U-Net-only: every backbone trains and
+    predicts through the same interface."""
+    import dataclasses
+
+    import cooler
+    import numpy as np
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome import train as htrain
+    from hicmultiome.model import BACKBONES, build_backbone, n_cond_channels
+
+    for kind in BACKBONES:
+        m = build_backbone(kind, n_cond_channels(4, 0, 0, "full"), out_ch=2,
+                           base=16, depth=2)
+        import torch
+        y = m(torch.zeros(1, n_cond_channels(4, 0, 0, "full"), 32, 32))
+        assert y.shape == (1, 2, 32, 32), f"{kind} shape {tuple(y.shape)}"
+        assert torch.allclose(y, y.transpose(-1, -2), atol=1e-6), f"{kind} not symmetric"
+
+    c = dataclasses.replace(
+        cfg,
+        model=dataclasses.replace(cfg.model, kind="dilated", base_channels=16),
+        train=dataclasses.replace(cfg.train, cache_dir=str(workdir / "cache_bb"),
+                                  output_dir=str(workdir / "run_bb"),
+                                  max_steps=10, eval_every=5))
+    hprep.build(c)
+    htrain.train(c)
+    out = str(workdir / "pred_bb.cool")
+    hpred.predict(c, "chr1", out, batch=4)
+    assert np.nan_to_num(
+        cooler.Cooler(out).matrix(balance=False).fetch("chr1")).sum() > 0

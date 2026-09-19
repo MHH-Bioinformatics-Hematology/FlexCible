@@ -1,0 +1,91 @@
+{
+  "logdir": "runs/runner_fix",
+  "jobs": [
+    {
+      "name": "pchic_2kb",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic_2kb.yaml",
+      "cache_dir": "cache/pchic_2kb",
+      "cache_manifest": "cache/pchic_2kb/manifest.json",
+      "pred_out": "runs/pchic_2kb/pred_capture_even.cool",
+      "eval_out": "runs/pchic_2kb/metrics.json"
+    },
+    {
+      "name": "pchic_1kb",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pchic_1kb.yaml",
+      "cache_dir": "cache/pchic_1kb",
+      "cache_manifest": "cache/pchic_1kb/manifest.json",
+      "pred_out": "runs/pchic_1kb/pred_capture_even.cool",
+      "eval_out": "runs/pchic_1kb/metrics.json"
+    }
+  ],
+  "post": [
+    {
+      "name": "pairwise_build",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "build",
+        "--config",
+        "configs/pairwise.yaml"
+      ]
+    },
+    {
+      "name": "pairwise_train",
+      "resource": "gpu",
+      "cwd": "../pchic-unet",
+      "deps": [
+        "pairwise_build"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "train",
+        "--config",
+        "configs/pairwise.yaml"
+      ]
+    },
+    {
+      "name": "pairwise_eval",
+      "resource": "cpu",
+      "cwd": "../pchic-unet",
+      "deps": [
+        "pairwise_train"
+      ],
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "-m",
+        "pchicunet.pairwise",
+        "evaluate",
+        "--config",
+        "configs/pairwise.yaml",
+        "--out",
+        "runs/pairwise/metrics.json"
+      ]
+    },
+    {
+      "name": "minset_pchic",
+      "resource": "gpu",
+      "cwd": "../pchic-unet",
+      "cmd": [
+        "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
+        "/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/scripts/minimal_set.py",
+        "--config",
+        "configs/gm12878_25kb.dropout.yaml",
+        "--mode",
+        "pchic",
+        "--chrom",
+        "2",
+        "--out",
+        "runs/pchic_dropout/minimal_set_pchic.json"
+      ]
+    }
+  ]
+}

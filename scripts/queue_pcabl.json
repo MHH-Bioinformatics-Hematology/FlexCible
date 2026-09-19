@@ -1,0 +1,116 @@
+{
+  "logdir": "runs/runner_pcabl",
+  "jobs": [
+    {
+      "name": "pcabl_all14",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_all14.yaml",
+      "cache_dir": "cache/pcabl_all14",
+      "cache_manifest": "cache/pcabl_all14/manifest.json",
+      "pred_out": "runs/pcabl_all14/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_all14/metrics.json"
+    },
+    {
+      "name": "pcabl_ctcf",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_ctcf.yaml",
+      "cache_dir": "cache/pcabl_ctcf",
+      "cache_manifest": "cache/pcabl_ctcf/manifest.json",
+      "pred_out": "runs/pcabl_ctcf/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_ctcf/metrics.json"
+    },
+    {
+      "name": "pcabl_h3k27ac",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_h3k27ac.yaml",
+      "cache_dir": "cache/pcabl_h3k27ac",
+      "cache_manifest": "cache/pcabl_h3k27ac/manifest.json",
+      "pred_out": "runs/pcabl_h3k27ac/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_h3k27ac/metrics.json"
+    },
+    {
+      "name": "pcabl_h3k4me3",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_h3k4me3.yaml",
+      "cache_dir": "cache/pcabl_h3k4me3",
+      "cache_manifest": "cache/pcabl_h3k4me3/manifest.json",
+      "pred_out": "runs/pcabl_h3k4me3/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_h3k4me3/metrics.json"
+    },
+    {
+      "name": "pcabl_h3k4me1",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_h3k4me1.yaml",
+      "cache_dir": "cache/pcabl_h3k4me1",
+      "cache_manifest": "cache/pcabl_h3k4me1/manifest.json",
+      "pred_out": "runs/pcabl_h3k4me1/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_h3k4me1/metrics.json"
+    },
+    {
+      "name": "pcabl_dnase",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_dnase.yaml",
+      "cache_dir": "cache/pcabl_dnase",
+      "cache_manifest": "cache/pcabl_dnase/manifest.json",
+      "pred_out": "runs/pcabl_dnase/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_dnase/metrics.json"
+    },
+    {
+      "name": "pcabl_meth",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_meth.yaml",
+      "cache_dir": "cache/pcabl_meth",
+      "cache_manifest": "cache/pcabl_meth/manifest.json",
+      "pred_out": "runs/pcabl_meth/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_meth/metrics.json"
+    },
+    {
+      "name": "pcabl_ep_pair",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_ep_pair.yaml",
+      "cache_dir": "cache/pcabl_ep_pair",
+      "cache_manifest": "cache/pcabl_ep_pair/manifest.json",
+      "pred_out": "runs/pcabl_ep_pair/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_ep_pair/metrics.json"
+    },
+    {
+      "name": "pcabl_regulatory",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_regulatory.yaml",
+      "cache_dir": "cache/pcabl_regulatory",
+      "cache_manifest": "cache/pcabl_regulatory/manifest.json",
+      "pred_out": "runs/pcabl_regulatory/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_regulatory/metrics.json"
+    },
+    {
+      "name": "pcabl_architectural",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_architectural.yaml",
+      "cache_dir": "cache/pcabl_architectural",
+      "cache_manifest": "cache/pcabl_architectural/manifest.json",
+      "pred_out": "runs/pcabl_architectural/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_architectural/metrics.json"
+    },
+    {
+      "name": "pcabl_ep_plus_ctcf",
+      "cwd": "../pchic-unet",
+      "module": "pchicunet",
+      "config": "configs/pcabl_ep_plus_ctcf.yaml",
+      "cache_dir": "cache/pcabl_ep_plus_ctcf",
+      "cache_manifest": "cache/pcabl_ep_plus_ctcf/manifest.json",
+      "pred_out": "runs/pcabl_ep_plus_ctcf/pred_capture_even.cool",
+      "eval_out": "runs/pcabl_ep_plus_ctcf/metrics.json"
+    }
+  ],
+  "post": []
+}

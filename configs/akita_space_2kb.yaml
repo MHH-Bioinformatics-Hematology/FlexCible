@@ -1,0 +1,44 @@
+data:
+  tracks:
+  - name: CTCF
+    type: tf
+    motif: MA0139.2
+  samples:
+  - name: gm12878_hg38
+    cool_path: /mnt/processed/wolffjoa/restart_of_prediction_project/akita_normalization/gm12878_2kb_akita_normalized.cool
+    bigwig_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/hg38_tracks
+  resolution: 2000
+  holdout_bed: /home/mh-hannover.local/wolffjoa/data/hic-multiome/akita_holdout_valid_test.bed
+sequence:
+  fasta: null
+  features: []
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  enabled: false
+window:
+  size: 512
+  stride: 256
+  transform: prescaled
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+train:
+  output_dir: runs/akita_space_2kb
+  cache_dir: cache/akita_space_2kb
+  batch_size: 3
+  lr: 0.0003
+  max_steps: 2000000
+  max_minutes: 150
+  eval_every: 300
+  val_fraction: 0.1
+  seed: 0
+  augment_reverse: true
+predict:
+  merge: hann
+  integer_counts: false

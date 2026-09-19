@@ -1,0 +1,75 @@
+# GM12878, 25 kb, FULL multi-omic conditioning:
+#   14 protein tracks (DNA-binding ones with their required motifs)
+# + DNA sequence features (GC, CpG)
+# + strand-separated CTCF motif-hit tracks with directed pair channels
+# + capture Hi-C (Mifsud 2015 E-MTAB-2323, hg19) as auxiliary target.
+# Train odd autosomes, test even. hg19 throughout (Rao GSE63525 Hi-C).
+data:
+  cool_path: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/GM12878_25kb_cooler_coarsen.cool
+  bigwig_dir: /home/mh-hannover.local/wolffjoa/data/Hi-cGAN/data/gm12878/bigwig
+  tracks:
+    - {name: CTCF,     type: tf,            motif: MA0139.2}
+    - {name: RAD21,    type: cofactor,      motif: MA0139.2}   # cohesin loads at CTCF sites
+    - {name: SMC3,     type: cofactor,      motif: MA0139.2}
+    - {name: DNase,    type: accessibility}
+    - {name: H3K27ac,  type: histone}
+    - {name: H3K27me3, type: histone}
+    - {name: H3K36me3, type: histone}
+    - {name: H3K4me1,  type: histone}
+    - {name: H3K4me2,  type: histone}
+    - {name: H3K4me3,  type: histone}
+    - {name: H3K79me2, type: histone}
+    - {name: H3K9ac,   type: histone}
+    - {name: H3K9me3,  type: histone}
+    - {name: H4K20me1, type: histone}
+  resolution: 25000
+  chroms: null
+  train_parity: odd
+  test_parity: even
+
+sequence:
+  fasta: /mnt/processed/wolffjoa/vardictcpp_validation_zenodo/reference/hg19.fa
+  features: [gc, cpg]
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  score_frac: 0.80
+  directed_pairs: true
+
+capture:
+  interactions: /home/mh-hannover.local/wolffjoa/data/hic-multiome/pchic/TS5_GM12878_promoter-other_significant_interactions.txt
+  format: mifsud
+  min_score: 0.0            # the file already holds only significant interactions
+  loss_weight: 0.5
+  clip_quantile: 0.999
+
+window:
+  size: 128
+  stride: 64
+  transform: log1p
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+
+track:
+  transform: log1p
+  norm: zscore
+
+model:
+  base_channels: 48
+  depth: 4
+
+train:
+  output_dir: runs/multiome_25kb
+  cache_dir: cache/multiome_25kb
+  batch_size: 16            # per GPU; torchrun --nproc_per_node=2 -> effective 32
+  lr: 3.0e-4
+  max_steps: 200000
+  max_minutes: 30
+  eval_every: 150
+  val_fraction: 0.1
+  seed: 0
+
+predict:
+  merge: hann
+  out_cool: runs/multiome_25kb/pred.cool
