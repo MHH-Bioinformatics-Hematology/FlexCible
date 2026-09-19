@@ -292,6 +292,10 @@ class TrainConfig:
     # (plus the sequence features and any motif whose track is kept) are sliced
     # from the full cache. None = use all tracks.
     select_tracks: list[str] | None = None
+    # early stopping by epoch: stop after max_epochs, or when validation has not
+    # improved for patience_epochs (validated once per epoch). None disables.
+    max_epochs: int | None = None
+    patience_epochs: int | None = None
 
 
 @dataclass

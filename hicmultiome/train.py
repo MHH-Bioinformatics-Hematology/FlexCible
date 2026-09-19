@@ -410,6 +410,8 @@ def train(cfg: Config):
         log.info("mixed precision: %s autocast", cfg.train.amp)
 
     loss_val = float("nan")
+    epochs_no_improve = 0
+    prev_best = best
     while step < cfg.train.max_steps and not stop:
         timed_out = bool(
             cfg.train.max_minutes and (time.time() - t0) / 60.0 >= cfg.train.max_minutes
@@ -504,6 +506,25 @@ def train(cfg: Config):
             log.info("epoch %d done  avg_loss=%.4f (step %d)", epoch, ep_loss / nb, step)
         if step - last_eval >= cfg.train.eval_every or stop:
             validate(loss_val)
+        # epoch-based early stopping: max_epochs cap, or no val improvement for
+        # patience_epochs (validate once per epoch so the count is per-epoch)
+        if cfg.train.patience_epochs or cfg.train.max_epochs:
+            if step != last_eval:
+                validate(loss_val)
+            if best > prev_best:
+                prev_best = best
+                epochs_no_improve = 0
+            else:
+                epochs_no_improve += 1
+            es = is_main and (
+                (cfg.train.max_epochs and epoch >= cfg.train.max_epochs)
+                or (cfg.train.patience_epochs
+                    and epochs_no_improve >= cfg.train.patience_epochs))
+            if stop_flag(bool(es)):
+                if is_main:
+                    log.info("early stop at epoch %d (best val %.4f, "
+                             "%d epochs no improvement)", epoch, best, epochs_no_improve)
+                stop = True
     if step != last_eval:
         validate(loss_val)
 

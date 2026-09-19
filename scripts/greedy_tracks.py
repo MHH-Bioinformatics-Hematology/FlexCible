@@ -33,13 +33,16 @@ def _best_val(log_text: str) -> float:
     return max(vals) if vals else float("nan")
 
 
-def _run_candidate(base, cache, steps, out_root, selected, track, gpu, py):
-    """Launch one 1-GPU training for selected+[track]; return (Popen, cfg_path, log_path)."""
+def _run_candidate(base, cache, max_epochs, patience, out_root, selected, track, gpu, py):
+    """Launch one 1-GPU training for selected+[track], with per-candidate early
+    stopping (up to max_epochs, stop after `patience` epochs without val
+    improvement). Returns (Popen, log_path)."""
     cfg = copy.deepcopy(base)
     cfg["train"].update({
-        "select_tracks": selected + [track], "max_steps": steps,
-        "eval_every": max(1, steps // 2), "resume": False, "compile": False,
-        "cache_dir": cache, "max_minutes": None,
+        "select_tracks": selected + [track],
+        "max_epochs": max_epochs, "patience_epochs": patience,
+        "max_steps": 10_000_000, "eval_every": 10_000_000,   # epoch-end validate only
+        "resume": False, "compile": True, "cache_dir": cache, "max_minutes": None,
         "output_dir": str(out_root / ("__".join(selected + [track])[:80] or track)),
     })
     cfg["train"].pop("resume_from", None)
@@ -54,7 +57,7 @@ def _run_candidate(base, cache, steps, out_root, selected, track, gpu, py):
     return p, log_path
 
 
-def _eval_round(base, cache, steps, out_root, selected, candidates, gpus, py):
+def _eval_round(base, cache, max_epochs, patience, out_root, selected, candidates, gpus, py):
     """Train every candidate track (added to `selected`), 2 at a time, one per
     GPU; return {track: best_val}."""
     results = {}
@@ -64,8 +67,8 @@ def _eval_round(base, cache, steps, out_root, selected, candidates, gpus, py):
         procs = []
         for track, gpu in batch:
             print(f"    train +{track} on GPU {gpu}", flush=True)
-            procs.append((track, *_run_candidate(base, cache, steps, out_root,
-                                                 selected, track, gpu, py)))
+            procs.append((track, *_run_candidate(base, cache, max_epochs, patience,
+                                                 out_root, selected, track, gpu, py)))
         for track, p, log_path in procs:
             p.wait()
             p._fh.close()
@@ -78,7 +81,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True)
     ap.add_argument("--cache", required=True)
-    ap.add_argument("--steps", type=int, default=100)
+    ap.add_argument("--max-epochs", type=int, default=100)
+    ap.add_argument("--patience", type=int, default=5,
+                    help="stop a candidate after this many epochs with no val gain")
     ap.add_argument("--gpus", default="0,1")
     ap.add_argument("--out-dir",
                     default="/mnt/processed/wolffjoa/hic-multiome/runs/greedy_tracks")
@@ -98,7 +103,7 @@ def main():
     best_so_far = float("-inf")
     while remaining:
         print(f"[round {len(selected)+1}] selected={selected}", flush=True)
-        res = _eval_round(base, a.cache, a.steps, out_root, selected, remaining, gpus, py)
+        res = _eval_round(base, a.cache, a.max_epochs, a.patience, out_root, selected, remaining, gpus, py)
         track, val = max(res.items(), key=lambda kv: (kv[1] if kv[1] == kv[1] else -9))
         rounds.append({"round": len(selected) + 1, "added": track, "best_val": val,
                        "selected": "+".join(selected + [track]),
@@ -129,7 +134,7 @@ def main():
             plt.annotate(r["added"], (r["round"], r["best_val"]), fontsize=7,
                          rotation=30, ha="left")
         plt.xlabel("number of tracks (greedy order)")
-        plt.ylabel(f"best val dist-Pearson ({a.steps} steps)")
+        plt.ylabel(f"best val dist-Pearson (early-stop, max {a.max_epochs} ep)")
         plt.title("Greedy ChIP-track selection")
         plt.grid(alpha=0.3)
         plt.tight_layout()
