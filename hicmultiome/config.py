@@ -296,6 +296,10 @@ class TrainConfig:
     # improved for patience_epochs (validated once per epoch). None disables.
     max_epochs: int | None = None
     patience_epochs: int | None = None
+    # write checkpoints during training. Off for the greedy screen, where only
+    # the logged best-val matters, to avoid a 128 MB write every epoch stalling
+    # the GPU.
+    save_checkpoints: bool = True
 
 
 @dataclass

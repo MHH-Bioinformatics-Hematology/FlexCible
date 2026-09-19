@@ -43,6 +43,7 @@ def _run_candidate(base, cache, max_epochs, patience, out_root, selected, track,
         "max_epochs": max_epochs, "patience_epochs": patience,
         "max_steps": 10_000_000, "eval_every": 10_000_000,   # epoch-end validate only
         "resume": False, "compile": True, "cache_dir": cache, "max_minutes": None,
+        "save_checkpoints": False,
         "output_dir": str(out_root / ("__".join(selected + [track])[:80] or track)),
     })
     cfg["train"].pop("resume_from", None)

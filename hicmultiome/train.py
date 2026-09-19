@@ -356,7 +356,7 @@ def train(cfg: Config):
     curve: list[dict] = []
 
     def save(name, ptr):
-        if not is_main:
+        if not is_main or not cfg.train.save_checkpoints:
             return
         ck = out_dir / name
         ck.mkdir(parents=True, exist_ok=True)
@@ -638,7 +638,7 @@ def train_stream(cfg: Config):
     seen = 0
 
     def save(name, ptr):
-        if not is_main:
+        if not is_main or not cfg.train.save_checkpoints:
             return
         ck = out_dir / name
         ck.mkdir(parents=True, exist_ok=True)
