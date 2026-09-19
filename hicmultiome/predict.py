@@ -29,9 +29,10 @@ from .matrix import (
     plan_windows,
     write_cool,
 )
-from .model import (HiCUNet, build_backbone, build_spatial_cond,
-                    n_cond_channels)
+from .model import (HiCModel, HiCUNet, SeqEncoder, build_backbone,
+                    build_spatial_cond, n_cond_channels)
 from .precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+from .sequence import window_codes
 from .tracks import TrackNormalizer
 from .utils import get_logger, set_seed
 
@@ -97,13 +98,35 @@ def build_model(cfg: Config, ckpt: Path, device):
     n_out = 2 if channels["has_capture"] else 1
     n_planes = 2 if channels.get("capture_input") else 0
     mode = cfg.model.cond_mode
-    model = build_backbone(cfg.model.kind,
-                           n_cond_channels(n_sym, n_motifs, n_planes, mode),
-                           out_ch=n_out, base=cfg.model.base_channels,
-                           depth=cfg.model.depth).to(device)
-    model.load_state_dict(torch.load(ckpt / "model.pt", map_location=device))
+    emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
+    backbone = build_backbone(cfg.model.kind,
+                              n_cond_channels(n_sym + emb, n_motifs, n_planes, mode),
+                              out_ch=n_out, base=cfg.model.base_channels,
+                              depth=cfg.model.depth)
+    encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
+               if cfg.sequence.uses_encoder else None)
+    model = HiCModel(backbone, mode, encoder).to(device)
+    sd = torch.load(ckpt / "model.pt", map_location=device)
+    # older bare-backbone checkpoints have no "backbone." prefix
+    if not any(k.startswith("backbone.") for k in sd):
+        sd = {f"backbone.{k}": v for k, v in sd.items()}
+    model.load_state_dict(sd)
     model.eval()
     return model, channels
+
+
+def _batch_seq(fasta, chrom, starts, size, res, device, revcomp=False):
+    """One-hot DNA (len(starts), 4, size*res) for a batch of windows, for the
+    sequence encoder; N and past-chromosome-end padding are all-zero."""
+    L = size * res
+    oh = torch.zeros(len(starts), 4, L)
+    ar = torch.arange(L)
+    for k, s in enumerate(starts):
+        c = torch.from_numpy(
+            window_codes(fasta, chrom, s, size, res, revcomp=revcomp).astype(np.int64))
+        m = c < 4
+        oh[k, c[m], ar[m]] = 1.0
+    return oh.to(device)
 
 
 def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
@@ -122,6 +145,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
         sample = type(sample)(**{**sample.__dict__})
         sample.zeroed_tracks = sorted(set(sample.zeroed_tracks) | set(zero_tracks))
         log.info("zeroing tracks at inference: %s", sample.zeroed_tracks)
+    use_seq = cfg.sequence.uses_encoder
+    fasta = sample.fasta or cfg.sequence.fasta
     track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
     mat_norm = load_norm(ckpt, "norm_matrix", sample.name, MatrixNormalizer)
     model, channels = build_model(cfg, ckpt, device)
@@ -282,9 +307,10 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                 else:
                     planes = torch.full((b, 2, size, size), -1.0, device=device)
                     planes[:, 1] = 0.0
+            seq_oh = (_batch_seq(fasta, chrom, [w.start for w in bw], size,
+                                 cfg.data.resolution, device) if use_seq else None)
             with torch.no_grad():
-                out = model(build_spatial_cond(cond, pairs, planes,
-                                               cfg.model.cond_mode))
+                out = model(cond, pairs, planes, seq_oh)
                 if tta:
                     from .dataset import reverse_cond, split_cond as _sc
 
@@ -292,8 +318,10 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     sym_r, pairs_r = _sc(cond_r, offset, n_motifs)
                     planes_r = (torch.flip(planes, dims=[-1, -2])
                                 if planes is not None else None)
-                    out_r = model(build_spatial_cond(sym_r, pairs_r, planes_r,
-                                                     cfg.model.cond_mode))
+                    seq_r = (_batch_seq(fasta, chrom, [w.start for w in bw], size,
+                                        cfg.data.resolution, device, revcomp=True)
+                             if use_seq else None)
+                    out_r = model(sym_r, pairs_r, planes_r, seq_r)
                     out = 0.5 * (out + torch.flip(out_r, dims=[-1, -2]))
                 imgs = out.float().cpu().numpy()
             for w, img in zip(bw, imgs):
