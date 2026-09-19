@@ -201,6 +201,28 @@ def train(cfg: Config):
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
     offset, n_motifs = ds.motif_row_offset(), ds.n_motifs
+
+    use_seq = cfg.sequence.uses_encoder
+    binsize = int(cfg.data.resolution)
+    fasta_map = _fasta_map(cfg)
+    W = ds.window_size
+    # full-set window coordinates (aligned to the stacked rows), for the encoder
+    full_coords = _coords(ds) if use_seq else None
+
+    # data-efficiency knob: keep every k-th window (effective stride =
+    # window.stride * k). A cheap way to sweep training-set size without
+    # re-precomputing the cache -- every k-th of the 50%-overlap windows is
+    # exactly the coarser-stride tiling.
+    k = max(1, int(cfg.train.window_subsample))
+    if k > 1:
+        keep = list(range(0, data["target"].shape[0], k))
+        data = {kk: v[keep] for kk, v in data.items()}
+        if full_coords is not None:
+            ch, st, sm = full_coords
+            full_coords = ([ch[i] for i in keep], st[keep], [sm[i] for i in keep])
+        if is_main:
+            log.info("window_subsample=%d: %d training windows (effective "
+                     "stride %d bins)", k, len(keep), cfg.window.stride * k)
     N_total = data["target"].shape[0]
 
     # Each rank keeps its stripe of the windows resident on its GPU. Stripes are
@@ -213,18 +235,12 @@ def train(cfg: Config):
     bt = data["bait"][sl].to(device)
     vdata_d = None
     if is_main and vdata is not None:
-        vdata_d = {k: v.to(device) for k, v in vdata.items()}
+        vdata_d = {k2: v.to(device) for k2, v in vdata.items()}
     N = tg.shape[0]
 
-    # sequence encoder: fetch each window's DNA on the fly (windows keep their
-    # (chrom, start)); the per-bin embedding is added to the conditioning
-    use_seq = cfg.sequence.uses_encoder
-    binsize = int(cfg.data.resolution)
-    fasta_map = _fasta_map(cfg)
-    W = ds.window_size
     tr_coords = val_coords = None
     if use_seq:
-        ch, st, sm = _coords(ds)                  # rank stripe, aligned to tg/cd
+        ch, st, sm = full_coords                  # rank stripe, aligned to tg/cd
         rows = list(range(rank, n_even, world))
         tr_coords = ([ch[i] for i in rows], st[rows], [sm[i] for i in rows])
         if is_main and vds is not None:

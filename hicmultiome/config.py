@@ -277,6 +277,9 @@ class TrainConfig:
     eval_every: int = 150
     val_fraction: float = 0.1
     seed: int = 0
+    # keep every k-th training window (effective stride = window.stride * k); a
+    # cheap way to sweep training-set size without re-precomputing the cache
+    window_subsample: int = 1
 
 
 @dataclass
