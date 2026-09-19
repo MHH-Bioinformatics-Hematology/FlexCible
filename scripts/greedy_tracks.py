@@ -33,6 +33,20 @@ def _best_val(log_text: str) -> float:
     return max(vals) if vals else float("nan")
 
 
+def _cached_val(out_root, selected, track):
+    """Reuse a candidate already trained in a previous (interrupted) run: if its
+    log shows a completed run (early stop or done), return its best val, so the
+    greedy is resumable and never recomputes finished candidates."""
+    log = out_root / f"cand_{len(selected)}_{track}.log"
+    if not log.exists():
+        return None
+    txt = log.read_text(errors="replace")
+    if "early stop at epoch" in txt or "done." in txt:
+        v = _best_val(txt)
+        return v if v == v else None
+    return None
+
+
 def _run_candidate(base, cache, max_epochs, patience, out_root, selected, track, gpu, py):
     """Launch one 1-GPU training for selected+[track], with per-candidate early
     stopping (up to max_epochs, stop after `patience` epochs without val
@@ -59,22 +73,38 @@ def _run_candidate(base, cache, max_epochs, patience, out_root, selected, track,
 
 
 def _eval_round(base, cache, max_epochs, patience, out_root, selected, candidates, gpus, py):
-    """Train every candidate track (added to `selected`), 2 at a time, one per
-    GPU; return {track: best_val}."""
+    """Train every candidate track (added to `selected`) across the GPUs as a
+    rolling pool: the instant a GPU's candidate finishes, the next queued one is
+    launched on it, so no GPU idles waiting for a slower partner. Returns
+    {track: best_val}."""
     results = {}
-    queue = list(candidates)
-    while queue:
-        batch = [(queue.pop(0), gpus[i % len(gpus)]) for i in range(min(len(gpus), len(queue)))]
-        procs = []
-        for track, gpu in batch:
+    queue = []
+    for track in candidates:                 # reuse finished candidates
+        cv = _cached_val(out_root, selected, track)
+        if cv is not None:
+            results[track] = cv
+            print(f"    +{track}: best_val={cv:.4f} (cached)", flush=True)
+        else:
+            queue.append(track)
+    free = list(gpus)
+    running = {}                       # gpu -> (track, Popen, log_path)
+    while queue or running:
+        while queue and free:
+            gpu = free.pop(0)
+            track = queue.pop(0)
             print(f"    train +{track} on GPU {gpu}", flush=True)
-            procs.append((track, *_run_candidate(base, cache, max_epochs, patience,
-                                                 out_root, selected, track, gpu, py)))
-        for track, p, log_path in procs:
-            p.wait()
-            p._fh.close()
-            results[track] = _best_val(Path(log_path).read_text(errors="replace"))
-            print(f"    +{track}: best_val={results[track]:.4f}", flush=True)
+            p, log_path = _run_candidate(base, cache, max_epochs, patience,
+                                         out_root, selected, track, gpu, py)
+            running[gpu] = (track, p, log_path)
+        time.sleep(5)
+        for gpu, (track, p, log_path) in list(running.items()):
+            if p.poll() is not None:
+                p._fh.close()
+                results[track] = _best_val(Path(log_path).read_text(errors="replace"))
+                print(f"    +{track}: best_val={results[track]:.4f} (GPU {gpu} free)",
+                      flush=True)
+                del running[gpu]
+                free.append(gpu)
     return results
 
 
