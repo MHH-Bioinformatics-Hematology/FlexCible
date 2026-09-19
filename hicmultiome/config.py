@@ -287,6 +287,11 @@ class TrainConfig:
     stream: bool = False
     stream_stride: int | None = None
     num_workers: int = 4
+    # train on only these ChIP tracks (a subset of the cache's tracks), for
+    # greedy feature selection without re-precomputing: the matching cond rows
+    # (plus the sequence features and any motif whose track is kept) are sliced
+    # from the full cache. None = use all tracks.
+    select_tracks: list[str] | None = None
 
 
 @dataclass

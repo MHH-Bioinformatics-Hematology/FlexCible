@@ -74,6 +74,23 @@ def _coords(ds):
     return chroms, starts, samples
 
 
+def _select_rows(cfg: Config, channels: dict):
+    """Row indices into the cached cond for cfg.train.select_tracks: the chosen
+    ChIP tracks, all sequence features, and each motif whose track is kept.
+    Returns (rows, motif_offset, n_motifs, n_sym) for the reduced conditioning."""
+    sel = set(cfg.train.select_tracks)
+    tracks, seqf, motifs = channels["tracks"], channels["seq_features"], channels["motif_ids"]
+    keep_t = [i for i, t in enumerate(tracks) if t in sel]
+    track_motif = {t.name: t.motif for t in cfg.data.tracks}
+    used = {track_motif.get(tracks[i]) for i in keep_t}
+    keep_m = [m for m, mid in enumerate(motifs) if mid in used]
+    nt, ns = len(tracks), len(seqf)
+    rows = (keep_t
+            + list(range(nt, nt + ns))
+            + [nt + ns + 2 * m + k for m in keep_m for k in (0, 1)])
+    return rows, len(keep_t) + ns, len(keep_m), len(rows)
+
+
 def _fasta_map(cfg: Config) -> dict:
     """sample name -> FASTA path (per-sample override, else sequence.fasta).
     Includes a 'default' entry for caches whose windows carry no sample name."""
@@ -202,7 +219,20 @@ def train(cfg: Config):
     vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed)
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
-    offset, n_motifs = ds.motif_row_offset(), ds.n_motifs
+
+    # greedy feature selection: keep only the chosen ChIP tracks' cond rows
+    n_sym_eff = ds.n_sym
+    if cfg.train.select_tracks:
+        rows, offset, n_motifs, n_sym_eff = _select_rows(cfg, ds.channels)
+        data["cond"] = data["cond"][:, rows, :]
+        if vdata is not None:
+            vdata["cond"] = vdata["cond"][:, rows, :]
+        if is_main:
+            log.info("select_tracks=%s -> %d tracks, %d motifs, %d sym rows",
+                     cfg.train.select_tracks,
+                     len(cfg.train.select_tracks), n_motifs, n_sym_eff)
+    else:
+        offset, n_motifs = ds.motif_row_offset(), ds.n_motifs
 
     use_seq = cfg.sequence.uses_encoder
     binsize = int(cfg.data.resolution)
@@ -259,7 +289,7 @@ def train(cfg: Config):
     capin = bool(cfg.capture.use_as_input and ds.n_out == 2)
     cond_mode = cfg.model.cond_mode
     emb = cfg.sequence.embed_dim if use_seq else 0
-    in_ch = n_cond_channels(ds.n_sym + emb, n_motifs, 2 if capin else 0, cond_mode)
+    in_ch = n_cond_channels(n_sym_eff + emb, n_motifs, 2 if capin else 0, cond_mode)
     backbone = build_backbone(cfg.model.kind, in_ch, out_ch=ds.n_out,
                               base=cfg.model.base_channels, depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
@@ -285,7 +315,7 @@ def train(cfg: Config):
             "%d val, %d sym rows, %d motifs, %d cond channels, %d out channels, "
             "%.2fM params",
             N_total, N, world, 0 if vdata is None else vdata["target"].shape[0],
-            ds.n_sym, n_motifs, in_ch, ds.n_out,
+            n_sym_eff, n_motifs, in_ch, ds.n_out,
             sum(p.numel() for p in core.parameters()) / 1e6,
         )
 
