@@ -38,8 +38,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hicmultiome.config import Config                                # noqa: E402
 from hicmultiome.genome import match_name                            # noqa: E402
 from hicmultiome.matrix import MatrixNormalizer, open_cool           # noqa: E402
-from hicmultiome.model import (build_backbone, build_spatial_cond,
-                               n_cond_channels)                      # noqa: E402
+from hicmultiome.model import (HiCModel, SeqEncoder, build_backbone,
+                               build_spatial_cond, n_cond_channels)  # noqa: E402
+from hicmultiome.sequence import window_codes                        # noqa: E402
 from hicmultiome.precompute import (assemble_chrom, chrom_nbins_of,
                                     sample_track_files)              # noqa: E402
 from hicmultiome.tracks import TrackNormalizer                       # noqa: E402
@@ -54,16 +55,37 @@ log = get_logger("score-like-hicgan")
 
 def load_model(cfg, ckpt, device):
     channels = json.loads((ckpt / "channels.json").read_text())
-    in_ch = n_cond_channels(len(channels["sym_rows"]), len(channels["motif_ids"]),
+    emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
+    in_ch = n_cond_channels(len(channels["sym_rows"]) + emb,
+                            len(channels["motif_ids"]),
                             2 if channels.get("capture_input") else 0,
                             cfg.model.cond_mode)
-    model = build_backbone(cfg.model.kind, in_ch,
-                           out_ch=2 if channels.get("has_capture") else 1,
-                           base=cfg.model.base_channels,
-                           depth=cfg.model.depth).to(device)
-    model.load_state_dict(torch.load(ckpt / "model.pt", map_location=device))
+    backbone = build_backbone(cfg.model.kind, in_ch,
+                              out_ch=2 if channels.get("has_capture") else 1,
+                              base=cfg.model.base_channels,
+                              depth=cfg.model.depth)
+    encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
+               if cfg.sequence.uses_encoder else None)
+    model = HiCModel(backbone, cfg.model.cond_mode, encoder).to(device)
+    sd = torch.load(ckpt / "model.pt", map_location=device)
+    # older checkpoints stored the bare backbone (no encoder); its keys have no
+    # "backbone." prefix, so remap them onto the HiCModel wrapper
+    if not any(k.startswith("backbone.") for k in sd):
+        sd = {f"backbone.{k}": v for k, v in sd.items()}
+    model.load_state_dict(sd)
     model.eval()
     return model, channels
+
+
+def region_onehot(fasta, chrom, start_bin, size, res, device, revcomp=False):
+    """One-hot DNA (1, 4, size*res) for a window, for the sequence encoder."""
+    codes = window_codes(fasta, chrom, start_bin, size, res, revcomp=revcomp)
+    c = torch.from_numpy(codes.astype(np.int64))
+    L = c.shape[0]
+    oh = torch.zeros(1, 4, L)
+    m = c < 4
+    oh[0, c[m], torch.arange(L)[m]] = 1.0
+    return oh.to(device)
 
 
 def resample(pred: np.ndarray, our_start_bp: int, our_res: int,
@@ -89,6 +111,8 @@ def main():
 
     cfg = Config.load(a.config)
     sample = cfg.get_sample(None)
+    use_seq = cfg.sequence.uses_encoder
+    fasta = sample.fasta or cfg.sequence.fasta
     ckpt = Path(a.checkpoint or (Path(cfg.train.output_dir) / "checkpoint-best"))
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, channels = load_model(cfg, ckpt, device)
@@ -140,13 +164,17 @@ def main():
             cond = torch.from_numpy(ct[None]).to(device)
             pairs = (cond[:, offset:offset + 2 * n_motifs].reshape(1, n_motifs, 2, size)
                      if n_motifs else None)
+            seq_oh = (region_onehot(fasta, name, st, size, res, device)
+                      if use_seq else None)
             with torch.no_grad():
-                out = model(build_spatial_cond(cond, pairs, None, cfg.model.cond_mode))
+                out = model(cond, pairs, None, seq_oh)
                 if a.tta:
                     from hicmultiome.dataset import reverse_cond, split_cond
                     cr = reverse_cond(cond, offset, n_motifs)
                     sr, pr = split_cond(cr, offset, n_motifs)
-                    out_r = model(build_spatial_cond(sr, pr, None, cfg.model.cond_mode))
+                    seq_r = (region_onehot(fasta, name, st, size, res, device,
+                                           revcomp=True) if use_seq else None)
+                    out_r = model(sr, pr, None, seq_r)
                     out = 0.5 * (out + torch.flip(out_r, dims=[-1, -2]))
             P = mat_norm.decode(out[0, 0].float().cpu().numpy())
             P = 0.5 * (P + P.T)
