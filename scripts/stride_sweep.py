@@ -1,18 +1,18 @@
-"""Sweep training-set size via window_subsample: accuracy vs windows vs time.
+"""Sweep window stride (overlap / training-set size): accuracy vs windows vs time.
 
-For each factor k, train from scratch (fixed wall-clock budget) on every k-th
-cached window -- effective stride = window.stride * k -- then score the best
-checkpoint on Akita's own 2 kb benchmark. Writes a CSV and two plots:
-accuracy vs number of training windows, and training time vs windows. It
-answers "how much training data does the model actually need" and how stride
-trades accuracy for speed.
+For each stride, train from scratch (fixed wall-clock budget) with windows
+streamed from the cooler on the fly, then score the best checkpoint on Akita's
+own 2 kb benchmark. Stride spans the full range: 1 = ~99.8% overlap (Hi-cGAN's
+dense regime), up through 50% overlap, to strides larger than the window (gaps,
+sparser). Writes a CSV and two plots: accuracy vs number of training windows,
+and training time vs windows -- answering "how much training data does the
+model actually need" and how overlap trades accuracy for speed.
 
-All local. Each training run uses torchrun over the given GPUs; scoring uses
-one GPU. Run it when the GPUs are free:
+All local. Each training run uses torchrun over the given GPUs; scoring uses one
+GPU. Run it when the GPUs are free:
 
-    CUDA-side is chosen per step, so do not set CUDA_VISIBLE_DEVICES yourself.
     python scripts/stride_sweep.py --config configs/akita_2kb_seq.yaml \
-        --factors 1,2,4,8,16 --minutes 45 --gpus 0,1
+        --strides 1,5,16,64,256,1024 --minutes 45 --gpus 0,1
 """
 from __future__ import annotations
 
@@ -41,10 +41,14 @@ def _parse_akita_median(text: str) -> float:
 
 
 def _parse_n_windows(text: str) -> float:
-    m = re.search(r"window_subsample=\d+:\s*(\d+)\s*training windows", text)
-    if not m:
-        m = re.search(r"(\d+)\s*train windows", text)
-    return float(m.group(1)) if m else math.nan
+    for pat in (r"stream training:\s*(\d+)\s*train",
+                r"stream\[train\]:\s*(\d+)\s*windows",
+                r"window_subsample=\d+:\s*(\d+)\s*training windows",
+                r"(\d+)\s*train windows"):
+        m = re.search(pat, text)
+        if m:
+            return float(m.group(1))
+    return math.nan
 
 
 def _best_val(run_dir: Path) -> float:
@@ -90,41 +94,47 @@ def _plot(rows, out_png):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True)
-    ap.add_argument("--factors", default="1,2,4,8,16")
+    ap.add_argument("--strides", default="1,5,16,64,256,1024",
+                    help="absolute window strides (bins) to sweep via streaming; "
+                         "stride < window.size = overlap (1 ~ 99.8%%, Hi-cGAN); "
+                         ">= size = gaps (sparser)")
     ap.add_argument("--minutes", type=float, default=45)
+    ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--gpus", default="0,1")
     ap.add_argument("--out-dir",
                     default="/mnt/processed/wolffjoa/hic-multiome/runs/stride_sweep")
     ap.add_argument("--tta", action="store_true", default=True)
     a = ap.parse_args()
 
-    factors = [int(x) for x in a.factors.split(",") if x.strip()]
+    strides = [int(x) for x in a.strides.split(",") if x.strip()]
     gpus = [g for g in a.gpus.split(",") if g.strip()]
     ngpu = len(gpus)
     outdir = Path(a.out_dir)
     outdir.mkdir(parents=True, exist_ok=True)
     base = yaml.safe_load(open(a.config))
-    base_stride = int(base["window"]["stride"])
+    size = int(base["window"]["size"])
     py = sys.executable
     torchrun = str(Path(py).parent / "torchrun")
 
     rows = []
-    for k in factors:
-        run_dir = outdir / f"k{k}"
+    for stride in strides:
+        run_dir = outdir / f"s{stride}"
         cfg = copy.deepcopy(base)
-        cfg["train"].update({"window_subsample": k, "max_minutes": a.minutes,
+        cfg["train"].update({"stream": True, "stream_stride": stride,
+                             "num_workers": a.workers, "max_minutes": a.minutes,
                              "resume": False, "output_dir": str(run_dir)})
-        cfg_path = outdir / f"k{k}.yaml"
+        cfg_path = outdir / f"s{stride}.yaml"
         yaml.safe_dump(cfg, open(cfg_path, "w"), sort_keys=False)
 
+        overlap = max(0.0, 100 * (1 - stride / size))
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
-        print(f"[sweep] k={k} eff_stride={base_stride * k}: training {a.minutes} min "
-              f"on GPU(s) {gpus}", flush=True)
+        print(f"[sweep] stride={stride} ({overlap:.1f}% overlap): training "
+              f"{a.minutes} min on GPU(s) {gpus}", flush=True)
         t0 = time.time()
         cmd = ([torchrun, "--standalone", f"--nproc_per_node={ngpu}",
                 "-m", "hicmultiome.train", "--config", str(cfg_path)] if ngpu > 1
                else [py, "-m", "hicmultiome.train", "--config", str(cfg_path)])
-        tlog = _run(cmd, outdir / f"k{k}.train.log", env)
+        tlog = _run(cmd, outdir / f"s{stride}.train.log", env)
         train_min = (time.time() - t0) / 60.0
 
         senv = dict(os.environ, CUDA_VISIBLE_DEVICES=gpus[0])
@@ -133,15 +143,15 @@ def main():
                 "--out", str(run_dir / "akita.csv")]
         if a.tta:
             scmd.append("--tta")
-        print(f"[sweep] k={k}: scoring on Akita benchmark", flush=True)
-        slog = _run(scmd, outdir / f"k{k}.score.log", senv)
+        print(f"[sweep] stride={stride}: scoring on Akita benchmark", flush=True)
+        slog = _run(scmd, outdir / f"s{stride}.score.log", senv)
 
-        row = {"k": k, "eff_stride": base_stride * k,
+        row = {"stride": stride, "overlap_pct": round(overlap, 1),
                "n_windows": _parse_n_windows(tlog), "train_min": round(train_min, 1),
                "akita_median": _parse_akita_median(slog),
                "best_val_pearson": _best_val(run_dir)}
         rows.append(row)
-        print(f"[sweep] k={k}: {row}", flush=True)
+        print(f"[sweep] stride={stride}: {row}", flush=True)
 
     import csv as _csv
     with open(outdir / "sweep.csv", "w", newline="") as f:
@@ -150,9 +160,9 @@ def main():
         w.writerows(rows)
     _plot(rows, outdir / "sweep.png")
     print(f"[sweep] wrote {outdir / 'sweep.csv'} and {outdir / 'sweep.png'}")
-    print("\nk\teff_stride\twindows\ttrain_min\takita_median\tbest_val")
+    print("\nstride\toverlap%\twindows\ttrain_min\takita_median\tbest_val")
     for r in rows:
-        print(f"{r['k']}\t{r['eff_stride']}\t{r['n_windows']:.0f}\t{r['train_min']}"
+        print(f"{r['stride']}\t{r['overlap_pct']}\t{r['n_windows']:.0f}\t{r['train_min']}"
               f"\t{r['akita_median']:.3f}\t{r['best_val_pearson']:.3f}")
 
 
