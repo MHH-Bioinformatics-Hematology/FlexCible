@@ -122,34 +122,56 @@ def main():
     print(f"[round 0] full set ({len(selected)} tracks)", flush=True)
     best = val_of(selected)
     rounds = [{"round": 0, "removed": "", "n_tracks": len(selected), "val": best,
-               "kept": "+".join(sorted(selected))}]
+               "kept": "+".join(sorted(selected)), "all_removals": ""}]
+    rankings = []          # every candidate of every round: which drop, its val, its rank
     print(f"[round 0] all {len(selected)} tracks: val={best:.4f}", flush=True)
 
+    def write_out():
+        with open(out_root / "backward.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["round", "removed", "n_tracks", "val",
+                                              "kept", "all_removals"])
+            w.writeheader()
+            w.writerows(rounds)
+        with open(out_root / "backward_rankings.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["round", "rank", "removed", "val", "chosen"])
+            w.writeheader()
+            w.writerows(rankings)
+
+    write_out()
     while len(selected) > 1:
         rnd = len(all_tracks) - len(selected) + 1
         print(f"[round {rnd}] removing one of {sorted(selected)}", flush=True)
         subsets = [[t for t in selected if t != d] for d in selected]
         res = eval_sets(base, a.cache, subsets, a.val_regions, a.patience, a.max_epochs,
                         out_root, gpus, py)
-        # the removal that keeps val highest
-        best_sub = max(res.items(), key=lambda kv: (kv[1] if kv[1] == kv[1] else -9))
-        sub_tracks, v = list(best_sub[0]), best_sub[1]
-        removed = (set(selected) - set(sub_tracks)).pop()
+        # full ranking of this round's removals (best first) -- keeps 2nd, 3rd, ...
+        ranked = sorted(
+            [((set(selected) - set(list(fs))).pop(), val) for fs, val in res.items()],
+            key=lambda tv: -(tv[1] if tv[1] == tv[1] else -9))
+        removed, v = ranked[0]
+        accept = best - v <= a.tol
+        for rk, (t, vv) in enumerate(ranked, 1):
+            rankings.append({"round": rnd, "rank": rk, "removed": t, "val": round(vv, 4),
+                             "chosen": (t == removed and accept)})
+        print(f"[round {rnd}] ranking: "
+              + " > ".join(f"-{t}:{vv:.3f}" for t, vv in ranked[:5]), flush=True)
         print(f"[round {rnd}] best removal: -{removed} -> val={v:.4f} "
               f"(prev best {best:.4f})", flush=True)
-        if best - v > a.tol:
+        if not accept:
+            rounds.append({"round": rnd, "removed": "(stopped)", "n_tracks": len(selected),
+                           "val": best, "kept": "+".join(sorted(selected)),
+                           "all_removals": ";".join(f"{t}:{vv:.4f}" for t, vv in ranked)})
+            write_out()
             print(f"[stop] removing any track now costs > {a.tol}; "
                   f"final set = {sorted(selected)} ({len(selected)} tracks)", flush=True)
             break
-        selected = sub_tracks
+        selected = [t for t in selected if t != removed]   # kept = selected minus removed
         best = max(best, v)
         rounds.append({"round": rnd, "removed": removed, "n_tracks": len(selected),
-                       "val": v, "kept": "+".join(sorted(selected))})
+                       "val": v, "kept": "+".join(sorted(selected)),
+                       "all_removals": ";".join(f"{t}:{vv:.4f}" for t, vv in ranked)})
+        write_out()
 
-    with open(out_root / "backward.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["round", "removed", "n_tracks", "val", "kept"])
-        w.writeheader()
-        w.writerows(rounds)
     try:
         import matplotlib
         matplotlib.use("Agg")
