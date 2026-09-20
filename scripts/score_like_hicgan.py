@@ -56,8 +56,12 @@ log = get_logger("score-like-hicgan")
 def load_model(cfg, ckpt, device):
     channels = json.loads((ckpt / "channels.json").read_text())
     emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
-    in_ch = n_cond_channels(len(channels["sym_rows"]) + emb,
-                            len(channels["motif_ids"]),
+    if cfg.train.select_tracks:                       # subset-of-tracks model
+        from hicmultiome.train import _select_rows
+        _, _, n_motifs, n_sym = _select_rows(cfg, channels)
+    else:
+        n_sym, n_motifs = len(channels["sym_rows"]), len(channels["motif_ids"])
+    in_ch = n_cond_channels(n_sym + emb, n_motifs,
                             2 if channels.get("capture_input") else 0,
                             cfg.model.cond_mode)
     backbone = build_backbone(cfg.model.kind, in_ch,
@@ -117,8 +121,13 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, channels = load_model(cfg, ckpt, device)
     size, res = cfg.window.size, cfg.data.resolution
-    n_motifs = len(channels["motif_ids"])
-    offset = len(channels["tracks"]) + len(channels["seq_features"])
+    sel_rows = None
+    if cfg.train.select_tracks:
+        from hicmultiome.train import _select_rows
+        sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
+    else:
+        n_motifs = len(channels["motif_ids"])
+        offset = len(channels["tracks"]) + len(channels["seq_features"])
     mat_norm = MatrixNormalizer.load(ckpt / f"norm_matrix_{sample.name}.json")
     track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
 
@@ -145,6 +154,8 @@ def main():
         nb = chrom_nbins_of(src, name)
         sym_full = track_norm.apply(
             assemble_chrom(cfg, sample, track_files, name, nb))
+        if sel_rows is not None:                       # keep only selected tracks
+            sym_full = sym_full[sel_rows]
 
         for _, r in grp.iterrows():
             tname = match_name(chrom, list(tgt.chromnames))
