@@ -48,7 +48,7 @@ def _cached(out_root, tracks):
     return None
 
 
-def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gpu, py):
+def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gpus, py):
     cfg = copy.deepcopy(base)
     cfg["sequence"]["encoder"] = "none"
     cfg["train"].update({
@@ -64,42 +64,32 @@ def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gp
     yaml.safe_dump(cfg, open(cfg_path, "w"), sort_keys=False)
     log_path = out_root / f"cand_{_key(tracks)}.log"
     fh = open(log_path, "w")
-    env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu))
-    p = subprocess.Popen([py, "-m", "hicmultiome.train", "--config", str(cfg_path)],
-                         stdout=fh, stderr=subprocess.STDOUT, env=env)
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
+    torchrun = str(Path(py).parent / "torchrun")
+    cmd = ([torchrun, "--standalone", f"--nproc_per_node={len(gpus)}",
+            "-m", "hicmultiome.train", "--config", str(cfg_path)] if len(gpus) > 1
+           else [py, "-m", "hicmultiome.train", "--config", str(cfg_path)])
+    p = subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT, env=env)
     p._fh = fh
     return p, log_path
 
 
 def eval_sets(base, cache, subsets, val_regions, patience, max_epochs, out_root, gpus, py):
-    """{frozenset(tracks): val} for each subset, rolling pool over GPUs, reusing
-    finished candidates."""
+    """{frozenset(tracks): val} for each subset. Each candidate trains on ALL
+    GPUs (DDP), one candidate at a time; finished candidates are reused."""
     results = {}
-    queue = []
     for ts in subsets:
         cv = _cached(out_root, ts)
         if cv is not None:
             results[frozenset(ts)] = cv
             print(f"    {sorted(ts)}: {cv:.4f} (cached)", flush=True)
-        else:
-            queue.append(ts)
-    free = list(gpus)
-    running = {}
-    while queue or running:
-        while queue and free:
-            gpu = free.pop(0)
-            ts = queue.pop(0)
-            print(f"    drop-eval {sorted(ts)} on GPU {gpu}", flush=True)
-            p, log = _launch(base, cache, ts, val_regions, patience, max_epochs, out_root, gpu, py)
-            running[gpu] = (ts, p, log)
-        time.sleep(5)
-        for gpu, (ts, p, log) in list(running.items()):
-            if p.poll() is not None:
-                p._fh.close()
-                results[frozenset(ts)] = _best_val(Path(log).read_text(errors="replace"))
-                print(f"    {sorted(ts)}: {results[frozenset(ts)]:.4f} (GPU {gpu} free)", flush=True)
-                del running[gpu]
-                free.append(gpu)
+            continue
+        print(f"    drop-eval {sorted(ts)} on GPUs {gpus} (DDP)", flush=True)
+        p, log = _launch(base, cache, ts, val_regions, patience, max_epochs, out_root, gpus, py)
+        p.wait()
+        p._fh.close()
+        results[frozenset(ts)] = _best_val(Path(log).read_text(errors="replace"))
+        print(f"    {sorted(ts)}: {results[frozenset(ts)]:.4f}", flush=True)
     return results
 
 
