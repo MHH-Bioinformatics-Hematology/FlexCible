@@ -171,6 +171,34 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
     return float(np.nanmean(rs)) if rs else float("nan")
 
 
+@torch.no_grad()
+def val_akita_median(model, data, device, batch, offset, n_motifs,
+                     cond_mode="full", seq_fn=None):
+    """Akita-style validation: the median over the held-out regions of each
+    region's Pearson between prediction and target over its finite upper-triangle
+    pixels (log obs/exp). Pearson is affine-invariant, so comparing in the
+    encoded space the model outputs equals comparing decoded O/E."""
+    if data is None or data["target"].shape[0] == 0:
+        return float("nan")
+    model.eval()
+    rs = []
+    N = data["target"].shape[0]
+    for i in range(0, N, batch):
+        tgt = data["target"][i : i + batch].to(device)
+        sym, pairs = split_cond(data["cond"][i : i + batch].to(device), offset, n_motifs)
+        seq_oh = seq_fn(i, tgt.shape[0]) if seq_fn is not None else None
+        p = model(sym, pairs, None, seq_oh)[:, 0].float().cpu().numpy()
+        t = tgt[:, 0].float().cpu().numpy()
+        iu = np.triu_indices(p.shape[-1], 1)
+        for k in range(p.shape[0]):
+            pk, tk = p[k][iu], t[k][iu]
+            m = np.isfinite(pk) & np.isfinite(tk)
+            if m.sum() > 100 and pk[m].std() > 1e-8 and tk[m].std() > 1e-8:
+                rs.append(np.corrcoef(pk[m], tk[m])[0, 1])
+    model.train()
+    return float(np.median(rs)) if rs else float("nan")
+
+
 def _plot_curve(rows, out_png):
     import matplotlib
 
@@ -215,8 +243,20 @@ def train(cfg: Config):
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed)
-    vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed)
+    if cfg.train.val_regions:
+        # hold out a fixed set of whole windows as an Akita-style validation set
+        data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed)
+        vds = ds
+        if data is not None:
+            perm = np.random.default_rng(cfg.train.seed).permutation(data["target"].shape[0])
+            vi, ti = perm[: cfg.train.val_regions], perm[cfg.train.val_regions :]
+            vdata = {k: v[vi] for k, v in data.items()}
+            data = {k: v[ti] for k, v in data.items()}
+        else:
+            vdata = None
+    else:
+        data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed)
+        vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed)
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
 
@@ -383,11 +423,13 @@ def train(cfg: Config):
                 seq_fn = lambda i, n: batch_onehot(
                     val_coords, list(range(i, i + n)), [False] * n, W, binsize,
                     fasta_map, device)
-            r = val_distance_pearson(
-                model, vdata_d, device,
-                max(1, min(batch, vdata_d["target"].shape[0])), offset, n_motifs,
-                capin=capin, cond_mode=cond_mode, seq_fn=seq_fn,
-            )
+            vb = max(1, min(batch, vdata_d["target"].shape[0]))
+            if cfg.train.val_regions:
+                r = val_akita_median(model, vdata_d, device, vb, offset, n_motifs,
+                                     cond_mode=cond_mode, seq_fn=seq_fn)
+            else:
+                r = val_distance_pearson(model, vdata_d, device, vb, offset, n_motifs,
+                                         capin=capin, cond_mode=cond_mode, seq_fn=seq_fn)
             imp = r > best
             log.info("  [val] epoch %d step %d  dist-pearson=%.4f%s",
                      epoch, step, r, "  <- best" if imp else "")

@@ -296,6 +296,10 @@ class TrainConfig:
     # improved for patience_epochs (validated once per epoch). None disables.
     max_epochs: int | None = None
     patience_epochs: int | None = None
+    # hold out this many fixed windows (seeded) as an Akita-style validation set
+    # -- validation and early stopping then use the median per-region Pearson of
+    # log(obs/exp) over them, not the per-distance Pearson. None = old behaviour.
+    val_regions: int | None = None
     # write checkpoints during training. Off for the greedy screen, where only
     # the logged best-val matters, to avoid a 128 MB write every epoch stalling
     # the GPU.
