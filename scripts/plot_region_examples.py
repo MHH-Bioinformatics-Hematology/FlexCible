@@ -108,9 +108,13 @@ def main():
         + [("medium", df.iloc[mid - n // 2 + i]) for i in range(n)] \
         + [("bad", df.iloc[len(df) - n + i]) for i in range(n)]
 
-    rows = len(picks)
-    fig, axes = plt.subplots(rows, 2, figsize=(6, 3 * rows))
-    for r, (band, row) in enumerate(picks):
+    # 3x3 grid: rows = good/medium/bad, each a split map (upper=truth, lower=ours)
+    bands = ["good", "medium", "bad"]
+    fig, axes = plt.subplots(3, n, figsize=(3.2 * n, 3.4 * 3))
+    kw = dict(cmap="RdBu_r", vmin=-2, vmax=2)
+    for idx, (band, row) in enumerate(picks):
+        br, bc = bands.index(band), idx % n
+        ax = axes[br, bc] if n > 1 else axes[br]
         chrom, span = row["region"].split(":")
         start, end = (int(x) for x in span.split("-"))
         tname = match_name(chrom, list(tgt.chromnames))
@@ -119,21 +123,20 @@ def main():
         P = predict_region(cfg, model, channels, sel_rows, offset, n_motifs, use_seq,
                            fasta, mat_norm, track_norm, track_files, sample, src,
                            chrom, start, end, n_out, tgt.binsize, device, a.tta)
-        Tm = np.where(T == 0, np.nan, T)
-        kw = dict(cmap="RdBu_r", vmin=-2, vmax=2)
-        axes[r, 0].imshow(Tm, **kw)
-        axes[r, 1].imshow(P, **kw)
+        # split map: upper triangle (incl. diagonal) = original, lower = prediction
+        M = P.astype(float).copy()
+        ut = np.triu_indices(n_out, 0)
+        M[ut] = np.where(T[ut] == 0, np.nan, T[ut])
+        ax.imshow(M, **kw)
         ar = row.get("akita_gm12878", float("nan"))
-        axes[r, 0].set_ylabel(f"{band}\n{row['region']}", fontsize=7)
-        axes[r, 0].set_title("ground truth" if r == 0 else "", fontsize=9)
-        axes[r, 1].set_title("our prediction" if r == 0 else "", fontsize=9)
-        axes[r, 1].text(0.02, 0.06, f"ours r={row['ours']:.2f}\nAkita r={ar:.2f}",
-                        transform=axes[r, 1].transAxes, fontsize=7,
-                        bbox=dict(fc="white", alpha=0.7, lw=0))
-        for c in (0, 1):
-            axes[r, c].set_xticks([]); axes[r, c].set_yticks([])
-    fig.suptitle("RAD21+H3K4me1+H3K4me2 vs Akita target (log obs/exp)", fontsize=10)
-    fig.tight_layout()
+        ax.set_title(f"{row['region']}\nours r={row['ours']:.2f} | Akita r={ar:.2f}",
+                     fontsize=7)
+        if bc == 0:
+            ax.set_ylabel(band, fontsize=11, fontweight="bold")
+        ax.set_xticks([]); ax.set_yticks([])
+    fig.suptitle("upper = original Hi-C  |  lower = hic-multiome-unet "
+                 "(RAD21+H3K4me1+H3K4me2), log obs/exp", fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(a.out, dpi=150)
     print("wrote", a.out)
 
