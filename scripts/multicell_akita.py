@@ -1,0 +1,249 @@
+"""Multi-cell retraining on Akita's five cell types, outside Akita's excluded regions.
+
+Akita trains one network on HFF and H1-hESC Micro-C and GM12878, IMR90 and
+HCT116 in situ Hi-C. Here the best single-cell configuration (the resolved
+config of runs/motif_grid/full__all13__4motifs: 13 ChIP tracks, CTCF, YY1,
+ZNF143 and MAZ motif planes, GC/CpG, no DNA encoder, no distance bias, 2 kb,
+oe_proper.py targets) is retrained on several cells at once, each cell with
+its own ChIP. Training windows are restricted to Akita's training sequences
+(`data.train_regions_bed`, built by scripts/akita_regions.py); validation is
+100 held-out windows per cell with patience-based early stopping, both GPUs.
+
+Runs (names select cells and options):
+  gm1         GM12878 alone with the region filter (isolates the filter's effect)
+  hic3        GM12878, IMR90, HCT116 (in situ Hi-C only)
+  all5        the three Hi-C cells plus HFF and H1 Micro-C
+  all5assay   all5 with the assay indicator row (0 Hi-C, 1 Micro-C)
+
+Stages, each skipped when its output exists:
+  precompute  window cache per run (CPU; several can run in parallel)
+  train       torchrun on --gpus
+  eval        per training cell: scripts/eval_val_windows.py --split test --sample
+              (the disjoint Akita test windows of that cell's own target), and
+              scripts/crosscell_predict.py --tta on the 413 Akita test regions for
+              every cell with a target (training and unseen cells), with the
+              measured maps of the other cells as baselines
+  The single-cell reference checkpoint is scored with crosscell_predict under
+  the run name "ref".
+
+    python scripts/multicell_akita.py --runs gm1 hic3 all5 all5assay --stage all
+"""
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import yaml
+
+REPO = Path(__file__).resolve().parents[1]
+HM = Path("/mnt/processed/wolffjoa/hic-multiome")
+OE = HM / "crosscell_oe"
+REF_RUN = HM / "runs/motif_grid/full__all13__4motifs"
+REF_CFG = HM / "runs/motif_grid/full__all13__4motifs.yaml"
+TRAIN_BED = Path.home() / "data/hic-multiome/akita/akita_train_regions.bed"
+OUT = HM / "runs/multicell"
+CACHE = REPO / "cache"
+PY = sys.executable
+TORCHRUN = str(Path(sys.executable).parent / "torchrun")
+
+ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
+         "H3K4me2", "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"]
+
+# name: (target O/E cool, ChIP bigwig dir, assay)
+CELLS = {
+    "gm12878": (OE / "gm12878_proper_2kb.cool",
+                Path.home() / "data/hic-multiome/hg38_gm12878", "hic"),
+    "imr90": (OE / "imr90_proper_2kb.cool", HM / "hg38_imr90", "hic"),
+    "hct116": (OE / "hct116_proper_2kb.cool", HM / "hg38_hct116", "hic"),
+    "hff": (OE / "hff_proper_2kb.cool", HM / "hg38_hff", "microc"),
+    "h1": (OE / "h1_proper_2kb.cool", HM / "hg38_h1", "microc"),
+    # never trained on; scored with crosscell_predict only
+    "k562": (OE / "k562_proper_2kb.cool", HM / "hg38_k562", "hic"),
+    "hmec": (OE / "hmec_rep1_ice_2kb.cool", HM / "hg38_hmec", "hic"),
+    "huvec": (OE / "huvec_rep1_ice_2kb.cool", HM / "hg38_huvec", "hic"),
+}
+BASELINE_CELLS = ["gm12878", "imr90", "hct116", "hff", "h1", "k562"]
+RUNS = {
+    "gm1": (["gm12878"], False),
+    "hic3": (["gm12878", "imr90", "hct116"], False),
+    "all5": (["gm12878", "imr90", "hct116", "hff", "h1"], False),
+    "all5assay": (["gm12878", "imr90", "hct116", "hff", "h1"], True),
+}
+
+
+def missing_marks(bw_dir: Path) -> list[str]:
+    have = {p.stem.upper() for p in bw_dir.glob("*.bigwig")}
+    return [t for t in ALL13 if t.upper() not in have]
+
+
+def run_config(name: str, val_per_cell: int, patience: int, max_epochs: int) -> dict:
+    cells, assay = RUNS[name]
+    cfg = copy.deepcopy(yaml.safe_load(open(REF_CFG)))
+    cfg["data"]["samples"] = [
+        {"name": c, "cool_path": str(CELLS[c][0]), "bigwig_dir": str(CELLS[c][1]),
+         "missing_tracks": missing_marks(CELLS[c][1]), "assay": CELLS[c][2]}
+        for c in cells]
+    cfg["data"]["train_regions_bed"] = str(TRAIN_BED)
+    cfg["data"]["assay_indicator"] = assay
+    cfg["train"].update({
+        "output_dir": str(OUT / name), "cache_dir": str(CACHE / f"mc_{name}"),
+        "val_regions": val_per_cell * len(cells), "patience_epochs": patience,
+        "max_epochs": max_epochs, "resident_dtype": "float16", "resume": False,
+        "save_checkpoints": True, "track_dropout": 0.0,
+    })
+    return cfg
+
+
+def done(log: Path) -> bool:
+    t = log.read_text(errors="replace") if log.exists() else ""
+    return "early stop at epoch" in t or "done." in t
+
+
+def sh(cmd, log: Path, env=None):
+    print("[cmd]", " ".join(map(str, cmd)), flush=True)
+    with open(log, "a") as fh:
+        return subprocess.run(list(map(str, cmd)), stdout=fh, stderr=subprocess.STDOUT,
+                              env=env, cwd=REPO).returncode
+
+
+def crosscell(tag: str, cfg_path: Path, ckpt: Path, out: Path, gpu: str):
+    out.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu)
+    for cell, (cool, bw, assay) in CELLS.items():
+        if not cool.exists() or not bw.exists():
+            print(f"[skip] {tag}/{cell}: target or ChIP missing", flush=True)
+            continue
+        if (out / f"predict_{cell}.csv").exists():
+            continue
+        others = [f"{o}={CELLS[o][0]}" for o in BASELINE_CELLS
+                  if o != cell and CELLS[o][0].exists()]
+        sh([PY, "scripts/crosscell_predict.py", "--config", cfg_path,
+            "--checkpoint", ckpt, "--cell", cell, "--bigwig-dir", bw,
+            "--target", cool, "--tta", "--assay", assay, "--out-dir", out,
+            "--others", *others], out / f"predict_{cell}.log", env)
+
+
+def summarize():
+    """Tables from all finished runs: test730.csv (eval_val_windows per training
+    cell) and crosscell.csv (crosscell_predict medians with the best baseline),
+    plus train_windows.csv (cache sizes and windows removed by the region filter)."""
+    import csv
+
+    import pandas as pd
+
+    names = ["ref"] + list(RUNS)
+    t_rows, c_rows, w_rows = [], [], []
+    for tag, rdir in (("ref", REF_RUN), ("ref_seed1", Path(f"{REF_RUN}__seed1"))):
+        if (rdir / "test_eval.json").exists():
+            r = json.loads((rdir / "test_eval.json").read_text())
+            t_rows.append({"run": tag, "cell": "gm12878", "n": r["n"],
+                           "oe_median_r": round(r["oe_median_r"], 4)})
+    for name in names:
+        run = OUT / name
+        for j in sorted(run.glob("test_eval_*.json")):
+            r = json.loads(j.read_text())
+            t_rows.append({"run": name, "cell": r["sample"], "n": r["n"],
+                           "oe_median_r": round(r["oe_median_r"], 4)})
+        for f in sorted((run / "crosscell").glob("predict_*.csv")):
+            df = pd.read_csv(f)
+            cell = f.stem.replace("predict_", "")
+            base = {c.replace("base_", ""): df[c].median() for c in df.columns
+                    if c.startswith("base_")}
+            best = max(base, key=base.get) if base else ""
+            c_rows.append({"run": name, "cell": cell,
+                           "trained_on_cell": name != "ref" and cell in RUNS[name][0]
+                           or (name == "ref" and cell == "gm12878"),
+                           "n": int(df["model"].notna().sum()),
+                           "model": round(float(df["model"].median()), 4),
+                           "best_baseline_cell": best,
+                           "best_baseline": round(float(base[best]), 4) if best else None,
+                           **{f"base_{k}": round(float(v), 4) for k, v in base.items()}})
+        man = CACHE / f"mc_{name}" / "manifest.json"
+        if man.exists():
+            m = json.loads(man.read_text())
+            per = {}
+            for sh_ in m["shards"]:
+                d = per.setdefault(sh_["sample"], {"train": 0, "test": 0})
+                d[sh_["split"]] += sh_["n_windows"]
+            for smp, d in per.items():
+                w_rows.append({"run": name, "cell": smp, "train_windows": d["train"],
+                               "test_windows": d["test"]})
+            w_rows.append({"run": name, "cell": "ALL",
+                           "train_windows": sum(d["train"] for d in per.values()),
+                           "test_windows": sum(d["test"] for d in per.values()),
+                           "removed_by_train_regions": m.get("n_outside_train_regions")})
+    for fn, rows in (("test730.csv", t_rows), ("crosscell.csv", c_rows),
+                     ("train_windows.csv", w_rows)):
+        if not rows:
+            continue
+        keys = []
+        for r in rows:
+            keys += [k for k in r if k not in keys]
+        with open(OUT / fn, "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=keys)
+            w.writeheader()
+            w.writerows(rows)
+        print(f"wrote {OUT / fn}")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--runs", nargs="+", default=list(RUNS), choices=list(RUNS) + ["ref"])
+    ap.add_argument("--stage", choices=["precompute", "train", "eval", "all", "summary"],
+                    default="all")
+    ap.add_argument("--gpus", default="0,1")
+    ap.add_argument("--val-per-cell", type=int, default=100)
+    ap.add_argument("--patience", type=int, default=10)
+    ap.add_argument("--max-epochs", type=int, default=100)
+    a = ap.parse_args()
+    OUT.mkdir(parents=True, exist_ok=True)
+    if a.stage == "summary":
+        summarize()
+        return
+    gpus = [g for g in a.gpus.split(",") if g]
+
+    for name in a.runs:
+        if name == "ref":
+            if a.stage in ("eval", "all"):
+                ck = REF_RUN / (REF_RUN / "best").read_text().strip()
+                crosscell("ref", ck / "config.yaml", ck, OUT / "ref" / "crosscell", gpus[0])
+            continue
+        cfg = run_config(name, a.val_per_cell, a.patience, a.max_epochs)
+        cp = OUT / f"{name}.yaml"
+        yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
+        cache = Path(cfg["train"]["cache_dir"])
+        if a.stage in ("precompute", "all") and not (cache / "manifest.json").exists():
+            print(f"[precompute] {name}", flush=True)
+            if sh([PY, "-m", "hicmultiome.precompute", "--config", cp],
+                  OUT / f"{name}.precompute.log"):
+                raise SystemExit(f"precompute failed for {name}")
+        log = OUT / f"{name}.log"
+        if a.stage in ("train", "all") and not done(log):
+            if not (cache / "manifest.json").exists():
+                raise SystemExit(f"{name}: no cache; run --stage precompute first")
+            log.write_text("")
+            env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
+            sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
+                "-m", "hicmultiome.train", "--config", cp], log, env)
+            if not done(log):
+                raise SystemExit(f"training failed for {name}; see {log}")
+        if a.stage in ("eval", "all"):
+            run = OUT / name
+            env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpus[0])
+            for cell in RUNS[name][0]:
+                if not (run / f"test_eval_{cell}.json").exists():
+                    sh([PY, "scripts/eval_val_windows.py", "--run", run, "--split", "test",
+                        "--sample", cell], OUT / f"{name}.eval.log", env)
+            ck = run / (run / "best").read_text().strip()
+            crosscell(name, ck / "config.yaml", ck, run / "crosscell", gpus[0])
+        print(f"[done] {name} ({a.stage})", flush=True)
+    print("MULTICELL_DONE", flush=True)
+
+
+if __name__ == "__main__":
+    main()

@@ -45,6 +45,9 @@ def main():
     ap.add_argument("--others", nargs="*", default=[], help="cell=cool of OTHER cells")
     ap.add_argument("--binsize", type=int, default=2000)
     ap.add_argument("--tta", action="store_true")
+    ap.add_argument("--assay", choices=["hic", "microc"], default=None,
+                    help="contact assay of this cell's map, for models trained "
+                         "with data.assay_indicator (default: keep the config's)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default="/mnt/processed/wolffjoa/hic-multiome/runs/crosscell")
     a = ap.parse_args()
@@ -68,6 +71,8 @@ def main():
     # this cell's sample: point tracks at its bigwig dir; which marks it has
     sample = cfg.get_sample(None)
     sample.bigwig_dir = a.bigwig_dir
+    if a.assay is not None:
+        sample.assay = a.assay
     have = {p.stem.upper(): p for p in Path(a.bigwig_dir).glob("*.bigwig")}
     missing = [t for t in channels["tracks"] if t.upper() not in have]
     print(f"[{a.cell}] {n_chip-len(missing)}/{n_chip} marks; missing={missing}", flush=True)

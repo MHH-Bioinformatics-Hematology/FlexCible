@@ -45,7 +45,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--run", required=True)
     ap.add_argument("--ckpt", default="best")
-    ap.add_argument("--expected", required=True)
+    ap.add_argument("--expected", default=None,
+                    help="expected-profile npz for the log-obs rows; without it "
+                         "only the O/E score is computed")
+    ap.add_argument("--sample", default=None,
+                    help="multi-sample caches: score only this sample's windows "
+                         "(default: all windows pooled)")
     ap.add_argument("--split", choices=["val", "test"], default="val",
                     help="val: the run's held-out validation windows (they overlap "
                          "training windows by up to half a window); test: all "
@@ -66,6 +71,11 @@ def main():
         data, ds = _stack(cfg.train.cache_dir, "test", 0.0, False, cfg.train.seed,
                           chroms=cfg.train.chroms)
         vi = np.arange(data["target"].shape[0])
+    if a.sample is not None:
+        smp = _coords(ds)[2]
+        vi = np.array([i for i in vi if smp[i] == a.sample], dtype=np.int64)
+        if not len(vi):
+            raise SystemExit(f"no {a.split} windows for sample {a.sample!r}")
     tgt = data["target"][vi][:, 0].numpy()
     cond = data["cond"][vi]
     ch, st, sm = _coords(ds)
@@ -96,25 +106,34 @@ def main():
             preds.append(model(sym, pairs, None, oh)[:, 0].float().cpu().numpy())
     pred = np.concatenate(preds)
 
-    scale = json.loads(next(Path(cfg.train.cache_dir).glob("norm_matrix_*.json")).read_text())["scale"]
-    E = np.load(a.expected)
+    nm = Path(cfg.train.cache_dir) / f"norm_matrix_{a.sample}.json"
+    if a.sample is None or not nm.exists():
+        nm = next(Path(cfg.train.cache_dir).glob("norm_matrix_*.json"))
+    scale = json.loads(nm.read_text())["scale"]
+    E = np.load(a.expected) if a.expected else None
     idx = np.arange(W)
     D = np.abs(idx[:, None] - idx[None, :])
     r_oe, r_lo, r_dist = [], [], []
     for k in range(len(vi)):
         c = vcoords[0][k]
-        decay = np.log(E[f"{c}:exp"])[D] + E[f"{c}:offset"][D]
         t_oe = np.clip(tgt[k], -1, 1) * scale
         p_oe = np.clip(pred[k], -1, 1) * scale
         r_oe.append(region_r(p_oe, t_oe))
+        if E is None:
+            continue
+        decay = np.log(E[f"{c}:exp"])[D] + E[f"{c}:offset"][D]
         r_lo.append(region_r(p_oe + decay, t_oe + decay))
         r_dist.append(region_r(decay, t_oe + decay))
     res = {"run": str(run), "ckpt": str(ck), "split": a.split, "n": len(vi),
-           "oe_median_r": float(np.nanmedian(r_oe)),
-           "logobs_median_r_decay_inflated": float(np.nanmedian(r_lo)),
-           "distance_only_logobs_median_r": float(np.nanmedian(r_dist))}
+           "oe_median_r": float(np.nanmedian(r_oe))}
+    if a.sample is not None:
+        res["sample"] = a.sample
+    if E is not None:
+        res["logobs_median_r_decay_inflated"] = float(np.nanmedian(r_lo))
+        res["distance_only_logobs_median_r"] = float(np.nanmedian(r_dist))
     print(json.dumps(res, indent=1))
-    Path(a.out or run / f"{a.split}_eval.json").write_text(json.dumps(res, indent=1))
+    Path(a.out or run / (f"{a.split}_eval.json" if a.sample is None
+                         else f"{a.split}_eval_{a.sample}.json")).write_text(json.dumps(res, indent=1))
 
 
 if __name__ == "__main__":
