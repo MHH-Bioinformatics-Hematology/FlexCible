@@ -1,0 +1,14 @@
+name,val
+noChIP__4motifs+annot,0.3549
+noCohesin__4motifs+annot,0.6104
+all13__4motifs+annot,0.6632
+ctcfCohesin__4motifs,0.5467
+ctcfCohesin__4motifs+annot,0.585
+all13__ctcfMotif__ckpt,0.6615
+all13__ctcfMotif+distBias,0.6599
+noChIP__4motifs__hv,0.2752
+noChIP__4motifs+enc__hv,0.1935
+noCohesin__4motifs__hv,0.6019
+noCohesin__4motifs+enc__hv,0.5396
+histones__4motifs__hv,0.5117
+histones__4motifs+enc__hv,0.4374

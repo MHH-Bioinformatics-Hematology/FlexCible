@@ -1,0 +1,13 @@
+n_tracks,dropped,val,chroms
+13,(none),0.6085,"chr2,chr3,chr5"
+12,H3K36me3,0.5999,"chr2,chr3,chr5"
+12,H3K4me3,0.5998,"chr2,chr3,chr5"
+12,H3K27me3,0.5919,"chr2,chr3,chr5"
+12,RAD21,0.5834,"chr2,chr3,chr5"
+12,SMC3,0.5807,"chr2,chr3,chr5"
+12,H3K9ac,0.5683,"chr2,chr3,chr5"
+12,CTCF,0.5639,"chr2,chr3,chr5"
+12,H3K4me1,0.5625,"chr2,chr3,chr5"
+12,H3K27ac,0.5596,"chr2,chr3,chr5"
+12,H3K4me2,0.5543,"chr2,chr3,chr5"
+12,H3K79me2,0.5351,"chr2,chr3,chr5"
