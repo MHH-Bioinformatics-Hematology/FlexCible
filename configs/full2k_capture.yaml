@@ -1,0 +1,98 @@
+# GM12878 promoter capture Hi-C (Mifsud 2015, lifted fragment-wise to hg38 by
+# scripts/lift_capture_hg38.py) on top of configs/full2k_motifs.yaml.
+# As written: variant A, capture as an auxiliary TARGET only (second output
+# channel, bait-masked loss). scripts/capture_experiment.py derives variant B
+# (capture.use_as_input: true, input_dropout 0.5) from this file.
+data:
+  tracks:
+  - name: CTCF
+    type: tf
+    motif: MA0139.2
+  - name: RAD21
+    type: cofactor
+    motif: MA0139.2
+  - name: SMC3
+    type: cofactor
+    motif: MA0139.2
+  - name: H3K27ac
+    type: histone
+  - name: H3K27me3
+    type: histone
+  - name: H3K36me3
+    type: histone
+  - name: H3K4me1
+    type: histone
+  - name: H3K4me2
+    type: histone
+  - name: H3K4me3
+    type: histone
+  - name: H3K79me2
+    type: histone
+  - name: H3K9ac
+    type: histone
+  - name: H3K9me3
+    type: histone
+  - name: H4K20me1
+    type: histone
+  samples:
+  - name: gm12878_hg38
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/gm12878_proper_2kb.cool
+    bigwig_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/hg38_gm12878
+    capture_interactions: /home/mh-hannover.local/wolffjoa/data/hic-multiome/pchic/TS5_GM12878_promoter-other_significant_interactions.hg38.txt
+    capture_baits: /home/mh-hannover.local/wolffjoa/data/hic-multiome/pchic/GM12878_pchic_baits.hg38.bed
+  resolution: 2000
+  holdout_bed: /home/mh-hannover.local/wolffjoa/data/hic-multiome/akita_holdout_valid_test.bed
+sequence:
+  fasta: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome/hg38.fa
+  features:
+  - gc
+  - cpg
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  enabled: true
+  score_frac: 0.8
+  extra:
+  - MA0095.3
+  - MA0088.2
+  - MA1522.1
+window:
+  size: 512
+  stride: 256
+  transform: prescaled
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+train:
+  output_dir: runs/full2k_capture
+  cache_dir: cache/full2k_capture
+  batch_size: 3
+  lr: 0.0003
+  max_steps: 2000000000
+  max_minutes: null
+  eval_every: 600
+  val_fraction: 0.1
+  seed: 0
+  amp: bf16
+  compile: true
+  augment_reverse: true
+  track_dropout: 0.0
+  track_dropout_mode: uniform_count
+  val_regions: 100
+  max_epochs: 100
+  patience_epochs: 10
+predict:
+  merge: hann
+  integer_counts: false
+capture:
+  format: mifsud
+  min_score: 0.0
+  loss_weight: 0.5
+  clip_quantile: 0.999
+  use_as_input: false
+  input_dropout: 0.5
