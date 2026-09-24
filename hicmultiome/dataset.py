@@ -23,7 +23,7 @@ from torch.utils.data import Dataset
 
 class WindowDataset(Dataset):
     def __init__(self, cache_dir: str, split: str, val_fraction: float = 0.0,
-                 want_val: bool = False, seed: int = 0):
+                 want_val: bool = False, seed: int = 0, chroms=None):
         self.cache_dir = Path(cache_dir)
         manifest = json.loads((self.cache_dir / "manifest.json").read_text())
         self.channels = {
@@ -32,9 +32,12 @@ class WindowDataset(Dataset):
         }
         self.window_size = manifest["window_size"]
 
+        # optional chromosome restriction (fast proxy search on 1-2 chroms)
+        chroms = set(chroms) if chroms else None
         self._index: list[tuple[str, int, str, int, str]] = []
         self._shard_cache: dict[str, dict] = {}
-        for s in [s for s in manifest["shards"] if s["split"] == split]:
+        for s in [s for s in manifest["shards"]
+                  if s["split"] == split and (chroms is None or s["chrom"] in chroms)]:
             data = np.load(s["path"])
             for i, st in enumerate(data["start"]):
                 self._index.append(

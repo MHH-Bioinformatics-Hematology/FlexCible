@@ -56,7 +56,7 @@ log = get_logger("score-like-hicgan")
 def load_model(cfg, ckpt, device):
     channels = json.loads((ckpt / "channels.json").read_text())
     emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
-    if cfg.train.select_tracks:                       # subset-of-tracks model
+    if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:  # subset model
         from hicmultiome.train import _select_rows
         _, _, n_motifs, n_sym = _select_rows(cfg, channels)
     else:
@@ -70,7 +70,8 @@ def load_model(cfg, ckpt, device):
                               depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if cfg.sequence.uses_encoder else None)
-    model = HiCModel(backbone, cfg.model.cond_mode, encoder).to(device)
+    model = HiCModel(backbone, cfg.model.cond_mode, encoder,
+                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
     sd = torch.load(ckpt / "model.pt", map_location=device)
     # older checkpoints stored the bare backbone (no encoder); its keys have no
     # "backbone." prefix, so remap them onto the HiCModel wrapper
@@ -122,7 +123,7 @@ def main():
     model, channels = load_model(cfg, ckpt, device)
     size, res = cfg.window.size, cfg.data.resolution
     sel_rows = None
-    if cfg.train.select_tracks:
+    if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
         from hicmultiome.train import _select_rows
         sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
     else:

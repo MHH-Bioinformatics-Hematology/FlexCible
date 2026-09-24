@@ -271,18 +271,29 @@ class HiCModel(nn.Module):
     view keeps its offset), and the fixed 1D->2D conditioning is built here."""
 
     def __init__(self, backbone: nn.Module, cond_mode: str,
-                 encoder: SeqEncoder | None = None):
+                 encoder: SeqEncoder | None = None, dist_bias: int = 0):
         super().__init__()
         self.backbone = backbone
         self.encoder = encoder
         self.cond_mode = cond_mode
+        # optional learned per-distance offset b[|i-j|] added to the Hi-C
+        # output channel (symmetric by construction); 0 = off, so checkpoints
+        # without it load unchanged
+        self.dist_bias = (nn.Parameter(torch.zeros(dist_bias)) if dist_bias
+                          else None)
 
     def forward(self, cond, pairs=None, planes=None, seq_onehot=None):
         sym = cond
         if self.encoder is not None and seq_onehot is not None:
             emb = self.encoder(seq_onehot, cond.shape[-1])
             sym = torch.cat([cond, emb], dim=1)
-        return self.backbone(build_spatial_cond(sym, pairs, planes, self.cond_mode))
+        out = self.backbone(build_spatial_cond(sym, pairs, planes, self.cond_mode))
+        if self.dist_bias is not None:
+            w = out.shape[-1]
+            idx = torch.arange(w, device=out.device)
+            b = self.dist_bias[:w][(idx[:, None] - idx[None, :]).abs()]
+            out = torch.cat([out[:, :1] + b.to(out.dtype), out[:, 1:]], dim=1)
+        return out
 
 
 BACKBONES = ("unet", "dilated", "axial", "pixelmlp")

@@ -46,8 +46,8 @@ def ddp_env():
     )
 
 
-def _stack(cache_dir, split, val_fraction, want_val, seed):
-    ds = WindowDataset(cache_dir, split, val_fraction, want_val, seed)
+def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None):
+    ds = WindowDataset(cache_dir, split, val_fraction, want_val, seed, chroms=chroms)
     if len(ds) == 0:
         return None, ds
     n, w = len(ds), ds.window_size
@@ -78,11 +78,14 @@ def _select_rows(cfg: Config, channels: dict):
     """Row indices into the cached cond for cfg.train.select_tracks: the chosen
     ChIP tracks, all sequence features, and each motif whose track is kept.
     Returns (rows, motif_offset, n_motifs, n_sym) for the reduced conditioning."""
-    sel = set(cfg.train.select_tracks)
     tracks, seqf, motifs = channels["tracks"], channels["seq_features"], channels["motif_ids"]
+    sel = set(cfg.train.select_tracks) if cfg.train.select_tracks is not None else set(tracks)
     keep_t = [i for i, t in enumerate(tracks) if t in sel]
-    track_motif = {t.name: t.motif for t in cfg.data.tracks}
-    used = {track_motif.get(tracks[i]) for i in keep_t}
+    if cfg.train.select_motifs is not None:
+        used = set(cfg.train.select_motifs)
+    else:
+        track_motif = {t.name: t.motif for t in cfg.data.tracks}
+        used = {track_motif.get(tracks[i]) for i in keep_t} | set(cfg.motifs.extra)
     keep_m = [m for m, mid in enumerate(motifs) if mid in used]
     nt, ns = len(tracks), len(seqf)
     rows = (keep_t
@@ -243,26 +246,44 @@ def train(cfg: Config):
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
 
+    chroms = cfg.train.chroms                    # optional fast-proxy chrom restriction
+    vi = ti = None                               # val_regions row split of ds
     if cfg.train.val_regions:
         # hold out a fixed set of whole windows as an Akita-style validation set
-        data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed)
+        data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed, chroms=chroms)
         vds = ds
         if data is not None:
             perm = np.random.default_rng(cfg.train.seed).permutation(data["target"].shape[0])
             vi, ti = perm[: cfg.train.val_regions], perm[cfg.train.val_regions :]
+            if cfg.train.val_exclude_overlap:
+                # windows overlap by (size - stride); drop every training window
+                # sharing any bin with a validation window, so validation cannot
+                # be passed by memorising position (e.g. a DNA encoder)
+                ch_, st_, sm_ = _coords(ds)
+                vset = {}
+                for i in vi:
+                    vset.setdefault((ch_[i], sm_[i]), []).append(int(st_[i]))
+                W_ = ds.window_size
+                ti = np.array([i for i in ti if not any(
+                    abs(int(st_[i]) - v) < W_ for v in vset.get((ch_[i], sm_[i]), ()))],
+                    dtype=ti.dtype)
+                if rank == 0:
+                    log.info("val_exclude_overlap: %d training windows left "
+                             "(%d overlapped validation)",
+                             len(ti), len(perm) - len(vi) - len(ti))
             vdata = {k: v[vi] for k, v in data.items()}
             data = {k: v[ti] for k, v in data.items()}
         else:
             vdata = None
     else:
-        data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed)
-        vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed)
+        data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed, chroms=chroms)
+        vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed, chroms=chroms)
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
 
     # greedy feature selection: keep only the chosen ChIP tracks' cond rows
     n_sym_eff = ds.n_sym
-    if cfg.train.select_tracks:
+    if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
         rows, offset, n_motifs, n_sym_eff = _select_rows(cfg, ds.channels)
         data["cond"] = data["cond"][:, rows, :]
         if vdata is not None:
@@ -270,7 +291,7 @@ def train(cfg: Config):
         if is_main:
             log.info("select_tracks=%s -> %d tracks, %d motifs, %d sym rows",
                      cfg.train.select_tracks,
-                     len(cfg.train.select_tracks), n_motifs, n_sym_eff)
+                     len(rows) - n_motifs * 2 - len(ds.channels["seq_features"]), n_motifs, n_sym_eff)
     else:
         offset, n_motifs = ds.motif_row_offset(), ds.n_motifs
 
@@ -280,6 +301,13 @@ def train(cfg: Config):
     W = ds.window_size
     # full-set window coordinates (aligned to the stacked rows), for the encoder
     full_coords = _coords(ds) if use_seq else None
+    val_coords_all = None
+    if full_coords is not None and ti is not None:
+        # val_regions split the stacked rows by perm (vi/ti); split the
+        # coordinates the same way so the encoder reads each window's own DNA
+        ch, st, sm = full_coords
+        val_coords_all = ([ch[i] for i in vi], st[vi], [sm[i] for i in vi])
+        full_coords = ([ch[i] for i in ti], st[ti], [sm[i] for i in ti])
 
     # data-efficiency knob: keep every k-th window (effective stride =
     # window.stride * k). A cheap way to sweep training-set size without
@@ -315,7 +343,9 @@ def train(cfg: Config):
         ch, st, sm = full_coords                  # rank stripe, aligned to tg/cd
         rows = list(range(rank, n_even, world))
         tr_coords = ([ch[i] for i in rows], st[rows], [sm[i] for i in rows])
-        if is_main and vds is not None:
+        if is_main and val_coords_all is not None:
+            val_coords = val_coords_all
+        elif is_main and vds is not None:
             val_coords = _coords(vds)
 
     n_chip = len(ds.channels["tracks"])
@@ -334,7 +364,8 @@ def train(cfg: Config):
                               base=cfg.model.base_channels, depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if use_seq else None)
-    model = HiCModel(backbone, cond_mode, encoder).to(device)
+    model = HiCModel(backbone, cond_mode, encoder,
+                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
     if use_seq and is_main:
         log.info("sequence encoder: dilated, embed_dim=%d width=%d (bp->%d bins)",
                  emb, cfg.sequence.enc_width, W)
@@ -484,8 +515,15 @@ def train(cfg: Config):
                     tgt = torch.where(rmask[:, None, None, None], tgt_r, tgt)
                     bait_b = torch.where(m1[:, :, 0], bait_r, bait_b)
             if absent_t is not None:
-                drop = (torch.rand(bs, n_chip, device=device)
-                        < cfg.train.track_dropout)
+                if cfg.train.track_dropout_mode == "uniform_count":
+                    # per window keep k ~ Uniform{1..n_chip} tracks, drop the rest:
+                    # rank tracks by random key, keep the k smallest -> drop the rest
+                    k = torch.randint(1, n_chip + 1, (bs, 1), device=device)
+                    rank = torch.rand(bs, n_chip, device=device).argsort(1).argsort(1)
+                    drop = rank >= k
+                else:
+                    drop = (torch.rand(bs, n_chip, device=device)
+                            < cfg.train.track_dropout)
                 if drop.any():
                     cond_b = cond_b.clone()
                     cond_b[:, :n_chip] = torch.where(
@@ -633,7 +671,8 @@ def train_stream(cfg: Config):
                               base=cfg.model.base_channels, depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if use_seq else None)
-    model = HiCModel(backbone, cfg.model.cond_mode, encoder).to(device)
+    model = HiCModel(backbone, cfg.model.cond_mode, encoder,
+                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
     if is_ddp:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
     core = model.module if is_ddp else model

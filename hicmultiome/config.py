@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 
 TF_TYPES = ("tf", "cofactor")           # DNA-binding: motif REQUIRED
-NONMOTIF_TYPES = ("histone", "accessibility", "methylation")
+NONMOTIF_TYPES = ("histone", "accessibility", "methylation", "annotation")
 
 
 @dataclass
@@ -32,6 +32,9 @@ class TrackSpec:
                     binder)
       accessibility DNase/ATAC -> no motif
       methylation   DNA methylation level (WGBS/RRBS fraction) -> no motif
+      annotation    cell-invariant genome annotation (CpG islands, TSS, gene
+                    bodies, repeat classes; scripts/build_annotation_tracks.py)
+                    -> no motif
     motif: JASPAR matrix ID; the PFM must exist as <motifs.dir>/<motif>.jaspar
     """
 
@@ -233,6 +236,9 @@ class ModelConfig:
     # pairwise features; "pair"/"tile" withhold them so the network has to
     # discover the correspondence itself (see model.COND_MODES).
     cond_mode: str = "full"
+    # learned per-distance bias b[|i-j|] (length window.size) added to the
+    # Hi-C output, to absorb the residual distance trend left in O/E targets
+    dist_bias: bool = False
 
 
 @dataclass
@@ -249,6 +255,17 @@ class TrainConfig:
     # this predicts sensibly from ANY track subset, enabling cheap greedy
     # minimal-input search at inference (scripts/minimal_set.py).
     track_dropout: float = 0.0
+    # Dropout scheme. "independent": each track dropped i.i.d. with prob
+    # track_dropout (expected ~ (1-p)*T kept, rarely very sparse). "uniform_count":
+    # per window draw k ~ Uniform{1..T} kept tracks and drop the rest, so the model
+    # trains on every subset size from 1 to all -- needed for robust prediction
+    # from only a couple of tracks. Active whenever track_dropout > 0 (its value
+    # is ignored in uniform_count mode).
+    track_dropout_mode: str = "independent"
+    # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
+    # Used for a fast proxy input-search: far fewer windows -> quick candidates,
+    # to check whether the track ranking is stable without all chromosomes.
+    chroms: list[str] | None = None
     # Continue an interrupted or finished run instead of starting from zero:
     # restores the weights, the optimizer state (momentum matters, restarting
     # it costs progress) and the step/epoch counters, and keeps the previous
@@ -292,6 +309,10 @@ class TrainConfig:
     # (plus the sequence features and any motif whose track is kept) are sliced
     # from the full cache. None = use all tracks.
     select_tracks: list[str] | None = None
+    # motif channels to keep, independently of which ChIP tracks are kept
+    # (e.g. the CTCF motif without any CTCF/cohesin ChIP, or no motif at all).
+    # None = motifs of the kept tracks plus every motifs.extra entry.
+    select_motifs: list[str] | None = None
     # early stopping by epoch: stop after max_epochs, or when validation has not
     # improved for patience_epochs (validated once per epoch). None disables.
     max_epochs: int | None = None
@@ -300,6 +321,10 @@ class TrainConfig:
     # -- validation and early stopping then use the median per-region Pearson of
     # log(obs/exp) over them, not the per-distance Pearson. None = old behaviour.
     val_regions: int | None = None
+    # with val_regions: also drop every training window that overlaps a
+    # validation window (strided windows overlap by size - stride bins), so the
+    # validation score cannot come from memorised genomic position
+    val_exclude_overlap: bool = False
     # write checkpoints during training. Off for the greedy screen, where only
     # the logged best-val matters, to avoid a 128 MB write every epoch stalling
     # the GPU.

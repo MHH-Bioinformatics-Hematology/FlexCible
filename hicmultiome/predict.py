@@ -105,7 +105,8 @@ def build_model(cfg: Config, ckpt: Path, device):
                               depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if cfg.sequence.uses_encoder else None)
-    model = HiCModel(backbone, mode, encoder).to(device)
+    model = HiCModel(backbone, mode, encoder,
+                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
     sd = torch.load(ckpt / "model.pt", map_location=device)
     # older bare-backbone checkpoints have no "backbone." prefix
     if not any(k.startswith("backbone.") for k in sd):
