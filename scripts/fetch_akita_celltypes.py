@@ -34,6 +34,10 @@ CELLS = {
     "imr90":  ["IMR-90"],
     "hff":    ["HFFc6", "foreskin fibroblast"],
     "hct116": ["HCT116"],
+    "k562":   ["K562"],
+    "hmec":   ["HMEC", "mammary epithelial cell"],
+    "huvec":  ["HUVEC", "endothelial cell of umbilical vein",
+               "umbilical vein endothelial cell"],
 }
 
 
