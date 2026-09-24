@@ -34,6 +34,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -104,6 +105,23 @@ def done(log: Path) -> bool:
     return "early stop at epoch" in t or "done." in t
 
 
+STOP_RE = re.compile(r"early stop at epoch (\d+) \(best val ([-0-9.]+), (\d+) epochs no improvement\)")
+
+
+def stop_info(name: str, patience: int):
+    """(epoch, best_val, 'patience' | 'cap') of the LAST stop of a run, over
+    the first training log and its continuation log, or None."""
+    t = ""
+    for f in (OUT / f"{name}.log", OUT / f"{name}.cont.log"):
+        if f.exists():
+            t += f.read_text(errors="replace")
+    m = STOP_RE.findall(t)
+    if not m:
+        return None
+    ep, best, noimp = m[-1]
+    return int(ep), float(best), "patience" if int(noimp) >= patience else "cap"
+
+
 def sh(cmd, log: Path, env=None):
     print("[cmd]", " ".join(map(str, cmd)), flush=True)
     with open(log, "a") as fh:
@@ -111,10 +129,12 @@ def sh(cmd, log: Path, env=None):
                               env=env, cwd=REPO).returncode
 
 
-def crosscell(tag: str, cfg_path: Path, ckpt: Path, out: Path, gpu: str):
+def crosscell(tag: str, cfg_path: Path, ckpt: Path, out: Path, gpu: str, cells=None):
     out.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu)
     for cell, (cool, bw, assay) in CELLS.items():
+        if cells and cell not in cells:
+            continue
         if not cool.exists() or not bw.exists():
             print(f"[skip] {tag}/{cell}: target or ChIP missing", flush=True)
             continue
@@ -177,8 +197,14 @@ def summarize():
                            "train_windows": sum(d["train"] for d in per.values()),
                            "test_windows": sum(d["test"] for d in per.values()),
                            "removed_by_train_regions": m.get("n_outside_train_regions")})
+    s_rows = []
+    for name in RUNS:
+        si = stop_info(name, 10)
+        if si:
+            s_rows.append({"run": name, "stopped_at_epoch": si[0], "best_val": si[1],
+                           "stopped_by": si[2]})
     for fn, rows in (("test730.csv", t_rows), ("crosscell.csv", c_rows),
-                     ("train_windows.csv", w_rows)):
+                     ("train_windows.csv", w_rows), ("training_stop.csv", s_rows)):
         if not rows:
             continue
         keys = []
@@ -200,6 +226,11 @@ def main():
     ap.add_argument("--val-per-cell", type=int, default=100)
     ap.add_argument("--patience", type=int, default=10)
     ap.add_argument("--max-epochs", type=int, default=100)
+    ap.add_argument("--cells", nargs="*", default=None,
+                    help="eval stage: only these cells (split the work across GPUs)")
+    ap.add_argument("--continue-capped", action="store_true",
+                    help="train stage: resume a run whose last stop was the "
+                         "max_epochs cap (not patience) up to --max-epochs")
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.stage == "summary":
@@ -211,11 +242,13 @@ def main():
         if name == "ref":
             if a.stage in ("eval", "all"):
                 ck = REF_RUN / (REF_RUN / "best").read_text().strip()
-                crosscell("ref", ck / "config.yaml", ck, OUT / "ref" / "crosscell", gpus[0])
+                crosscell("ref", ck / "config.yaml", ck, OUT / "ref" / "crosscell", gpus[0],
+                          a.cells)
             continue
         cfg = run_config(name, a.val_per_cell, a.patience, a.max_epochs)
         cp = OUT / f"{name}.yaml"
-        yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
+        if not done(OUT / f"{name}.log"):       # a finished run keeps its config
+            yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
         cache = Path(cfg["train"]["cache_dir"])
         if a.stage in ("precompute", "all") and not (cache / "manifest.json").exists():
             print(f"[precompute] {name}", flush=True)
@@ -232,15 +265,48 @@ def main():
                 "-m", "hicmultiome.train", "--config", cp], log, env)
             if not done(log):
                 raise SystemExit(f"training failed for {name}; see {log}")
+        # a run cut off by the max_epochs cap while still improving continues
+        # from its latest checkpoint (weights, optimizer, step/epoch counters,
+        # best validation score), with --max-epochs as the new cap and
+        # patience as the stopping rule; repeated until patience stops it
+        while (a.stage in ("train", "all") and a.continue_capped
+               and (si := stop_info(name, a.patience)) and si[2] == "cap"
+               and si[0] < a.max_epochs):
+            ccfg = yaml.safe_load(open(cp))
+            ccfg["train"].update({
+                "resume": True,
+                "resume_from": str(OUT / name / "checkpoint-latest"),
+                "max_epochs": a.max_epochs, "patience_epochs": a.patience})
+            # checkpoint-latest is written before that epoch's validation, so
+            # its stored best can lag by the last improvement; carry the true
+            # best over so a worse model cannot replace checkpoint-best
+            pj = OUT / name / "checkpoint-latest" / "progress.json"
+            pr = json.loads(pj.read_text())
+            if si[1] > pr["best"]:
+                pr["best"] = si[1]
+                pj.write_text(json.dumps(pr))
+            ccp = OUT / f"{name}.cont.yaml"
+            yaml.safe_dump(ccfg, open(ccp, "w"), sort_keys=False)
+            print(f"[continue] {name} from epoch {si[0]} (cap) to max {a.max_epochs}",
+                  flush=True)
+            env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
+            n0 = len(STOP_RE.findall((OUT / f"{name}.cont.log").read_text(errors="replace"))
+                     if (OUT / f"{name}.cont.log").exists() else [])
+            sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
+                "-m", "hicmultiome.train", "--config", ccp], OUT / f"{name}.cont.log", env)
+            if len(STOP_RE.findall((OUT / f"{name}.cont.log").read_text(errors="replace"))) <= n0:
+                raise SystemExit(f"continuation failed for {name}")
         if a.stage in ("eval", "all"):
             run = OUT / name
             env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpus[0])
             for cell in RUNS[name][0]:
+                if a.cells and cell not in a.cells:
+                    continue
                 if not (run / f"test_eval_{cell}.json").exists():
                     sh([PY, "scripts/eval_val_windows.py", "--run", run, "--split", "test",
                         "--sample", cell], OUT / f"{name}.eval.log", env)
             ck = run / (run / "best").read_text().strip()
-            crosscell(name, ck / "config.yaml", ck, run / "crosscell", gpus[0])
+            crosscell(name, ck / "config.yaml", ck, run / "crosscell", gpus[0], a.cells)
         print(f"[done] {name} ({a.stage})", flush=True)
     print("MULTICELL_DONE", flush=True)
 
