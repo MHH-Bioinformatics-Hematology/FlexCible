@@ -29,8 +29,11 @@ from pathlib import Path
 import yaml
 
 
-def _key(tracks):
-    return hashlib.sha1("|".join(sorted(tracks)).encode()).hexdigest()[:12]
+def _key(tracks, chroms=None):
+    s = "|".join(sorted(tracks))
+    if chroms:                       # fast-proxy runs keyed separately from full-data
+        s += "::" + ",".join(sorted(chroms))
+    return hashlib.sha1(s.encode()).hexdigest()[:12]
 
 
 def _best_val(text):
@@ -38,8 +41,8 @@ def _best_val(text):
     return max(vals) if vals else float("nan")
 
 
-def _cached(out_root, tracks):
-    log = out_root / f"cand_{_key(tracks)}.log"
+def _cached(out_root, tracks, chroms=None):
+    log = out_root / f"cand_{_key(tracks, chroms)}.log"
     if log.exists():
         t = log.read_text(errors="replace")
         if "early stop at epoch" in t or "done." in t:
@@ -48,7 +51,8 @@ def _cached(out_root, tracks):
     return None
 
 
-def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gpus, py):
+def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gpus, py,
+            chroms=None):
     cfg = copy.deepcopy(base)
     cfg["sequence"]["encoder"] = "none"
     cfg["train"].update({
@@ -56,13 +60,13 @@ def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gp
         "patience_epochs": patience, "max_epochs": max_epochs,
         "max_steps": 10_000_000, "eval_every": 10_000_000, "resume": False,
         "compile": True, "save_checkpoints": False, "cache_dir": cache,
-        "max_minutes": None,
-        "output_dir": str(out_root / _key(tracks)),
+        "max_minutes": None, "chroms": (sorted(chroms) if chroms else None),
+        "output_dir": str(out_root / _key(tracks, chroms)),
     })
     cfg["train"].pop("resume_from", None)
-    cfg_path = out_root / f"cand_{_key(tracks)}.yaml"
+    cfg_path = out_root / f"cand_{_key(tracks, chroms)}.yaml"
     yaml.safe_dump(cfg, open(cfg_path, "w"), sort_keys=False)
-    log_path = out_root / f"cand_{_key(tracks)}.log"
+    log_path = out_root / f"cand_{_key(tracks, chroms)}.log"
     fh = open(log_path, "w")
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
     torchrun = str(Path(py).parent / "torchrun")
@@ -74,18 +78,20 @@ def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gp
     return p, log_path
 
 
-def eval_sets(base, cache, subsets, val_regions, patience, max_epochs, out_root, gpus, py):
+def eval_sets(base, cache, subsets, val_regions, patience, max_epochs, out_root, gpus, py,
+              chroms=None):
     """{frozenset(tracks): val} for each subset. Each candidate trains on ALL
     GPUs (DDP), one candidate at a time; finished candidates are reused."""
     results = {}
     for ts in subsets:
-        cv = _cached(out_root, ts)
+        cv = _cached(out_root, ts, chroms)
         if cv is not None:
             results[frozenset(ts)] = cv
             print(f"    {sorted(ts)}: {cv:.4f} (cached)", flush=True)
             continue
         print(f"    drop-eval {sorted(ts)} on GPUs {gpus} (DDP)", flush=True)
-        p, log = _launch(base, cache, ts, val_regions, patience, max_epochs, out_root, gpus, py)
+        p, log = _launch(base, cache, ts, val_regions, patience, max_epochs, out_root, gpus, py,
+                         chroms=chroms)
         p.wait()
         p._fh.close()
         results[frozenset(ts)] = _best_val(Path(log).read_text(errors="replace"))
@@ -101,7 +107,14 @@ def main():
     ap.add_argument("--patience", type=int, default=10)
     ap.add_argument("--max-epochs", type=int, default=100)
     ap.add_argument("--tol", type=float, default=0.005,
-                    help="stop when the best removal drops val by more than this")
+                    help="stop when the best removal drops val by more than this "
+                         "(ignored with --full-path)")
+    ap.add_argument("--full-path", action="store_true",
+                    help="never stop: remove the least-harmful track every round down "
+                         "to a single track, recording the whole elimination path")
+    ap.add_argument("--chroms", default=None,
+                    help="restrict training to these chromosomes (comma list) for a fast "
+                         "proxy search, e.g. chr2,chr3")
     ap.add_argument("--gpus", default="0,1")
     ap.add_argument("--out-dir",
                     default="/mnt/processed/wolffjoa/hic-multiome/runs/backward_tracks")
@@ -110,13 +123,16 @@ def main():
     base = yaml.safe_load(open(a.config))
     all_tracks = [t["name"] for t in base["data"]["tracks"]]
     gpus = [g for g in a.gpus.split(",") if g.strip()]
+    chroms = [c for c in a.chroms.split(",") if c.strip()] if a.chroms else None
     out_root = Path(a.out_dir)
     out_root.mkdir(parents=True, exist_ok=True)
     py = sys.executable
+    if chroms:
+        print(f"[fast] restricting training to chromosomes: {chroms}", flush=True)
 
     def val_of(ts):
         return eval_sets(base, a.cache, [ts], a.val_regions, a.patience, a.max_epochs,
-                         out_root, gpus, py)[frozenset(ts)]
+                         out_root, gpus, py, chroms=chroms)[frozenset(ts)]
 
     selected = list(all_tracks)
     print(f"[round 0] full set ({len(selected)} tracks)", flush=True)
@@ -143,20 +159,20 @@ def main():
         print(f"[round {rnd}] removing one of {sorted(selected)}", flush=True)
         subsets = [[t for t in selected if t != d] for d in selected]
         res = eval_sets(base, a.cache, subsets, a.val_regions, a.patience, a.max_epochs,
-                        out_root, gpus, py)
+                        out_root, gpus, py, chroms=chroms)
         # full ranking of this round's removals (best first) -- keeps 2nd, 3rd, ...
         ranked = sorted(
             [((set(selected) - set(list(fs))).pop(), val) for fs, val in res.items()],
             key=lambda tv: -(tv[1] if tv[1] == tv[1] else -9))
         removed, v = ranked[0]
-        accept = best - v <= a.tol
+        accept = a.full_path or (best - v <= a.tol)
         for rk, (t, vv) in enumerate(ranked, 1):
             rankings.append({"round": rnd, "rank": rk, "removed": t, "val": round(vv, 4),
                              "chosen": (t == removed and accept)})
         print(f"[round {rnd}] ranking: "
               + " > ".join(f"-{t}:{vv:.3f}" for t, vv in ranked[:5]), flush=True)
         print(f"[round {rnd}] best removal: -{removed} -> val={v:.4f} "
-              f"(prev best {best:.4f})", flush=True)
+              f"(running best {best:.4f})", flush=True)
         if not accept:
             rounds.append({"round": rnd, "removed": "(stopped)", "n_tracks": len(selected),
                            "val": best, "kept": "+".join(sorted(selected)),
@@ -194,6 +210,11 @@ def main():
     print("round\tremoved\tn\tval\tkept")
     for r in rounds:
         print(f"{r['round']}\t{r['removed'] or '(all)'}\t{r['n_tracks']}\t{r['val']:.4f}\t{r['kept']}")
+    # optimum along the elimination path (relevant in --full-path mode)
+    valid = [r for r in rounds if r["removed"] != "(stopped)"]
+    bestr = max(valid, key=lambda r: r["val"])
+    print(f"\n[optimum] best point on path: {bestr['n_tracks']} tracks, "
+          f"val={bestr['val']:.4f} -> {bestr['kept']}")
 
 
 if __name__ == "__main__":
