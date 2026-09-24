@@ -181,7 +181,7 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
         from .capture import CaptureData
 
         cap_data = CaptureData(sample.capture_interactions, cfg.capture.format,
-                               cfg.capture.min_score)
+                               cfg.capture.min_score, baits=sample.capture_baits)
         log.info("feeding capture Hi-C as conditioning input")
     cap_clr = None
     if capture_cool:

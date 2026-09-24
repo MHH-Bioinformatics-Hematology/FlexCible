@@ -75,6 +75,12 @@ class SampleSpec:
         deletions (hicmultiome.perturb) are grounded in real perturbation data.
     capture_interactions: optional per-sample capture Hi-C file (format/score
         options come from the global `capture` section).
+    capture_baits: optional BED of every baited fragment of the capture
+        design (chrom, start, end, ...). The bait mask then covers all
+        designed baits, including baits without any significant interaction
+        (their rows are measured and hold no significant contact). None keeps
+        the original behaviour: baits are the bait ends seen in the
+        interaction file.
     fasta: per-sample genome override (cross-assembly samples); defaults to
         sequence.fasta.
     assay: contact assay of the target map, "hic" or "microc". Only read when
@@ -88,6 +94,7 @@ class SampleSpec:
     bigwig_dir: str
     fasta: str | None = None
     capture_interactions: str | None = None
+    capture_baits: str | None = None
     missing_tracks: list[str] = field(default_factory=list)
     zeroed_tracks: list[str] = field(default_factory=list)
     assay: str = "hic"

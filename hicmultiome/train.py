@@ -179,11 +179,13 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
 
 @torch.no_grad()
 def val_akita_median(model, data, device, batch, offset, n_motifs,
-                     cond_mode="full", seq_fn=None):
+                     cond_mode="full", seq_fn=None, capin=False):
     """Akita-style validation: the median over the held-out regions of each
     region's Pearson between prediction and target over its finite upper-triangle
     pixels (log obs/exp). Pearson is affine-invariant, so comparing in the
-    encoded space the model outputs equals comparing decoded O/E."""
+    encoded space the model outputs equals comparing decoded O/E.
+    With capin (capture-input model) the capture planes are fed as absent, the
+    same tracks-only mode as val_distance_pearson."""
     if data is None or data["target"].shape[0] == 0:
         return float("nan")
     model.eval()
@@ -194,7 +196,12 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
         sym, pairs = split_cond(data["cond"][i : i + batch].to(device).float(),
                                 offset, n_motifs)
         seq_oh = seq_fn(i, tgt.shape[0]) if seq_fn is not None else None
-        p = model(sym, pairs, None, seq_oh)[:, 0].float().cpu().numpy()
+        planes = None
+        if capin:
+            nb_ = tgt.shape[0]
+            planes = capture_planes(tgt, torch.zeros(nb_, tgt.shape[-1], device=device),
+                                    torch.zeros(nb_, device=device))
+        p = model(sym, pairs, planes, seq_oh)[:, 0].float().cpu().numpy()
         t = tgt[:, 0].float().cpu().numpy()
         iu = np.triu_indices(p.shape[-1], 1)
         for k in range(p.shape[0]):
@@ -465,7 +472,7 @@ def train(cfg: Config):
             vb = max(1, min(batch, vdata_d["target"].shape[0]))
             if cfg.train.val_regions:
                 r = val_akita_median(model, vdata_d, device, vb, offset, n_motifs,
-                                     cond_mode=cond_mode, seq_fn=seq_fn)
+                                     cond_mode=cond_mode, seq_fn=seq_fn, capin=capin)
             else:
                 r = val_distance_pearson(model, vdata_d, device, vb, offset, n_motifs,
                                          capin=capin, cond_mode=cond_mode, seq_fn=seq_fn)
@@ -544,7 +551,8 @@ def train(cfg: Config):
             if capin:
                 present = (torch.rand(bs, device=device)
                            >= cfg.capture.input_dropout).float()
-                planes = capture_planes(tgt, bt[idx], present)
+                # bait_b: the bait flags flipped with reverse-augmented windows
+                planes = capture_planes(tgt, bait_b, present)
                 dropped = 1.0 - present
             seq_oh = None
             if use_seq:
@@ -559,7 +567,7 @@ def train(cfg: Config):
             pred = pred.float()
             loss = hic_loss(pred[:, 0], tgt[:, 0])
             if cap_w > 0:
-                bait_eff = bt[idx]
+                bait_eff = bait_b
                 if dropped is not None:
                     # aux target only where the input plane was blanked --
                     # otherwise the task degenerates to copying the input

@@ -218,7 +218,8 @@ def build(cfg: Config) -> dict:
         sample_tracks[s.name] = sample_track_files(cfg, s)
         if s.capture_interactions:
             captures[s.name] = CaptureData(
-                s.capture_interactions, cfg.capture.format, cfg.capture.min_score
+                s.capture_interactions, cfg.capture.format, cfg.capture.min_score,
+                baits=s.capture_baits,
             )
         log.info("sample %s: train %s | test %s", s.name,
                  sample_chroms[s.name][0], sample_chroms[s.name][1])

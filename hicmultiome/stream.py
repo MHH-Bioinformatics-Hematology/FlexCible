@@ -74,7 +74,8 @@ class StreamWindowDataset(Dataset):
             self.mat_norm[s.name] = MatrixNormalizer.load(p)
             if self.has_capture and s.capture_interactions:
                 self.captures[s.name] = CaptureData(
-                    s.capture_interactions, cfg.capture.format, cfg.capture.min_score)
+                    s.capture_interactions, cfg.capture.format, cfg.capture.min_score,
+                    baits=s.capture_baits)
                 cp = cache / f"norm_capture_{s.name}.json"
                 if cp.exists():
                     self.cap_norm[s.name] = CaptureNormalizer.load(cp)

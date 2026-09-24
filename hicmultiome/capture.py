@@ -50,6 +50,18 @@ def parse_mifsud(path: str, min_score: float):
             yield bc, bmid, oc, omid, score
 
 
+def read_bait_bed(path: str) -> dict[str, set[int]]:
+    """chrom -> set of bait fragment midpoints from a BED (chrom, start, end, ...)."""
+    out: dict[str, set[int]] = {}
+    with open(Path(path).expanduser()) as f:
+        for line in f:
+            if not line.strip() or line.startswith(("#", "track")):
+                continue
+            p = line.split("\t")
+            out.setdefault(p[0], set()).add((int(p[1]) + int(p[2])) // 2)
+    return out
+
+
 @dataclass
 class ChromCapture:
     """Binned capture data for one chromosome."""
@@ -61,7 +73,8 @@ class ChromCapture:
 class CaptureData:
     """All cis capture interactions, binned per chromosome on demand."""
 
-    def __init__(self, path: str, fmt: str, min_score: float):
+    def __init__(self, path: str, fmt: str, min_score: float,
+                 baits: str | None = None):
         if fmt != "mifsud":
             raise ValueError(fmt)
         self.by_chrom: dict[str, list[tuple[int, int, float]]] = {}
@@ -75,6 +88,16 @@ class CaptureData:
             "capture: %d cis interactions on %d chroms (min_score=%.1f)",
             n, len(self.by_chrom), min_score,
         )
+        if baits:
+            # the full design: every baited fragment is observed, also those
+            # without a significant interaction (their rows hold no contact)
+            n_seen = sum(len(v) for v in self.baits.values())
+            self.baits = read_bait_bed(baits)
+            for c in self.by_chrom:
+                self.baits.setdefault(c, set())
+            log.info("capture: %d designed baits from %s (%d baits carry an "
+                     "interaction)", sum(len(v) for v in self.baits.values()),
+                     baits, n_seen)
 
     def window_block(
         self, chrom: str, start_bin: int, size: int, binsize: int

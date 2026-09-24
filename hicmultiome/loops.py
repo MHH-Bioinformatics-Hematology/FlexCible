@@ -323,7 +323,7 @@ def evaluate(cfg: Config, pred_path: str, pred_capture_path: str | None,
     capture = None
     if smp.capture_interactions:
         capture = CaptureData(smp.capture_interactions, cfg.capture.format,
-                              cfg.capture.min_score)
+                              cfg.capture.min_score, baits=smp.capture_baits)
     max_dist_bins = min(cfg.window.size, int(max_dist_mb * 1e6 / info["binsize"]))
 
     results: dict = {"per_chrom": {}}
