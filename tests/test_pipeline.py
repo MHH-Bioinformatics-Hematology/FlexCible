@@ -1193,3 +1193,93 @@ def test_hic_backbones_are_selectable(workdir, cfg):
     hpred.predict(c, "chr1", out, batch=4)
     assert np.nan_to_num(
         cooler.Cooler(out).matrix(balance=False).fetch("chr1")).sum() > 0
+
+
+def test_merge_regions_and_containment():
+    from hicmultiome.genome import merge_regions, window_region_state
+
+    m = merge_regions({"chr1": [(50, 80), (0, 30), (20, 40), (40, 45)]})
+    assert m == {"chr1": [(0, 45), (50, 80)]}
+    assert window_region_state(m, "chr1", 5, 44) == "inside"      # spans two raw
+    assert window_region_state(m, "chr1", 40, 60) == "overlap"    # crosses the gap
+
+
+def test_train_regions_bed_restricts_training_windows_only(workdir, cfg):
+    """data.train_regions_bed keeps only training windows wholly inside the
+    (merged) regions and counts the rest; test windows are untouched."""
+    import dataclasses
+
+    from hicmultiome import precompute as hprep
+
+    hold = workdir / "tr_holdout.bed"
+    hold.write_text("chr1\t40000\t72000\n")
+    keep = workdir / "tr_keep.bed"
+    # two touching intervals on chr1 (merged into 0-40000), and chr2 0-60000
+    keep.write_text("chr1\t0\t20000\nchr1\t20000\t40000\nchr2\t0\t60000\n")
+
+    def run(tr_bed, name):
+        c = dataclasses.replace(
+            cfg,
+            data=dataclasses.replace(cfg.data, holdout_bed=str(hold),
+                                     train_regions_bed=tr_bed),
+            train=dataclasses.replace(cfg.train, cache_dir=str(workdir / name)))
+        return hprep.build(c)
+
+    base = run(None, "cache_tr_off")
+    on = run(str(keep), "cache_tr_on")
+    n = lambda m, sp: sum(x["n_windows"] for x in m["shards"] if x["split"] == sp)
+    assert n(on, "test") == n(base, "test")
+    assert 0 < n(on, "train") < n(base, "train")
+    assert on["n_outside_train_regions"] == n(base, "train") - n(on, "train")
+    assert "n_outside_train_regions" not in base
+    lim = {"chr1": 40000, "chr2": 60000}
+    for sh in on["shards"]:
+        if sh["split"] != "train":
+            continue
+        for st in np.load(sh["path"])["start"]:
+            assert (int(st) + cfg.window.size) * BINSIZE <= lim[sh["chrom"]]
+
+
+def test_assay_indicator_row(workdir, cfg):
+    """data.assay_indicator adds one constant row after the sequence features
+    (0 Hi-C, 1 Micro-C); off, the layout is unchanged."""
+    import dataclasses
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        seq_feature_names, sym_row_names)
+
+    base = cfg.get_sample(None)
+    hic = dataclasses.replace(base, name="hic_s", assay="hic")
+    mc = dataclasses.replace(base, name="mc_s", assay="microc")
+    off = dataclasses.replace(cfg, data=dataclasses.replace(cfg.data, samples=[hic, mc]))
+    on = dataclasses.replace(off, data=dataclasses.replace(off.data, assay_indicator=True))
+    assert "assay:microc" not in sym_row_names(off)
+    rows_on, rows_off = sym_row_names(on), sym_row_names(off)
+    assert len(rows_on) == len(rows_off) + 1
+    k = rows_on.index("assay:microc")
+    assert k == len(on.track_names) + len(seq_feature_names(on)) - 1
+    nb = CHROMS["chr1"] // BINSIZE
+    for s, v in ((hic, 0.0), (mc, 1.0)):
+        a_on = assemble_chrom(on, s, sample_track_files(on, s), "chr1", nb)
+        a_off = assemble_chrom(off, s, sample_track_files(off, s), "chr1", nb)
+        assert a_on.shape[0] == len(rows_on)
+        assert np.all(a_on[k] == v)
+        np.testing.assert_array_equal(np.delete(a_on, k, axis=0), a_off)
+    with pytest.raises(ValueError):
+        dataclasses.replace(base, assay="capture")
+
+
+def test_resident_float16_matches_float32(workdir, cfg):
+    """The cache is float16, so a float16 resident stack holds the same values."""
+    import torch
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome.train import _stack
+
+    if not (Path(cfg.train.cache_dir) / "manifest.json").exists():
+        hprep.build(cfg)
+    d32, _ = _stack(cfg.train.cache_dir, "train", 0.0, False, 0)
+    d16, _ = _stack(cfg.train.cache_dir, "train", 0.0, False, 0, dtype=torch.float16)
+    assert d16["target"].dtype == torch.float16
+    assert torch.equal(d16["target"].float(), d32["target"])
+    assert torch.equal(d16["cond"].float(), d32["cond"])

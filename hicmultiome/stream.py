@@ -31,7 +31,8 @@ from torch.utils.data import Dataset
 
 from .capture import CaptureData, CaptureNormalizer
 from .config import Config
-from .genome import read_bed_regions, resolve_chroms, split_chroms, window_region_state
+from .genome import (merge_regions, read_bed_regions, resolve_chroms, split_chroms,
+                     window_region_state)
 from .matrix import MatrixNormalizer, open_cool, plan_windows
 from .precompute import (
     _prep_target,
@@ -80,6 +81,8 @@ class StreamWindowDataset(Dataset):
 
         self.holdout = (read_bed_regions(cfg.data.holdout_bed)
                         if cfg.data.holdout_bed else None)
+        self.train_regions = (merge_regions(read_bed_regions(cfg.data.train_regions_bed))
+                              if cfg.data.train_regions_bed else None)
 
         # window index: (sample, chrom, start), filtered by holdout + mappability
         self.index: list[tuple[str, str, int]] = []
@@ -104,6 +107,11 @@ class StreamWindowDataset(Dataset):
                             continue
                         if split == "test" and state != "inside":
                             continue
+                    if (split == "train" and self.train_regions is not None
+                            and window_region_state(
+                                self.train_regions, chrom, w.start * self.res,
+                                (w.start + w.size) * self.res) != "inside"):
+                        continue
                     if (mappable_fraction(mappable, chrom, w.start, w.size)
                             < cfg.window.min_mappable_fraction):
                         continue

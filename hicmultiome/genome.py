@@ -99,6 +99,22 @@ def read_bed_regions(path: str) -> dict[str, list[tuple[int, int]]]:
     return out
 
 
+def merge_regions(regions: dict[str, list[tuple[int, int]]]
+                  ) -> dict[str, list[tuple[int, int]]]:
+    """Merge overlapping or touching intervals per chromosome, so "wholly
+    inside one region" (window_region_state) means inside their union."""
+    out: dict[str, list[tuple[int, int]]] = {}
+    for c, ivs in regions.items():
+        merged: list[list[int]] = []
+        for s, e in sorted(ivs):
+            if merged and s <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], e)
+            else:
+                merged.append([s, e])
+        out[c] = [(s, e) for s, e in merged]
+    return out
+
+
 def window_region_state(regions, chrom: str, start_bp: int, end_bp: int) -> str:
     """"inside" if the window lies wholly in a region, "overlap" if it touches
     one, else "outside"."""

@@ -27,7 +27,8 @@ from tqdm import tqdm
 
 from .capture import CaptureData, CaptureNormalizer
 from .config import Config, SampleSpec
-from .genome import read_bed_regions, split_chroms, window_region_state
+from .genome import (merge_regions, read_bed_regions, split_chroms,
+                     window_region_state)
 from .matrix import (
     MatrixNormalizer,
     fetch_diagonal_window,
@@ -90,9 +91,24 @@ def mappable_fraction(mask, chrom: str, start: int, size: int) -> float:
     return float(seg.mean()) if seg.size else 0.0
 
 
+ASSAY_ROW = "assay:microc"          # data.assay_indicator row (0 Hi-C, 1 Micro-C)
+
+
+def seq_feature_names(cfg: Config) -> list[str]:
+    """channels["seq_features"]: the rows between the ChIP tracks and the motif
+    rows (consumers compute the motif offset as len(tracks) + len(this)). The
+    assay indicator row, when enabled, sits at the end of this block."""
+    names = list(cfg.sequence.features) if cfg.sequence.fasta else []
+    if cfg.data.assay_indicator:
+        names.append("assay_microc")
+    return names
+
+
 def sym_row_names(cfg: Config) -> list[str]:
     rows = list(cfg.track_names)
     rows += [f"seq:{f}" for f in cfg.sequence.features] if cfg.any_fasta else []
+    if cfg.data.assay_indicator:
+        rows += [ASSAY_ROW]
     for mid in cfg.active_motif_ids:
         rows += [f"motif:{mid}:fwd", f"motif:{mid}:rev"]
     return rows
@@ -117,17 +133,21 @@ def assemble_chrom(
     if not fasta and cfg.any_fasta:
         # another sample has a genome, so the layout carries sequence/motif
         # rows: emit zeros here rather than a differently shaped array
-        n_extra = len(cfg.sequence.features) + 2 * len(cfg.active_motif_ids)
-        if n_extra:
-            parts.append(np.zeros((n_extra, nb), dtype=np.float32))
-    if fasta:
         if cfg.sequence.features:
-            parts.append(
-                cached_sequence_features(
-                    fasta, chrom, cfg.sequence.features,
-                    nb, cfg.data.resolution, cfg.sequence.cache_dir,
-                )
+            parts.append(np.zeros((len(cfg.sequence.features), nb), dtype=np.float32))
+    if fasta and cfg.sequence.features:
+        parts.append(
+            cached_sequence_features(
+                fasta, chrom, cfg.sequence.features,
+                nb, cfg.data.resolution, cfg.sequence.cache_dir,
             )
+        )
+    if cfg.data.assay_indicator:
+        parts.append(np.full((1, nb), float(sample.assay == "microc"),
+                             dtype=np.float32))
+    if not fasta and cfg.any_fasta and cfg.active_motif_ids:
+        parts.append(np.zeros((2 * len(cfg.active_motif_ids), nb), dtype=np.float32))
+    if fasta:
         for mid in cfg.active_motif_ids:
             parts.append(
                 cached_motif_tracks(
@@ -163,6 +183,13 @@ def build(cfg: Config) -> dict:
     if holdout:
         log.info("region holdout: %d chroms, %d regions",
                  len(holdout), sum(len(v) for v in holdout.values()))
+    train_regions = (merge_regions(read_bed_regions(cfg.data.train_regions_bed))
+                     if cfg.data.train_regions_bed else None)
+    if train_regions is not None:
+        log.info("training windows restricted to %d merged regions (%.1f Mb) of %s",
+                 sum(len(v) for v in train_regions.values()),
+                 sum(e - s for v in train_regions.values() for s, e in v) / 1e6,
+                 cfg.data.train_regions_bed)
     cache = Path(cfg.train.cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
 
@@ -256,7 +283,7 @@ def build(cfg: Config) -> dict:
     channels = {
         "sym_rows": rows,
         "tracks": cfg.track_names,
-        "seq_features": cfg.sequence.features if cfg.sequence.fasta else [],
+        "seq_features": seq_feature_names(cfg),
         "motif_ids": cfg.active_motif_ids,
         "has_capture": bool(captures),
         "capture_input": bool(captures) and cfg.capture.use_as_input,
@@ -286,6 +313,7 @@ def build(cfg: Config) -> dict:
         mappable = load_mappable(s.cool_path)
         n_unmappable = 0
         n_empty = 0
+        n_outside_train = 0
         for w in wins:
             if holdout is not None:
                 state = window_region_state(
@@ -296,6 +324,11 @@ def build(cfg: Config) -> dict:
                     continue
                 if split == "test" and state != "inside":
                     continue
+            if split == "train" and train_regions is not None and window_region_state(
+                    train_regions, chrom, w.start * res_bp,
+                    (w.start + w.size) * res_bp) != "inside":
+                n_outside_train += 1
+                continue
             # Mappability is known from the mask alone, so this rejects the
             # window before paying for the fetch. Applies to both splits: an
             # unmappable window is no more useful as a test case.
@@ -330,6 +363,8 @@ def build(cfg: Config) -> dict:
             starts.append(w.start)
 
         if not targets:
+            if n_outside_train:
+                skipped_outside.append((s.name, chrom, n_outside_train))
             return None
         shard = cache / f"{s.name}_{split}_{chrom}.npz"
         arrays = dict(
@@ -346,8 +381,10 @@ def build(cfg: Config) -> dict:
             "path": str(shard), "n_windows": len(targets), "nbins": nb,
             "n_unmappable_skipped": n_unmappable,
             "n_empty_skipped": n_empty,
+            "n_outside_train_regions": n_outside_train,
         }
 
+    skipped_outside: list[tuple[str, str, int]] = []   # chroms with no shard left
     for s in samples:
         train_chroms, test_chroms = sample_chroms[s.name]
         for chrom in tqdm(train_chroms, desc=f"cache-train:{s.name}"):
@@ -370,6 +407,13 @@ def build(cfg: Config) -> dict:
     n_emp = sum(x.get("n_empty_skipped", 0) for x in manifest["shards"])
     log.info("skipped %d windows below %.0f%% mappability, %d empty windows",
              n_unmap, 100 * cfg.window.min_mappable_fraction, n_emp)
+    if train_regions is not None:
+        n_out = (sum(x.get("n_outside_train_regions", 0) for x in manifest["shards"])
+                 + sum(n for *_, n in skipped_outside))
+        manifest["n_outside_train_regions"] = n_out
+        (cache / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        log.info("train_regions_bed removed %d training windows (not wholly inside "
+                 "a training region)", n_out)
     return manifest
 
 

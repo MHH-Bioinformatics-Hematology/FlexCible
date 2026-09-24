@@ -46,20 +46,22 @@ def ddp_env():
     )
 
 
-def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None):
+def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
+           dtype=torch.float32):
     ds = WindowDataset(cache_dir, split, val_fraction, want_val, seed, chroms=chroms)
     if len(ds) == 0:
         return None, ds
     n, w = len(ds), ds.window_size
-    tg = torch.empty((n, ds.n_out, w, w), dtype=torch.float32)
-    cd = torch.empty((n, ds.n_sym, w), dtype=torch.float32)
+    tg = torch.empty((n, ds.n_out, w, w), dtype=dtype)
+    cd = torch.empty((n, ds.n_sym, w), dtype=dtype)
     bt = torch.zeros((n, w), dtype=torch.float32)
     for path, pairs in ds.grouped_index().items():        # one decompress each
         z = np.load(path)
         rows = np.array([r for r, _ in pairs])
         loc = np.array([l for _, l in pairs])
-        tg[rows] = torch.from_numpy(z["target"][loc].astype(np.float32))
-        cd[rows] = torch.from_numpy(z["cond"][loc].astype(np.float32))
+        npdt = np.float16 if dtype == torch.float16 else np.float32
+        tg[rows] = torch.from_numpy(z["target"][loc].astype(npdt))
+        cd[rows] = torch.from_numpy(z["cond"][loc].astype(npdt))
         if "bait" in z:
             bt[rows] = torch.from_numpy(z["bait"][loc].astype(np.float32))
     return {"target": tg, "cond": cd, "bait": bt}, ds
@@ -153,8 +155,9 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
     model.eval()
     preds = []
     for i in range(0, data["target"].shape[0], batch):
-        tgt_b = data["target"][i : i + batch].to(device)
-        sym, pairs = split_cond(data["cond"][i : i + batch].to(device), offset, n_motifs)
+        tgt_b = data["target"][i : i + batch].to(device).float()
+        sym, pairs = split_cond(data["cond"][i : i + batch].to(device).float(),
+                                offset, n_motifs)
         planes = None
         if capin:
             absent = torch.zeros(tgt_b.shape[0], device=device)
@@ -162,7 +165,7 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
         seq_oh = seq_fn(i, tgt_b.shape[0]) if seq_fn is not None else None
         preds.append(model(sym, pairs, planes, seq_oh).cpu())
     pred = torch.cat(preds)[:, 0].numpy()
-    true = data["target"][:, 0].cpu().numpy()
+    true = data["target"][:, 0].float().cpu().numpy()
     w = true.shape[-1]
     rs = []
     for d in range(1, min(maxd, w)):
@@ -187,8 +190,9 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
     rs = []
     N = data["target"].shape[0]
     for i in range(0, N, batch):
-        tgt = data["target"][i : i + batch].to(device)
-        sym, pairs = split_cond(data["cond"][i : i + batch].to(device), offset, n_motifs)
+        tgt = data["target"][i : i + batch].to(device).float()
+        sym, pairs = split_cond(data["cond"][i : i + batch].to(device).float(),
+                                offset, n_motifs)
         seq_oh = seq_fn(i, tgt.shape[0]) if seq_fn is not None else None
         p = model(sym, pairs, None, seq_oh)[:, 0].float().cpu().numpy()
         t = tgt[:, 0].float().cpu().numpy()
@@ -247,10 +251,12 @@ def train(cfg: Config):
         out_dir.mkdir(parents=True, exist_ok=True)
 
     chroms = cfg.train.chroms                    # optional fast-proxy chrom restriction
+    res_dt = {"float32": torch.float32, "float16": torch.float16}[cfg.train.resident_dtype]
     vi = ti = None                               # val_regions row split of ds
     if cfg.train.val_regions:
         # hold out a fixed set of whole windows as an Akita-style validation set
-        data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed, chroms=chroms)
+        data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed, chroms=chroms,
+                          dtype=res_dt)
         vds = ds
         if data is not None:
             perm = np.random.default_rng(cfg.train.seed).permutation(data["target"].shape[0])
@@ -276,8 +282,10 @@ def train(cfg: Config):
         else:
             vdata = None
     else:
-        data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed, chroms=chroms)
-        vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed, chroms=chroms)
+        data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed, chroms=chroms,
+                          dtype=res_dt)
+        vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed, chroms=chroms,
+                            dtype=res_dt)
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
 
@@ -501,7 +509,7 @@ def train(cfg: Config):
         b = 0
         while b + bs <= N:
             idx = perm[b : b + bs]
-            cond_b, tgt, bait_b = cd[idx], tg[idx], bt[idx]
+            cond_b, tgt, bait_b = cd[idx].float(), tg[idx].float(), bt[idx]
             rev_mask = None
             if cfg.train.augment_reverse:
                 rmask = torch.rand(bs, device=device) < 0.5

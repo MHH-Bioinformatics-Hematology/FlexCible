@@ -18,6 +18,7 @@ import yaml
 
 TF_TYPES = ("tf", "cofactor")           # DNA-binding: motif REQUIRED
 NONMOTIF_TYPES = ("histone", "accessibility", "methylation", "annotation")
+ASSAYS = ("hic", "microc")                # SampleSpec.assay; index = indicator value
 
 
 @dataclass
@@ -76,6 +77,10 @@ class SampleSpec:
         options come from the global `capture` section).
     fasta: per-sample genome override (cross-assembly samples); defaults to
         sequence.fasta.
+    assay: contact assay of the target map, "hic" or "microc". Only read when
+        data.assay_indicator is on, which then feeds it to the network as a
+        constant input row (0 = Hi-C, 1 = Micro-C): the two assays differ
+        systematically in ways no ChIP track can explain.
     """
 
     name: str
@@ -85,6 +90,12 @@ class SampleSpec:
     capture_interactions: str | None = None
     missing_tracks: list[str] = field(default_factory=list)
     zeroed_tracks: list[str] = field(default_factory=list)
+    assay: str = "hic"
+
+    def __post_init__(self):
+        if self.assay not in ASSAYS:
+            raise ValueError(f"sample {self.name!r}: unknown assay {self.assay!r} "
+                             f"(expected one of {ASSAYS})")
 
 
 @dataclass
@@ -104,6 +115,16 @@ class DataConfig:
     # contained inside them -- the same containment/overlap rule the
     # published comparison used.
     holdout_bed: str | None = None
+    # Restrict TRAINING windows to these regions: a window is kept only if it
+    # lies wholly inside one region after overlapping/adjacent regions are
+    # merged (e.g. the union of Akita's training sequences, which leaves out
+    # exactly the stretches Akita's filters dropped: assembly gaps, blacklist,
+    # unmappable and sparse-target sequence). Test windows are unaffected.
+    # None = no restriction (previous behaviour).
+    train_regions_bed: str | None = None
+    # Feed each sample's SampleSpec.assay as one constant conditioning row
+    # (0 = Hi-C, 1 = Micro-C), placed after the sequence features. Off = no row.
+    assay_indicator: bool = False
 
 
 @dataclass
@@ -297,6 +318,10 @@ class TrainConfig:
     # keep every k-th training window (effective stride = window.stride * k); a
     # cheap way to sweep training-set size without re-precomputing the cache
     window_subsample: int = 1
+    # dtype of the windows kept resident (CPU stack and GPU stripe). The cache
+    # stores float16, so "float16" is lossless and halves memory (several
+    # cells at 2 kb); batches are cast to float32 before use.
+    resident_dtype: str = "float32"
     # stream windows from the cooler on the fly instead of the resident cache,
     # so any stride works (incl. the dense, high-overlap regime). Reuses the
     # fitted normalisers in cache_dir. stream_stride overrides window.stride for
