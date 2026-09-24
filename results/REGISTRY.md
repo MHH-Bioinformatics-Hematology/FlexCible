@@ -150,3 +150,62 @@ No filter raises pixel Pearson (GM12878 0.701, IMR90 0.615 unfiltered). A
 per-distance contrast gain learned on the tuning split raises the APA ratio
 from 0.51 to 0.73 and fixed-threshold boundary F1 by 0.02 (GM12878) and 0.08
 (IMR90), at a cost of 0.004 to 0.008 pixel Pearson.
+
+## 10. Promoter capture Hi-C in training (FINAL)
+
+Question: does GM12878 promoter capture Hi-C (Mifsud et al. 2015,
+E-MTAB-2323) improve the 2 kb O/E prediction, as an auxiliary training
+target (variant A) or as an optional input with modality dropout (variant B,
+one checkpoint scored with and without capture input)?
+
+Data. The published significant promoter-other interactions (1,618,000,
+raw count and log(observed/expected) per HindIII fragment pair) and the
+22,076-fragment HindIII bait design were lifted from hg19 to hg38 fragment by
+fragment with the UCSC hg19ToHg38 chain (`scripts/lift_capture_hg38.py`,
+output `~/data/hic-multiome/pchic/*.hg38.*`). 1,616,240 interactions (99.9%)
+and 22,055 baits kept; 99.99% of 40,000 checked lifted fragment ends lie on an
+hg38 HindIII site (AAGCTT), so the lifted intervals are the hg38 fragments and
+the published scores carry over unchanged. The raw reads (six GM12878 runs,
+884 M read pairs, 165 GB) were not reprocessed. The capture code bins the
+scores by fragment midpoint onto the 2 kb grid (maximum per pixel), encodes
+them as score / 99.9th percentile (12.39) mapped to [-1, 1] with -1 for no
+significant interaction, and masks the capture loss to pixels whose row or
+column holds a designed bait (`data.samples[].capture_baits`, 3.3% of the
+upper-triangle pixels of a test window). `capture_lift/lift_capture_hg38.json`.
+
+Runs. `python scripts/capture_experiment.py --variants A B --seeds 0 1`
+(config `configs/full2k_capture.yaml`, cache `cache/full2k_capture`, whose Hi-C
+windows and conditioning are identical to `cache/full2k_motifs`): the
+reference model of section 8 (13 ChIP tracks, 4 motifs, no encoder, no
+distance bias, track dropout 0, patience 10 epochs) plus a capture output
+channel with loss weight 0.5 (A), or additionally the capture map and bait mask
+as input planes, blanked in 50% of training windows, with the capture loss on
+the blanked windows (B). Early stopping uses validation without capture input.
+Scoring: `scripts/eval_capture_windows.py` on the 730 test windows, median
+per-window Pearson on O/E over all upper-triangle pixels, over pixels touching
+a bait and over the rest; the reference checkpoints are rescored on the same
+windows (0.695 and 0.694, as in section 8).
+
+| model | capture at test | all | bait pixels | non-bait pixels |
+|---|---|---|---|---|
+| reference, seeds 0, 1 | no | 0.695, 0.694 | 0.710, 0.711 | 0.696, 0.694 |
+| A: auxiliary target, seeds 0, 1 | no | 0.694, 0.701 | 0.713, 0.718 | 0.697, 0.700 |
+| B: input + auxiliary target, seeds 0, 1 | no | 0.698, 0.690 | 0.714, 0.711 | 0.697, 0.688 |
+| B: input + auxiliary target, seeds 0, 1 | yes | 0.696, 0.688 | 0.717, 0.711 | 0.696, 0.686 |
+
+All differences lie within the seed spread of 0.013. Paired over windows, the
+same B checkpoint with capture input scores +0.0003 and +0.0002 higher per
+window than without (bait pixels +0.0004 and +0.0011). Capture input changes
+the predicted map by 0.005 on average (encoded scale, target standard
+deviation 0.22), equally at bait and at other pixels. The capture map carries
+little of the 2 kb O/E target: at bait pixels the per-window Pearson between
+capture plane and Hi-C O/E is 0.11, and pixels with a significant capture
+interaction exceed the other bait pixels by 0.07 encoded units, a third of a
+target standard deviation. The auxiliary capture channel itself reaches a
+per-window Pearson of 0.29 to 0.30 against the capture target on bait pixels.
+Capture Hi-C is a contact measurement of the same cell, so at bait pixels
+capture input partly supplies the answer; variant A and the non-bait pixels
+are the comparisons free of that, and they show no gain either. Capture
+supervision and capture input leave the GM12878 prediction unchanged at 2 kb.
+Tables `capture/capture_summary.csv`, `capture/capture_input_diagnostics.json`
+(`scripts/capture_input_diagnostics.py`).

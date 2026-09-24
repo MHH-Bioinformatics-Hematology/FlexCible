@@ -42,6 +42,9 @@ COPY = {
     "sequence_chip_grid": [R / "motif_grid/results_all.csv", R / "motif_grid/motif_grid.csv",
                            R / "motif_grid/annot_grid.csv"],
     "sharpening": [R / "sharpen/sharpen_median.csv"],
+    "capture": [R / "capture/capture_summary.csv",
+                R / "capture/capture_input_diagnostics.json"],
+    "capture_lift": [Path("~/data/hic-multiome/pchic/lift_capture_hg38.json").expanduser()],
 }
 ALL13 = {"CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
          "H3K4me2", "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"}

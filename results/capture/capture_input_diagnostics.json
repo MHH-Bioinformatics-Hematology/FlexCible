@@ -1,0 +1,26 @@
+{
+ "cache": "cache/full2k_capture",
+ "n_windows": 730,
+ "target_oe_std_encoded": 0.22005730867385864,
+ "significant_fraction_of_bait_pixels": 0.11534151193002286,
+ "oe_at_significant_capture_pixels": 0.07778681069612503,
+ "oe_at_other_bait_pixels": 0.006131060887128115,
+ "median_window_r_capture_vs_oe_bait_pixels": 0.11240367731280687,
+ "n_windows_r": 699,
+ "runs": {
+  "/mnt/processed/wolffjoa/hic-multiome/runs/capture/B__seed0": {
+   "n_windows": 48,
+   "mean_abs_change_bait_pixels": 0.0049986205995082855,
+   "mean_abs_change_other_pixels": 0.004182460717856884,
+   "mean_abs_change_significant_capture_pixels": 0.005039931274950504,
+   "mean_signed_change_significant_capture_pixels": 0.002942729741334915
+  },
+  "/mnt/processed/wolffjoa/hic-multiome/runs/capture/B__seed1": {
+   "n_windows": 48,
+   "mean_abs_change_bait_pixels": 0.00451832776889205,
+   "mean_abs_change_other_pixels": 0.004146701656281948,
+   "mean_abs_change_significant_capture_pixels": 0.0052087195217609406,
+   "mean_signed_change_significant_capture_pixels": 0.0018122026231139898
+  }
+ }
+}

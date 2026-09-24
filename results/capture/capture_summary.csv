@@ -1,0 +1,9 @@
+model,seed,capture_at_test,n,oe_median_r,bait_median_r,nonbait_median_r,capture_channel_bait_median_r,bait_pixel_fraction,run
+base (no capture),0,no,730,0.6946310068746819,0.7104621994610703,0.695867402561001,,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/motif_grid/full__all13__4motifs
+base (no capture),1,no,730,0.6937031911727101,0.7105263905190605,0.693861877671741,,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/motif_grid/full__all13__4motifs__seed1
+A: capture as auxiliary target,0,no,730,0.694380343877035,0.7132399976926327,0.6967199082691313,0.2932454549007051,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/capture/A__seed0
+B: capture input + aux target,0,no,730,0.69777634057409,0.7144796405325253,0.6974929378213843,0.29852699832415164,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/capture/B__seed0
+B: capture input + aux target,0,yes,730,0.6956782898647671,0.716813173788646,0.6956132008948328,0.2888281505507424,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/capture/B__seed0
+A: capture as auxiliary target,1,no,730,0.7012992253967296,0.7176522954180732,0.7004813129792362,0.30459526985278074,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/capture/A__seed1
+B: capture input + aux target,1,no,730,0.6898600265957295,0.7110127401861475,0.6882878958304541,0.2993511524065124,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/capture/B__seed1
+B: capture input + aux target,1,yes,730,0.6875717549888292,0.7105040417660078,0.6860147714339473,0.2861730222459232,0.03342079976811516,/mnt/processed/wolffjoa/hic-multiome/runs/capture/B__seed1

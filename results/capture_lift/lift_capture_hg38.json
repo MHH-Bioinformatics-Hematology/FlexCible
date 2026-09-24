@@ -1,0 +1,12 @@
+{
+ "interactions_in": 1618000,
+ "interactions_out": 1616240,
+ "interactions_dropped_unmapped": 1759,
+ "interactions_dropped_split": 1,
+ "fragments_in": 523898,
+ "fragments_lifted": 523676,
+ "baits_in": 22076,
+ "baits_lifted": 22055,
+ "hindiii_site_at_lifted_end_fraction": 0.9999,
+ "hindiii_ends_checked": 40000
+}
