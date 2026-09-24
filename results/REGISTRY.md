@@ -96,16 +96,28 @@ matrix (0.76 to 0.82) computed on `akita_normalize.py` targets. The
 distance-only predictor reaches 0.76 there, so these values measure the shared
 distance decay. Do not cite.
 
-## 7. Biological replicates, 5 cell lines, 2 to 25 kb (PENDING)
+## 7. Biological replicates, 5 cell lines, 2 to 25 kb (FINAL)
 
 `scripts/replicates_all_cells.py` then `scripts/replicate_corr.py`: ENCODE
 MboI in situ Hi-C, one lane-pair per replicate, minibwa, HiCExplorer v4
-`hicBuildMatrix`, ICE, `oe_proper.py`, rep1 vs rep2 on the 413 regions.
-Output `replicates/replicate_corr.csv` (appears after the GM12878 rep2 rebuild
-finishes). First single-cell run (`scripts/raw_hic_ceiling.sh`, HMEC,
-unbalanced): 0.415 at 2 kb with 171 M contacts, 5 to 23 times fewer contacts
-than the maps in section 6, so replicate agreement at 2 kb is limited by
-depth.
+`hicBuildMatrix` at 2, 5, 10 and 25 kb, cooler ICE balancing, `oe_proper.py`,
+rep1 vs rep2 on the 413 regions. Table `replicates/replicate_corr.csv`
+(contacts per replicate from the 25 kb level).
+
+| cell | contacts rep1 / rep2 (M) | 2 kb | 5 kb | 10 kb | 25 kb |
+|---|---|---|---|---|---|
+| GM12878 | 138 / 230 | 0.386 | 0.564 | 0.779 | 0.933 |
+| IMR90 | 166 / 199 | 0.501 | 0.689 | 0.867 | 0.956 |
+| K562 | 144 / 210 | 0.359 | 0.500 | 0.764 | 0.932 |
+| HMEC | 171 / 167 | 0.317 | 0.526 | 0.780 | 0.936 |
+| HUVEC | 112 / 117 | 0.332 | 0.429 | 0.697 | 0.888 |
+
+At one sequencing lane per replicate (110 to 230 M contacts), replicate
+agreement at 2 kb is 0.32 to 0.50 and rises to 0.89 to 0.96 at 25 kb. The maps
+the model is scored against in sections 6 and 8 hold 0.9 to 4.0 billion
+contacts, so these values bound replicate agreement at single-lane depth and
+sit below the agreement expected for those deep maps. The first single-cell run
+(`scripts/raw_hic_ceiling.sh`, HMEC, unbalanced) gave 0.415 at 2 kb.
 
 ## 8. Sequence channels x ChIP (FINAL)
 
