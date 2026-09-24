@@ -23,7 +23,6 @@ import torch
 
 from .config import Config
 from .matrix import BandedAccumulator, MatrixNormalizer, hann2d, open_cool, plan_windows
-from .model import build_spatial_cond
 from .plot import parse_region
 from .precompute import assemble_chrom, chrom_nbins_of, sample_track_files
 from .predict import _resolve_ckpt, build_model, load_norm
@@ -60,8 +59,8 @@ def _predict_banded(model, channels, sym_full, wins, size, stride, nb, mat_norm,
                                 device=device)
             planes[:, 1] = 0.0
         with torch.no_grad():
-            imgs = model(build_spatial_cond(cond, pairs, planes,
-                                            cond_mode)).float().cpu().numpy()
+            # HiCModel builds the 2-D conditioning itself (as in training)
+            imgs = model(cond, pairs, planes).float().cpu().numpy()
         for w, img in zip(bw, imgs):
             block = np.maximum(mat_norm.decode(img[0]), 0.0)
             acc.add_block(w.start, 0.5 * (block + block.T), w2d)

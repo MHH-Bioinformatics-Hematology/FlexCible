@@ -251,7 +251,6 @@ def predict_edited(cfg: Config, chrom: str, edits: list[Edit], out_cool: str,
 
     from .matrix import (BandedAccumulator, MatrixNormalizer, hann2d, open_cool,
                          plan_windows, write_cool_custom)
-    from .model import build_spatial_cond
     from .precompute import assemble_chrom, chrom_nbins_of, sample_track_files
     from .predict import _resolve_ckpt, build_model, load_norm
     from .tracks import TrackNormalizer
@@ -312,8 +311,8 @@ def predict_edited(cfg: Config, chrom: str, edits: list[Edit], out_cool: str,
             planes = torch.full((cond.shape[0], 2, size, size), -1.0, device=device)
             planes[:, 1] = 0.0
         with torch.no_grad():
-            imgs = model(build_spatial_cond(cond, pairs, planes,
-                                            cfg.model.cond_mode))[:, 0]
+            # HiCModel builds the 2-D conditioning itself (as in training)
+            imgs = model(cond, pairs, planes)[:, 0]
         for w, img in zip(bw, imgs.float().cpu().numpy()):
             block = np.maximum(mat_norm.decode(img), 0.0)
             acc.add_block(w.start, 0.5 * (block + block.T), w2d)
