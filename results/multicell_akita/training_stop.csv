@@ -1,0 +1,5 @@
+run,stopped_at_epoch,best_val,stopped_by,all_stops
+gm1,34,0.6858,patience,epoch 34 patience
+hic3,57,0.6973,patience,epoch 57 patience
+all5,193,0.7661,patience,epoch 100 cap; epoch 193 patience
+all5assay,169,0.7679,patience,epoch 169 patience

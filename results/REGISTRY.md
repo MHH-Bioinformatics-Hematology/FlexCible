@@ -221,3 +221,57 @@ are the comparisons free of that, and they show no gain either. Capture
 supervision and capture input leave the GM12878 prediction unchanged at 2 kb.
 Tables `capture/capture_summary.csv`, `capture/capture_input_diagnostics.json`
 (`scripts/capture_input_diagnostics.py`).
+
+## 11. Multi-cell training on Akita's cell types (FINAL)
+
+`scripts/multicell_akita.py` (runs gm1, hic3, all5, all5assay), best
+configuration (13 ChIP, 4 motifs, 2 kb, `oe_proper.py` targets), training
+windows restricted to Akita's training sequences (`data.train_regions_bed`,
+263 merged regions, 2009.5 Mb; removes 1327 of 4536 GM12878 windows), stopped
+by patience (all5 continued past the 100-epoch cap, stopped at 193; all5assay
+at 169). Tables `multicell_akita/test730.csv` (730 disjoint test windows),
+`crosscell.csv` (413 regions, with every other cell's measured map on the same
+regions), `training_stop.csv`, `train_windows.csv`.
+
+Test windows (730), cells seen in training:
+
+| cell | GM12878 only | 3 Hi-C cells | 5 cells | 5 cells + assay indicator |
+|---|---|---|---|---|
+| GM12878 | 0.685 | 0.696 | 0.678 | 0.680 |
+| IMR90 | | 0.710 | 0.697 | 0.698 |
+| HCT116 | | 0.650 | 0.630 | 0.626 |
+| H1 (Micro-C) | | | 0.667 | 0.668 |
+| HFF (Micro-C) | | | 0.760 | 0.757 |
+
+Cells never seen in training (413 regions; best measured map of another cell
+in brackets): K562 0.362, 0.463, 0.494, 0.448 (0.517, IMR90); HMEC 0.148,
+0.219, 0.248, 0.229 (0.302, IMR90); HUVEC 0.183, 0.206, 0.229, 0.196 (0.239,
+IMR90), for GM12878 only, 3 cells, 5 cells and 5 cells with the assay
+indicator. HMEC and HUVEC targets are single-lane maps (section 7). With 3
+cells, H1 (unseen) scores 0.609 against 0.594 for the best measured map (HFF).
+Adding the two Micro-C cells lowers the Hi-C cells by 0.013 to 0.020; the
+assay indicator (`data.assay_indicator`) does not recover it.
+
+The GM12878-only model trained on all training windows (section 8) scores
+IMR90 at 0.489 and HCT116 at 0.491, and the HFF map predicts IMR90 at 0.662,
+so the IMR90 comparison in section 6 holds only against GM12878 and K562 as
+measured baselines.
+
+## 12. Deep replicate agreement, intact Hi-C (FINAL)
+
+`scripts/replicate_corr_intact.py`: ENCODE per-replicate intact Hi-C .hic
+converted with the in-house C++ hic2cool, ICE, `oe_proper.py`, rep A vs rep B
+on the 413 regions. Table `replicates/replicate_corr_intact_deep.csv`. K562
+ENCSR676BEP (0.97 and 1.45 billion contacts): 0.650 (2 kb), 0.865 (5 kb),
+0.954 (10 kb), 0.990 (25 kb). The three GM12878 pairs (0.25 to 0.47 billion
+contacts per replicate) give 0.46 to 0.52 at 2 kb and 0.90 to 0.97 at 25 kb.
+The expected score of an error-free prediction against one replicate is about
+the square root of the replicate agreement (0.81 at 2 kb for the K562 pair).
+
+## 13. Expanded multi-cell training, 12 cell types, 2 to 25 kb (PENDING)
+
+`scripts/encode_expand.py`, `scripts/multicell_expanded.py`,
+`runs/multicell_expanded/driver.sh`: 7 further ENCODE cells (HepG2, A549,
+MCF-7, NHEK, GM23248, CD14+ monocytes, PC-9) from ENCODE .hic via the C++
+hic2cool, three-class assay indicator (in situ Hi-C, intact Hi-C, Micro-C),
+models all12 at 2, 5, 10 and 25 kb and insitu7 at 2 kb.
