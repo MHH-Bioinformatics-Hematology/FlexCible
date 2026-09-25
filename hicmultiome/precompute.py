@@ -57,6 +57,27 @@ def _zero_fraction(block: np.ndarray) -> float:
 
 
 _MAPPABLE_CACHE: dict = {}
+_FORK_FN = None
+
+
+def _fork_call(args):
+    return _FORK_FN(*args)
+
+
+def _pmap(fn, tasks: list, workers: int) -> list:
+    """[fn(*t) for t in tasks], in order; with workers > 1 on a fork pool whose
+    children inherit fn (a closure over the build state) instead of pickling it."""
+    global _FORK_FN
+    if workers <= 1 or len(tasks) <= 1:
+        return [fn(*t) for t in tasks]
+    import multiprocessing as mp
+
+    _FORK_FN = fn
+    try:
+        with mp.get_context("fork").Pool(min(workers, len(tasks))) as pool:
+            return pool.map(_fork_call, tasks, chunksize=1)
+    finally:
+        _FORK_FN = None
 
 
 def load_mappable(cool_path: str):
@@ -183,7 +204,11 @@ def sample_track_files(cfg: Config, sample: SampleSpec):
     return out
 
 
-def build(cfg: Config) -> dict:
+def build(cfg: Config, workers: int = 1) -> dict:
+    """Fit the normalisers and cache the windows. workers > 1 runs the
+    per-sample normaliser pass and the per-chromosome window pass in parallel
+    processes (fork); results, their order and the cache are the same as with
+    workers=1, the default."""
     rows = sym_row_names(cfg)
     holdout = read_bed_regions(cfg.data.holdout_bed) if cfg.data.holdout_bed else None
     if holdout:
@@ -235,21 +260,38 @@ def build(cfg: Config) -> dict:
     all_rows_arrays, all_valid_rows = [], []
     mat_norms: dict[str, MatrixNormalizer] = {}
     cap_norms: dict[str, CaptureNormalizer] = {}
-    for s in samples:
+    if workers > 1:
+        # the per-chromosome sequence/motif caches are written without locking:
+        # fill them once here, so the parallel passes only read them
+        for s in samples:
+            fasta = cfg.sample_fasta(s)
+            if not fasta:
+                continue
+            for chrom in sorted(set(sample_chroms[s.name][0]) | set(sample_chroms[s.name][1])):
+                nb = chrom_nbins_of(coolers[s.name], chrom)
+                if cfg.sequence.features:
+                    cached_sequence_features(fasta, chrom, cfg.sequence.features, nb,
+                                             cfg.data.resolution, cfg.sequence.cache_dir)
+                for mid in cfg.active_motif_ids:
+                    cached_motif_tracks(fasta, chrom, mid, cfg.motifs.dir, nb,
+                                        cfg.data.resolution, cfg.motifs.score_frac,
+                                        cfg.sequence.cache_dir)
+
+    def fit_sample(s: SampleSpec):
         clr = coolers[s.name]
         train_chroms, _ = sample_chroms[s.name]
-        band_sample, oe_blocks = [], []
+        band_sample, oe_blocks, arrays, valids = [], [], [], []
         for chrom in tqdm(train_chroms, desc=f"fit:{s.name}"):
             nb = chrom_nbins_of(clr, chrom)
-            all_rows_arrays.append(
+            arrays.append(
                 assemble_chrom(cfg, s, sample_tracks[s.name], chrom, nb))
             # rows this sample actually measures (missing/zeroed excluded)
             dead = set(s.missing_tracks) | set(s.zeroed_tracks)
-            valid = np.ones(all_rows_arrays[-1].shape[0], dtype=bool)
+            valid = np.ones(arrays[-1].shape[0], dtype=bool)
             for i, tname in enumerate(cfg.track_names):
                 if tname in dead:
                     valid[i] = False
-            all_valid_rows.append(valid)
+            valids.append(valid)
             wins = plan_windows(nb, cfg.window.size, cfg.window.stride, chrom)
             for w in wins[:: max(1, len(wins) // 40)]:      # ~40 windows/chrom
                 block = _prep_target(
@@ -266,9 +308,18 @@ def build(cfg: Config) -> dict:
             headroom=cfg.window.clip_headroom,
         )
         if cfg.window.transform == "obs_exp":
-            mat_norms[s.name] = norm.fit_obs_exp(oe_blocks)
+            norm = norm.fit_obs_exp(oe_blocks)
         else:
-            mat_norms[s.name] = norm.fit(np.concatenate(band_sample))
+            norm = norm.fit(np.concatenate(band_sample))
+        return arrays, valids, norm
+
+    fitted = _pmap(fit_sample, [(s,) for s in samples], workers)
+    for s, (arrays, valids, norm) in zip(samples, fitted):
+        clr = coolers[s.name]
+        train_chroms, _ = sample_chroms[s.name]
+        all_rows_arrays += arrays
+        all_valid_rows += valids
+        mat_norms[s.name] = norm
         mat_norms[s.name].save(cache / f"norm_matrix_{s.name}.json")
         log.info("  %s contact scale = %.4f", s.name, mat_norms[s.name].scale)
         if s.name in captures:
@@ -370,9 +421,8 @@ def build(cfg: Config) -> dict:
             starts.append(w.start)
 
         if not targets:
-            if n_outside_train:
-                skipped_outside.append((s.name, chrom, n_outside_train))
-            return None
+            # (a chromosome with no shard left still reports what it dropped)
+            return None, ((s.name, chrom, n_outside_train) if n_outside_train else None)
         shard = cache / f"{s.name}_{split}_{chrom}.npz"
         arrays = dict(
             target=np.stack(targets),
@@ -389,19 +439,35 @@ def build(cfg: Config) -> dict:
             "n_unmappable_skipped": n_unmappable,
             "n_empty_skipped": n_empty,
             "n_outside_train_regions": n_outside_train,
-        }
+        }, None
 
     skipped_outside: list[tuple[str, str, int]] = []   # chroms with no shard left
-    for s in samples:
-        train_chroms, test_chroms = sample_chroms[s.name]
-        for chrom in tqdm(train_chroms, desc=f"cache-train:{s.name}"):
-            rec = process(s, chrom, "train")
+    if workers <= 1:
+        for s in samples:
+            train_chroms, test_chroms = sample_chroms[s.name]
+            for chrom in tqdm(train_chroms, desc=f"cache-train:{s.name}"):
+                rec, skip = process(s, chrom, "train")
+                if rec:
+                    manifest["shards"].append(rec)
+                if skip:
+                    skipped_outside.append(skip)
+            for chrom in tqdm(test_chroms, desc=f"cache-test:{s.name}"):
+                rec, skip = process(s, chrom, "test")
+                if rec:
+                    manifest["shards"].append(rec)
+                if skip:
+                    skipped_outside.append(skip)
+    else:
+        tasks = [(s, chrom, split) for s in samples
+                 for split, chroms in zip(("train", "test"), sample_chroms[s.name])
+                 for chrom in chroms]
+        log.info("caching %d (sample, split, chromosome) tasks on %d workers",
+                 len(tasks), workers)
+        for rec, skip in _pmap(process, tasks, workers):
             if rec:
                 manifest["shards"].append(rec)
-        for chrom in tqdm(test_chroms, desc=f"cache-test:{s.name}"):
-            rec = process(s, chrom, "test")
-            if rec:
-                manifest["shards"].append(rec)
+            if skip:
+                skipped_outside.append(skip)
 
     (cache / "manifest.json").write_text(json.dumps(manifest, indent=2))
     n_train = sum(x["n_windows"] for x in manifest["shards"] if x["split"] == "train")
@@ -427,8 +493,11 @@ def build(cfg: Config) -> dict:
 def main():
     ap = argparse.ArgumentParser(description="Precompute multi-omic Hi-C windows.")
     ap.add_argument("--config", required=True)
+    ap.add_argument("--workers", type=int, default=1,
+                    help="parallel processes for the per-sample and per-chromosome "
+                         "passes (default 1: serial); the cache is identical")
     args = ap.parse_args()
-    build(Config.load(args.config))
+    build(Config.load(args.config), workers=args.workers)
 
 
 if __name__ == "__main__":

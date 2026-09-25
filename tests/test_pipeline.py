@@ -1304,6 +1304,54 @@ def test_assay_indicator_three_class(workdir, cfg):
         dataclasses.replace(off.data, assay_indicator_mode="four")
 
 
+def test_precompute_workers_identical_cache(workdir):
+    """precompute.build(workers=2) writes the same manifest, normalisers and
+    shards as the serial default, with two samples, capture and a train filter."""
+    import json
+
+    from hicmultiome import precompute
+    from hicmultiome.config import Config
+
+    bed = workdir / "train_regions_w.bed"
+    bed.write_text("chr1\t0\t40000\nchr2\t0\t60000\n")
+    caches = {}
+    for w in (1, 2):
+        raw = {
+            "data": {
+                "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                           {"name": "H3K27ac", "type": "histone"}],
+                "resolution": BINSIZE,
+                "train_regions_bed": str(bed),
+                "samples": [
+                    {"name": "a", "cool_path": str(workdir / "target.cool"),
+                     "bigwig_dir": str(workdir),
+                     "capture_interactions": str(workdir / "capture.txt")},
+                    {"name": "b", "cool_path": str(workdir / "target.cool"),
+                     "bigwig_dir": str(workdir), "zeroed_tracks": ["CTCF"]},
+                ],
+            },
+            "sequence": {"fasta": str(workdir / "genome.fa"),
+                         "cache_dir": str(workdir / "gcache")},
+            "motifs": {"dir": str(workdir), "score_frac": 0.8},
+            "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99},
+            "train": {"output_dir": str(workdir / f"run_w{w}"),
+                      "cache_dir": str(workdir / f"cache_w{w}")},
+        }
+        caches[w] = (precompute.build(Config.from_dict(raw), workers=w),
+                     workdir / f"cache_w{w}")
+    (m1, c1), (m2, c2) = caches[1], caches[2]
+    strip = [{k: v for k, v in sh.items() if k != "path"} for sh in m1["shards"]]
+    assert strip == [{k: v for k, v in sh.items() if k != "path"} for sh in m2["shards"]]
+    assert m1.get("n_outside_train_regions") == m2.get("n_outside_train_regions")
+    for f in sorted(p.name for p in c1.glob("norm_*.json")):
+        assert json.loads((c1 / f).read_text()) == json.loads((c2 / f).read_text())
+    for sh in m1["shards"]:
+        a, b = np.load(sh["path"]), np.load(c2 / Path(sh["path"]).name)
+        assert set(a.files) == set(b.files)
+        for k in a.files:
+            np.testing.assert_array_equal(a[k], b[k])
+
+
 def test_resident_float16_matches_float32(workdir, cfg):
     """The cache is float16, so a float16 resident stack holds the same values."""
     import torch
