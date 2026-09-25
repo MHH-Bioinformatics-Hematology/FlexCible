@@ -169,6 +169,11 @@ def summarize():
             r = json.loads(j.read_text())
             t_rows.append({"run": name, "cell": r["sample"], "n": r["n"],
                            "oe_median_r": round(r["oe_median_r"], 4)})
+        # best checkpoint as it stood at epoch 100 (snapshot), where taken
+        for j in sorted(run.glob("ep100_test_*.json")):
+            r = json.loads(j.read_text())
+            t_rows.append({"run": f"{name}@ep100", "cell": r["sample"], "n": r["n"],
+                           "oe_median_r": round(r["oe_median_r"], 4)})
         for f in sorted((run / "crosscell").glob("predict_*.csv")):
             df = pd.read_csv(f)
             cell = f.stem.replace("predict_", "")
@@ -201,8 +206,12 @@ def summarize():
     for name in RUNS:
         si = stop_info(name, 10)
         if si:
+            t = "".join(f.read_text(errors="replace") for f in
+                        (OUT / f"{name}.log", OUT / f"{name}.cont.log") if f.exists())
+            hist = "; ".join(f"epoch {e} {'patience' if int(n) >= 10 else 'cap'}"
+                             for e, _, n in STOP_RE.findall(t))
             s_rows.append({"run": name, "stopped_at_epoch": si[0], "best_val": si[1],
-                           "stopped_by": si[2]})
+                           "stopped_by": si[2], "all_stops": hist})
     for fn, rows in (("test730.csv", t_rows), ("crosscell.csv", c_rows),
                      ("train_windows.csv", w_rows), ("training_stop.csv", s_rows)):
         if not rows:
