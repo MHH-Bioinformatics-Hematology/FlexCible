@@ -18,7 +18,12 @@ import yaml
 
 TF_TYPES = ("tf", "cofactor")           # DNA-binding: motif REQUIRED
 NONMOTIF_TYPES = ("histone", "accessibility", "methylation", "annotation")
-ASSAYS = ("hic", "microc")                # SampleSpec.assay; index = indicator value
+# SampleSpec.assay: "hic" = in situ Hi-C, "intact" = intact Hi-C (MNase and/or
+# DNaseI digestion), "microc" = Micro-C
+ASSAYS = ("hic", "intact", "microc")
+# data.assay_indicator_mode: "binary" = one row (1 Micro-C, 0 either Hi-C);
+# "three" = two rows (intact, microc), in situ Hi-C is the all-zero reference
+ASSAY_MODES = ("binary", "three")
 
 
 @dataclass
@@ -83,10 +88,12 @@ class SampleSpec:
         interaction file.
     fasta: per-sample genome override (cross-assembly samples); defaults to
         sequence.fasta.
-    assay: contact assay of the target map, "hic" or "microc". Only read when
-        data.assay_indicator is on, which then feeds it to the network as a
-        constant input row (0 = Hi-C, 1 = Micro-C): the two assays differ
-        systematically in ways no ChIP track can explain.
+    assay: contact assay of the target map: "hic" (in situ Hi-C), "intact"
+        (intact Hi-C, MNase/DNaseI) or "microc". Only read when
+        data.assay_indicator is on, which then feeds it to the network as
+        constant input rows (see data.assay_indicator_mode): the assays differ
+        systematically in ways no ChIP track can explain. In the default
+        binary mode "intact" counts as Hi-C (row value 0).
     """
 
     name: str
@@ -132,6 +139,16 @@ class DataConfig:
     # Feed each sample's SampleSpec.assay as one constant conditioning row
     # (0 = Hi-C, 1 = Micro-C), placed after the sequence features. Off = no row.
     assay_indicator: bool = False
+    # "binary" (default): the single row above, in situ and intact Hi-C both 0.
+    # "three": two constant rows, assay:intact then assay:microc, so in situ
+    # Hi-C (0, 0), intact Hi-C (1, 0) and Micro-C (0, 1) are three classes.
+    # Only read when assay_indicator is on.
+    assay_indicator_mode: str = "binary"
+
+    def __post_init__(self):
+        if self.assay_indicator_mode not in ASSAY_MODES:
+            raise ValueError(f"unknown data.assay_indicator_mode "
+                             f"{self.assay_indicator_mode!r} (expected one of {ASSAY_MODES})")
 
 
 @dataclass

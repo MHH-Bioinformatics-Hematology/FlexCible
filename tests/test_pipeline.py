@@ -1269,6 +1269,41 @@ def test_assay_indicator_row(workdir, cfg):
         dataclasses.replace(base, assay="capture")
 
 
+def test_assay_indicator_three_class(workdir, cfg):
+    """assay_indicator_mode "three" adds two constant rows (intact, microc):
+    in situ Hi-C (0, 0), intact Hi-C (1, 0), Micro-C (0, 1). The binary default
+    keeps one row and counts intact Hi-C as Hi-C."""
+    import dataclasses
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        seq_feature_names, sym_row_names)
+
+    base = cfg.get_sample(None)
+    smp = {a: dataclasses.replace(base, name=f"{a}_s", assay=a)
+           for a in ("hic", "intact", "microc")}
+    off = dataclasses.replace(cfg, data=dataclasses.replace(
+        cfg.data, samples=list(smp.values())))
+    binary = dataclasses.replace(off, data=dataclasses.replace(off.data, assay_indicator=True))
+    three = dataclasses.replace(binary, data=dataclasses.replace(
+        binary.data, assay_indicator_mode="three"))
+    r_off, r_bin, r_3 = sym_row_names(off), sym_row_names(binary), sym_row_names(three)
+    assert len(r_bin) == len(r_off) + 1 and len(r_3) == len(r_off) + 2
+    ki, km = r_3.index("assay:intact"), r_3.index("assay:microc")
+    assert (ki, km) == (km - 1, len(three.track_names) + len(seq_feature_names(three)) - 1)
+    kb = r_bin.index("assay:microc")
+    nb = CHROMS["chr1"] // BINSIZE
+    want = {"hic": (0.0, 0.0), "intact": (1.0, 0.0), "microc": (0.0, 1.0)}
+    for a, s in smp.items():
+        a3 = assemble_chrom(three, s, sample_track_files(three, s), "chr1", nb)
+        ab = assemble_chrom(binary, s, sample_track_files(binary, s), "chr1", nb)
+        ao = assemble_chrom(off, s, sample_track_files(off, s), "chr1", nb)
+        assert np.all(a3[ki] == want[a][0]) and np.all(a3[km] == want[a][1])
+        assert np.all(ab[kb] == float(a == "microc"))
+        np.testing.assert_array_equal(np.delete(a3, [ki, km], axis=0), ao)
+    with pytest.raises(ValueError):
+        dataclasses.replace(off.data, assay_indicator_mode="four")
+
+
 def test_resident_float16_matches_float32(workdir, cfg):
     """The cache is float16, so a float16 resident stack holds the same values."""
     import torch

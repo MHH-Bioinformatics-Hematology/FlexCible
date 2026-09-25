@@ -92,6 +92,15 @@ def mappable_fraction(mask, chrom: str, start: int, size: int) -> float:
 
 
 ASSAY_ROW = "assay:microc"          # data.assay_indicator row (0 Hi-C, 1 Micro-C)
+ASSAY_ROW_INTACT = "assay:intact"   # extra row of assay_indicator_mode "three"
+
+
+def assay_classes(cfg: Config) -> list[str]:
+    """Assays with an indicator row, in row order (empty when the indicator is
+    off): ["microc"] in binary mode, ["intact", "microc"] in three-class mode."""
+    if not cfg.data.assay_indicator:
+        return []
+    return ["intact", "microc"] if cfg.data.assay_indicator_mode == "three" else ["microc"]
 
 
 def seq_feature_names(cfg: Config) -> list[str]:
@@ -99,16 +108,14 @@ def seq_feature_names(cfg: Config) -> list[str]:
     rows (consumers compute the motif offset as len(tracks) + len(this)). The
     assay indicator row, when enabled, sits at the end of this block."""
     names = list(cfg.sequence.features) if cfg.sequence.fasta else []
-    if cfg.data.assay_indicator:
-        names.append("assay_microc")
+    names += [f"assay_{a}" for a in assay_classes(cfg)]
     return names
 
 
 def sym_row_names(cfg: Config) -> list[str]:
     rows = list(cfg.track_names)
     rows += [f"seq:{f}" for f in cfg.sequence.features] if cfg.any_fasta else []
-    if cfg.data.assay_indicator:
-        rows += [ASSAY_ROW]
+    rows += [f"assay:{a}" for a in assay_classes(cfg)]
     for mid in cfg.active_motif_ids:
         rows += [f"motif:{mid}:fwd", f"motif:{mid}:rev"]
     return rows
@@ -142,9 +149,8 @@ def assemble_chrom(
                 nb, cfg.data.resolution, cfg.sequence.cache_dir,
             )
         )
-    if cfg.data.assay_indicator:
-        parts.append(np.full((1, nb), float(sample.assay == "microc"),
-                             dtype=np.float32))
+    for a in assay_classes(cfg):
+        parts.append(np.full((1, nb), float(sample.assay == a), dtype=np.float32))
     if not fasta and cfg.any_fasta and cfg.active_motif_ids:
         parts.append(np.zeros((2 * len(cfg.active_motif_ids), nb), dtype=np.float32))
     if fasta:

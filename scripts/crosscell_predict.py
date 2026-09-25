@@ -45,7 +45,7 @@ def main():
     ap.add_argument("--others", nargs="*", default=[], help="cell=cool of OTHER cells")
     ap.add_argument("--binsize", type=int, default=2000)
     ap.add_argument("--tta", action="store_true")
-    ap.add_argument("--assay", choices=["hic", "microc"], default=None,
+    ap.add_argument("--assay", choices=["hic", "intact", "microc"], default=None,
                     help="contact assay of this cell's map, for models trained "
                          "with data.assay_indicator (default: keep the config's)")
     ap.add_argument("--device", default="cuda")
