@@ -272,6 +272,24 @@ def convert(acc, hic: Path, res: int) -> Path:
     return out
 
 
+STAGE = Path("/tmp/hicmx_stage")         # local NVMe scratch for balance / oe_proper
+
+
+def local_copy(label, res) -> Path:
+    STAGE.mkdir(parents=True, exist_ok=True)
+    return STAGE / f"{label}_{res // 1000}kb.cool"
+
+
+def to_share(src: Path, dst: Path):
+    """Copy a finished local file to the share under a temporary name, check
+    its size, then rename."""
+    tmp = dst.with_name(dst.name + ".copy")
+    sh(f"rm -f '{tmp}' && cp '{src}' '{tmp}'")
+    if tmp.stat().st_size != src.stat().st_size:
+        raise RuntimeError(f"copy of {src} to {tmp} is truncated")
+    tmp.rename(dst)
+
+
 def final_path(label, res):
     return ENC / f"{label}_{res // 1000}kb.cool"
 
@@ -307,17 +325,18 @@ def build(label):
         fin = final_path(label, res)
         if not fin.exists():
             raws = [convert(acc, hics[acc][0], res) for acc in accs]
-            part = ENC / f"{label}_{res // 1000}kb.part.cool"
-            sh(f"rm -f '{part}'")
-            if len(raws) == 1:
-                raws[0].rename(part)
-            else:                                        # sum biological replicates
-                log(f"[merge] {label} {res} from {len(raws)} replicates")
-                sh(f"{ENV}/cooler merge '{part}' " + " ".join(f"'{r}'" for r in raws))
             with SEM_OE:
+                # balance on local disk: random HDF5 access over the share is slow
+                loc = local_copy(label, res)
+                sh(f"rm -f '{loc}'")
+                if len(raws) == 1:
+                    sh(f"cp '{raws[0]}' '{loc}'")
+                else:                                    # sum biological replicates
+                    log(f"[merge] {label} {res} from {len(raws)} replicates")
+                    sh(f"{ENV}/cooler merge '{loc}' " + " ".join(f"'{r}'" for r in raws))
                 log(f"[balance] {label} {res}")
-                sh(f"{ENV}/cooler balance --force -p 8 --ignore-diags 2 --max-iters 500 '{part}'")
-            part.rename(fin)
+                sh(f"{ENV}/cooler balance --force -p 8 --ignore-diags 2 --max-iters 500 '{loc}'")
+                to_share(loc, fin)
             for r in raws:
                 if r.exists():
                     r.unlink()
@@ -339,14 +358,21 @@ def build(label):
                 f"masked {100 * st['ice_masked_frac']:.1f}%")
         o = oe_path(label, res)
         if not o.exists():
-            tmp = o.with_suffix(".part.cool")
             with SEM_OE:
+                loc = local_copy(label, res)
+                if not loc.exists():
+                    sh(f"cp '{fin}' '{loc}.cp' && mv '{loc}.cp' '{loc}'")
+                out = STAGE / f"oe_{o.name}"
                 log(f"[oe_proper] {label} {res}")
-                sh(f"rm -f '{tmp}' && cd {CODE} && {ENV}/python scripts/oe_proper.py "
-                   f"--input '{fin}' --output '{tmp}' --binsize {res} "
+                sh(f"rm -f '{out}' && cd {CODE} && {ENV}/python scripts/oe_proper.py "
+                   f"--input '{loc}' --output '{out}' --binsize {res} "
                    f"> '{ENC}/logs/oe_{label}_{res // 1000}kb.log' 2>&1")
-            tmp.rename(o)
+                to_share(out, o)
+                out.unlink()
             log(f"[oe ok] {label} {res} -> {o.name}")
+        loc = local_copy(label, res)
+        if loc.exists():
+            loc.unlink()
     # all cools verified: the .hic files are no longer needed
     for acc in accs:
         for path in [ENC / f"{acc}.hic", *ENC.glob(f"{acc}.hic.part*")]:
@@ -412,13 +438,24 @@ def main():
     ap.add_argument("--no-hic", action="store_true")
     ap.add_argument("--local", action="store_true",
                     help="also build the 5/10/25 kb proper O/E of the 4DN mcools (LOCAL)")
+    ap.add_argument("--oe-slots", type=int, default=3,
+                    help="concurrent cooler balance / oe_proper jobs")
+    ap.add_argument("--conv-slots", type=int, default=2, help="concurrent hic2cool jobs")
     ap.add_argument("--hic-streams", type=int, default=8,
                     help="parallel .hic downloads (one stream runs at about 5 MB/s)")
     a = ap.parse_args()
-    global SEM_DL_HIC
+
+    global SEM_DL_HIC, SEM_OE, SEM_CONV
     SEM_DL_HIC = threading.Semaphore(a.hic_streams)
+    SEM_OE = threading.Semaphore(a.oe_slots)
+    SEM_CONV = threading.Semaphore(a.conv_slots)
     for d in (ENC, ENC / "stats", ENC / "logs", ENC / "meta"):
         d.mkdir(parents=True, exist_ok=True)
+    # leftovers of an interrupted run: local scratch, half-balanced maps
+    sh(f"rm -rf '{STAGE}'")
+    for p in ENC.glob("*kb.part.cool"):
+        if not p.name.endswith(".raw.part.cool"):
+            p.unlink()
     labels = a.only or list(HIC)
     NONPAIR_LEFT[0] = sum(HIC[lab][3] != "pair" for lab in labels)
     if NONPAIR_LEFT[0] == 0:
