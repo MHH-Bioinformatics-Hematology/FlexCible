@@ -35,6 +35,39 @@ from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_
 from hicmultiome.tracks import TrackNormalizer
 
 
+def coarse_score(M, start, end, fine_res, cres, cclr, chrom):
+    """Pearson of the fine prediction M (region grid, fine_res bins starting at
+    `start`), averaged into the bins of the coarser cooler `cclr`, against that
+    cooler's values on the same region. None if too few bins or pixels."""
+    name = match_name(chrom, list(cclr.chromnames))
+    if name is None:
+        return None
+    c0 = (start // cres) * cres
+    c1 = -(-end // cres) * cres
+    try:
+        T = np.asarray(cclr.matrix(balance=False).fetch(f"{name}:{c0}-{c1}"), float)
+    except Exception:
+        return None
+    m = T.shape[0]
+    if m < 20:
+        return None
+    centres = start + (np.arange(M.shape[0]) + 0.5) * fine_res
+    idx = ((centres - c0) // cres).astype(int)
+    keep = (idx >= 0) & (idx < m)
+    ii, jj = np.meshgrid(idx, idx, indexing="ij")
+    ok = np.isfinite(M) & keep[:, None] & keep[None, :]
+    s = np.zeros((m, m)); n = np.zeros((m, m))
+    np.add.at(s, (ii[ok], jj[ok]), M[ok])
+    np.add.at(n, (ii[ok], jj[ok]), 1.0)
+    P = np.where(n > 0, s / np.maximum(n, 1), np.nan)
+    iu = np.triu_indices(m, k=2)
+    x, y = P[iu], np.where(T == 0, np.nan, T)[iu]
+    good = np.isfinite(x) & np.isfinite(y)
+    if good.sum() < 100 or x[good].std() == 0 or y[good].std() == 0:
+        return None
+    return float(pearsonr(x[good], y[good]).statistic)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True)
@@ -48,6 +81,12 @@ def main():
     ap.add_argument("--assay", choices=["hic", "intact", "microc"], default=None,
                     help="contact assay of this cell's map, for models trained "
                          "with data.assay_indicator (default: keep the config's)")
+    ap.add_argument("--coarse", nargs="*", default=[],
+                    help="res=cool: also block-average the native prediction onto "
+                         "that coarser grid and score it against that target")
+    ap.add_argument("--regions", default=None,
+                    help="chrom/start/end TSV of regions to score (default: the "
+                         "413 Akita test regions)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default="/mnt/processed/wolffjoa/hic-multiome/runs/crosscell")
     a = ap.parse_args()
@@ -62,6 +101,10 @@ def main():
     offset = len(channels["tracks"]) + len(channels["seq_features"])
     n_chip = len(channels["tracks"])
     row_of = {t: i for i, t in enumerate(channels["tracks"])}
+    sel_rows = None                              # model trained on a subset of the cond rows
+    if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
+        from hicmultiome.train import _select_rows
+        sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
     mat_norm = MatrixNormalizer.load(ckpt / f"norm_matrix_{cfg.get_sample(None).name}.json")
     track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
     absent = track_norm.absent_values()
@@ -81,12 +124,17 @@ def main():
 
     tgt = cooler.Cooler(a.target)
     src = tgt                                    # chrom sizes at the model/target resolution
+    coarse = {}
+    for kv in a.coarse:
+        k, v = kv.split("=", 1)
+        coarse[int(k)] = cooler.Cooler(v)
     others = {}
     for kv in a.others:
         k, v = kv.split("=", 1)
         others[k] = cooler.Cooler(v)
 
-    regions = pd.read_csv(sc.REGIONS, sep="\t", names=["chrom", "start", "end"])
+    regions = pd.read_csv(a.regions or sc.REGIONS, sep="\t", usecols=[0, 1, 2],
+                          names=["chrom", "start", "end"])
     rows = []
     for chrom, grp in regions.groupby("chrom"):
         tname = match_name(chrom, list(tgt.chromnames))     # target fetch (2 kb grid)
@@ -98,6 +146,8 @@ def main():
         # fill any missing mark rows with the absent value
         for t in missing:
             sym_full[row_of[t]] = absent[row_of[t]]
+        if sel_rows is not None:
+            sym_full = sym_full[sel_rows]
         print(f"  {chrom}: {len(grp)} regions", flush=True)
         for _, r in grp.iterrows():
             try:
@@ -136,6 +186,17 @@ def main():
             rec = {"region": f"{chrom}:{int(r.start)}-{int(r.end)}"}
             if ok.sum() > 100 and M[ok].std() > 0 and Tm[ok].std() > 0:
                 rec["model"] = float(pearsonr(M[ok], Tm[ok]).statistic)
+            # the same prediction averaged onto coarser grids, scored there; only
+            # bins inside the model window count (resample extends the edges of
+            # a window shorter than the region by nearest-value copies)
+            if coarse:
+                cen = int(r.start) + (np.arange(n_out) + 0.5) * tgt.binsize
+                cov = (cen >= st * res) & (cen < (st + size) * res)
+                Mc = np.where(cov[:, None] & cov[None, :], M, np.nan)
+            for cres, cclr in coarse.items():
+                r_c = coarse_score(Mc, int(r.start), int(r.end), tgt.binsize, cres, cclr, chrom)
+                if r_c is not None:
+                    rec[f"model_{cres // 1000}kb"] = r_c
             # measured-map baselines: other cells' REAL map vs this cell's real map
             iu = np.triu_indices(n_out, k=2)
             for oc, oclr in others.items():
@@ -159,7 +220,9 @@ def main():
     cols = [c for c in df.columns if c != "region"]
     summ = df[cols].median().sort_values(ascending=False)
     for k, v in summ.items():
-        tag = "MODEL (from ChIP)" if k == "model" else k.replace("base_", "real ") + " -> " + a.cell
+        tag = ("MODEL (from ChIP)" if k == "model" else
+               f"MODEL averaged to {k[6:]}" if k.startswith("model_") else
+               k.replace("base_", "real ") + " -> " + a.cell)
         print(f"  {v:.4f}  {tag}", flush=True)
     print(f"  n={df['model'].notna().sum()} regions; wrote predict_{a.cell}.csv")
 

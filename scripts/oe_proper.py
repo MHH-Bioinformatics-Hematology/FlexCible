@@ -171,10 +171,13 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--binsize", type=int, default=2000)
     ap.add_argument("--chroms", nargs="*", default=None)
+    ap.add_argument("--max-dist", type=int, default=MAX_DIST,
+                    help="band in bp (default 2 Mb); wider for windows spanning "
+                         "more than 2 Mb, so no window pixel is an unmeasured zero")
     a = ap.parse_args()
 
     clr = open_at(a.input, a.binsize)
-    band = MAX_DIST // a.binsize
+    band = a.max_dist // a.binsize
     chroms = a.chroms or [c for c in clr.chromnames
                           if c.replace("chr", "") in
                           [str(i) for i in range(1, 23)] + ["X"]]
