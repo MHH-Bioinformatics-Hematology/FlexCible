@@ -597,9 +597,10 @@ def status(agg, quiet=False):
                 q.append(f"- {d.parent.name}/{d.name}: {last[-1]}")
     if q:
         lines += ["", "## Queue (last milestone per driver)", "",
-                  "Order: all12refres 25 kb, all12honest 25 kb, Akita GM12878 runs, "
-                  "all12refres 10 kb, all12honest 10 kb, 5 kb pair, 2 kb pair, "
-                  "all12reflearn 25 and 10 kb, then all12refin (held).", ""] + q
+                  "runs/multicell_reference/gpu_queue.sh (trainings back to back, "
+                  "evaluations in the background): Akita-grid pair, all12refres and "
+                  "all12honest at 10, 5 and 2 kb, all12reflearn 25 and 10 kb, "
+                  "all12refin 25 and 10 kb.", ""] + q
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")
