@@ -1,3 +1,7 @@
 run,stopped_at_epoch,best_val,stopped_by,all_stops
 all12refres_25kb,38,0.9445,patience,epoch 38 patience
+all12reflearn_25kb,17,0.8267,patience,epoch 17 patience
 all12honest_25kb,27,0.8349,patience,epoch 27 patience
+all12refres_10kb,67,0.9181,patience,epoch 67 patience
+all12reflearn_10kb,26,0.8111,patience,epoch 26 patience
+all12honest_10kb,31,0.8146,patience,epoch 31 patience

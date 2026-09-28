@@ -1,0 +1,10 @@
+{
+ "label": "molm13_xu",
+ "res": 10000,
+ "contacts": 0.0,
+ "nnz": 74269382,
+ "ice_masked_frac": 0.11425046707184001,
+ "sources": [
+  "/mnt/processed/wolffjoa/hic-multiome/aml/molm13/GSM4417606_MOLM13_b38d5.hic"
+ ]
+}

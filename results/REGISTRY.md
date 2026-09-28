@@ -535,6 +535,41 @@ stays below it for HMEC (0.910 against 0.932) and HUVEC (0.894 against
 validation the no-reference 12-cell model scores 0.828 on the training
 cells, 0.013 above the section 13 all12 run (0.815).
 
+Results at 10 kb (all12refres stopped by patience at epoch 67, honest
+validation 0.9181; all12honest at epoch 31, 0.8146), same columns; for the
+held-out cells the reference is consensus12 (the single-lane HMEC and HUVEC
+maps included):
+
+| cell | all12refres | reference alone | best other map | all12honest | all12 (section 13, overlapping validation) | test windows |
+|---|---|---|---|---|---|---|
+| gm12878 | 0.938 | 0.858 | 0.799 (k562) | 0.835 | 0.825 | 0.931 / 0.819 / 0.822 |
+| imr90 | 0.948 | 0.903 | 0.903 (gm23248) | 0.881 | 0.880 | 0.947 / 0.909 / 0.845 |
+| hct116 | 0.950 | 0.910 | 0.869 (a549) | 0.835 | 0.841 | 0.942 / 0.899 / 0.821 |
+| hff | 0.959 | 0.917 | 0.913 (gm23248) | 0.884 | 0.884 | 0.955 / 0.920 / 0.854 |
+| h1 | 0.932 | 0.886 | 0.856 (hct116) | 0.835 | 0.830 | 0.926 / 0.879 / 0.798 |
+| hepg2 | 0.926 | 0.874 | 0.831 (hct116) | 0.825 | 0.822 | 0.920 / 0.871 / 0.802 |
+| a549 | 0.938 | 0.913 | 0.869 (hct116) | 0.838 | 0.833 | 0.930 / 0.907 / 0.814 |
+| nhek | 0.918 | 0.888 | 0.865 (hmec_deep) | 0.779 | 0.773 | 0.906 / 0.884 / 0.728 |
+| gm23248 | 0.943 | 0.925 | 0.913 (hff) | 0.787 | 0.771 | 0.940 / 0.917 / 0.741 |
+| mcf7 | 0.909 | 0.879 | 0.832 (h1) | 0.814 | 0.807 | 0.893 / 0.868 / 0.764 |
+| cd14mono | 0.858 | 0.626 | 0.662 (gm12878) | 0.775 | 0.772 | 0.856 / 0.638 / 0.768 |
+| pc9 | 0.894 | 0.852 | 0.820 (a549) | 0.788 | 0.787 | 0.889 / 0.859 / 0.756 |
+| k562 | 0.885 | 0.859 | 0.827 (hct116) | 0.750 | 0.752 |  /  /  |
+| hmec | 0.806 | 0.809 | 0.768 (nhek) | 0.613 | 0.621 |  /  /  |
+| huvec | 0.768 | 0.769 | 0.728 (imr90) | 0.659 | 0.648 |  /  /  |
+| hmec_deep | 0.900 | 0.906 | 0.865 (nhek) | 0.703 | 0.713 |  /  /  |
+| huvec_deep | 0.881 | 0.884 | 0.835 (imr90) | 0.791 | 0.770 |  /  /  |
+
+Across the 12 training cells the residual reference model scores a median
+of 0.935, against 0.887 for the leave-one-out consensus alone, 0.860 for the
+best single other map and 0.830 for all12honest (test windows 0.928, 0.882
+and 0.800); it exceeds the consensus alone in all 12 cells, in 77% to 98% of
+the regions per cell. On held-out cells it exceeds consensus12 for K562
+(0.885 against 0.859) and matches it within 0.007 for HMEC and HUVEC, deep
+and single-lane (0.900 against 0.907, 0.881 against 0.884); all12honest
+scores 0.61 to 0.79 on them. With honest validation the no-reference model
+scores 0.830 on the training cells against 0.823 for the section 13 run.
+
 ## 16. Worst-predicted regions (FINAL)
 
 `scripts/worst_regions.py` (CPU only; stages predict, collect, reps,
