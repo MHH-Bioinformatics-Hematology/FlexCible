@@ -1,0 +1,25 @@
+rule,n_regions,median_over_12_cells,median_cell,median_model_over_replicate,share,spearman_model_replicate,median_replicate_bottom10,median_replicate_all
+median target SD >= 0.0,413,0.9386626935691706,,,,,,
+median target SD >= 0.15,412,0.9387281326535337,,,,,,
+median target SD >= 0.2,403,0.9396214178436764,,,,,,
+median target SD >= 0.25,372,0.9410520726469382,,,,,,
+all12refres_25kb gm12878: independent replicate vs target >= 0.0,413,,0.9382163304992056,0.9843605030656442,,,,
+all12refres_25kb gm12878: independent replicate vs target >= 0.8,397,,0.9404244725009854,0.9830658872587499,,,,
+all12refres_25kb gm12878: independent replicate vs target >= 0.9,342,,0.9440877659528879,0.9809929545730786,,,,
+all12refres_25kb gm12878: model beats independent replicate,413,,,,0.3341404358353511,0.5562493207426705,,
+all12refres_25kb gm12878: bottom 10% with replicate in lowest quartile (< 0.927),41,,0.7633511763153304,,0.7560975609756098,,0.8845525341148013,0.9553431815912428
+all12refres_25kb gm12878: bottom 10% with replicate in upper half (>= 0.955),41,,,,0.0975609756097561,,,
+all12refres_25kb gm12878: bottom 10% with replicate < 0.85,41,,,,0.3902439024390244,,,
+all12refres_25kb k562: independent replicate vs target >= 0.0,413,,0.9059004204991652,0.9415023346519602,,,,
+all12refres_25kb k562: independent replicate vs target >= 0.8,409,,0.9060193928409912,0.9415023346519602,,,,
+all12refres_25kb k562: independent replicate vs target >= 0.9,392,,0.9073749781929183,0.9404363715188044,,,,
+all12refres_25kb k562: model beats independent replicate,413,,,,0.09927360774818401,0.41195189682715705,,
+all12refres_25kb k562: bottom 10% with replicate in lowest quartile (< 0.950),41,,0.6751987722682691,,0.6097560975609756,,0.9357899106756116,0.965153749132586
+all12refres_25kb k562: bottom 10% with replicate in upper half (>= 0.965),41,,,,0.14634146341463414,,,
+all12refres_25kb k562: bottom 10% with replicate < 0.85,41,,,,0.14634146341463414,,,
+all12_2kb gm12878: model beats independent replicate,413,,,,0.9782082324455206,0.6922460923326625,,
+all12_2kb gm12878: bottom 10% with replicate in lowest quartile (< 0.262),41,,0.3303327844673904,,0.8536585365853658,,0.0984058816236157,0.4137766502821511
+all12_2kb gm12878: bottom 10% with replicate in upper half (>= 0.414),41,,,,0.024390243902439025,,,
+all12_2kb k562: model beats independent replicate,413,,,,0.6513317191283293,0.8638310079310001,,
+all12_2kb k562: bottom 10% with replicate in lowest quartile (< 0.318),41,,0.2209316289237733,,0.9024390243902439,,0.0925535242459173,0.5450360677397843
+all12_2kb k562: bottom 10% with replicate in upper half (>= 0.545),41,,,,0.0,,,

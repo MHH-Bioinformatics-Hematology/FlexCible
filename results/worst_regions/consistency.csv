@@ -1,0 +1,17 @@
+comparison,value
+"cell vs cell (ref25 model), mean pairwise Spearman",0.42239997793546097
+"cell vs cell, share of bottom-10% shared (chance 0.10)",0.26237989652623794
+"model_med12 vs cons_med12, Spearman",0.7232667311939837
+"model_med12 vs cons_med12, share of bottom-10% shared",0.4634146341463415
+"model_med12 vs bestother_med12, Spearman",0.7822937246673215
+"model_med12 vs bestother_med12, share of bottom-10% shared",0.5365853658536586
+"model_med12 vs all12_25kb_med12, Spearman",0.5948820707068126
+"model_med12 vs all12_25kb_med12, share of bottom-10% shared",0.34146341463414637
+"model_med12 vs all12_2kb_med12, Spearman",0.22563472019367734
+"model_med12 vs all12_2kb_med12, share of bottom-10% shared",0.17073170731707318
+"all12_2kb_med12 vs all12_25kb_med12, Spearman",0.20570944105511363
+"all12_2kb_med12 vs all12_25kb_med12, share of bottom-10% shared",0.07317073170731707
+"model_med12 vs model_med_heldout, Spearman",0.6620114329868142
+"model_med12 vs model_med_heldout, share of bottom-10% shared",0.43902439024390244
+"all12_2kb_med12 vs bestother_2kb_med12, Spearman",0.8672093230048743
+"all12_2kb_med12 vs bestother_2kb_med12, share of bottom-10% shared",0.8780487804878049

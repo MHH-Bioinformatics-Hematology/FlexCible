@@ -534,3 +534,69 @@ stays below it for HMEC (0.910 against 0.932) and HUVEC (0.894 against
 0.916); all12honest scores 0.771, 0.735 and 0.805 on them. With honest
 validation the no-reference 12-cell model scores 0.828 on the training
 cells, 0.013 above the section 13 all12 run (0.815).
+
+## 16. Worst-predicted regions (FINAL)
+
+`scripts/worst_regions.py` (CPU only; stages predict, collect, reps,
+features, model, metrics, fixes, chipref, tables, figures; outputs
+`runs/worst_regions/`, tables `worst_regions/`). Models: the 12-cell
+residual reference model at 25 kb (section 15, all12refres_25kb) and the
+all12 2 kb model (section 13), re-predicted on CPU with `--save-pred` (the
+GM12878 per-region scores reproduce the crosscell table to 1e-4). Region
+score as in `crosscell_predict.py`; bottom 10% = 41 of 413 regions, ranked
+by the median over the 12 training cells.
+
+Worst regions at 25 kb (median over all regions 0.940): chr5:101449728
+0.697, chr4:32845824 0.706, chr12:37810176 0.748, chr2:240488448 0.795,
+chr5:61294592 0.805, chr17:48642048 0.820 (`worst_25kb.csv`). Worst at 2 kb
+(median 0.656): chr4:31272960 0.257, chr1:188526592 0.261, chr1:190623744
+0.279, clustered in chr4:28.6 to 33.9 Mb, chr1:188 to 192 Mb and chr7:52 to
+54.6 Mb (`worst_2kb.csv`). The two bad sets are unrelated (Spearman 0.21
+between the all12 2 and 25 kb scores, 7% of the bottom 10% shared). Across
+cells the 25 kb scores agree with Spearman 0.42 and two cells share 26% of
+their bottom 10%; the 25 kb model and the consensus it reads share 46%
+(`consistency.csv`).
+
+Target-side and model-side failures, from independent intact Hi-C
+(GM12878 ENCSR965OVH, K562 ENCSR676BEP) scored against the in situ target
+(`fix_eval_rules.csv`). At 2 kb the independent replicate agrees with the
+target at 0.098 (GM12878) and 0.093 (K562) in the model's bottom 10%,
+against 0.414 and 0.545 over all regions, and 85% and 90% of these regions
+lie in the lowest replicate quartile: the 2 kb failures are target noise.
+These are gene-poor B-compartment stretches with 65 raw contacts per 25 kb
+pixel against 117 elsewhere and H3K27ac 1.2 log2 units below the genome
+mean (region-level random forest CV R2 0.78; target SD Spearman 0.75). At
+25 kb the replicate agrees at 0.885 (GM12878) and 0.936 (K562) in the
+bottom 10% (0.955 and 0.965 overall) while the model scores 0.763 and
+0.675; 39% and 15% of these regions have replicate agreement below 0.85.
+The 25 kb failures are mostly model-side, on flat and cell-specific maps:
+the share of pixel variance between the 12 cells (Spearman -0.60; 0.48 in
+the bottom 10% against 0.30) and the target SD (0.54; 0.278 against 0.380)
+explain most of the score (region-level random forest CV R2 0.50, ridge
+0.60; cell specificity alone 0.40, target-map features alone 0.36, genome
+annotation 0.03, ChIP and compartment below 0, window position 0). Cancer
+lines score as well as the others (median 0.934 against 0.932) and coverage
+steps do not predict the score; pericentromeric (chr12:37.8 Mb, 28.5%
+segmental duplication) and subtelomeric (chr2:240.5 Mb) regions are single
+cases (`feature_groups.csv`, `feature_univariate.csv`).
+
+Metric sensitivity (`metric_variants_summary.csv`), 25 kb, 15 cells,
+overall / bottom 10%: crosscell score 0.933 / 0.855, upper triangle k >= 2
+0.933 / 0.855, k >= 10 0.932 / 0.842, unmappable bins and a 2-bin halo
+masked 0.935 / 0.859, copy-number segments masked 0.934 / 0.859, Spearman
+0.926 / 0.842, stratum-adjusted correlation 0.893 / 0.804. Pearson variants
+keep 80 to 100% of the bottom 10%, SCC keeps 29%
+(`metric_badset_stability.csv`). At 2 kb masking changes the bottom 10% by
+at most 0.021.
+
+Fixes tested on the saved predictions. Blending the prediction with its
+consensus input, (1 - a) P + a C, raises the training cells from 0.9387 to
+0.9417 (a = 0.3; bottom 10% 0.859 to 0.872) and the held-out cells K562,
+HMEC deep and HUVEC deep from 0.9056 to 0.9166 (a = 0.5; bottom 10% 0.823
+to 0.847); a was read on the test regions and is not a result until chosen
+on validation windows (`fix_blend_summary.csv`). A reference map weighting
+the other cells by ChIP profile similarity (softmax, tau 0.1) scores 0.9249
+against 0.9223 for their plain mean (bottom 10% 0.846 against 0.833); the
+single most ChIP-similar cell scores 0.884 (`chipref_summary.csv`).
+Excluding the 41 regions with median target SD below 0.25 moves the
+12-cell median from 0.9387 to 0.9411.
