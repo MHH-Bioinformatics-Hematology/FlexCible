@@ -634,3 +634,41 @@ kb; all-chromosome model 0.649 / 0.577 and 0.616 / 0.579. Sequence alone
 recovers the consensus at 0.55 to 0.65, well below the measured consensus
 it approximates. Stage 2 (all12reflearn, the residual model with the
 out-of-fold learned map as reference) is queued after the 2 kb pair.
+
+## 17. Multi-resolution training (PENDING)
+
+A. Resolution-conditioned shared U-Net, run all12multires
+(`hicmultiome/train_multires.py`, `scripts/multires.py`): one residual
+reference model (12 training cells, per-cell leave-one-out consensus,
+consensus12 for held-out cells, honest validation per resolution) trained on
+2, 5, 10 and 25 kb windows together. `model.resolutions` gives every
+resolution a learned 16-dimensional embedding that modulates every U-Net
+block by FiLM (scale and shift per channel, zero-initialised). Windows keep
+the sizes of the dedicated models (512, 384, 192 and 80 bins); the U-Net is
+fully convolutional, so each step draws one resolution uniformly (the same
+draw on both DDP ranks) and a batch of its windows, which gives every
+resolution the same number of gradient steps; an epoch is as many steps as
+one pass over all training windows, and the mean of the four validation
+scores drives patience. No torch.compile (four window shapes). Per
+resolution the model is exposed as a run folder
+(`multicell_reference/all12multires[_<k>kb]`) and evaluated exactly like the
+dedicated runs (`reference_summary.csv`).
+
+C. Scale-dependent input importance (`scripts/scale_importance.py`) on
+model A: per resolution, the score loss when one input group is set to its
+absent value (CTCF, cohesin, active, gene body, repressive, motifs, GC/CpG,
+reference plane) on the disjoint test windows, and gradient x input shares
+per group and distance band (<100 kb, 100 to 500 kb, >500 kb); figure
+`scale_importance/importance.png`.
+
+B. Coarse-to-fine cascade 25, 10, 5, 2 kb (`scripts/cascade.py`, run
+all12casc, `model.prior`): the coarser level's prediction, resampled onto
+the finer window, as one more input plane of the residual reference model.
+Priors are out of fold, 2-fold by chromosome: two fold models per coarse
+level (odd chromosomes; even chromosomes and chrX; the cascade setup below
+25 kb) each predict the other fold's chromosomes for every cell, and the
+merged maps (`crosscell_oe/cascade/prior_<cell>_<k>kb.cool`) feed both the
+next level's fold models and its final model trained on all training
+chromosomes.
+
+All three run under `scripts/gpu_scheduler.py`; results follow here.
