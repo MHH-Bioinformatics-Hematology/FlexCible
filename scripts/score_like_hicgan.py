@@ -114,6 +114,15 @@ def main():
     ap.add_argument("--even-only", action="store_true",
                     help="restrict to even chromosomes, our held-out set")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--reference", default=None,
+                    help="reference-map models: the reference cool (default: the "
+                         "config's; checked by the leakage guard for gm12878)")
+    ap.add_argument("--sample-cool", default=None,
+                    help="cool of the model's bin grid, replacing the config's "
+                         "sample cool_path (only chromosome sizes are read)")
+    ap.add_argument("--baseline", nargs="*", default=[],
+                    help="name=cool: score this measured map itself on the same "
+                         "regions and pixels (column base_<name>)")
     a = ap.parse_args()
 
     cfg = Config.load(a.config)
@@ -143,7 +152,19 @@ def main():
     log.info("%d Akita test regions; target %s", len(regions), TARGET.name)
 
     tgt = cooler.Cooler(str(TARGET))
-    src = open_cool(sample.cool_path)          # only for chromosome sizes
+    src = open_cool(a.sample_cool or sample.cool_path)   # only for chromosome sizes
+    ref_clr = None
+    if cfg.model.reference != "none":
+        from hicmultiome.reference import open_reference, reference_block, resolve_reference
+        ref_path = resolve_reference(cfg, ckpt, "gm12878", a.reference)
+        ref_clr = open_reference(ref_path, res)
+        log.info("reference map %s (%s)", ref_path, cfg.model.reference)
+    from hicmultiome.reference import assert_reference_excludes
+    baselines = {}
+    for kv in a.baseline:
+        k, v = kv.split("=", 1)
+        assert_reference_excludes(v, "gm12878")
+        baselines[k] = cooler.Cooler(v)
     track_files = sample_track_files(cfg, sample)
     rows = []
 
@@ -180,15 +201,20 @@ def main():
                      if n_motifs else None)
             seq_oh = (region_onehot(fasta, name, st, size, res, device)
                       if use_seq else None)
+            ref = None
+            if ref_clr is not None:
+                ref = torch.from_numpy(
+                    reference_block(ref_clr, name, st, size, mat_norm)[None]).to(device)
             with torch.no_grad():
-                out = model(cond, pairs, None, seq_oh)
+                out = model(cond, pairs, None, seq_oh, ref)
                 if a.tta:
                     from hicmultiome.dataset import reverse_cond, split_cond
                     cr = reverse_cond(cond, offset, n_motifs)
                     sr, pr = split_cond(cr, offset, n_motifs)
                     seq_r = (region_onehot(fasta, name, st, size, res, device,
                                            revcomp=True) if use_seq else None)
-                    out_r = model(sr, pr, None, seq_r)
+                    ref_r = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
+                    out_r = model(sr, pr, None, seq_r, ref_r)
                     out = 0.5 * (out + torch.flip(out_r, dims=[-1, -2]))
             P = mat_norm.decode(out[0, 0].float().cpu().numpy())
             P = 0.5 * (P + P.T)
@@ -205,6 +231,17 @@ def main():
                 ok = np.isfinite(M) & np.isfinite(Tm)
                 if ok.sum() >= 100 and M[ok].std() > 0 and Tm[ok].std() > 0:
                     rec["ours"] = float(pearsonr(M[ok], Tm[ok]).statistic)
+                # measured maps as the prediction, on the same pixels
+                for bn, bclr in baselines.items():
+                    bnm = match_name(chrom, list(bclr.chromnames))
+                    B = np.asarray(bclr.matrix(balance=False).fetch(
+                        f"{bnm}:{int(r.start)}-{int(r.end)}"), dtype=float)
+                    if B.shape != T.shape:
+                        continue
+                    Bm = np.where(live[:, None] & live[None, :] & (B != 0), B, np.nan)
+                    okb = ok & np.isfinite(Bm)
+                    if okb.sum() >= 100 and Bm[okb].std() > 0:
+                        rec[f"base_{bn}"] = float(pearsonr(Bm[okb], Tm[okb]).statistic)
             rows.append(rec)
         log.info("%s: %d regions", chrom, len(grp))
 
