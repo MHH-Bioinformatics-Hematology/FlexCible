@@ -36,6 +36,7 @@ from .matrix import (
     plan_windows,
 )
 from .motifs import cached_motif_tracks
+from .reference import assert_reference_excludes
 from .sequence import cached_sequence_features
 from .tracks import TrackNormalizer, discover_tracks, read_all_tracks
 from .utils import get_logger
@@ -233,6 +234,7 @@ def build(cfg: Config, workers: int = 1) -> dict:
             if not path:
                 raise ValueError(f"sample {s.name!r}: no reference map while "
                                  "another sample has one")
+            assert_reference_excludes(path, s.name)
             ref_clrs[s.name] = open_cool(path)
             if ref_clrs[s.name].binsize != cfg.data.resolution:
                 raise ValueError(f"reference {path} binsize "

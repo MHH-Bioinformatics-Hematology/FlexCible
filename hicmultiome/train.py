@@ -311,6 +311,8 @@ def train(cfg: Config):
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
     use_ref = cfg.model.reference != "none"
+    if use_ref:
+        ds.check_reference_leakage()
     if use_ref and "ref" not in data:
         raise RuntimeError(f"model.reference={cfg.model.reference!r} but the cache "
                            f"{cache_dir} holds no reference windows: set "

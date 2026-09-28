@@ -1576,3 +1576,49 @@ def test_reference_per_sample(workdir):
     raw["data"]["samples"][1].pop("reference_cool")
     with pytest.raises(ValueError, match="none for"):
         Config.from_dict(raw)
+
+
+def test_reference_leakage_guard(workdir):
+    """A reference whose <cool>.json lists the trained or scored cell (by
+    identity: hmec_deep is hmec) is rejected by precompute, training and the
+    scoring helpers; one that excludes it passes."""
+    import dataclasses
+    import json
+    import shutil
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+    from hicmultiome.reference import (assert_reference_excludes, cell_identity,
+                                       reference_cells)
+
+    assert cell_identity("hmec_deep") == cell_identity("HMEC") == "hmec"
+    assert cell_identity("huvec_rep1") == "huvec"
+    assert cell_identity("gm12878") != cell_identity("gm23248")
+    ref = workdir / "leak_ref.cool"
+    shutil.copy(workdir / "target.cool", ref)
+    meta = Path(str(ref) + ".json")
+    meta.write_text(json.dumps({"cells": ["imr90", "hmec_deep"]}))
+    assert reference_cells(ref) == ["imr90", "hmec_deep"]
+    assert_reference_excludes(ref, "k562")
+    for leaked in ("hmec", "hmec_deep", "IMR90"):
+        with pytest.raises(ValueError, match="reference leakage"):
+            assert_reference_excludes(ref, leaked)
+    assert reference_cells(workdir / "target.cool") is None   # no record: no check
+
+    raw = _ref_raw(workdir, "leak", reference="input", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [dict(s0, name="imr90", reference_cool=str(ref))]
+    raw["train"]["cache_dir"] = str(workdir / "cache_leak")
+    with pytest.raises(ValueError, match="reference leakage"):
+        hprep.build(Config.from_dict(raw))
+    # a clean cache whose reference record later names the sample: training refuses
+    raw["data"]["samples"] = [dict(s0, name="k562", reference_cool=str(ref))]
+    c = Config.from_dict(raw)
+    hprep.build(c)
+    meta.write_text(json.dumps({"cells": ["k562"]}))
+    with pytest.raises(ValueError, match="reference leakage"):
+        htrain.train(c)
+    ds = htrain.WindowDataset(c.train.cache_dir, "test")
+    assert ds.reference_by_sample() == {"k562": str(ref)}
+    with pytest.raises(ValueError, match="reference leakage"):
+        ds.check_reference_leakage()

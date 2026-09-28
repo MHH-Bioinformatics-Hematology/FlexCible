@@ -84,6 +84,8 @@ def main():
     use_ref = cfg.model.reference != "none"
     if (use_ref or a.reference_only) and "ref" not in data:
         raise SystemExit(f"{cache_dir} holds no reference windows")
+    if use_ref or a.reference_only:
+        ds.check_reference_leakage()
     ref = data["ref"][vi] if "ref" in data else None
     if a.sample is not None:
         smp = _coords(ds)[2]

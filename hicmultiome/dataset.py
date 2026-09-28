@@ -54,6 +54,23 @@ class WindowDataset(Dataset):
             keep = mask if want_val else ~mask
             self._index = [x for x, m in zip(self._index, keep) if m]
 
+    def reference_by_sample(self) -> dict:
+        """{sample: reference map path} for the windows held (empty without a
+        cached reference)."""
+        if not self.reference:
+            return {}
+        samples = {x[4] for x in self._index}
+        if isinstance(self.reference, dict):
+            return {s: self.reference[s] for s in samples if s in self.reference}
+        return {s: self.reference for s in samples}
+
+    def check_reference_leakage(self) -> None:
+        """Raise when a sample's cached reference contains that sample's cell."""
+        from .reference import assert_reference_excludes
+
+        for smp, path in self.reference_by_sample().items():
+            assert_reference_excludes(path, smp)
+
     @property
     def n_sym(self) -> int:
         return len(self.channels["sym_rows"])

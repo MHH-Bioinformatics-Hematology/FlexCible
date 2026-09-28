@@ -31,6 +31,7 @@ import score_like_hicgan as sc
 from hicmultiome.config import Config
 from hicmultiome.genome import match_name
 from hicmultiome.matrix import MatrixNormalizer, open_cool
+from hicmultiome.reference import assert_reference_excludes
 from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
 from hicmultiome.tracks import TrackNormalizer
 
@@ -136,6 +137,7 @@ def main():
                                    cfg.data.reference_cool)
         if not ref_path:
             raise SystemExit(f"{a.cell}: reference-map model needs --reference")
+        assert_reference_excludes(ref_path, a.cell)
         # a training cell's reference was encoded with its own normaliser
         own_norm = ckpt / f"norm_matrix_{a.cell}.json"
         if own_norm.exists():
@@ -154,6 +156,7 @@ def main():
     others = {}
     for kv in a.others:
         k, v = kv.split("=", 1)
+        assert_reference_excludes(v, a.cell)    # consensus baselines must exclude the cell
         others[k] = cooler.Cooler(v)
 
     regions = pd.read_csv(a.regions or sc.REGIONS, sep="\t", usecols=[0, 1, 2],
