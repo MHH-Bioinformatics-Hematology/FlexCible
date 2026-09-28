@@ -22,7 +22,12 @@ R = Path("/mnt/processed/wolffjoa/hic-multiome/runs")
 X = Path("/mnt/processed/wolffjoa/hic-multiome/crosscell_raw")
 
 COPY = {
-    "akita_comparison": [REPO / "runs/akita_native/score_like_hicgan.csv"],
+    "akita_comparison": [REPO / "runs/akita_native/score_like_hicgan.csv",
+                         R / "akita_ref/section1_overlapval.score.csv",
+                         R / "akita_ref/akita_native_honest.score.csv",
+                         R / "akita_ref/akita_native_refres.score.csv",
+                         Path("/mnt/processed/wolffjoa/hic-multiome/akita2kb/akita_targets_check.json"),
+                         Path("/mnt/processed/wolffjoa/hic-multiome/akita2kb/akita_cache_check.json")],
     "backward_elimination": [R / "backward_tracks/backward.csv",
                              R / "backward_tracks/backward_rankings.csv",
                              R / "backward_tracks/backward_FULLDATA_ref.csv",

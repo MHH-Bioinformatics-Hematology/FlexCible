@@ -1,0 +1,3 @@
+run,stopped_at_epoch,best_val,stopped_by,all_stops
+all12refres_25kb,38,0.9445,patience,epoch 38 patience
+all12honest_25kb,27,0.8349,patience,epoch 27 patience

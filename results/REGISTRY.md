@@ -40,6 +40,39 @@ published GM12878 target on the paired regions.
 
 - `akita_comparison/score_like_hicgan.csv`: per region, ours vs Akita vs Hi-cGAN.
 - 222 paired regions: ours 0.652, Akita 0.556; ours higher in 68% of regions.
+  This model used overlapping validation (methods note above).
+
+Honest validation and a reference map (2026-09-28). `scripts/akita_targets.py`
+rebuilt Akita's published targets of all five cells on the 2048 bp grid from
+the public 1m records (gs://basenji_hic/1m/data); the rebuilt GM12878 map
+equals the section 1 test cool on all 413 test windows (maximum difference
+0.0, `akita_targets_check.json`). Reference = consensus4, the per-window mean
+of the HFF, H1, IMR90 and HCT116 targets (never GM12878). Models:
+`configs/akita_native_honest.yaml` (the section 1 model with honest
+validation, same cache and 30-minute schedule) and
+`configs/akita_native_refres.yaml` (plus consensus4, residual). The
+reference model trains on a cache built from the rebuilt train-fold target,
+which holds 3762 of the 4424 section 1 training windows with identical
+targets; the other 662 windows are more than 95% empty in the rebuilt map and
+are dropped by the empty-window filter (`akita_cache_check.json`). Scored by
+`scripts/score_like_hicgan.py --tta` against Akita's target, with the measured
+maps of the other cells scored on the same pixels (tables
+`akita_comparison/*.score.csv`).
+
+| model | 222 paired regions | 413 regions | above Akita (222) | above consensus4 (222) |
+|---|---|---|---|---|
+| section 1 model, overlapping validation | 0.652 | 0.642 | 68% | 60% |
+| section 1 model, honest validation | 0.640 | 0.636 | 66% | 55% |
+| residual reference model (consensus4), honest | 0.744 | 0.752 | 96% | 99% |
+| Akita (recorded) | 0.556 | 0.548 | | |
+| consensus4 alone | 0.616 | 0.618 | | |
+| best single other cell (HFF) | 0.519 | 0.525 | | |
+
+With honest validation the ChIP model scores 0.640 on the 222 regions, 0.012
+below the overlapping-validation checkpoint and 0.084 above Akita. The
+four-cell consensus alone reaches 0.616, above Akita's 0.556, and the
+residual reference model reaches 0.744 and exceeds Akita in 96% and
+consensus4 in 99% of the regions.
 
 ## 2. Backward elimination of ChIP tracks (FINAL)
 
