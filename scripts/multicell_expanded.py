@@ -133,7 +133,39 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     "all12": (TRAIN12, None),
     "all12assay3": (TRAIN12, "three"),
     "insitu7": (INSITU7, None),
+    # all12 plus a reference map (model.reference): every training cell reads a
+    # leave-one-out consensus (mean of the other 11 training cells' maps), the
+    # held-out cells the consensus of all 12. Outputs in runs/multicell_reference.
+    "all12refres": (TRAIN12, None),
+    "all12refin": (TRAIN12, None),
 }
+REF_RUNS = {"all12refres": "residual", "all12refin": "input"}
+REF_OUT = HM / "runs/multicell_reference"
+
+
+def consensus_loo(cell: str, res: int) -> Path:
+    """Mean of the proper O/E maps of the 11 training cells other than `cell`
+    (scripts/consensus_oe.py; runs/multicell_reference/consensus.sh)."""
+    return OE / f"consensus_loo_{cell}_proper_{res // 1000}kb.cool"
+
+
+def consensus12(res: int) -> Path:
+    """Mean of all 12 training cells' maps: the reference for held-out cells."""
+    return OE / f"consensus12_proper_{res // 1000}kb.cool"
+
+
+def is_ref(name: str) -> bool:
+    return split_name(name)[0] in REF_RUNS
+
+
+def out_of(name: str) -> Path:
+    """Folder of a run's directory, config and logs."""
+    return REF_OUT if is_ref(name) else OUT
+
+
+def reference_of(name: str, cell: str) -> Path:
+    res = split_name(name)[1]
+    return consensus_loo(cell, res) if cell in RUNS[split_name(name)[0]][0] else consensus12(res)
 # earlier models: name -> (run dir, cells trained on)
 OLD_RUNS = {"ref": (REF_RUN, ["gm12878"]), "gm1": (OLD / "gm1", ["gm12878"]),
             "hic3": (OLD / "hic3", ["gm12878", "imr90", "hct116"]),
@@ -169,8 +201,13 @@ def run_config(name, val_per_cell, patience, max_epochs):
     cfg["data"]["assay_indicator"] = mode is not None
     if mode is not None:
         cfg["data"]["assay_indicator_mode"] = mode
+    if base in REF_RUNS:
+        for smp in cfg["data"]["samples"]:
+            smp["reference_cool"] = str(consensus_loo(smp["name"], res))
+        cfg.setdefault("model", {})["reference"] = REF_RUNS[base]
+    cache_name = (f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS else f"mc_{name}")
     cfg["train"].update({
-        "output_dir": str(OUT / name), "cache_dir": str(CACHE / f"mc_{name}"),
+        "output_dir": str(out_of(name) / name), "cache_dir": str(CACHE / cache_name),
         "val_regions": val_per_cell * len(cells), "patience_epochs": patience,
         "max_epochs": max_epochs, "resident_dtype": "float16", "resume": False,
         "save_checkpoints": True, "track_dropout": 0.0,
@@ -180,7 +217,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
 
 def logtext(name):
     return "".join(f.read_text(errors="replace") for f in
-                   (OUT / f"{name}.log", OUT / f"{name}.cont.log") if f.exists())
+                   (out_of(name) / f"{name}.log", out_of(name) / f"{name}.cont.log")
+                   if f.exists())
 
 
 def done(log: Path) -> bool:
@@ -207,7 +245,10 @@ def best_ckpt(run: Path) -> Path:
     return run / (run / "best").read_text().strip()
 
 
-def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000):
+def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_run=None):
+    """ref_run: name of a reference-map run; each cell then gets its reference
+    (reference_of) as model input and as an extra measured-map column
+    (base_consensus_loo for training cells, base_consensus12 for held-out)."""
     out.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu)
     for cell in cells:
@@ -220,18 +261,26 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000):
             continue
         others = [f"{o}={target(o, res)}" for o in BASELINE_MAPS
                   if CELLS[o][3] != ident and target(o, res).exists()]
+        extra = []
+        if ref_run is not None:
+            rf = reference_of(ref_run, cell)
+            tag = "consensus_loo" if cell in RUNS[split_name(ref_run)[0]][0] else "consensus12"
+            others.append(f"{tag}={rf}")
+            extra = ["--reference", rf]
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", cfg_path,
                  "--checkpoint", ckpt, "--cell", cell, "--bigwig-dir", bw,
                  "--target", cool, "--tta", "--assay", assay, "--out-dir", out,
-                 "--binsize", res, "--others", *others], out / f"predict_{cell}.log", env)
+                 "--binsize", res, *extra, "--others", *others],
+                out / f"predict_{cell}.log", env)
         if rc:
             print(f"[FAILED] crosscell {out}/{cell} rc={rc}", flush=True)
 
 
 def train(name, a, gpus):
     cfg = run_config(name, a.val_per_cell, a.patience, a.max_epochs)
-    cp = OUT / f"{name}.yaml"
-    log = OUT / f"{name}.log"
+    O = out_of(name)
+    cp = O / f"{name}.yaml"
+    log = O / f"{name}.log"
     cache = Path(cfg["train"]["cache_dir"])
     if not (cache / "manifest.json").exists():
         raise SystemExit(f"{name}: no cache; run --stage precompute first")
@@ -247,26 +296,26 @@ def train(name, a, gpus):
     while (si := stop_info(name, a.patience)) and si[2] == "cap" and si[0] < a.max_epochs:
         ccfg = yaml.safe_load(open(cp))
         ccfg["train"].update({"resume": True,
-                              "resume_from": str(OUT / name / "checkpoint-latest"),
+                              "resume_from": str(O / name / "checkpoint-latest"),
                               "max_epochs": a.max_epochs, "patience_epochs": a.patience})
-        pj = OUT / name / "checkpoint-latest" / "progress.json"
+        pj = O / name / "checkpoint-latest" / "progress.json"
         pr = json.loads(pj.read_text())
         if si[1] > pr["best"]:
             pr["best"] = si[1]
             pj.write_text(json.dumps(pr))
-        ccp = OUT / f"{name}.cont.yaml"
+        ccp = O / f"{name}.cont.yaml"
         yaml.safe_dump(ccfg, open(ccp, "w"), sort_keys=False)
         print(f"[continue] {name} from epoch {si[0]} (cap) to max {a.max_epochs}", flush=True)
         n0 = len(STOP_RE.findall(logtext(name)))
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
         sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
-            "-m", "hicmultiome.train", "--config", ccp], OUT / f"{name}.cont.log", env)
+            "-m", "hicmultiome.train", "--config", ccp], O / f"{name}.cont.log", env)
         if len(STOP_RE.findall(logtext(name))) <= n0:
             raise SystemExit(f"continuation failed for {name}")
 
 
 def evaluate(name, gpu, cells):
-    run = OUT / name
+    run = out_of(name) / name
     base, res = split_name(name)
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu)
     for cell in RUNS[base][0]:
@@ -274,10 +323,17 @@ def evaluate(name, gpu, cells):
             continue
         if not (run / f"test_eval_{cell}.json").exists():
             sh([PY, "scripts/eval_val_windows.py", "--run", run, "--split", "test",
-                "--sample", cell], OUT / f"{name}.eval.log", env)
+                "--sample", cell], out_of(name) / f"{name}.eval.log", env)
+        # the cell's leave-one-out reference alone, on the same windows
+        if is_ref(name) and not (run / f"refalone_test_eval_{cell}.json").exists():
+            sh([PY, "scripts/eval_val_windows.py", "--run", run, "--split", "test",
+                "--sample", cell, "--reference-only",
+                "--out", run / f"refalone_test_eval_{cell}.json"],
+               out_of(name) / f"{name}.eval.log", env)
     ck = best_ckpt(run)
     crosscell(ck / "config.yaml", ck, run / "crosscell", gpu,
-              [c for c in RUNS[base][0] + TEST if not cells or c in cells], res)
+              [c for c in RUNS[base][0] + TEST if not cells or c in cells], res,
+              ref_run=name if is_ref(name) else None)
 
 
 def rescore(gpu, cells):
@@ -309,7 +365,7 @@ def _write(fn, rows):
     print(f"wrote {OUT / fn}")
 
 
-ALL_RUNS = [run_name(b, r) for r in WINDOW for b in RUNS]
+ALL_RUNS = [run_name(b, r) for r in WINDOW for b in RUNS if b not in REF_RUNS]
 
 
 def summarize():
@@ -524,6 +580,96 @@ def resolution_table(c_rows, t_rows, base_run="all12"):
     _save(fig, "resolution_vs_replicates.png")
 
 
+def _write_to(folder: Path, fn, rows):
+    global OUT
+    keep = OUT
+    try:
+        OUT = folder
+        _write(fn, rows)
+    finally:
+        OUT = keep
+
+
+def reference_summary():
+    """Per cell and resolution, 413 Akita test regions and the disjoint test
+    windows: each reference run, its reference alone (leave-one-out consensus
+    for training cells, consensus12 for held-out cells), the best measured map
+    of another cell, and the no-reference all12 run. Written to
+    runs/multicell_reference/reference_compare.csv, reference_summary.csv and
+    training_stop.csv."""
+    import pandas as pd
+
+    rows, stops = [], []
+    for res in (25000, 10000, 5000, 2000):
+        base_name = run_name("all12", res)
+        for rb in REF_RUNS:
+            name = run_name(rb, res)
+            run = REF_OUT / name
+            if not run.exists():
+                continue
+            si = stop_info(name, 10)
+            if si:
+                hist = "; ".join(f"epoch {e} {'patience' if int(n) >= 10 else 'cap'}"
+                                 for e, _, n in STOP_RE.findall(logtext(name)))
+                stops.append({"run": name, "stopped_at_epoch": si[0], "best_val": si[1],
+                              "stopped_by": si[2], "all_stops": hist})
+            for cell in TRAIN12 + TEST:
+                f = run / "crosscell" / f"predict_{cell}.csv"
+                rec = {"res_kb": res // 1000, "run": name, "cell": cell,
+                       "trained_on_cell": cell in TRAIN12}
+                if f.exists():
+                    df = pd.read_csv(f)
+                    base = {c[5:]: float(df[c].median()) for c in df if c.startswith("base_")}
+                    cons = next((k for k in base if k.startswith("consensus")), None)
+                    single = {k: v for k, v in base.items() if not k.startswith("consensus")}
+                    b = max(single, key=single.get) if single else None
+                    rec.update({"n": int(df["model"].notna().sum()),
+                                "model": round(float(df["model"].median()), 4),
+                                "reference_alone": round(base[cons], 4) if cons else None,
+                                "reference": cons,
+                                "best_other_map": round(single[b], 4) if b else None,
+                                "best_other_map_cell": b})
+                    if cons:   # paired per region
+                        d = df.dropna(subset=["model", f"base_{cons}"])
+                        rec["frac_regions_model_above_reference"] = round(
+                            float((d["model"] > d[f"base_{cons}"]).mean()), 3)
+                fb = OUT / base_name / "crosscell" / f"predict_{cell}.csv"
+                if fb.exists():
+                    rec["all12_no_reference"] = round(float(pd.read_csv(fb)["model"].median()), 4)
+                for tag, j in (("test_windows", run / f"test_eval_{cell}.json"),
+                               ("test_windows_reference_alone",
+                                run / f"refalone_test_eval_{cell}.json"),
+                               ("test_windows_all12_no_reference",
+                                OUT / base_name / f"test_eval_{cell}.json")):
+                    if j.exists():
+                        rec[tag] = round(json.loads(j.read_text())["oe_median_r"], 4)
+                if len(rec) > 4:
+                    rows.append(rec)
+    _write_to(REF_OUT, "reference_compare.csv", rows)
+    _write_to(REF_OUT, "training_stop.csv", stops)
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    summ = []
+    for (k, run), g in df.groupby(["res_kb", "run"], sort=False):
+        for label, sub in (("12 training cells", g[g["trained_on_cell"]]),
+                           ("held-out cells", g[~g["trained_on_cell"]])):
+            rec = {"res_kb": k, "run": run, "cells": label, "n_cells": len(sub)}
+            for c in ("model", "reference_alone", "best_other_map", "all12_no_reference",
+                      "test_windows", "test_windows_reference_alone",
+                      "test_windows_all12_no_reference"):
+                if c in sub and sub[c].notna().any():
+                    rec[f"median_{c}"] = round(float(sub[c].median()), 4)
+            for c, t in (("reference_alone", "beats_reference"),
+                         ("best_other_map", "beats_best_other_map"),
+                         ("all12_no_reference", "beats_all12_no_reference")):
+                if c in sub:
+                    s2 = sub.dropna(subset=["model", c])
+                    rec[t] = f"{int((s2['model'] > s2[c]).sum())}/{len(s2)}"
+            summ.append(rec)
+    _write_to(REF_OUT, "reference_summary.csv", summ)
+
+
 def decide():
     """all12 or all12assay3 from the five-cell pair all5 / all5assay: the
     indicator is used when it raises the mean unseen-cell score (K562, HMEC,
@@ -569,7 +715,8 @@ def main():
     ap.add_argument("--res", nargs="*", type=int, default=[2000], choices=list(WINDOW),
                     help="resolutions; a run at res != 2000 is named <run>_<k>kb")
     ap.add_argument("--stage", choices=["precompute", "train", "eval", "rescore", "all",
-                                        "summary", "decide", "ready"], default="all")
+                                        "summary", "refsummary", "decide", "ready"],
+                    default="all")
     ap.add_argument("--gpus", default="0,1")
     ap.add_argument("--workers", type=int, default=8, help="precompute processes")
     ap.add_argument("--val-per-cell", type=int, default=100)
@@ -579,9 +726,13 @@ def main():
                     help="eval/rescore: only these cells (split the work across GPUs)")
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    REF_OUT.mkdir(parents=True, exist_ok=True)
     CACHE.mkdir(parents=True, exist_ok=True)
     if a.stage == "summary":
         summarize()
+        return
+    if a.stage == "refsummary":
+        reference_summary()
         return
     if a.stage == "decide":
         r = decide()
@@ -598,6 +749,9 @@ def main():
             base, res = split_name(name)
             try:
                 missing = [c for c in RUNS[base][0] if not target(c, res).exists()]
+                if base in REF_RUNS:
+                    missing += [str(reference_of(name, c)) for c in RUNS[base][0] + TEST
+                                if not reference_of(name, c).exists()]
                 for c in RUNS[base][0]:
                     missing_marks(CELLS[c][1])
             except SystemExit as e:
@@ -609,8 +763,8 @@ def main():
         return
     for name in names:
         cfg = run_config(name, a.val_per_cell, a.patience, a.max_epochs)
-        cp = OUT / f"{name}.yaml"
-        if not done(OUT / f"{name}.log"):           # a finished run keeps its config
+        cp = out_of(name) / f"{name}.yaml"
+        if not done(out_of(name) / f"{name}.log"):  # a finished run keeps its config
             yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
         cache = Path(cfg["train"]["cache_dir"])
         if a.stage in ("precompute", "all") and not (cache / "manifest.json").exists():
@@ -620,7 +774,7 @@ def main():
                 raise SystemExit(f"{name}: targets not ready: {missing}")
             print(f"[precompute] {name}", flush=True)
             if sh([PY, "-m", "hicmultiome.precompute", "--config", cp,
-                   "--workers", a.workers], OUT / f"{name}.precompute.log"):
+                   "--workers", a.workers], out_of(name) / f"{name}.precompute.log"):
                 raise SystemExit(f"precompute failed for {name}")
         if a.stage in ("train", "all"):
             train(name, a, gpus)

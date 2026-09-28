@@ -309,7 +309,7 @@ def score_baseline(name, gpu, a):
     for cell in HELDOUT:
         crosscell(src, ck, cell, res, mx.target(cell, res), ri.TEST_REGIONS,
                   out / "crosscell_heldout", log, env, other_maps(cell, res))
-    if res in VARIANTS["avg2kb"][2]:
+    if res in VARIANTS["avg2kb"][2] and (not a.variants or "avg2kb" in a.variants):
         avg_cache = ensure_cache(res, "avg", a.workers)
         base_cache = ensure_cache(res, "base", a.workers)
         evalw(src, out / "test_eval_avg.json", log, env, cache=avg_cache)
@@ -369,7 +369,8 @@ def all_jobs(res_filter=None, variants=None):
         if v == "refres" and r == 10000:
             # baseline extras once the A runs at 25 and 10 kb are queued
             jobs += [("baseline", ri.run_name(rr, ri.DEFAULT_WINDOW[rr], BASELINE_SET, s))
-                     for rr in (25000, 10000, 5000) for s in SEEDS]
+                     for rr in (25000, 10000, 5000) for s in SEEDS
+                     if not res_filter or rr in res_filter]
     return jobs
 
 
@@ -550,9 +551,31 @@ def status(agg, quiet=False):
         f = lambda k: f"{r[k]:.3f}" if r.get(k) is not None else ""
         lines.append(f"| {r['res_kb']} kb | {r['variant']} | {r['n_seeds']} | {f('honest_val')} "
                      f"| {f('test_windows')} | {f('akita_test_regions')} | {'; '.join(extra)} |")
-    running = [p.stem for p in OUT.glob("*kb_w*__*__s*.log") if not finished(p.stem)]
+    running = [p.stem for p in OUT.glob("*kb_w*__*__s*.log")
+               if re.fullmatch(r"\d+kb_w\d+__.+__s\d+", p.stem) and not finished(p.stem)]
     if running:
         lines += ["", "Training now: " + ", ".join(sorted(running))]
+    # 12-cell reference runs (scripts/multicell_expanded.py --stage refsummary)
+    rs = HM / "runs/multicell_reference/reference_summary.csv"
+    if rs.exists():
+        import pandas as pd
+        d = pd.read_csv(rs)
+        lines += ["", "## 12-cell training with reference map (runs/multicell_reference)", "",
+                  "Median over cells, 413 Akita test regions (test windows for training "
+                  "cells in the last columns).", "",
+                  "| res | run | cells | model | reference alone | best other map | "
+                  "all12 no ref | beats ref | beats best map | test win model / ref / all12 |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
+        g = lambda r, c: "" if c not in r or pd.isna(r[c]) else (
+            f"{r[c]:.3f}" if isinstance(r[c], float) else str(r[c]))
+        for _, r in d.iterrows():
+            lines.append(
+                f"| {r['res_kb']} kb | {r['run']} | {r['cells']} | {g(r, 'median_model')} "
+                f"| {g(r, 'median_reference_alone')} | {g(r, 'median_best_other_map')} "
+                f"| {g(r, 'median_all12_no_reference')} | {g(r, 'beats_reference')} "
+                f"| {g(r, 'beats_best_other_map')} | {g(r, 'median_test_windows')} / "
+                f"{g(r, 'median_test_windows_reference_alone')} / "
+                f"{g(r, 'median_test_windows_all12_no_reference')} |")
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")

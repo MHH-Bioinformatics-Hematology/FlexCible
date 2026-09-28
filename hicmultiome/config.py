@@ -107,6 +107,10 @@ class SampleSpec:
     missing_tracks: list[str] = field(default_factory=list)
     zeroed_tracks: list[str] = field(default_factory=list)
     assay: str = "hic"
+    # per-sample reference map (overrides data.reference_cool for this
+    # sample), e.g. a leave-one-out consensus that excludes the sample's own
+    # cell. None = data.reference_cool (or no reference).
+    reference_cool: str | None = None
 
     def __post_init__(self):
         if self.assay not in ASSAYS:
@@ -466,6 +470,15 @@ class Config:
         return self.motif_ids if (self.any_fasta and self.motifs.enabled) else []
 
     @property
+    def has_reference(self) -> bool:
+        """A reference map is configured (globally or for any sample)."""
+        return bool(self.data.reference_cool
+                    or any(s.reference_cool for s in self.data.samples))
+
+    def sample_reference(self, sample: "SampleSpec") -> str | None:
+        return sample.reference_cool or self.data.reference_cool
+
+    @property
     def has_capture(self) -> bool:
         return any(s.capture_interactions for s in self.data.samples)
 
@@ -504,11 +517,16 @@ class Config:
                         f"sample {s.name!r}: unknown track {t!r} in "
                         "missing_tracks/zeroed_tracks"
                     )
-        if self.model.reference != "none" and not self.data.reference_cool:
-            raise ValueError(f"model.reference={self.model.reference!r} needs "
-                             "data.reference_cool (the cached reference map)")
-        if self.data.reference_cool and self.window.transform != "prescaled":
-            raise ValueError("data.reference_cool needs window.transform "
+        if self.model.reference != "none":
+            lack = [s.name for s in self.data.samples
+                    if not (s.reference_cool or self.data.reference_cool)]
+            if lack:
+                raise ValueError(f"model.reference={self.model.reference!r} needs "
+                                 "data.reference_cool or samples[].reference_cool "
+                                 f"(the cached reference map); none for {lack}")
+        if self.has_reference and self.window.transform != "prescaled":
+            raise ValueError("a reference map (data.reference_cool or "
+                             "samples[].reference_cool) needs window.transform "
                              "'prescaled' (the reference holds log O/E values)")
         for mid in self.active_motif_ids:
             p = Path(self.motifs.dir).expanduser() / f"{mid}.jaspar"

@@ -129,7 +129,17 @@ def main():
 
     ref_clr = None
     if cfg.model.reference != "none":
-        ref_path = a.reference or cfg.data.reference_cool
+        # default: the cell's own reference when it is a training sample
+        # (samples[].reference_cool), else data.reference_cool
+        own = next((s for s in cfg.data.samples if s.name == a.cell), None)
+        ref_path = a.reference or (cfg.sample_reference(own) if own else
+                                   cfg.data.reference_cool)
+        if not ref_path:
+            raise SystemExit(f"{a.cell}: reference-map model needs --reference")
+        # a training cell's reference was encoded with its own normaliser
+        own_norm = ckpt / f"norm_matrix_{a.cell}.json"
+        if own_norm.exists():
+            mat_norm = MatrixNormalizer.load(own_norm)
         ref_clr = cooler.Cooler(ref_path)
         if ref_clr.binsize != res:
             raise SystemExit(f"reference {ref_path}: binsize {ref_clr.binsize} != {res}")

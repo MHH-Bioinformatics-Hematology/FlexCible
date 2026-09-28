@@ -1541,3 +1541,38 @@ def test_coarsen_oe_matches_dense_block_mean(workdir):
                         assert got[I, J] == pytest.approx(num[I, J] / den[I, J], rel=1e-5)
                     else:
                         assert got[I, J] == 0
+
+
+def test_reference_per_sample(workdir):
+    """samples[].reference_cool overrides data.reference_cool per sample (e.g.
+    a leave-one-out consensus); each sample's cached ref is its own map."""
+    import cooler
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    src = cooler.Cooler(str(workdir / "target.cool"))
+    px = src.pixels()[:]
+    px["count"] = -px["count"]                      # a distinguishable map
+    neg = workdir / "neg_ref.cool"
+    cooler.create_cooler(str(neg), bins=src.bins()[:][["chrom", "start", "end"]],
+                         pixels=px, dtypes={"count": "float64"})
+    raw = _ref_raw(workdir, "persample", reference="residual", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [dict(s0, name="a", reference_cool=str(workdir / "target.cool")),
+                              dict(s0, name="b", reference_cool=str(neg))]
+    raw["train"]["cache_dir"] = str(workdir / "cache_ref_ps")
+    c = Config.from_dict(raw)
+    assert c.has_reference and c.sample_reference(c.data.samples[1]) == str(neg)
+    man = hprep.build(c)
+    assert man["reference"] == {"a": str(workdir / "target.cool"), "b": str(neg)}
+    for sh in man["shards"]:
+        z = np.load(sh["path"])
+        sign = 1 if sh["sample"] == "a" else -1
+        np.testing.assert_array_equal(z["ref"], sign * z["target"][:, 0])
+    htrain.train(c)
+    assert (Path(c.train.output_dir) / "best").exists()
+    # a reference model with one sample lacking a map is rejected
+    raw["data"]["samples"][1].pop("reference_cool")
+    with pytest.raises(ValueError, match="none for"):
+        Config.from_dict(raw)

@@ -225,13 +225,20 @@ def build(cfg: Config, workers: int = 1) -> dict:
     cache.mkdir(parents=True, exist_ok=True)
 
     samples = cfg.data.samples
-    ref_clr = None
-    if cfg.data.reference_cool:
-        ref_clr = open_cool(cfg.data.reference_cool)
-        if ref_clr.binsize != cfg.data.resolution:
-            raise ValueError(f"reference_cool binsize {ref_clr.binsize} != "
-                             f"resolution {cfg.data.resolution}")
-        log.info("reference map %s cached per window", cfg.data.reference_cool)
+    # reference map per sample (samples[].reference_cool, else data.reference_cool)
+    ref_clrs = {}
+    if cfg.has_reference:
+        for s in samples:
+            path = cfg.sample_reference(s)
+            if not path:
+                raise ValueError(f"sample {s.name!r}: no reference map while "
+                                 "another sample has one")
+            ref_clrs[s.name] = open_cool(path)
+            if ref_clrs[s.name].binsize != cfg.data.resolution:
+                raise ValueError(f"reference {path} binsize "
+                                 f"{ref_clrs[s.name].binsize} != resolution "
+                                 f"{cfg.data.resolution}")
+            log.info("sample %s: reference map %s cached per window", s.name, path)
     coolers, sample_chroms, sample_tracks, captures = {}, {}, {}, {}
     for s in samples:
         clr = open_cool(s.cool_path)
@@ -354,8 +361,10 @@ def build(cfg: Config, workers: int = 1) -> dict:
         "capture_input": bool(captures) and cfg.capture.use_as_input,
         "samples": [s.name for s in samples],
     }
-    if ref_clr is not None:
-        channels["reference"] = str(cfg.data.reference_cool)
+    if ref_clrs:
+        refs_by_sample = {s.name: str(cfg.sample_reference(s)) for s in samples}
+        paths = set(refs_by_sample.values())
+        channels["reference"] = (paths.pop() if len(paths) == 1 else refs_by_sample)
     (cache / "channels.json").write_text(json.dumps(channels, indent=2))
 
     # ---- pass 2: slice + cache windows per sample ----
@@ -376,6 +385,7 @@ def build(cfg: Config, workers: int = 1) -> dict:
         wins = plan_windows(nb, cfg.window.size, cfg.window.stride, chrom)
 
         targets, conds, baits, starts, refs = [], [], [], [], []
+        ref_clr = ref_clrs.get(s.name)
         ref_name = (match_name(chrom, list(ref_clr.chromnames))
                     if ref_clr is not None else None)
         res_bp = cfg.data.resolution
