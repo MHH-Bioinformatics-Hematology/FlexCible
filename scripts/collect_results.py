@@ -48,6 +48,14 @@ COPY = {
     # tables written by `scripts/multicell_akita.py --stage summary`
     "multicell_akita": [R / "multicell/test730.csv", R / "multicell/crosscell.csv",
                         R / "multicell/train_windows.csv", R / "multicell/training_stop.csv"],
+    # tables written by `scripts/multicell_expanded.py --stage summary`
+    "multicell_expanded": [R / f"multicell_expanded/{n}.csv" for n in
+                           ("test730", "crosscell", "scaling",
+                            "resolution_vs_replicates", "training_stop")],
+    # tables written by `scripts/resolution_inputs.py` and `averaging_ceiling.py`
+    "resolution_inputs": [R / f"resolution_inputs/{n}.csv" for n in
+                          ("summary", "runs", "resolution_compare",
+                           "resolution_compare_summary", "averaging_ceiling")],
 }
 ALL13 = {"CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
          "H3K4me2", "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"}

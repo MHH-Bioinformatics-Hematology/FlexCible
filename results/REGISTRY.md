@@ -268,10 +268,80 @@ contacts per replicate) give 0.46 to 0.52 at 2 kb and 0.90 to 0.97 at 25 kb.
 The expected score of an error-free prediction against one replicate is about
 the square root of the replicate agreement (0.81 at 2 kb for the K562 pair).
 
-## 13. Expanded multi-cell training, 12 cell types, 2 to 25 kb (PENDING)
+## 13. Expanded multi-cell training, 12 cell types, 2 to 25 kb (FINAL)
 
 `scripts/encode_expand.py`, `scripts/multicell_expanded.py`,
 `runs/multicell_expanded/driver.sh`: 7 further ENCODE cells (HepG2, A549,
 MCF-7, NHEK, GM23248, CD14+ monocytes, PC-9) from ENCODE .hic via the C++
 hic2cool, three-class assay indicator (in situ Hi-C, intact Hi-C, Micro-C),
 models all12 at 2, 5, 10 and 25 kb and insitu7 at 2 kb.
+Stopped by patience at epoch 106 (all12, 2 kb), 114 (5 kb), 107 (10 kb), 127
+(25 kb) and 148 (insitu7). Tables `multicell_expanded/test730.csv`,
+`crosscell.csv`, `scaling.csv`, `resolution_vs_replicates.csv`,
+`training_stop.csv`; `resolution_inputs/resolution_compare_summary.csv`,
+`averaging_ceiling.csv`.
+
+All 12 training cells, 413 Akita test regions, median over cells:
+
+| resolution | model | best measured map of another cell | model beats map | test windows | 2 kb model averaged |
+|---|---|---|---|---|---|
+| 2 kb | 0.656 | 0.581 | 11/12 | 0.649 | |
+| 5 kb | 0.777 | 0.769 | 6/12 | 0.735 | 0.692 |
+| 10 kb | 0.823 | 0.860 | 2/12 | 0.786 | 0.706 |
+| 25 kb | 0.815 | 0.905 | 1/12 | 0.804 | 0.701 |
+
+Held-out cells (413 regions, model / best measured map): K562 0.544 / 0.517,
+0.653 / 0.723, 0.752 / 0.827, 0.767 / 0.866 at 2, 5, 10 and 25 kb; HMEC deep
+0.461 / 0.588 and HUVEC deep 0.553 / 0.571 at 2 kb. The measured 2 kb GM12878
+map block-averaged to 5, 10 and 25 kb scores 0.806, 0.812 and 0.815 against
+the coarse targets, which bounds the averaged 2 kb model.
+
+Unseen cells versus number of training cells (413 regions): K562 0.362,
+0.463, 0.494, 0.551, 0.544 for 1, 3, 5, 7 (insitu7) and 12 cells; HMEC deep
+0.355, 0.408, 0.504, 0.451, 0.461; HUVEC deep 0.234, 0.380, 0.494, 0.526,
+0.553. insitu7 (the 7 in situ Hi-C cells) scores its training cells 0.006 to
+0.016 above all12 on the test windows (GM12878 0.684 vs 0.670, IMR90 0.697 vs
+0.691).
+
+## 14. Input groups and window size per resolution (FINAL)
+
+`scripts/resolution_inputs.py` (stages groups, combo, windows; driver
+`runs/resolution_inputs/gpu_chain.sh`), GM12878 only, `cache_expanded`
+targets, 2 seeds each, validation windows disjoint from training windows
+(`train.val_exclude_overlap`). Groups: CTCF; cohesin (RAD21, SMC3); active
+(H3K27ac, H3K4me1/2/3, H3K9ac); gene body (H3K36me3, H3K79me2, H4K20me1);
+repressive (H3K27me3, H3K9me3); motifs (4). Windows of 384, 192 and 80 bins
+at 5, 10 and 25 kb (1.92 Mb, 1.92 Mb, 2.0 Mb). Tables
+`resolution_inputs/summary.csv` (seed means and per-seed values),
+`runs.csv`.
+
+Mean of 2 seeds, validation / 730 test windows / 413 Akita test regions:
+
+| inputs | 5 kb | 10 kb | 25 kb |
+|---|---|---|---|
+| all | 0.802 / 0.784 / 0.802 | 0.842 / 0.824 / 0.838 | 0.823 / 0.825 / 0.826 |
+| without CTCF | 0.797 / 0.781 / 0.800 | 0.818 / 0.800 / 0.821 | 0.798 / 0.811 / 0.810 |
+| without cohesin | 0.787 / 0.772 / 0.781 | 0.812 / 0.805 / 0.798 | 0.801 / 0.823 / 0.817 |
+| without active | 0.790 / 0.779 / 0.799 | 0.823 / 0.811 / 0.817 | 0.808 / 0.816 / 0.809 |
+| without gene body | 0.804 / 0.788 / 0.801 | 0.837 / 0.824 / 0.827 | 0.815 / 0.835 / 0.829 |
+| without repressive | 0.790 / 0.789 / 0.802 | 0.834 / 0.815 / 0.818 | 0.830 / 0.827 / 0.822 |
+| without motifs | 0.798 / 0.782 / 0.793 | 0.833 / 0.816 / 0.818 | 0.823 / 0.817 / 0.822 |
+| repressive + gene body | 0.650 / 0.640 / 0.620 | 0.704 / 0.686 / 0.660 | 0.676 / 0.686 / 0.655 |
+| sequence only | 0.446 / 0.423 / 0.501 | 0.514 / 0.469 / 0.513 | 0.452 / 0.471 / 0.530 |
+
+Removing CTCF or cohesin lowers every resolution, by up to 0.040 on the
+Akita test regions at 10 kb. Repressive and gene-body marks alone reach 0.62
+to 0.70 at every resolution. The single-group removals of gene body,
+repressive marks and motifs change the scores by at most 0.02, within the
+seed spread (up to 0.048 between the two seeds at 25 kb). The selection
+rule (best seed-mean validation) picked without gene body at 5 kb, all at
+10 kb and without repressive at 25 kb; the 25 kb combination without both
+scores 0.813 / 0.811 / 0.811.
+
+Window size, chosen inputs, same metrics: 5 kb 256 bins 0.788 / 0.790 /
+0.804 (384 bins 0.804 / 0.788 / 0.801); 10 kb 256 bins 0.821 / 0.825 / 0.822
+(192 bins 0.842 / 0.824 / 0.838); 25 kb 160 bins 0.831 / 0.833 / 0.804 and
+256 bins 0.826 / 0.823 / 0.765 (80 bins 0.830 / 0.827 / 0.822). The Akita
+test regions span about 1 Mb, so wider windows place them in a smaller share
+of the context.
+

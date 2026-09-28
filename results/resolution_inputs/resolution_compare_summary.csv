@@ -1,0 +1,17 @@
+res_kb,cells,dedicated_all_inputs,averaged_2kb,best_inputs,best_measured_map,test_windows_dedicated,rep_insitu_single_lane,rep_intact_deep,dedicated_beats_map,averaged_beats_map
+2,median of 12 training cells,0.6564,,,0.5813,0.6494,0.4435,0.497,11/12,
+2,k562,0.544,,,0.5166,,0.359,0.501,,
+2,hmec_deep,0.4607,,,0.5878,,,,,
+2,huvec_deep,0.5534,,,0.5708,,,,,
+5,median of 12 training cells,0.7767,0.6922,,0.7688,0.7346,0.6265,0.697,6/12,2/12
+5,k562,0.6531,0.5873,,0.7232,,0.5,0.762,,
+5,hmec_deep,0.6887,0.4992,,0.7864,,,,,
+5,huvec_deep,0.6997,0.5622,,0.756,,,,,
+10,median of 12 training cells,0.8233,0.706,,0.8604,0.7858,0.823,0.825,2/12,0/12
+10,k562,0.7524,0.6172,,0.8267,,0.764,0.888,,
+10,hmec_deep,0.7132,0.51,,0.8648,,,,,
+10,huvec_deep,0.77,0.5805,,0.8348,,,,,
+25,median of 12 training cells,0.8153,0.7008,,0.9046,0.8041,0.9445,0.939,1/12,0/12
+25,k562,0.7671,0.6356,,0.8663,,0.932,0.972,,
+25,hmec_deep,0.6977,0.4842,,0.921,,,,,
+25,huvec_deep,0.7808,0.5461,,0.8821,,,,,
