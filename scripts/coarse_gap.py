@@ -584,6 +584,22 @@ def status(agg, quiet=False):
         for _, r in pd.read_csv(lr).iterrows():
             items = [f"{k} {v}" for k, v in r.items() if k != "res_kb" and pd.notna(v)]
             lines.append(f"- {r['res_kb']} kb: " + "; ".join(items))
+    drivers = [HM / "runs/multicell_reference/driver.log",
+               HM / "runs/akita_ref/driver.log",
+               HM / "runs/multicell_reference/driver_5_2kb.log",
+               HM / "runs/learned_reference/driver.log"]
+    q = []
+    for d in drivers:
+        if d.exists():
+            last = [x for x in d.read_text(errors="replace").splitlines()
+                    if x[:4].isdigit()]
+            if last:
+                q.append(f"- {d.parent.name}/{d.name}: {last[-1]}")
+    if q:
+        lines += ["", "## Queue (last milestone per driver)", "",
+                  "Order: all12refres 25 kb, all12honest 25 kb, Akita GM12878 runs, "
+                  "all12refres 10 kb, all12honest 10 kb, 5 kb pair, 2 kb pair, "
+                  "all12reflearn 25 and 10 kb, then all12refin (held).", ""] + q
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")
