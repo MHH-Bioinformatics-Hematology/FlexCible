@@ -496,3 +496,41 @@ this section; as a control, 148 of the 295 GM12878 test windows at 25 kb
 overlap an Akita test region under the same check. A first all12refres run
 at 25 kb with overlapping validation was stopped at epoch 52
 (`all12refres_25kb.overlapval*`) and is not reported.
+
+Results at 25 kb (all12refres stopped by patience at epoch 38, honest
+validation 0.9445; all12honest at epoch 27, 0.8349). 413 Akita test regions
+per cell, reference alone = the cell's leave-one-out consensus (training
+cells) or consensus12 (held-out cells) scored on identical pixels; last
+column: disjoint test windows, model / reference alone / all12honest:
+
+| cell | all12refres | reference alone | best other map | all12honest | all12 (section 13, overlapping validation) | test windows |
+|---|---|---|---|---|---|---|
+| gm12878 | 0.938 | 0.882 | 0.844 (k562) | 0.822 | 0.815 | 0.940 / 0.848 / 0.828 |
+| imr90 | 0.955 | 0.928 | 0.931 (gm23248) | 0.881 | 0.872 | 0.960 / 0.924 / 0.855 |
+| hct116 | 0.952 | 0.932 | 0.910 (a549) | 0.839 | 0.823 | 0.959 / 0.923 / 0.833 |
+| hff | 0.961 | 0.932 | 0.940 (gm23248) | 0.890 | 0.879 | 0.967 / 0.934 / 0.867 |
+| h1 | 0.937 | 0.912 | 0.899 (hct116) | 0.819 | 0.825 | 0.944 / 0.908 / 0.819 |
+| hepg2 | 0.938 | 0.906 | 0.871 (a549) | 0.833 | 0.816 | 0.945 / 0.895 / 0.835 |
+| a549 | 0.949 | 0.946 | 0.910 (hct116) | 0.864 | 0.844 | 0.962 / 0.941 / 0.855 |
+| nhek | 0.939 | 0.927 | 0.921 (hmec_deep) | 0.809 | 0.782 | 0.945 / 0.927 / 0.768 |
+| gm23248 | 0.948 | 0.939 | 0.940 (hff) | 0.786 | 0.777 | 0.954 / 0.938 / 0.733 |
+| mcf7 | 0.930 | 0.918 | 0.893 (nhek) | 0.835 | 0.809 | 0.934 / 0.916 / 0.793 |
+| cd14mono | 0.879 | 0.668 | 0.712 (gm12878) | 0.807 | 0.806 | 0.898 / 0.677 / 0.823 |
+| pc9 | 0.916 | 0.907 | 0.889 (a549) | 0.821 | 0.813 | 0.926 / 0.902 / 0.810 |
+| k562 | 0.906 | 0.897 | 0.866 (hct116) | 0.771 | 0.767 |  /  /  |
+| hmec | 0.873 |  |  | 0.691 | 0.677 |  /  /  |
+| huvec | 0.859 |  |  | 0.763 | 0.738 |  /  /  |
+| hmec_deep | 0.910 | 0.932 | 0.921 (nhek) | 0.735 | 0.698 |  /  /  |
+| huvec_deep | 0.894 | 0.916 | 0.882 (imr90) | 0.805 | 0.781 |  /  /  |
+
+Across the 12 training cells the residual reference model scores a median
+of 0.939, against 0.922 for the leave-one-out consensus alone, 0.905 for the
+best single other map and 0.828 for all12honest; it exceeds the consensus
+alone in all 12 cells (paired over regions in 56% to 95% of the regions,
+most for CD14+ monocytes, 0.879 against 0.668) and all12honest in all 12.
+On the test windows the medians are 0.945, 0.919 and 0.826. Of the held-out
+deep maps the model exceeds consensus12 for K562 (0.906 against 0.897) and
+stays below it for HMEC (0.910 against 0.932) and HUVEC (0.894 against
+0.916); all12honest scores 0.771, 0.735 and 0.805 on them. With honest
+validation the no-reference 12-cell model scores 0.828 on the training
+cells, 0.013 above the section 13 all12 run (0.815).
