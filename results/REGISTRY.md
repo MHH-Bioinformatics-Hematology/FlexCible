@@ -600,3 +600,37 @@ against 0.9223 for their plain mean (bottom 10% 0.846 against 0.833); the
 single most ChIP-similar cell scores 0.884 (`chipref_summary.csv`).
 Excluding the 41 regions with median target SD below 0.25 moves the
 12-cell median from 0.9387 to 0.9411.
+
+## 16. Consensus carried by the model (embedded FINAL, learned PENDING)
+
+Question: can the only cell-specific input at prediction time be the cell's
+ChIP (with sequence and motif channels), with the consensus Hi-C carried by
+the model? Script `scripts/learned_reference.py`, tables
+`learned_reference/learned_reference.csv` and the JSON files beside it.
+
+Embedded consensus. `model.embed_reference` (default off) and
+`scripts/embed_reference.py` store a reference map in the checkpoint
+(`embedded_reference.cool` with a .json of its cells, source, bin size and
+chromosome sizes); `predict.py` and `crosscell_predict.py` look up each
+window in it by chromosome name and bin, so the bigWigs must be on the
+map's assembly (hg38 for every map here; `open_reference` checks chromosome
+sizes against the prediction grid). Training is unchanged (per-cell
+leave-one-out maps); a training cell keeps its own leave-one-out map at
+prediction, and the leakage guard refuses the embedded map for any cell it
+contains. consensus12 embedded into all12refres_25kb: `predict.py` on
+chr2 of K562 gives identical maps with the embedded and the explicit
+consensus12 (maximum absolute difference 0.0 over 1,159,616 pixels); on the
+413 regions `crosscell_predict.py` on the GPU differs by at most
+1.6e-5 (K562, HMEC, HUVEC), and on the CPU by 0.0 (K562), so the GPU
+difference is floating-point nondeterminism.
+
+Learned consensus from sequence, stage 1. A model with GC/CpG and the four
+motif planes only, trained on consensus12 (all12 configuration, honest
+validation), 2-fold by chromosome for out-of-fold maps (odd chromosomes;
+even chromosomes and chrX), plus an all-chromosome model for comparison.
+Against consensus12 on the 413 Akita test regions and the disjoint test
+windows: out-of-fold map 0.552 / 0.557 at 25 kb and 0.559 / 0.547 at 10
+kb; all-chromosome model 0.649 / 0.577 and 0.616 / 0.579. Sequence alone
+recovers the consensus at 0.55 to 0.65, well below the measured consensus
+it approximates. Stage 2 (all12reflearn, the residual model with the
+out-of-fold learned map as reference) is queued after the 2 kb pair.
