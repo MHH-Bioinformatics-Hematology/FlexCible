@@ -61,7 +61,8 @@ COPY = {
                    ("summary", "runs", "heldout", "maps_gm12878")],
     # tables written by `scripts/multicell_expanded.py --stage refsummary`
     "multicell_reference": [R / f"multicell_reference/{n}.csv" for n in
-                            ("reference_compare", "reference_summary", "training_stop")],
+                            ("reference_compare", "reference_summary", "training_stop",
+                             "split_disjoint")],
 }
 ALL13 = {"CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
          "H3K4me2", "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"}

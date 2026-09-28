@@ -12,6 +12,26 @@ Pearson correlation between predicted and measured Hi-C, on the upper triangle
 Status: FINAL (cite), SUPERSEDED (kept for the record, do not cite as a
 result), PENDING (still running).
 
+Validation protocol (methods note, 2026-09-28). Checkpoint selection and
+early stopping use held-out validation windows of the training chromosomes.
+Since 2026-09-28 `train.val_exclude_overlap` defaults to true: validation
+windows are drawn by genomic position (every training cell's window at a
+drawn position is a validation window) and every training window of any
+cell sharing a bin with a validation position is removed. Before that date
+the default was false, and validation windows overlapped training windows by
+up to half a window (the stride), in multi-cell runs also through the other
+cells' windows at the same position. Runs with overlapping validation:
+sections 1, 2 (the elimination path itself is ranked by this validation
+score), 3 and 4 (the section 1 and 4 models), 6, 8 (all runs except the
+`__hv` runs), 9, 10, 11 and 13. Sections 14 and 15 use honest validation
+(single-cell runs there have one sample, where the old same-sample
+exclusion and the position rule coincide). The test scores of every section
+come from windows and regions disjoint from all training windows (held-out
+Akita valid and test regions, `data.holdout_bed`); section 15 verifies this
+per cell. Configs of the earlier runs reproduce with an explicit
+`val_exclude_overlap: false`, which every `configs/*.yaml` and every script
+regenerating those runs now sets.
+
 ## 1. Comparison with Akita (FINAL)
 
 Model `configs/akita_native.yaml` (13 ChIP tracks, CTCF motif, 2048 bp, Akita
@@ -345,3 +365,101 @@ Window size, chosen inputs, same metrics: 5 kb 256 bins 0.788 / 0.790 /
 test regions span about 1 Mb, so wider windows place them in a smaller share
 of the context.
 
+## 15. Closing the coarse-resolution gap (GM12878 FINAL, 12 cells PENDING)
+
+Question: at 10 and 25 kb the GM12878 model of section 14 (0.838 and 0.826
+on the 413 Akita test regions) scores about as well as the measured map of
+another cell (best single map 0.799 and 0.844, K562), while at 2 kb the
+model wins (section 13). Does a reference map of other cells as input close
+the gap?
+
+Reference map. `scripts/consensus_oe.py`: pixel-wise mean of the proper O/E
+maps of IMR90, HFF, H1, HCT116, HepG2, A549, NHEK, GM23248, MCF-7, CD14+
+monocytes and PC-9 (consensus11; cell list in `<cool>.json`). It excludes
+GM12878 and the held-out K562, HMEC and HUVEC. Options `data.reference_cool`
+(or per sample `samples[].reference_cool`) and `model.reference`: input (one
+extra 2D conditioning plane, A1 "refin") or residual (input plane, and the
+output is reference plus network output, A2 "refres"); default none.
+`hicmultiome/reference.py` rejects any reference whose recorded cells include
+the trained or scored cell (precompute, training, eval_val_windows,
+crosscell_predict, consensus baseline columns).
+
+GM12878 runs. `scripts/coarse_gap.py` (driver `runs/coarse_gap/driver.sh`,
+then `driver_gm_ref.sh`), protocol of section 14 (13 ChIP tracks, 4 motifs,
+80 and 192 bin windows, 100 honest validation windows, patience 10, seeds 0
+and 1). Tables `coarse_gap/summary.csv` (seed means and seed values),
+`runs.csv`, `heldout.csv`, `maps_gm12878.csv`. Baseline = the section 14
+"all" runs. Reference alone = consensus11 scored as the prediction on the
+identical windows, regions and pixels.
+
+Validation / 311 or 295 test windows / 413 Akita test regions, mean of 2
+seeds (seed values in brackets for the test regions):
+
+| model | 25 kb | 10 kb |
+|---|---|---|
+| baseline (section 14) | 0.823 / 0.825 / 0.826 (0.840, 0.813) | 0.842 / 0.824 / 0.838 (0.836, 0.840) |
+| reference alone | 0.857 / 0.848 / 0.882 | 0.842 / 0.819 / 0.858 |
+| A1 reference input | 0.935 / 0.930 / 0.931 (0.931, 0.931) | 0.929 / 0.924 / 0.933 (0.933, 0.933) |
+| A2 reference residual | 0.939 / 0.937 / 0.935 (0.937, 0.933) | 0.930 / 0.924 / 0.932 (0.932, 0.933) |
+| best single measured map (K562) | 0.844 | 0.799 |
+
+At 25 kb the 295 test windows are the disjoint windows of that cache (311 at
+10 kb). With the reference map as input the model reaches 0.93 at both
+resolutions, 0.09 to 0.11 above the baseline and 0.05 to 0.08 above the
+reference alone on the same regions. Paired over the 413 regions the
+residual model exceeds consensus11 in 82% of the regions at 25 kb (median
+difference 0.045) and in 94 to 95% at 10 kb (0.065). Input and residual
+variants differ by at most 0.007. GM12878 single-lane replicates agree at
+0.779 (10 kb) and 0.933 (25 kb), deep intact replicate pairs at 0.90 to 0.97
+(25 kb, section 12).
+
+Held-out cells, GM12878-trained models, 413 regions, reference consensus11
+(seeds 0, 1; GM12878-only models without track dropout, HMEC and HUVEC lack
+RAD21 and SMC3 ChIP):
+
+| cell | res | A2 residual | A1 input | baseline | consensus11 alone | best single map |
+|---|---|---|---|---|---|---|
+| K562 | 25 kb | 0.896, 0.886 | 0.887, 0.884 | 0.692, 0.687 | 0.893 | 0.866 (HCT116) |
+| HMEC deep | 25 kb | 0.916, 0.902 | 0.904, 0.893 | 0.523, 0.563 | 0.930 | 0.921 (NHEK) |
+| HUVEC deep | 25 kb | 0.906, 0.900 | 0.897, 0.892 | 0.623, 0.713 | 0.911 | 0.882 (IMR90) |
+| K562 | 10 kb | 0.879, 0.877 | 0.871, 0.871 | 0.689, 0.686 | 0.854 | 0.827 (HCT116) |
+| HMEC deep | 10 kb | 0.898, 0.901 | 0.814, 0.825 | 0.570, 0.473 | 0.905 | 0.865 (NHEK) |
+| HUVEC deep | 10 kb | 0.892, 0.893 | 0.800, 0.835 | 0.644, 0.596 | 0.883 | 0.835 (IMR90) |
+
+On held-out cells the residual model scores above the best single measured
+map in every case except HMEC at 25 kb (0.916 and 0.902 against 0.921 for
+NHEK), and within 0.03 of consensus11: above it for K562 and HUVEC at 10 kb
+and for K562 with seed 0 at 25 kb, below it for HMEC at both resolutions and
+HUVEC at 25 kb. Without the reference the GM12878 model scores 0.47 to 0.71
+on these cells.
+
+Not run (plan change 2026-09-28): the 5 kb reference runs (consensus11 at
+5 kb was built, `crosscell_oe/consensus11_proper_5kb.cool`), idea B
+(quarter-stride windows `window.stride = size / 4` and a narrow U-Net
+`model.base_channels` 24, variants q4, narrow, q4narrow in
+`scripts/coarse_gap.py`) and idea C (coarse targets block-averaged from the
+2 kb map, `scripts/coarsen_oe.py`, targets
+`crosscell_oe/gm12878_avg2kb_{10,25}kb.cool` built, variant avg2kb). The code
+of both stays selectable; no model was trained.
+
+12-cell training with the reference map (PENDING).
+`scripts/multicell_expanded.py` runs all12refres (residual) and all12honest
+(the all12 configuration without reference), both with honest validation, at
+25 and 10 kb, DDP on two GPUs, driver `runs/multicell_reference/driver.sh`,
+tables `multicell_reference/reference_compare.csv`,
+`reference_summary.csv`, `training_stop.csv`, `split_disjoint.csv`. The
+all12 configuration of section 13 at these resolutions has no assay
+indicator (`assay_decision.json` chose all12), and the new runs keep it.
+Each training cell reads an 11-cell leave-one-out consensus (the other
+training cells, `consensus_loo_<cell>_proper_<k>kb.cool`); the held-out
+cells K562, HMEC and HUVEC read the consensus of all 12 training cells
+(`consensus12_proper_<k>kb.cool`). Validation: 100 positions, 1200
+windows (25 kb; 101 positions, 1211 windows at 10 kb), 100 per cell, 1194
+(1269) training windows per cell after removing the 1872 (1955) windows at
+validation positions. `scripts/check_split_disjoint.py`: no training window
+of any cell overlaps one of the 413 Akita test regions or one of the test
+windows, in the 12-cell caches at 25 and 10 kb and the GM12878 caches of
+this section; as a control, 148 of the 295 GM12878 test windows at 25 kb
+overlap an Akita test region under the same check. A first all12refres run
+at 25 kb with overlapping validation was stopped at epoch 52
+(`all12refres_25kb.overlapval*`) and is not reported.
