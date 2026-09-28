@@ -305,6 +305,13 @@ class ModelConfig:
     #             output, so the network predicts the deviation of this cell
     #             from the reference
     reference: str = "none"
+    # Reference map to embed in every checkpoint (copied once as
+    # embedded_reference.cool, hicmultiome.reference.embed_reference), so that
+    # prediction for a NEW cell needs only its ChIP: predict.py and
+    # crosscell_predict.py look windows up in the embedded map by chromosome
+    # and bin. Typically the consensus of all training cells; training itself
+    # reads data.reference_cool / samples[].reference_cool. None = off.
+    embed_reference: str | None = None
 
     def __post_init__(self):
         if self.reference not in REFERENCE_MODES:

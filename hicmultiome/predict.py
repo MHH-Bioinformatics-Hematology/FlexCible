@@ -92,16 +92,11 @@ def load_norm(ckpt: Path, stem: str, sample_name: str, cls,
 
 
 def build_model(cfg: Config, ckpt: Path, device):
-    if cfg.model.reference != "none":
-        raise NotImplementedError(
-            "genome-wide prediction with a reference-map model (model.reference) "
-            "is not wired here; score such models with scripts/crosscell_predict.py "
-            "or scripts/eval_val_windows.py")
     channels = json.loads((ckpt / "channels.json").read_text())
     n_sym = len(channels["sym_rows"])
     n_motifs = len(channels["motif_ids"])
     n_out = 2 if channels["has_capture"] else 1
-    n_planes = 2 if channels.get("capture_input") else 0
+    n_planes = (2 if channels.get("capture_input") else 0) + cfg.model.reference_planes
     mode = cfg.model.cond_mode
     emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
     backbone = build_backbone(cfg.model.kind,
@@ -111,7 +106,8 @@ def build_model(cfg: Config, ckpt: Path, device):
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if cfg.sequence.uses_encoder else None)
     model = HiCModel(backbone, mode, encoder,
-                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
+                     cfg.window.size if cfg.model.dist_bias else 0,
+                     reference=cfg.model.reference).to(device)
     sd = torch.load(ckpt / "model.pt", map_location=device)
     # older bare-backbone checkpoints have no "backbone." prefix
     if not any(k.startswith("backbone.") for k in sd):
@@ -141,7 +137,14 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             tta: bool = False, obs_exp_out: bool = False,
             capture_cool: str | None = None,
             zero_regions: list[tuple[str, str, int, int]] | None = None,
-            renormalize_tracks: bool = False):
+            renormalize_tracks: bool = False, bigwig_dir: str | None = None,
+            cell: str | None = None, reference: str | None = None):
+    """bigwig_dir: predict a cell from this folder of ChIP bigWigs (tracks it
+    lacks enter as absent) with the configured sample's bin grid and
+    normalisers; `cell` names it (default: the sample name, or the folder
+    name with bigwig_dir). Reference-map models read `reference`, else the
+    cell's own training reference, else the map embedded in the checkpoint
+    (hicmultiome.reference.resolve_reference), looked up per window."""
     set_seed(cfg.train.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = _resolve_ckpt(cfg, checkpoint)
@@ -151,11 +154,29 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
         sample = type(sample)(**{**sample.__dict__})
         sample.zeroed_tracks = sorted(set(sample.zeroed_tracks) | set(zero_tracks))
         log.info("zeroing tracks at inference: %s", sample.zeroed_tracks)
+    missing_new: list[str] = []
+    if bigwig_dir:
+        sample = type(sample)(**{**sample.__dict__})
+        sample.bigwig_dir = str(bigwig_dir)
+        have = {q.stem.upper() for q in Path(bigwig_dir).glob("*.bigwig")}
+        missing_new = [t for t in cfg.track_names if t.upper() not in have]
+        sample.missing_tracks = list(missing_new)
+        cell = cell or Path(bigwig_dir).name
+        log.info("cell %s from %s; absent tracks: %s", cell, bigwig_dir, missing_new)
+    cell = cell or sample.name
     use_seq = cfg.sequence.uses_encoder
     fasta = sample.fasta or cfg.sequence.fasta
     track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
     mat_norm = load_norm(ckpt, "norm_matrix", sample.name, MatrixNormalizer)
     model, channels = build_model(cfg, ckpt, device)
+    ref_clr = None
+    if cfg.model.reference != "none":
+        from .reference import open_reference, resolve_reference
+
+        ref_path = resolve_reference(cfg, ckpt, cell, reference)
+        ref_clr = open_reference(ref_path, cfg.data.resolution,
+                                 dict(open_cool(sample.cool_path).chromsizes))
+        log.info("reference map for %s: %s (%s)", cell, ref_path, cfg.model.reference)
     if renormalize_tracks:
         # An unseen cell type usually comes from a different processing
         # pipeline (base-resolution fold-change vs pre-binned signal, other
@@ -268,6 +289,11 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     for r in rows:
                         raw[r, lo:hi] = 0.0
         sym_full = track_norm.apply(raw)
+        if missing_new:
+            absent = track_norm.absent_values()
+            for t in missing_new:
+                k = cfg.track_names.index(t)
+                sym_full[k] = absent[k]
         wins = plan_windows(nb, size, cfg.window.stride, chrom)
         acc = BandedAccumulator(nb, band=size)
         acc_cap = BandedAccumulator(nb, band=size) if (pchic_out and cap_norm) else None
@@ -315,8 +341,15 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     planes[:, 1] = 0.0
             seq_oh = (_batch_seq(fasta, chrom, [w.start for w in bw], size,
                                  cfg.data.resolution, device) if use_seq else None)
+            ref = None
+            if ref_clr is not None:
+                from .reference import reference_block
+
+                ref = torch.from_numpy(np.stack([
+                    reference_block(ref_clr, chrom, w.start, size, mat_norm)
+                    for w in bw])).to(device)
             with torch.no_grad():
-                out = model(cond, pairs, planes, seq_oh)
+                out = model(cond, pairs, planes, seq_oh, ref)
                 if tta:
                     from .dataset import reverse_cond, split_cond as _sc
 
@@ -327,7 +360,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     seq_r = (_batch_seq(fasta, chrom, [w.start for w in bw], size,
                                         cfg.data.resolution, device, revcomp=True)
                              if use_seq else None)
-                    out_r = model(sym_r, pairs_r, planes_r, seq_r)
+                    ref_r = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
+                    out_r = model(sym_r, pairs_r, planes_r, seq_r, ref_r)
                     out = 0.5 * (out + torch.flip(out_r, dims=[-1, -2]))
                 imgs = out.float().cpu().numpy()
             for w, img in zip(bw, imgs):
@@ -392,6 +426,14 @@ def main():
                     help="write obs/expected ratios instead of counts "
                          "(requires window.transform=obs_exp; skips the "
                          "distance-decay inversion)")
+    ap.add_argument("--bigwig-dir", default=None,
+                    help="predict a new cell from this folder of ChIP bigWigs")
+    ap.add_argument("--cell", default=None,
+                    help="name of the predicted cell (reference choice and "
+                         "leakage guard; default: sample or bigWig folder name)")
+    ap.add_argument("--reference", default=None,
+                    help="reference-map models: reference O/E cool (default: "
+                         "the cell's training reference, else the embedded map)")
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
@@ -404,7 +446,7 @@ def main():
     predict(Config.load(args.config), args.chroms, args.out, args.checkpoint,
             args.batch_size, args.pchic_out, args.sample, zt, args.capture_input,
             args.tta, args.obs_exp, args.capture_cool, zr or None,
-            args.renormalize_tracks)
+            args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference)
 
 
 if __name__ == "__main__":

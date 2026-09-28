@@ -1691,3 +1691,47 @@ def test_honest_validation_in_multisample_training(workdir, cfg):
     assert {co[2][i] for i in vi} == {"a", "b"}
     htrain.train(c)
     assert (Path(c.train.output_dir) / "best").exists()
+
+
+def test_embedded_reference_predicts_new_cell_from_chip_only(workdir):
+    """model.embed_reference copies the map into every checkpoint; predict.py
+    then predicts a new cell from its bigWigs alone, identical to passing the
+    same map explicitly; a training cell keeps its own reference and a cell
+    contained in the embedded map is refused."""
+    import json
+    import shutil
+
+    import cooler
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome import train as htrain
+    from hicmultiome.reference import EMBED_NAME, resolve_reference
+
+    emb = workdir / "emb_src.cool"
+    shutil.copy(workdir / "target.cool", emb)
+    Path(str(emb) + ".json").write_text(json.dumps({"cells": ["s", "other"]}))
+    raw = _ref_raw(workdir, "embed", reference="residual")
+    raw["model"]["embed_reference"] = str(emb)
+    raw["train"]["cache_dir"] = str(workdir / "cache_embed")
+    c = Config.from_dict(raw)
+    hprep.build(c)
+    htrain.train(c)
+    run = Path(c.train.output_dir)
+    ck = run / (run / "best").read_text().strip()
+    assert (ck / EMBED_NAME).exists() and (ck / (EMBED_NAME + ".json")).exists()
+    assert json.loads((ck / (EMBED_NAME + ".json")).read_text())["cells"] == ["s", "other"]
+    # training sample: its own reference; new cell: the embedded map
+    assert resolve_reference(c, ck, "s") == str(workdir / "target.cool")
+    assert resolve_reference(c, ck, "newcell") == str(ck / EMBED_NAME)
+    with pytest.raises(ValueError, match="reference leakage"):
+        resolve_reference(c, ck, "other")
+    a = str(workdir / "pred_emb.cool")
+    b = str(workdir / "pred_explicit.cool")
+    hpred.predict(c, "chr1", a, batch=4, bigwig_dir=str(workdir), cell="newcell", tta=True)
+    hpred.predict(c, "chr1", b, batch=4, bigwig_dir=str(workdir), cell="newcell", tta=True,
+                  reference=str(emb))
+    pa = np.nan_to_num(cooler.Cooler(a).matrix(balance=False).fetch("chr1"))
+    pb = np.nan_to_num(cooler.Cooler(b).matrix(balance=False).fetch("chr1"))
+    assert np.abs(pa).sum() > 0
+    assert np.abs(pa - pb).max() == 0.0

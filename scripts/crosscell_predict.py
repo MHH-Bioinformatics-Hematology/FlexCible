@@ -90,9 +90,12 @@ def main():
                          "413 Akita test regions)")
     ap.add_argument("--reference", default=None,
                     help="reference-map models (model.reference): the reference O/E "
-                         "cool at the model resolution (default: the config's "
-                         "data.reference_cool). For a held-out cell it must not "
-                         "contain that cell's map")
+                         "cool at the model resolution (default: the cell's own "
+                         "training reference, else the map embedded in the "
+                         "checkpoint, else data.reference_cool). It must not "
+                         "contain this cell's map")
+    ap.add_argument("--save-pred", default=None,
+                    help="also write every region's prediction (target grid) to this npz")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default="/mnt/processed/wolffjoa/hic-multiome/runs/crosscell")
     a = ap.parse_args()
@@ -130,21 +133,20 @@ def main():
 
     ref_clr = None
     if cfg.model.reference != "none":
-        # default: the cell's own reference when it is a training sample
-        # (samples[].reference_cool), else data.reference_cool
-        own = next((s for s in cfg.data.samples if s.name == a.cell), None)
-        ref_path = a.reference or (cfg.sample_reference(own) if own else
-                                   cfg.data.reference_cool)
-        if not ref_path:
-            raise SystemExit(f"{a.cell}: reference-map model needs --reference")
-        assert_reference_excludes(ref_path, a.cell)
+        # --reference, else the cell's own training reference (a leave-one-out
+        # map for a training cell), else the map embedded in the checkpoint
+        # (model.embed_reference), else data.reference_cool; never a map that
+        # contains this cell (hicmultiome.reference.resolve_reference)
+        from hicmultiome.reference import open_reference, resolve_reference
+        try:
+            ref_path = resolve_reference(cfg, ckpt, a.cell, a.reference)
+        except ValueError as e:
+            raise SystemExit(str(e))
         # a training cell's reference was encoded with its own normaliser
         own_norm = ckpt / f"norm_matrix_{a.cell}.json"
         if own_norm.exists():
             mat_norm = MatrixNormalizer.load(own_norm)
-        ref_clr = cooler.Cooler(ref_path)
-        if ref_clr.binsize != res:
-            raise SystemExit(f"reference {ref_path}: binsize {ref_clr.binsize} != {res}")
+        ref_clr = open_reference(ref_path, res)
         print(f"[{a.cell}] reference map {ref_path} ({cfg.model.reference})", flush=True)
 
     tgt = cooler.Cooler(a.target)
@@ -162,6 +164,7 @@ def main():
     regions = pd.read_csv(a.regions or sc.REGIONS, sep="\t", usecols=[0, 1, 2],
                           names=["chrom", "start", "end"])
     rows = []
+    saved = {}
     for chrom, grp in regions.groupby("chrom"):
         tname = match_name(chrom, list(tgt.chromnames))     # target fetch (2 kb grid)
         sname = match_name(chrom, list(src.chromnames))     # nb + ChIP binning (2048)
@@ -193,11 +196,9 @@ def main():
             seq = (sc.region_onehot(fasta, tname, st, size, res, device) if use_seq else None)
             ref = None
             if ref_clr is not None:
-                from hicmultiome.matrix import fetch_diagonal_window
-                rn = match_name(chrom, list(ref_clr.chromnames))
-                rb = (fetch_diagonal_window(ref_clr, rn, st, size) if rn is not None
-                      else np.zeros((size, size), np.float32))
-                ref = torch.from_numpy(mat_norm.encode(rb)[None]).to(device)
+                from hicmultiome.reference import reference_block
+                ref = torch.from_numpy(
+                    reference_block(ref_clr, chrom, st, size, mat_norm)[None]).to(device)
             with torch.no_grad():
                 o = model(cond, pairs, None, seq, ref)
                 if a.tta:
@@ -212,6 +213,8 @@ def main():
             P = mat_norm.decode(o[0, 0].float().cpu().numpy())
             P = 0.5 * (P + P.T)
             P = sc.resample(P, st * res, res, int(r.start), n_out, tgt.binsize)
+            if a.save_pred:
+                saved[f"{chrom}:{int(r.start)}-{int(r.end)}"] = P.astype(np.float32)
             live = np.abs(P).sum(1) > 0
             if live.mean() < 0.5:
                 continue
@@ -250,6 +253,8 @@ def main():
 
     df = pd.DataFrame(rows)
     out = Path(a.out_dir); out.mkdir(parents=True, exist_ok=True)
+    if a.save_pred:
+        np.savez_compressed(a.save_pred, **saved)
     df.to_csv(out / f"predict_{a.cell}.csv", index=False)
     print(f"\n=== {a.cell}: model prediction vs measured-map baselines ===", flush=True)
     cols = [c for c in df.columns if c != "region"]

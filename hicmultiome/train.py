@@ -561,6 +561,9 @@ def train(cfg: Config):
         for s in list(cache_dir.glob("norm_*.json")) + [cache_dir / "channels.json"]:
             if s.exists():
                 (ck / s.name).write_text(s.read_text())
+        if cfg.model.embed_reference:
+            from .reference import embed_reference
+            embed_reference(cfg.model.embed_reference, ck)
         cfg.save(ck / "config.yaml")
         (out_dir / ptr).write_text(name)
 
