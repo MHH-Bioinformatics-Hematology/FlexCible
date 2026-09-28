@@ -140,8 +140,12 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     "all12refin": (TRAIN12, None),
     # all12 retrained with honest validation: the no-reference comparison
     "all12honest": (TRAIN12, None),
+    # residual model on the LEARNED consensus (scripts/learned_reference.py):
+    # a sequence-only model's out-of-fold prediction of consensus12 replaces
+    # the measured consensus for every cell
+    "all12reflearn": (TRAIN12, None),
 }
-REF_RUNS = {"all12refres": "residual", "all12refin": "input"}
+REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual"}
 # runs trained with train.val_exclude_overlap (honest validation)
 HONEST_RUNS = set(REF_RUNS) | {"all12honest"}
 REF_OUT = HM / "runs/multicell_reference"
@@ -167,9 +171,24 @@ def out_of(name: str) -> Path:
     return REF_OUT if split_name(name)[0] in HONEST_RUNS else OUT
 
 
-def reference_of(name: str, cell: str) -> Path:
+def learned_map(res: int) -> Path:
+    """Out-of-fold prediction of consensus12 by the sequence-only model
+    (scripts/learned_reference.py)."""
+    return OE / f"learned_cons12_oof_{res // 1000}kb.cool"
+
+
+def measured_reference(name: str, cell: str) -> Path:
+    """Measured consensus for `cell`: leave-one-out for a training cell,
+    consensus12 for a held-out cell."""
     res = split_name(name)[1]
     return consensus_loo(cell, res) if cell in RUNS[split_name(name)[0]][0] else consensus12(res)
+
+
+def reference_of(name: str, cell: str) -> Path:
+    """The reference map a reference run reads for `cell`."""
+    if split_name(name)[0] == "all12reflearn":
+        return learned_map(split_name(name)[1])
+    return measured_reference(name, cell)
 # earlier models: name -> (run dir, cells trained on)
 OLD_RUNS = {"ref": (REF_RUN, ["gm12878"]), "gm1": (OLD / "gm1", ["gm12878"]),
             "hic3": (OLD / "hic3", ["gm12878", "imr90", "hct116"]),
@@ -207,9 +226,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cfg["data"]["assay_indicator_mode"] = mode
     if base in REF_RUNS:
         for smp in cfg["data"]["samples"]:
-            smp["reference_cool"] = str(consensus_loo(smp["name"], res))
+            smp["reference_cool"] = str(reference_of(name, smp["name"]))
         cfg.setdefault("model", {})["reference"] = REF_RUNS[base]
-    cache_name = (f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
+    cache_name = (f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
+                  else f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
                   else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows
                   else f"mc_{name}")
     cfg["train"].update({
@@ -273,8 +293,11 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
         extra = []
         if ref_run is not None:
             rf = reference_of(ref_run, cell)
+            meas = measured_reference(ref_run, cell)
             tag = "consensus_loo" if cell in RUNS[split_name(ref_run)[0]][0] else "consensus12"
-            others.append(f"{tag}={rf}")
+            others.append(f"{tag}={meas}")
+            if rf != meas:
+                others.append(f"learned={rf}")
             extra = ["--reference", rf]
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", cfg_path,
                  "--checkpoint", ckpt, "--cell", cell, "--bigwig-dir", bw,
@@ -613,6 +636,7 @@ def reference_summary():
         base_name = run_name("all12", res)          # overlapping validation (section 13)
         honest_name = run_name("all12honest", res)  # the same, honest validation
         for rb in list(REF_RUNS) + ["all12honest"]:
+            refres_name = run_name("all12refres", res)
             name = run_name(rb, res)
             run = REF_OUT / name
             if not run.exists():
@@ -631,19 +655,24 @@ def reference_summary():
                     df = pd.read_csv(f)
                     base = {c[5:]: float(df[c].median()) for c in df if c.startswith("base_")}
                     cons = next((k for k in base if k.startswith("consensus")), None)
-                    single = {k: v for k, v in base.items() if not k.startswith("consensus")}
+                    ref_col = "learned" if "learned" in base else cons
+                    single = {k: v for k, v in base.items()
+                              if not k.startswith("consensus") and k != "learned"}
                     b = max(single, key=single.get) if single else None
                     rec.update({"n": int(df["model"].notna().sum()),
                                 "model": round(float(df["model"].median()), 4),
-                                "reference_alone": round(base[cons], 4) if cons else None,
-                                "reference": cons,
+                                "reference_alone": round(base[ref_col], 4) if ref_col else None,
+                                "reference": ref_col,
+                                "measured_consensus_alone": (round(base[cons], 4)
+                                                             if cons else None),
                                 "best_other_map": round(single[b], 4) if b else None,
                                 "best_other_map_cell": b})
-                    if cons:   # paired per region
+                    if cons:   # paired per region, against the measured consensus
                         d = df.dropna(subset=["model", f"base_{cons}"])
-                        rec["frac_regions_model_above_reference"] = round(
+                        rec["frac_regions_model_above_measured_consensus"] = round(
                             float((d["model"] > d[f"base_{cons}"]).mean()), 3)
-                for tag, d in (("all12honest_no_reference", REF_OUT / honest_name),
+                for tag, d in (("all12refres_measured_reference", REF_OUT / refres_name),
+                               ("all12honest_no_reference", REF_OUT / honest_name),
                                ("all12_overlapval_no_reference", OUT / base_name)):
                     fb = d / "crosscell" / f"predict_{cell}.csv"
                     if fb.exists() and d != run:
@@ -671,7 +700,8 @@ def reference_summary():
         for label, sub in (("12 training cells", g[g["trained_on_cell"]]),
                            ("held-out cells", g[~g["trained_on_cell"]])):
             rec = {"res_kb": k, "run": run, "cells": label, "n_cells": len(sub)}
-            for c in ("model", "reference_alone", "best_other_map",
+            for c in ("model", "reference_alone", "measured_consensus_alone",
+                      "best_other_map", "all12refres_measured_reference",
                       "all12honest_no_reference", "all12_overlapval_no_reference",
                       "test_windows", "test_windows_reference_alone",
                       "test_windows_all12honest_no_reference",
@@ -679,6 +709,7 @@ def reference_summary():
                 if c in sub and sub[c].notna().any():
                     rec[f"median_{c}"] = round(float(sub[c].median()), 4)
             for c, t in (("reference_alone", "beats_reference"),
+                         ("measured_consensus_alone", "beats_measured_consensus"),
                          ("best_other_map", "beats_best_other_map"),
                          ("all12honest_no_reference", "beats_all12honest_no_reference")):
                 if c in sub:
@@ -780,6 +811,13 @@ def main():
         print("READY", flush=True)
         return
     for name in names:
+        # queue control: a run waits while <out>/HOLD_<name> exists
+        hold = out_of(name) / f"HOLD_{name}"
+        if hold.exists() and a.stage in ("precompute", "train", "all"):
+            print(f"[hold] {name}: waiting for {hold} to be removed", flush=True)
+            while hold.exists():
+                import time
+                time.sleep(60)
         cfg = run_config(name, a.val_per_cell, a.patience, a.max_epochs)
         cp = out_of(name) / f"{name}.yaml"
         if not done(out_of(name) / f"{name}.log"):  # a finished run keeps its config

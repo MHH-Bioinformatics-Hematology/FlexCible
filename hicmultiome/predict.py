@@ -95,6 +95,9 @@ def build_model(cfg: Config, ckpt: Path, device):
     channels = json.loads((ckpt / "channels.json").read_text())
     n_sym = len(channels["sym_rows"])
     n_motifs = len(channels["motif_ids"])
+    if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
+        from .train import _select_rows       # model trained on a subset of the rows
+        _, _, n_motifs, n_sym = _select_rows(cfg, channels)
     n_out = 2 if channels["has_capture"] else 1
     n_planes = (2 if channels.get("capture_input") else 0) + cfg.model.reference_planes
     mode = cfg.model.cond_mode
@@ -186,6 +189,10 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
         log.info("re-fitting track statistics on this sample's own signal")
     n_motifs = len(channels["motif_ids"])
     offset = len(channels["tracks"]) + len(channels["seq_features"])
+    sel_rows = None
+    if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
+        from .train import _select_rows
+        sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
     cap_norm = None
     if channels["has_capture"] and (pchic_out or capture_input or capture_cool):
         cap_norm = load_norm(ckpt, "norm_capture",
@@ -294,6 +301,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             for t in missing_new:
                 k = cfg.track_names.index(t)
                 sym_full[k] = absent[k]
+        if sel_rows is not None:
+            sym_full = sym_full[sel_rows]
         wins = plan_windows(nb, size, cfg.window.stride, chrom)
         acc = BandedAccumulator(nb, band=size)
         acc_cap = BandedAccumulator(nb, band=size) if (pchic_out and cap_norm) else None

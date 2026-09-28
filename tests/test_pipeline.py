@@ -1735,3 +1735,25 @@ def test_embedded_reference_predicts_new_cell_from_chip_only(workdir):
     pb = np.nan_to_num(cooler.Cooler(b).matrix(balance=False).fetch("chr1"))
     assert np.abs(pa).sum() > 0
     assert np.abs(pa - pb).max() == 0.0
+
+
+def test_predict_subset_model_sequence_only(workdir, cfg):
+    """predict.py runs a model trained on a subset of the cached rows (no ChIP,
+    motifs and GC/CpG only), as the sequence-only reference model uses."""
+    import dataclasses
+
+    import cooler
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome import train as htrain
+
+    raw = _ref_raw(workdir, "seqonly", ref_cool=False)
+    raw["train"].update({"select_tracks": [], "select_motifs": [MOTIF],
+                         "cache_dir": str(workdir / "cache_seqonly")})
+    c = Config.from_dict(raw)
+    hprep.build(c)
+    htrain.train(c)
+    out = str(workdir / "pred_seqonly.cool")
+    hpred.predict(c, "chr1", out, batch=4, tta=True)
+    assert np.abs(np.nan_to_num(cooler.Cooler(out).matrix(balance=False).fetch("chr1"))).sum() > 0
