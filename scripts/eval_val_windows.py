@@ -88,6 +88,9 @@ def main():
     if use_ref or a.reference_only:
         ds.check_reference_leakage()
     ref = data["ref"][vi] if "ref" in data else None
+    if cfg.model.prior and "prior" not in data:
+        raise SystemExit(f"{cache_dir} holds no prior windows")
+    prior = data["prior"][vi] if cfg.model.prior else None
     if a.sample is not None:
         smp = _coords(ds)[2]
         vi = np.array([i for i in vi if smp[i] == a.sample], dtype=np.int64)
@@ -122,7 +125,8 @@ def main():
                 oh = (batch_onehot(vcoords, list(range(i, i + n)), [False] * n, W,
                                    int(cfg.data.resolution), fm, device) if use_seq else None)
                 rb = ref[i:i + n].to(device).float() if use_ref else None
-                preds.append(model(sym, pairs, None, oh, rb)[:, 0].float().cpu().numpy())
+                pb = prior[i:i + n].to(device).float() if prior is not None else None
+                preds.append(model(sym, pairs, None, oh, rb, prior=pb)[:, 0].float().cpu().numpy())
         pred = np.concatenate(preds)
 
     nm = Path(cache_dir) / f"norm_matrix_{a.sample}.json"

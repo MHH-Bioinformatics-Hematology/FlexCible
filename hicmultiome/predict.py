@@ -137,7 +137,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             capture_cool: str | None = None,
             zero_regions: list[tuple[str, str, int, int]] | None = None,
             renormalize_tracks: bool = False, bigwig_dir: str | None = None,
-            cell: str | None = None, reference: str | None = None):
+            cell: str | None = None, reference: str | None = None,
+            prior: str | None = None):
     """bigwig_dir: predict a cell from this folder of ChIP bigWigs (tracks it
     lacks enter as absent) with the configured sample's bin grid and
     normalisers; `cell` names it (default: the sample name, or the folder
@@ -176,6 +177,14 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
         ref_clr = open_reference(ref_path, cfg.data.resolution,
                                  dict(open_cool(sample.cool_path).chromsizes))
         log.info("reference map for %s: %s (%s)", cell, ref_path, cfg.model.reference)
+    prior_clr = None
+    if cfg.model.prior:
+        own = next((s for s in cfg.data.samples if s.name == cell), None)
+        pp = prior or (cfg.sample_prior(own) if own else cfg.data.prior_cool)
+        if not pp:
+            raise ValueError(f"{cell}: cascade model (model.prior) needs a prior map")
+        prior_clr = open_cool(pp)
+        log.info("prior map for %s: %s", cell, pp)
     if renormalize_tracks:
         # An unseen cell type usually comes from a different processing
         # pipeline (base-resolution fold-change vs pre-binned signal, other
@@ -353,8 +362,15 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                 ref = torch.from_numpy(np.stack([
                     reference_block(ref_clr, chrom, w.start, size, mat_norm)
                     for w in bw])).to(device)
+            prior_t = None
+            if prior_clr is not None:
+                from .reference import prior_block
+
+                prior_t = torch.from_numpy(np.stack([
+                    prior_block(prior_clr, chrom, w.start, size, cfg.data.resolution, mat_norm)
+                    for w in bw])).to(device)
             with torch.no_grad():
-                out = model(cond, pairs, planes, seq_oh, ref)
+                out = model(cond, pairs, planes, seq_oh, ref, prior=prior_t)
                 if tta:
                     from .dataset import reverse_cond, split_cond as _sc
 
@@ -366,7 +382,9 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                                         cfg.data.resolution, device, revcomp=True)
                              if use_seq else None)
                     ref_r = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
-                    out_r = model(sym_r, pairs_r, planes_r, seq_r, ref_r)
+                    pr_r = (torch.flip(prior_t, dims=[-1, -2])
+                            if prior_t is not None else None)
+                    out_r = model(sym_r, pairs_r, planes_r, seq_r, ref_r, prior=pr_r)
                     out = 0.5 * (out + torch.flip(out_r, dims=[-1, -2]))
                 imgs = out.float().cpu().numpy()
             for w, img in zip(bw, imgs):
@@ -439,6 +457,8 @@ def main():
     ap.add_argument("--reference", default=None,
                     help="reference-map models: reference O/E cool (default: "
                          "the cell's training reference, else the embedded map)")
+    ap.add_argument("--prior", default=None,
+                    help="cascade models: the coarser model's prediction for this cell")
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
@@ -451,7 +471,8 @@ def main():
     predict(Config.load(args.config), args.chroms, args.out, args.checkpoint,
             args.batch_size, args.pchic_out, args.sample, zt, args.capture_input,
             args.tta, args.obs_exp, args.capture_cool, zr or None,
-            args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference)
+            args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference,
+            args.prior)
 
 
 if __name__ == "__main__":

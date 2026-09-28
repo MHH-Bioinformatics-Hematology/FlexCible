@@ -117,6 +117,35 @@ def open_reference(path: str, resolution: int, chromsizes: dict | None = None):
     return clr
 
 
+def prior_block(clr, chrom: str, start: int, size: int, res: int, mat_norm):
+    """Encoded (size, size) window of a prior map at bins [start, start + size)
+    of `res` bp, from a map at the same or a coarser bin size: each fine bin
+    takes the coarse bin containing its centre (0 = expected where the map
+    has no such chromosome or no value)."""
+    import numpy as np
+
+    from .genome import match_name
+
+    name = match_name(chrom, list(clr.chromnames))
+    if name is None:
+        return np.zeros((size, size), np.float32)
+    cres = int(clr.binsize)
+    clen = int(clr.chromsizes[name])
+    s, e = start * res, min((start + size) * res, clen)
+    c0 = (s // cres) * cres
+    c1 = min(-(-e // cres) * cres, clen)
+    M = np.nan_to_num(np.asarray(clr.matrix(balance=False).fetch(f"{name}:{c0}-{c1}"),
+                                 np.float32))
+    cen = start * res + (np.arange(size) + 0.5) * res
+    idx = ((cen - c0) // cres).astype(int)
+    ok = (idx >= 0) & (idx < M.shape[0]) & (cen < clen)
+    idx = np.clip(idx, 0, M.shape[0] - 1)
+    out = M[np.ix_(idx, idx)]
+    out[~ok, :] = 0.0
+    out[:, ~ok] = 0.0
+    return mat_norm.encode(out)
+
+
 def reference_block(clr, chrom: str, start: int, size: int, mat_norm):
     """Encoded (size, size) reference window at bins [start, start + size) of
     `chrom` (0 = expected where the map has no such chromosome)."""

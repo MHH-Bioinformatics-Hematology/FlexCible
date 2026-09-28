@@ -35,6 +35,8 @@ class WindowDataset(Dataset):
         self.window_size = manifest["window_size"]
         # path of the cached reference map (data.reference_cool), or None
         self.reference = manifest.get("reference")
+        # {sample: prior map path} of a cascade cache (model.prior), or None
+        self.prior = manifest.get("prior")
 
         # optional chromosome restriction (fast proxy search on 1-2 chroms)
         chroms = set(chroms) if chroms else None
@@ -120,6 +122,8 @@ class WindowDataset(Dataset):
         extra = {}
         if "ref" in shard:
             extra["ref"] = torch.from_numpy(shard["ref"][local].astype(np.float32))
+        if "prior" in shard:
+            extra["prior"] = torch.from_numpy(shard["prior"][local].astype(np.float32))
         return {
             **extra,
             "target": torch.from_numpy(target),

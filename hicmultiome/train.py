@@ -56,6 +56,7 @@ def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
     cd = torch.empty((n, ds.n_sym, w), dtype=dtype)
     bt = torch.zeros((n, w), dtype=torch.float32)
     rf = torch.empty((n, w, w), dtype=dtype) if ds.reference else None
+    pf = torch.empty((n, w, w), dtype=dtype) if ds.prior else None
     for path, pairs in ds.grouped_index().items():        # one decompress each
         z = np.load(path)
         rows = np.array([r for r, _ in pairs])
@@ -67,17 +68,21 @@ def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
             bt[rows] = torch.from_numpy(z["bait"][loc].astype(np.float32))
         if rf is not None:
             rf[rows] = torch.from_numpy(z["ref"][loc].astype(npdt))
+        if pf is not None:
+            pf[rows] = torch.from_numpy(z["prior"][loc].astype(npdt))
     out = {"target": tg, "cond": cd, "bait": bt}
     if rf is not None:
         out["ref"] = rf
+    if pf is not None:
+        out["prior"] = pf
     return out, ds
 
 
-def _ref_batch(data, i, n, device, use_ref):
-    """Encoded reference rows [i:i+n] on device, or None when unused."""
-    if not use_ref:
+def _ref_batch(data, i, n, device, use_ref, key="ref"):
+    """Encoded reference (or prior) rows [i:i+n] on device, None when unused."""
+    if not use_ref or key not in data:
         return None
-    return data["ref"][i : i + n].to(device).float()
+    return data[key][i : i + n].to(device).float()
 
 
 def _coords(ds):
@@ -263,7 +268,9 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
             planes = capture_planes(tgt_b, data["bait"][i : i + batch].to(device), absent)
         seq_oh = seq_fn(i, tgt_b.shape[0]) if seq_fn is not None else None
         preds.append(model(sym, pairs, planes, seq_oh,
-                           _ref_batch(data, i, tgt_b.shape[0], device, use_ref)).cpu())
+                           _ref_batch(data, i, tgt_b.shape[0], device, use_ref),
+                           prior=_ref_batch(data, i, tgt_b.shape[0], device, True,
+                                            "prior")).cpu())
     pred = torch.cat(preds)[:, 0].numpy()
     true = data["target"][:, 0].float().cpu().numpy()
     w = true.shape[-1]
@@ -302,7 +309,9 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
             planes = capture_planes(tgt, torch.zeros(nb_, tgt.shape[-1], device=device),
                                     torch.zeros(nb_, device=device))
         p = model(sym, pairs, planes, seq_oh,
-                  _ref_batch(data, i, tgt.shape[0], device, use_ref))[:, 0].float().cpu().numpy()
+                  _ref_batch(data, i, tgt.shape[0], device, use_ref),
+                  prior=_ref_batch(data, i, tgt.shape[0], device, True,
+                                   "prior"))[:, 0].float().cpu().numpy()
         t = tgt[:, 0].float().cpu().numpy()
         iu = np.triu_indices(p.shape[-1], 1)
         for k in range(p.shape[0]):
@@ -394,6 +403,12 @@ def train(cfg: Config):
     use_ref = cfg.model.reference != "none"
     if use_ref:
         ds.check_reference_leakage()
+    if cfg.model.prior and "prior" not in data:
+        raise RuntimeError(f"model.prior but the cache {cache_dir} holds no prior "
+                           "windows: set data.prior_cool / samples[].prior_cool and "
+                           "re-run hicmultiome.precompute")
+    if not cfg.model.prior:
+        data.pop("prior", None)
     if use_ref and "ref" not in data:
         raise RuntimeError(f"model.reference={cfg.model.reference!r} but the cache "
                            f"{cache_dir} holds no reference windows: set "
@@ -452,6 +467,7 @@ def train(cfg: Config):
     cd = data["cond"][sl].to(device)
     bt = data["bait"][sl].to(device)
     rf = data["ref"][sl].to(device) if use_ref else None
+    pf = data["prior"][sl].to(device) if cfg.model.prior else None
     vdata_d = None
     if is_main and vdata is not None:
         vdata_d = {k2: v.to(device) for k2, v in vdata.items()}
@@ -627,6 +643,7 @@ def train(cfg: Config):
             idx = perm[b : b + bs]
             cond_b, tgt, bait_b = cd[idx].float(), tg[idx].float(), bt[idx]
             ref_b = rf[idx].float() if rf is not None else None
+            prior_b = pf[idx].float() if pf is not None else None
             rev_mask = None
             if cfg.train.augment_reverse:
                 rmask = torch.rand(bs, device=device) < 0.5
@@ -641,6 +658,8 @@ def train(cfg: Config):
                     bait_b = torch.where(m1[:, :, 0], bait_r, bait_b)
                     if ref_b is not None:
                         ref_b = torch.where(m1, torch.flip(ref_b, dims=[-1, -2]), ref_b)
+                    if prior_b is not None:
+                        prior_b = torch.where(m1, torch.flip(prior_b, dims=[-1, -2]), prior_b)
             if absent_t is not None:
                 if cfg.train.track_dropout_mode == "uniform_count":
                     # per window keep k ~ Uniform{1..n_chip} tracks, drop the rest:
@@ -675,7 +694,7 @@ def train(cfg: Config):
                                       fasta_map, device)
             with torch.autocast("cuda", dtype=amp_dtype,
                                 enabled=amp_dtype is not None):
-                pred = model(cond_b, pairs, planes, seq_oh, ref_b)
+                pred = model(cond_b, pairs, planes, seq_oh, ref_b, prior=prior_b)
             pred = pred.float()
             loss = hic_loss(pred[:, 0], tgt[:, 0])
             if cap_w > 0:
@@ -774,9 +793,9 @@ def train_stream(cfg: Config):
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    if cfg.model.reference != "none":
-        raise NotImplementedError("model.reference is supported on the resident "
-                                  "cache path only (train.stream: false)")
+    if cfg.model.reference != "none" or cfg.model.prior:
+        raise NotImplementedError("model.reference / model.prior are supported on the "
+                                  "resident cache path only (train.stream: false)")
     ds = StreamWindowDataset(cfg, "train", str(cache_dir), stride=cfg.train.stream_stride)
     if ds.n_out != 1:
         raise NotImplementedError(

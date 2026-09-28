@@ -297,8 +297,10 @@ class HiCModel(nn.Module):
     def __init__(self, backbone: nn.Module, cond_mode: str,
                  encoder: SeqEncoder | None = None, dist_bias: int = 0,
                  reference: str = "none", resolutions: list[int] | None = None,
-                 res_embed_dim: int = 16, default_resolution: int | None = None):
+                 res_embed_dim: int = 16, default_resolution: int | None = None,
+                 prior: bool = False):
         super().__init__()
+        self.prior = bool(prior)   # cascade prior plane (config model.prior)
         # resolution conditioning (config model.resolutions): a learned
         # embedding per resolution drives FiLM in every U-Net block; forward
         # takes `res` (bin sizes, (B,) tensor or int), default_resolution when
@@ -340,7 +342,8 @@ class HiCModel(nn.Module):
             raise ValueError(f"resolution {vals} not among the trained {self.resolutions}")
         return torch.tensor(idx, device=device, dtype=torch.long)
 
-    def forward(self, cond, pairs=None, planes=None, seq_onehot=None, ref=None, res=None):
+    def forward(self, cond, pairs=None, planes=None, seq_onehot=None, ref=None, res=None,
+                prior=None):
         """ref: (B, W, W) encoded reference map; required unless reference is
         "none" (then ignored). res: bin size(s) for a resolution-conditioned
         model (ignored otherwise)."""
@@ -353,6 +356,11 @@ class HiCModel(nn.Module):
                 raise ValueError(f"reference={self.reference!r} model called without ref")
             ref = ref.to(cond.dtype)[:, None]
             planes = ref if planes is None else torch.cat([planes, ref], dim=1)
+        if self.prior:
+            if prior is None:
+                raise ValueError("prior-plane model called without prior")
+            pr = prior.to(cond.dtype)[:, None]
+            planes = pr if planes is None else torch.cat([planes, pr], dim=1)
         x = build_spatial_cond(sym, pairs, planes, self.cond_mode)
         if self.res_embed is not None:
             film = self.res_embed(self.res_index(res, cond.shape[0], cond.device))
@@ -397,4 +405,4 @@ def make_model(cfg, in_ch: int, out_ch: int = 1, encoder: SeqEncoder | None = No
     return HiCModel(backbone, m.cond_mode, encoder,
                     cfg.window.size if m.dist_bias else 0, reference=m.reference,
                     resolutions=m.resolutions, res_embed_dim=m.res_embed_dim,
-                    default_resolution=int(cfg.data.resolution))
+                    default_resolution=int(cfg.data.resolution), prior=m.prior)

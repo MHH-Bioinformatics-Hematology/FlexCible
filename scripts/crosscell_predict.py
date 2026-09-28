@@ -94,6 +94,9 @@ def main():
                          "training reference, else the map embedded in the "
                          "checkpoint, else data.reference_cool). It must not "
                          "contain this cell's map")
+    ap.add_argument("--prior", default=None,
+                    help="cascade models (model.prior): the coarser model's prediction "
+                         "for this cell (default: the cell's own samples[].prior_cool)")
     ap.add_argument("--save-pred", default=None,
                     help="also write every region's prediction (target grid) to this npz")
     ap.add_argument("--device", default="cuda")
@@ -149,6 +152,15 @@ def main():
         ref_clr = open_reference(ref_path, res)
         print(f"[{a.cell}] reference map {ref_path} ({cfg.model.reference})", flush=True)
 
+    prior_clr = None
+    if cfg.model.prior:
+        own = next((s for s in cfg.data.samples if s.name == a.cell), None)
+        pp = a.prior or (cfg.sample_prior(own) if own else cfg.data.prior_cool)
+        if not pp:
+            raise SystemExit(f"{a.cell}: cascade model needs --prior")
+        prior_clr = cooler.Cooler(pp)
+        print(f"[{a.cell}] prior map {pp}", flush=True)
+
     tgt = cooler.Cooler(a.target)
     src = tgt                                    # chrom sizes at the model/target resolution
     coarse = {}
@@ -199,8 +211,13 @@ def main():
                 from hicmultiome.reference import reference_block
                 ref = torch.from_numpy(
                     reference_block(ref_clr, chrom, st, size, mat_norm)[None]).to(device)
+            prior = None
+            if prior_clr is not None:
+                from hicmultiome.reference import prior_block
+                prior = torch.from_numpy(
+                    prior_block(prior_clr, chrom, st, size, res, mat_norm)[None]).to(device)
             with torch.no_grad():
-                o = model(cond, pairs, None, seq, ref)
+                o = model(cond, pairs, None, seq, ref, prior=prior)
                 if a.tta:
                     from hicmultiome.dataset import reverse_cond, split_cond
                     cr = reverse_cond(cond, offset, n_motifs)
@@ -208,7 +225,8 @@ def main():
                     seqr = (sc.region_onehot(fasta, tname, st, size, res, device, revcomp=True)
                             if use_seq else None)
                     refr = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
-                    o = 0.5 * (o + torch.flip(model(srr, prr, None, seqr, refr),
+                    prr_ = torch.flip(prior, dims=[-1, -2]) if prior is not None else None
+                    o = 0.5 * (o + torch.flip(model(srr, prr, None, seqr, refr, prior=prr_),
                                               dims=[-1, -2]))
             P = mat_norm.decode(o[0, 0].float().cpu().numpy())
             P = 0.5 * (P + P.T)

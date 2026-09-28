@@ -241,6 +241,15 @@ def build(cfg: Config, workers: int = 1) -> dict:
                                  f"{ref_clrs[s.name].binsize} != resolution "
                                  f"{cfg.data.resolution}")
             log.info("sample %s: reference map %s cached per window", s.name, path)
+    prior_clrs = {}
+    if cfg.has_prior:
+        for s in samples:
+            path = cfg.sample_prior(s)
+            if not path:
+                raise ValueError(f"sample {s.name!r}: no prior map while another sample has one")
+            prior_clrs[s.name] = open_cool(path)
+            log.info("sample %s: prior map %s (%d bp) cached per window", s.name, path,
+                     prior_clrs[s.name].binsize)
     coolers, sample_chroms, sample_tracks, captures = {}, {}, {}, {}
     for s in samples:
         clr = open_cool(s.cool_path)
@@ -367,6 +376,8 @@ def build(cfg: Config, workers: int = 1) -> dict:
         refs_by_sample = {s.name: str(cfg.sample_reference(s)) for s in samples}
         paths = set(refs_by_sample.values())
         channels["reference"] = (paths.pop() if len(paths) == 1 else refs_by_sample)
+    if prior_clrs:
+        channels["prior"] = {s.name: str(cfg.sample_prior(s)) for s in samples}
     (cache / "channels.json").write_text(json.dumps(channels, indent=2))
 
     # ---- pass 2: slice + cache windows per sample ----
@@ -386,7 +397,8 @@ def build(cfg: Config, workers: int = 1) -> dict:
         cap = captures.get(s.name)
         wins = plan_windows(nb, cfg.window.size, cfg.window.stride, chrom)
 
-        targets, conds, baits, starts, refs = [], [], [], [], []
+        targets, conds, baits, starts, refs, priors = [], [], [], [], [], []
+        prior_clr = prior_clrs.get(s.name)
         ref_clr = ref_clrs.get(s.name)
         ref_name = (match_name(chrom, list(ref_clr.chromnames))
                     if ref_clr is not None else None)
@@ -445,6 +457,11 @@ def build(cfg: Config, workers: int = 1) -> dict:
                 rb = (fetch_diagonal_window(ref_clr, ref_name, w.start, w.size)
                       if ref_name is not None else np.zeros((w.size, w.size), np.float32))
                 refs.append(mat_norms[s.name].encode(rb).astype(np.float16))
+            if prior_clr is not None:
+                from .reference import prior_block
+                priors.append(prior_block(prior_clr, chrom, w.start, w.size,
+                                          cfg.data.resolution,
+                                          mat_norms[s.name]).astype(np.float16))
             conds.append(ct.astype(np.float16))
             starts.append(w.start)
 
@@ -462,6 +479,8 @@ def build(cfg: Config, workers: int = 1) -> dict:
             arrays["bait"] = np.stack(baits).astype(np.uint8)
         if refs:
             arrays["ref"] = np.stack(refs)
+        if priors:
+            arrays["prior"] = np.stack(priors)
         np.savez_compressed(shard, **arrays)
         return {
             "sample": s.name, "chrom": chrom, "split": split,

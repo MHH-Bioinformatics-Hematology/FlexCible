@@ -86,8 +86,8 @@ class _AtRes:
     def __init__(self, model, res):
         self.model, self.res = model, res
 
-    def __call__(self, *args):
-        return self.model(*args, res=self.res)
+    def __call__(self, *args, **kw):
+        return self.model(*args, res=self.res, **kw)
 
     def eval(self):
         self.model.eval()
@@ -125,6 +125,8 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
     if sorted(reslist) != sorted(base.model.resolutions):
         raise ValueError(f"configs cover {reslist}, model.resolutions {base.model.resolutions}")
 
+    if base.model.prior:
+        raise NotImplementedError("model.prior is not supported in multi-resolution training")
     use_ref = base.model.reference != "none"
     data, vdata, info = {}, {}, {}
     in_ch = None

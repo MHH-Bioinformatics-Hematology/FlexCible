@@ -111,6 +111,10 @@ class SampleSpec:
     # sample), e.g. a leave-one-out consensus that excludes the sample's own
     # cell. None = data.reference_cool (or no reference).
     reference_cool: str | None = None
+    # per-sample prior map for model.prior (coarse-to-fine cascade): the
+    # coarser model's out-of-fold prediction for this cell, at the COARSER
+    # resolution; windows are resampled to this resolution's bins.
+    prior_cool: str | None = None
 
     def __post_init__(self):
         if self.assay not in ASSAYS:
@@ -158,6 +162,8 @@ class DataConfig:
     # window.transform "prescaled" (the reference holds log O/E values).
     # None = no reference (previous behaviour, previous caches).
     reference_cool: str | None = None
+    # prior map for every sample without samples[].prior_cool (model.prior)
+    prior_cool: str | None = None
 
     def __post_init__(self):
         if self.assay_indicator_mode not in ASSAY_MODES:
@@ -319,6 +325,10 @@ class ModelConfig:
     # single-resolution view of such a model predicts at. None = off.
     resolutions: list[int] | None = None
     res_embed_dim: int = 16
+    # Coarse-to-fine cascade: one more 2D input plane holding a prior map (a
+    # coarser model's prediction, data.prior_cool / samples[].prior_cool),
+    # appended after the reference plane. False = off.
+    prior: bool = False
 
     def __post_init__(self):
         if self.reference not in REFERENCE_MODES:
@@ -327,8 +337,9 @@ class ModelConfig:
 
     @property
     def reference_planes(self) -> int:
-        """2D conditioning planes taken by the reference map (0 or 1)."""
-        return 0 if self.reference == "none" else 1
+        """2D conditioning planes taken by the reference map and the prior
+        plane (0 to 2)."""
+        return (0 if self.reference == "none" else 1) + (1 if self.prior else 0)
 
 
 @dataclass
@@ -498,6 +509,13 @@ class Config:
         return sample.reference_cool or self.data.reference_cool
 
     @property
+    def has_prior(self) -> bool:
+        return bool(self.data.prior_cool or any(s.prior_cool for s in self.data.samples))
+
+    def sample_prior(self, sample: "SampleSpec") -> str | None:
+        return sample.prior_cool or self.data.prior_cool
+
+    @property
     def has_capture(self) -> bool:
         return any(s.capture_interactions for s in self.data.samples)
 
@@ -543,6 +561,13 @@ class Config:
                 raise ValueError(f"model.reference={self.model.reference!r} needs "
                                  "data.reference_cool or samples[].reference_cool "
                                  f"(the cached reference map); none for {lack}")
+        if self.model.prior:
+            lack = [s.name for s in self.data.samples if not self.sample_prior(s)]
+            if lack:
+                raise ValueError(f"model.prior needs data.prior_cool or "
+                                 f"samples[].prior_cool; none for {lack}")
+            if self.window.transform != "prescaled":
+                raise ValueError("model.prior needs window.transform 'prescaled'")
         if self.model.resolutions and int(self.data.resolution) not in self.model.resolutions:
             raise ValueError(f"data.resolution {self.data.resolution} not in "
                              f"model.resolutions {self.model.resolutions}")

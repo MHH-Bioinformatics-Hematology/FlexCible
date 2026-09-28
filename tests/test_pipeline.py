@@ -1841,3 +1841,58 @@ def test_multires_training_and_views(workdir):
         p = str(v / "pred.cool")
         hpred.predict(vc, "chr1", p, checkpoint=str(ck), batch=4)
         assert cooler.Cooler(p).binsize == res
+
+
+def test_cascade_prior_plane(workdir):
+    """model.prior: a coarser map (2 kb) resampled onto the 1 kb windows as an
+    extra input plane; prior_block takes, per fine bin, the coarse bin holding
+    its centre; the cascade model trains, is scored and predicts."""
+    import json
+    import subprocess
+
+    import cooler
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome import train as htrain
+    from hicmultiome.matrix import MatrixNormalizer
+    from hicmultiome.reference import prior_block
+
+    c2 = workdir / "target_2kb.cool"
+    if not c2.exists():
+        cooler.coarsen_cooler(str(workdir / "target.cool"), str(c2), factor=2, chunksize=10**6)
+    clr2 = cooler.Cooler(str(c2))
+    ident = MatrixNormalizer(transform="prescaled", scale=1.0)
+    blk = prior_block(clr2, "chr1", 3, 10, BINSIZE, ident)
+    M = np.nan_to_num(np.asarray(clr2.matrix(balance=False).fetch("chr1"), float))
+    fine = np.arange(3, 13)
+    np.testing.assert_allclose(blk, np.clip(M[np.ix_(fine // 2, fine // 2)], -1, 1), rtol=1e-6)
+
+    raw = _ref_raw(workdir, "casc", reference="residual")
+    raw["data"]["samples"][0]["prior_cool"] = str(c2)
+    raw["model"]["prior"] = True
+    raw["train"]["cache_dir"] = str(workdir / "cache_casc")
+    with pytest.raises(ValueError, match="model.prior needs"):
+        bad = json.loads(json.dumps(raw))
+        bad["data"]["samples"][0].pop("prior_cool")
+        Config.from_dict(bad)
+    c = Config.from_dict(raw)
+    assert c.model.reference_planes == 2
+    man = hprep.build(c)
+    assert man["prior"] == {"s": str(c2)}
+    mn = MatrixNormalizer.load(Path(c.train.cache_dir) / "norm_matrix_s.json")
+    sh = next(x for x in man["shards"] if x["chrom"] == "chr1")
+    z = np.load(sh["path"])
+    st = int(z["start"][0])
+    np.testing.assert_allclose(z["prior"][0].astype(np.float32),
+                               prior_block(clr2, "chr1", st, 32, BINSIZE, mn), atol=2e-3)
+    htrain.train(c)
+    run = Path(c.train.output_dir)
+    repo = Path(__file__).resolve().parents[1]
+    o = run / "t.json"
+    subprocess.run([sys.executable, str(repo / "scripts/eval_val_windows.py"), "--run", str(run),
+                    "--split", "test", "--out", str(o)], check=True, cwd=repo, capture_output=True)
+    assert json.loads(o.read_text())["n"] > 0
+    p = str(workdir / "pred_casc.cool")
+    hpred.predict(c, "chr1", p, batch=4, tta=True)
+    assert np.abs(np.nan_to_num(cooler.Cooler(p).matrix(balance=False).fetch("chr1"))).sum() > 0
