@@ -183,27 +183,39 @@ def check():
 
 
 def cachecheck(old: str, new: str):
-    """The section 1 cache (built from the original train-fold cool) against a
-    cache built from the rebuilt train-fold cool: same training windows and
-    the same encoded targets."""
+    """The section 1 cache (built from the original train-fold cool by an
+    earlier precompute that kept near-empty windows) against a cache built
+    from the rebuilt train-fold cool: per training window present in both,
+    the encoded targets must agree; windows only in the old cache are
+    counted with their fraction of zero pixels."""
     import json as _j
 
     mo = _j.loads((Path(old) / "manifest.json").read_text())
     mn = _j.loads((Path(new) / "manifest.json").read_text())
-    so = {(x["split"], x["chrom"]): x for x in mo["shards"]}
-    sn = {(x["split"], x["chrom"]): x for x in mn["shards"]}
-    tr = lambda d: {k for k in d if k[0] == "train"}
-    res = {"train_shards_old": len(tr(so)), "train_shards_new": len(tr(sn)),
-           "same_train_chroms": tr(so) == tr(sn), "same_starts": True,
-           "max_abs_diff_target": 0.0, "windows": 0}
-    for key in sorted(tr(so) & tr(sn)):
-        a, b = np.load(so[key]["path"]), np.load(sn[key]["path"])
-        if not np.array_equal(a["start"], b["start"]):
-            res["same_starts"] = False
-            continue
-        d = float(np.abs(a["target"].astype(np.float32) - b["target"].astype(np.float32)).max())
-        res["max_abs_diff_target"] = max(res["max_abs_diff_target"], d)
-        res["windows"] += len(a["start"])
+    so = {x["chrom"]: x for x in mo["shards"] if x["split"] == "train"}
+    sn = {x["chrom"]: x for x in mn["shards"] if x["split"] == "train"}
+    res = {"train_windows_old": sum(x["n_windows"] for x in so.values()),
+           "train_windows_new": sum(x["n_windows"] for x in sn.values()),
+           "common_windows": 0, "only_old": 0, "only_new": 0,
+           "max_abs_diff_target_common": 0.0, "only_old_min_zero_fraction": 1.0}
+    for chrom in sorted(set(so) | set(sn)):
+        # load each array once (indexing an NpzFile decompresses it every time)
+        a = dict(np.load(so[chrom]["path"])) if chrom in so else None
+        b = dict(np.load(sn[chrom]["path"])) if chrom in sn else None
+        sa = {int(x): i for i, x in enumerate(a["start"])} if a is not None else {}
+        sb = {int(x): i for i, x in enumerate(b["start"])} if b is not None else {}
+        for st in set(sa) & set(sb):
+            d = float(np.abs(a["target"][sa[st]].astype(np.float32)
+                             - b["target"][sb[st]].astype(np.float32)).max())
+            res["max_abs_diff_target_common"] = max(res["max_abs_diff_target_common"], d)
+            res["common_windows"] += 1
+        for st in set(sa) - set(sb):
+            res["only_old"] += 1
+            # the zero-fraction filter works on the raw block; here the encoded
+            # target, where an unmeasured pixel encodes as exactly 0
+            z = float((a["target"][sa[st]][0] == 0).mean())
+            res["only_old_min_zero_fraction"] = min(res["only_old_min_zero_fraction"], z)
+        res["only_new"] += len(set(sb) - set(sa))
     (OUTD / "akita_cache_check.json").write_text(_j.dumps(res, indent=1))
     print(_j.dumps(res, indent=1), flush=True)
 
