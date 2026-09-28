@@ -27,7 +27,7 @@ from tqdm import tqdm
 
 from .capture import CaptureData, CaptureNormalizer
 from .config import Config, SampleSpec
-from .genome import (merge_regions, read_bed_regions, split_chroms,
+from .genome import (match_name, merge_regions, read_bed_regions, split_chroms,
                      window_region_state)
 from .matrix import (
     MatrixNormalizer,
@@ -225,6 +225,13 @@ def build(cfg: Config, workers: int = 1) -> dict:
     cache.mkdir(parents=True, exist_ok=True)
 
     samples = cfg.data.samples
+    ref_clr = None
+    if cfg.data.reference_cool:
+        ref_clr = open_cool(cfg.data.reference_cool)
+        if ref_clr.binsize != cfg.data.resolution:
+            raise ValueError(f"reference_cool binsize {ref_clr.binsize} != "
+                             f"resolution {cfg.data.resolution}")
+        log.info("reference map %s cached per window", cfg.data.reference_cool)
     coolers, sample_chroms, sample_tracks, captures = {}, {}, {}, {}
     for s in samples:
         clr = open_cool(s.cool_path)
@@ -347,6 +354,8 @@ def build(cfg: Config, workers: int = 1) -> dict:
         "capture_input": bool(captures) and cfg.capture.use_as_input,
         "samples": [s.name for s in samples],
     }
+    if ref_clr is not None:
+        channels["reference"] = str(cfg.data.reference_cool)
     (cache / "channels.json").write_text(json.dumps(channels, indent=2))
 
     # ---- pass 2: slice + cache windows per sample ----
@@ -366,7 +375,9 @@ def build(cfg: Config, workers: int = 1) -> dict:
         cap = captures.get(s.name)
         wins = plan_windows(nb, cfg.window.size, cfg.window.stride, chrom)
 
-        targets, conds, baits, starts = [], [], [], []
+        targets, conds, baits, starts, refs = [], [], [], [], []
+        ref_name = (match_name(chrom, list(ref_clr.chromnames))
+                    if ref_clr is not None else None)
         res_bp = cfg.data.resolution
         mappable = load_mappable(s.cool_path)
         n_unmappable = 0
@@ -417,6 +428,11 @@ def build(cfg: Config, workers: int = 1) -> dict:
                 pad = np.zeros((ct.shape[0], w.size - ct.shape[1]), dtype=np.float32)
                 ct = np.concatenate([ct, pad], axis=1)
             targets.append(np.stack(imgs).astype(np.float16))
+            if ref_clr is not None:
+                # same scale as the target; absent chromosome -> 0 (expected)
+                rb = (fetch_diagonal_window(ref_clr, ref_name, w.start, w.size)
+                      if ref_name is not None else np.zeros((w.size, w.size), np.float32))
+                refs.append(mat_norms[s.name].encode(rb).astype(np.float16))
             conds.append(ct.astype(np.float16))
             starts.append(w.start)
 
@@ -432,6 +448,8 @@ def build(cfg: Config, workers: int = 1) -> dict:
         )
         if baits:
             arrays["bait"] = np.stack(baits).astype(np.uint8)
+        if refs:
+            arrays["ref"] = np.stack(refs)
         np.savez_compressed(shard, **arrays)
         return {
             "sample": s.name, "chrom": chrom, "split": split,

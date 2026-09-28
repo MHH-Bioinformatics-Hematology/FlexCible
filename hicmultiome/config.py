@@ -24,6 +24,8 @@ ASSAYS = ("hic", "intact", "microc")
 # data.assay_indicator_mode: "binary" = one row (1 Micro-C, 0 either Hi-C);
 # "three" = two rows (intact, microc), in situ Hi-C is the all-zero reference
 ASSAY_MODES = ("binary", "three")
+# model.reference: how the cached reference map enters the model
+REFERENCE_MODES = ("none", "input", "residual")
 
 
 @dataclass
@@ -144,6 +146,14 @@ class DataConfig:
     # Hi-C (0, 0), intact Hi-C (1, 0) and Micro-C (0, 1) are three classes.
     # Only read when assay_indicator is on.
     assay_indicator_mode: str = "binary"
+    # Reference contact map: an O/E cool on the same bin grid as the samples
+    # (e.g. the mean of other cells' maps, scripts/consensus_oe.py). When set,
+    # precompute caches each window's reference block as `ref`, encoded with
+    # the sample's matrix normaliser so it shares the target's scale; the model
+    # reads it only when model.reference is not "none". Requires
+    # window.transform "prescaled" (the reference holds log O/E values).
+    # None = no reference (previous behaviour, previous caches).
+    reference_cool: str | None = None
 
     def __post_init__(self):
         if self.assay_indicator_mode not in ASSAY_MODES:
@@ -284,6 +294,23 @@ class ModelConfig:
     # learned per-distance bias b[|i-j|] (length window.size) added to the
     # Hi-C output, to absorb the residual distance trend left in O/E targets
     dist_bias: bool = False
+    # Use of the cached reference map (data.reference_cool):
+    #   none      not read (default; old configs unchanged)
+    #   input     one extra 2D conditioning plane
+    #   residual  input plane AND the Hi-C output is reference + network
+    #             output, so the network predicts the deviation of this cell
+    #             from the reference
+    reference: str = "none"
+
+    def __post_init__(self):
+        if self.reference not in REFERENCE_MODES:
+            raise ValueError(f"unknown model.reference {self.reference!r} "
+                             f"(expected one of {REFERENCE_MODES})")
+
+    @property
+    def reference_planes(self) -> int:
+        """2D conditioning planes taken by the reference map (0 or 1)."""
+        return 0 if self.reference == "none" else 1
 
 
 @dataclass
@@ -477,6 +504,12 @@ class Config:
                         f"sample {s.name!r}: unknown track {t!r} in "
                         "missing_tracks/zeroed_tracks"
                     )
+        if self.model.reference != "none" and not self.data.reference_cool:
+            raise ValueError(f"model.reference={self.model.reference!r} needs "
+                             "data.reference_cool (the cached reference map)")
+        if self.data.reference_cool and self.window.transform != "prescaled":
+            raise ValueError("data.reference_cool needs window.transform "
+                             "'prescaled' (the reference holds log O/E values)")
         for mid in self.active_motif_ids:
             p = Path(self.motifs.dir).expanduser() / f"{mid}.jaspar"
             if not p.exists():

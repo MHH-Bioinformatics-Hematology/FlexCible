@@ -92,6 +92,11 @@ def load_norm(ckpt: Path, stem: str, sample_name: str, cls,
 
 
 def build_model(cfg: Config, ckpt: Path, device):
+    if cfg.model.reference != "none":
+        raise NotImplementedError(
+            "genome-wide prediction with a reference-map model (model.reference) "
+            "is not wired here; score such models with scripts/crosscell_predict.py "
+            "or scripts/eval_val_windows.py")
     channels = json.loads((ckpt / "channels.json").read_text())
     n_sym = len(channels["sym_rows"])
     n_motifs = len(channels["motif_ids"])

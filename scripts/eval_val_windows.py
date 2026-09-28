@@ -56,21 +56,35 @@ def main():
                          "training windows by up to half a window); test: all "
                          "test-region windows on the run's chromosomes (disjoint)")
     ap.add_argument("--out", default=None, help="JSON output (default <run>/<split>_eval.json)")
+    ap.add_argument("--cache-dir", default=None,
+                    help="score on this cache's windows and targets instead of the "
+                         "run's own (same bin grid and inputs, e.g. another target "
+                         "map or the half-stride cache of a quarter-stride run). "
+                         "--split val on another cache is only honest when its "
+                         "window list equals the training cache's")
+    ap.add_argument("--reference-only", action="store_true",
+                    help="score the cached reference map (data.reference_cool) "
+                         "itself as the prediction, on the same windows and pixels")
     a = ap.parse_args()
     run = Path(a.run)
     ck = run / (run / a.ckpt).read_text().strip()
     cfg = Config.load(ck / "config.yaml")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cache_dir = a.cache_dir or cfg.train.cache_dir
 
     if a.split == "val":
-        data, ds = _stack(cfg.train.cache_dir, "train", 0.0, False, cfg.train.seed,
+        data, ds = _stack(cache_dir, "train", 0.0, False, cfg.train.seed,
                           chroms=cfg.train.chroms)
         perm = np.random.default_rng(cfg.train.seed).permutation(data["target"].shape[0])
         vi = perm[: cfg.train.val_regions]
     else:   # every test window (held-out regions, disjoint from all training windows)
-        data, ds = _stack(cfg.train.cache_dir, "test", 0.0, False, cfg.train.seed,
+        data, ds = _stack(cache_dir, "test", 0.0, False, cfg.train.seed,
                           chroms=cfg.train.chroms)
         vi = np.arange(data["target"].shape[0])
+    use_ref = cfg.model.reference != "none"
+    if (use_ref or a.reference_only) and "ref" not in data:
+        raise SystemExit(f"{cache_dir} holds no reference windows")
+    ref = data["ref"][vi] if "ref" in data else None
     if a.sample is not None:
         smp = _coords(ds)[2]
         vi = np.array([i for i in vi if smp[i] == a.sample], dtype=np.int64)
@@ -86,29 +100,35 @@ def main():
     use_seq = cfg.sequence.uses_encoder
     emb = cfg.sequence.embed_dim if use_seq else 0
     W = ds.window_size
-    backbone = build_backbone(cfg.model.kind, n_cond_channels(n_sym + emb, n_motifs, 0,
+    backbone = build_backbone(cfg.model.kind, n_cond_channels(
+                              n_sym + emb, n_motifs, cfg.model.reference_planes,
                               cfg.model.cond_mode), out_ch=ds.n_out,
                               base=cfg.model.base_channels, depth=cfg.model.depth)
     enc = SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width) if use_seq else None
     model = HiCModel(backbone, cfg.model.cond_mode, enc,
-                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
+                     cfg.window.size if cfg.model.dist_bias else 0,
+                     reference=cfg.model.reference).to(device)
     model.load_state_dict(torch.load(ck / "model.pt", map_location=device))
     model.eval()
     fm = _fasta_map(cfg)
     preds = []
-    with torch.no_grad():
-        for i in range(0, len(vi), 4):
-            c = cond[i:i + 4].to(device)
-            sym, pairs = split_cond(c, offset, n_motifs)
-            n = c.shape[0]
-            oh = (batch_onehot(vcoords, list(range(i, i + n)), [False] * n, W,
-                               int(cfg.data.resolution), fm, device) if use_seq else None)
-            preds.append(model(sym, pairs, None, oh)[:, 0].float().cpu().numpy())
-    pred = np.concatenate(preds)
+    if a.reference_only:
+        pred = ref.float().numpy()
+    else:
+        with torch.no_grad():
+            for i in range(0, len(vi), 4):
+                c = cond[i:i + 4].to(device)
+                sym, pairs = split_cond(c, offset, n_motifs)
+                n = c.shape[0]
+                oh = (batch_onehot(vcoords, list(range(i, i + n)), [False] * n, W,
+                                   int(cfg.data.resolution), fm, device) if use_seq else None)
+                rb = ref[i:i + n].to(device).float() if use_ref else None
+                preds.append(model(sym, pairs, None, oh, rb)[:, 0].float().cpu().numpy())
+        pred = np.concatenate(preds)
 
-    nm = Path(cfg.train.cache_dir) / f"norm_matrix_{a.sample}.json"
+    nm = Path(cache_dir) / f"norm_matrix_{a.sample}.json"
     if a.sample is None or not nm.exists():
-        nm = next(Path(cfg.train.cache_dir).glob("norm_matrix_*.json"))
+        nm = next(Path(cache_dir).glob("norm_matrix_*.json"))
     scale = json.loads(nm.read_text())["scale"]
     E = np.load(a.expected) if a.expected else None
     idx = np.arange(W)
@@ -125,7 +145,8 @@ def main():
         r_lo.append(region_r(p_oe + decay, t_oe + decay))
         r_dist.append(region_r(decay, t_oe + decay))
     res = {"run": str(run), "ckpt": str(ck), "split": a.split, "n": len(vi),
-           "oe_median_r": float(np.nanmedian(r_oe))}
+           "oe_median_r": float(np.nanmedian(r_oe)), "cache_dir": str(cache_dir),
+           "prediction": "reference map" if a.reference_only else "model"}
     if a.sample is not None:
         res["sample"] = a.sample
     if E is not None:

@@ -6,6 +6,8 @@ Each item:
                                               seq features, motif fwd/rev)
   bait   : (W,) float32                    -- bait coverage (all-zero if the
                                               cache has no capture data)
+  ref    : (W, W) float32 (only if cached) -- encoded reference map
+                                              (data.reference_cool)
   meta   : (chrom, start)
 
 The manifest's channel bookkeeping (how many ChIP/seq rows, which motif rows
@@ -31,6 +33,8 @@ class WindowDataset(Dataset):
             for k in ("sym_rows", "tracks", "seq_features", "motif_ids", "has_capture")
         }
         self.window_size = manifest["window_size"]
+        # path of the cached reference map (data.reference_cool), or None
+        self.reference = manifest.get("reference")
 
         # optional chromosome restriction (fast proxy search on 1-2 chroms)
         chroms = set(chroms) if chroms else None
@@ -96,7 +100,11 @@ class WindowDataset(Dataset):
             bait = shard["bait"][local].astype(np.float32)
         else:
             bait = np.zeros(self.window_size, dtype=np.float32)
+        extra = {}
+        if "ref" in shard:
+            extra["ref"] = torch.from_numpy(shard["ref"][local].astype(np.float32))
         return {
+            **extra,
             "target": torch.from_numpy(target),
             "cond": torch.from_numpy(cond),
             "bait": torch.from_numpy(bait),

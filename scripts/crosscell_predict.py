@@ -87,6 +87,11 @@ def main():
     ap.add_argument("--regions", default=None,
                     help="chrom/start/end TSV of regions to score (default: the "
                          "413 Akita test regions)")
+    ap.add_argument("--reference", default=None,
+                    help="reference-map models (model.reference): the reference O/E "
+                         "cool at the model resolution (default: the config's "
+                         "data.reference_cool). For a held-out cell it must not "
+                         "contain that cell's map")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default="/mnt/processed/wolffjoa/hic-multiome/runs/crosscell")
     a = ap.parse_args()
@@ -121,6 +126,14 @@ def main():
     print(f"[{a.cell}] {n_chip-len(missing)}/{n_chip} marks; missing={missing}", flush=True)
     sample.missing_tracks = list(missing)        # declared absent -> raw zero -> absent value
     track_files = sample_track_files(cfg, sample)
+
+    ref_clr = None
+    if cfg.model.reference != "none":
+        ref_path = a.reference or cfg.data.reference_cool
+        ref_clr = cooler.Cooler(ref_path)
+        if ref_clr.binsize != res:
+            raise SystemExit(f"reference {ref_path}: binsize {ref_clr.binsize} != {res}")
+        print(f"[{a.cell}] reference map {ref_path} ({cfg.model.reference})", flush=True)
 
     tgt = cooler.Cooler(a.target)
     src = tgt                                    # chrom sizes at the model/target resolution
@@ -165,15 +178,24 @@ def main():
             pairs = (cond[:, offset:offset + 2 * n_motifs].reshape(1, n_motifs, 2, size)
                      if n_motifs else None)
             seq = (sc.region_onehot(fasta, tname, st, size, res, device) if use_seq else None)
+            ref = None
+            if ref_clr is not None:
+                from hicmultiome.matrix import fetch_diagonal_window
+                rn = match_name(chrom, list(ref_clr.chromnames))
+                rb = (fetch_diagonal_window(ref_clr, rn, st, size) if rn is not None
+                      else np.zeros((size, size), np.float32))
+                ref = torch.from_numpy(mat_norm.encode(rb)[None]).to(device)
             with torch.no_grad():
-                o = model(cond, pairs, None, seq)
+                o = model(cond, pairs, None, seq, ref)
                 if a.tta:
                     from hicmultiome.dataset import reverse_cond, split_cond
                     cr = reverse_cond(cond, offset, n_motifs)
                     srr, prr = split_cond(cr, offset, n_motifs)
                     seqr = (sc.region_onehot(fasta, tname, st, size, res, device, revcomp=True)
                             if use_seq else None)
-                    o = 0.5 * (o + torch.flip(model(srr, prr, None, seqr), dims=[-1, -2]))
+                    refr = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
+                    o = 0.5 * (o + torch.flip(model(srr, prr, None, seqr, refr),
+                                              dims=[-1, -2]))
             P = mat_norm.decode(o[0, 0].float().cpu().numpy())
             P = 0.5 * (P + P.T)
             P = sc.resample(P, st * res, res, int(r.start), n_out, tgt.binsize)

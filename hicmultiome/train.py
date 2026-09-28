@@ -55,6 +55,7 @@ def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
     tg = torch.empty((n, ds.n_out, w, w), dtype=dtype)
     cd = torch.empty((n, ds.n_sym, w), dtype=dtype)
     bt = torch.zeros((n, w), dtype=torch.float32)
+    rf = torch.empty((n, w, w), dtype=dtype) if ds.reference else None
     for path, pairs in ds.grouped_index().items():        # one decompress each
         z = np.load(path)
         rows = np.array([r for r, _ in pairs])
@@ -64,7 +65,19 @@ def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
         cd[rows] = torch.from_numpy(z["cond"][loc].astype(npdt))
         if "bait" in z:
             bt[rows] = torch.from_numpy(z["bait"][loc].astype(np.float32))
-    return {"target": tg, "cond": cd, "bait": bt}, ds
+        if rf is not None:
+            rf[rows] = torch.from_numpy(z["ref"][loc].astype(npdt))
+    out = {"target": tg, "cond": cd, "bait": bt}
+    if rf is not None:
+        out["ref"] = rf
+    return out, ds
+
+
+def _ref_batch(data, i, n, device, use_ref):
+    """Encoded reference rows [i:i+n] on device, or None when unused."""
+    if not use_ref:
+        return None
+    return data["ref"][i : i + n].to(device).float()
 
 
 def _coords(ds):
@@ -146,7 +159,7 @@ def capture_planes(tgt, bait, present):
 
 @torch.no_grad()
 def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
-                         capin=False, cond_mode="full", seq_fn=None):
+                         capin=False, cond_mode="full", seq_fn=None, use_ref=False):
     """Validation in the tracks-only mode (capture plane absent) -- the honest
     default, since prediction must not require capture data. `seq_fn(i, n)`, when
     given, returns the one-hot DNA for val rows [i:i+n] for the sequence encoder."""
@@ -163,7 +176,8 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
             absent = torch.zeros(tgt_b.shape[0], device=device)
             planes = capture_planes(tgt_b, data["bait"][i : i + batch].to(device), absent)
         seq_oh = seq_fn(i, tgt_b.shape[0]) if seq_fn is not None else None
-        preds.append(model(sym, pairs, planes, seq_oh).cpu())
+        preds.append(model(sym, pairs, planes, seq_oh,
+                           _ref_batch(data, i, tgt_b.shape[0], device, use_ref)).cpu())
     pred = torch.cat(preds)[:, 0].numpy()
     true = data["target"][:, 0].float().cpu().numpy()
     w = true.shape[-1]
@@ -179,7 +193,7 @@ def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
 
 @torch.no_grad()
 def val_akita_median(model, data, device, batch, offset, n_motifs,
-                     cond_mode="full", seq_fn=None, capin=False):
+                     cond_mode="full", seq_fn=None, capin=False, use_ref=False):
     """Akita-style validation: the median over the held-out regions of each
     region's Pearson between prediction and target over its finite upper-triangle
     pixels (log obs/exp). Pearson is affine-invariant, so comparing in the
@@ -201,7 +215,8 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
             nb_ = tgt.shape[0]
             planes = capture_planes(tgt, torch.zeros(nb_, tgt.shape[-1], device=device),
                                     torch.zeros(nb_, device=device))
-        p = model(sym, pairs, planes, seq_oh)[:, 0].float().cpu().numpy()
+        p = model(sym, pairs, planes, seq_oh,
+                  _ref_batch(data, i, tgt.shape[0], device, use_ref))[:, 0].float().cpu().numpy()
         t = tgt[:, 0].float().cpu().numpy()
         iu = np.triu_indices(p.shape[-1], 1)
         for k in range(p.shape[0]):
@@ -295,6 +310,11 @@ def train(cfg: Config):
                             dtype=res_dt)
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
+    use_ref = cfg.model.reference != "none"
+    if use_ref and "ref" not in data:
+        raise RuntimeError(f"model.reference={cfg.model.reference!r} but the cache "
+                           f"{cache_dir} holds no reference windows: set "
+                           "data.reference_cool and re-run hicmultiome.precompute")
 
     # greedy feature selection: keep only the chosen ChIP tracks' cond rows
     n_sym_eff = ds.n_sym
@@ -348,6 +368,7 @@ def train(cfg: Config):
     tg = data["target"][sl].to(device)
     cd = data["cond"][sl].to(device)
     bt = data["bait"][sl].to(device)
+    rf = data["ref"][sl].to(device) if use_ref else None
     vdata_d = None
     if is_main and vdata is not None:
         vdata_d = {k2: v.to(device) for k2, v in vdata.items()}
@@ -374,13 +395,17 @@ def train(cfg: Config):
     capin = bool(cfg.capture.use_as_input and ds.n_out == 2)
     cond_mode = cfg.model.cond_mode
     emb = cfg.sequence.embed_dim if use_seq else 0
-    in_ch = n_cond_channels(n_sym_eff + emb, n_motifs, 2 if capin else 0, cond_mode)
+    in_ch = n_cond_channels(n_sym_eff + emb, n_motifs,
+                            (2 if capin else 0) + cfg.model.reference_planes, cond_mode)
     backbone = build_backbone(cfg.model.kind, in_ch, out_ch=ds.n_out,
                               base=cfg.model.base_channels, depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if use_seq else None)
     model = HiCModel(backbone, cond_mode, encoder,
-                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
+                     cfg.window.size if cfg.model.dist_bias else 0,
+                     reference=cfg.model.reference).to(device)
+    if use_ref and is_main:
+        log.info("reference map: %s (%s)", cfg.model.reference, ds.reference)
     if use_seq and is_main:
         log.info("sequence encoder: dilated, embed_dim=%d width=%d (bp->%d bins)",
                  emb, cfg.sequence.enc_width, W)
@@ -472,10 +497,12 @@ def train(cfg: Config):
             vb = max(1, min(batch, vdata_d["target"].shape[0]))
             if cfg.train.val_regions:
                 r = val_akita_median(model, vdata_d, device, vb, offset, n_motifs,
-                                     cond_mode=cond_mode, seq_fn=seq_fn, capin=capin)
+                                     cond_mode=cond_mode, seq_fn=seq_fn, capin=capin,
+                                     use_ref=use_ref)
             else:
                 r = val_distance_pearson(model, vdata_d, device, vb, offset, n_motifs,
-                                         capin=capin, cond_mode=cond_mode, seq_fn=seq_fn)
+                                         capin=capin, cond_mode=cond_mode, seq_fn=seq_fn,
+                                         use_ref=use_ref)
             imp = r > best
             log.info("  [val] epoch %d step %d  dist-pearson=%.4f%s",
                      epoch, step, r, "  <- best" if imp else "")
@@ -517,6 +544,7 @@ def train(cfg: Config):
         while b + bs <= N:
             idx = perm[b : b + bs]
             cond_b, tgt, bait_b = cd[idx].float(), tg[idx].float(), bt[idx]
+            ref_b = rf[idx].float() if rf is not None else None
             rev_mask = None
             if cfg.train.augment_reverse:
                 rmask = torch.rand(bs, device=device) < 0.5
@@ -529,6 +557,8 @@ def train(cfg: Config):
                     cond_b = torch.where(m1, cond_r, cond_b)
                     tgt = torch.where(rmask[:, None, None, None], tgt_r, tgt)
                     bait_b = torch.where(m1[:, :, 0], bait_r, bait_b)
+                    if ref_b is not None:
+                        ref_b = torch.where(m1, torch.flip(ref_b, dims=[-1, -2]), ref_b)
             if absent_t is not None:
                 if cfg.train.track_dropout_mode == "uniform_count":
                     # per window keep k ~ Uniform{1..n_chip} tracks, drop the rest:
@@ -563,7 +593,7 @@ def train(cfg: Config):
                                       fasta_map, device)
             with torch.autocast("cuda", dtype=amp_dtype,
                                 enabled=amp_dtype is not None):
-                pred = model(cond_b, pairs, planes, seq_oh)
+                pred = model(cond_b, pairs, planes, seq_oh, ref_b)
             pred = pred.float()
             loss = hic_loss(pred[:, 0], tgt[:, 0])
             if cap_w > 0:
@@ -662,6 +692,9 @@ def train_stream(cfg: Config):
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
 
+    if cfg.model.reference != "none":
+        raise NotImplementedError("model.reference is supported on the resident "
+                                  "cache path only (train.stream: false)")
     ds = StreamWindowDataset(cfg, "train", str(cache_dir), stride=cfg.train.stream_stride)
     if ds.n_out != 1:
         raise NotImplementedError(

@@ -271,28 +271,45 @@ class HiCModel(nn.Module):
     view keeps its offset), and the fixed 1D->2D conditioning is built here."""
 
     def __init__(self, backbone: nn.Module, cond_mode: str,
-                 encoder: SeqEncoder | None = None, dist_bias: int = 0):
+                 encoder: SeqEncoder | None = None, dist_bias: int = 0,
+                 reference: str = "none"):
         super().__init__()
         self.backbone = backbone
         self.encoder = encoder
         self.cond_mode = cond_mode
+        # reference map (config model.reference): "input" appends it as one
+        # 2D conditioning plane (after any other planes); "residual" also adds
+        # it to the Hi-C output channel, so the backbone predicts the deviation
+        # from the reference. No parameters, so "none" checkpoints load as before.
+        if reference not in ("none", "input", "residual"):
+            raise ValueError(f"unknown reference mode {reference!r}")
+        self.reference = reference
         # optional learned per-distance offset b[|i-j|] added to the Hi-C
         # output channel (symmetric by construction); 0 = off, so checkpoints
         # without it load unchanged
         self.dist_bias = (nn.Parameter(torch.zeros(dist_bias)) if dist_bias
                           else None)
 
-    def forward(self, cond, pairs=None, planes=None, seq_onehot=None):
+    def forward(self, cond, pairs=None, planes=None, seq_onehot=None, ref=None):
+        """ref: (B, W, W) encoded reference map; required unless reference is
+        "none" (then ignored)."""
         sym = cond
         if self.encoder is not None and seq_onehot is not None:
             emb = self.encoder(seq_onehot, cond.shape[-1])
             sym = torch.cat([cond, emb], dim=1)
+        if self.reference != "none":
+            if ref is None:
+                raise ValueError(f"reference={self.reference!r} model called without ref")
+            ref = ref.to(cond.dtype)[:, None]
+            planes = ref if planes is None else torch.cat([planes, ref], dim=1)
         out = self.backbone(build_spatial_cond(sym, pairs, planes, self.cond_mode))
         if self.dist_bias is not None:
             w = out.shape[-1]
             idx = torch.arange(w, device=out.device)
             b = self.dist_bias[:w][(idx[:, None] - idx[None, :]).abs()]
             out = torch.cat([out[:, :1] + b.to(out.dtype), out[:, 1:]], dim=1)
+        if self.reference == "residual":
+            out = torch.cat([out[:, :1] + ref.to(out.dtype), out[:, 1:]], dim=1)
         return out
 
 

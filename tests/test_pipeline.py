@@ -1366,3 +1366,178 @@ def test_resident_float16_matches_float32(workdir, cfg):
     assert d16["target"].dtype == torch.float16
     assert torch.equal(d16["target"].float(), d32["target"])
     assert torch.equal(d16["cond"].float(), d32["cond"])
+
+
+# --------------------------------------------------------------------------- #
+# reference map as input (data.reference_cool, model.reference)
+# --------------------------------------------------------------------------- #
+def _ref_raw(workdir, name, reference="none", ref_cool=True, transform="prescaled"):
+    return {
+        "data": {
+            "samples": [{"name": "s", "cool_path": str(workdir / "target.cool"),
+                         "bigwig_dir": str(workdir)}],
+            "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                       {"name": "H3K27ac", "type": "histone"}],
+            "resolution": BINSIZE,
+            "reference_cool": str(workdir / "target.cool") if ref_cool else None,
+        },
+        "sequence": {"fasta": str(workdir / "genome.fa"),
+                     "cache_dir": str(workdir / "gcache")},
+        "motifs": {"dir": str(workdir), "score_frac": 0.8},
+        "window": {"size": 32, "stride": 16, "max_zero_fraction": 0.99,
+                   "transform": transform},
+        "model": {"base_channels": 16, "depth": 2, "reference": reference},
+        "train": {"output_dir": str(workdir / f"run_{name}"),
+                  "cache_dir": str(workdir / "cache_ref"),
+                  "batch_size": 4, "max_steps": 8, "eval_every": 4,
+                  "val_regions": 3, "val_exclude_overlap": True, "lr": 1e-3,
+                  "augment_reverse": True},
+    }
+
+
+def test_reference_config_validation(workdir):
+    with pytest.raises(ValueError, match="model.reference"):
+        Config.from_dict(_ref_raw(workdir, "x", reference="bogus"))
+    with pytest.raises(ValueError, match="needs data.reference_cool"):
+        Config.from_dict(_ref_raw(workdir, "x", reference="input", ref_cool=False))
+    with pytest.raises(ValueError, match="prescaled"):
+        Config.from_dict(_ref_raw(workdir, "x", transform="log1p"))
+    c = Config.from_dict(_ref_raw(workdir, "x", ref_cool=False))
+    assert c.model.reference == "none" and c.model.reference_planes == 0
+    assert c.data.reference_cool is None
+
+
+def test_reference_plane_and_residual_model():
+    """input: one extra conditioning plane; residual: the same network output
+    plus the reference on the Hi-C channel only."""
+    import torch
+
+    from hicmultiome.model import HiCModel, build_backbone, n_cond_channels
+
+    torch.manual_seed(0)
+    w = 16
+    in_ch = n_cond_channels(3, 1, 1, "full")
+    assert in_ch == n_cond_channels(3, 1, 0, "full") + 1
+    bb = build_backbone("unet", in_ch, out_ch=2, base=8, depth=2)
+    m_in = HiCModel(bb, "full", reference="input").eval()
+    m_res = HiCModel(bb, "full", reference="residual").eval()
+    cond = torch.randn(2, 3, w)
+    pairs = cond[:, 1:3].reshape(2, 1, 2, w)
+    ref = torch.randn(2, w, w)
+    ref = 0.5 * (ref + ref.transpose(-1, -2))
+    with torch.no_grad():
+        a = m_in(cond, pairs, None, None, ref)
+        b = m_res(cond, pairs, None, None, ref)
+        a2 = m_in(cond, pairs, None, None, torch.zeros_like(ref))
+    assert torch.allclose(b[:, 0], a[:, 0] + ref, atol=1e-6)
+    assert torch.allclose(b[:, 1], a[:, 1])
+    assert not torch.allclose(a, a2), "reference plane has no effect"
+    with pytest.raises(ValueError, match="without ref"):
+        m_in(cond, pairs, None, None, None)
+    # "none" ignores ref and keeps the old channel count
+    m0 = HiCModel(build_backbone("unet", in_ch - 1, out_ch=1, base=8, depth=2), "full")
+    assert m0(cond, pairs, None, None, ref).shape == (2, 1, w, w)
+
+
+def test_reference_cached_trained_and_scored(workdir):
+    """precompute caches the reference encoded like the target (here the
+    reference IS the target cool, so both arrays match); input and residual
+    models train and are scored by eval_val_windows, which also scores the
+    reference alone."""
+    import json
+    import subprocess
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    c = Config.from_dict(_ref_raw(workdir, "refin", reference="input"))
+    man = hprep.build(c)
+    assert man["reference"] == str(workdir / "target.cool")
+    for sh in man["shards"]:
+        z = np.load(sh["path"])
+        assert z["ref"].shape == z["target"][:, 0].shape
+        np.testing.assert_array_equal(z["ref"], z["target"][:, 0])
+    data, ds = htrain._stack(c.train.cache_dir, "train", 0.0, False, 0)
+    assert data["ref"].shape == data["target"][:, 0].shape and ds.reference
+
+    repo = Path(__file__).resolve().parents[1]
+    for mode in ("input", "residual"):
+        cm = Config.from_dict(_ref_raw(workdir, f"ref{mode}", reference=mode))
+        htrain.train(cm)
+        run = Path(cm.train.output_dir)
+        assert (run / "best").exists()
+        for extra in ([], ["--reference-only"]):
+            out = run / f"eval{len(extra)}.json"
+            subprocess.run([sys.executable, str(repo / "scripts/eval_val_windows.py"),
+                            "--run", str(run), "--split", "test", "--out", str(out),
+                            *extra], check=True, cwd=repo, capture_output=True)
+            r = json.loads(out.read_text())
+            assert r["n"] > 0
+            if extra:   # reference == target: a perfect prediction
+                assert r["prediction"] == "reference map"
+                assert r["oe_median_r"] > 0.999
+
+    # a cache without reference windows is rejected by a reference model
+    import dataclasses
+    bad = dataclasses.replace(
+        cm, train=dataclasses.replace(cm.train, cache_dir=str(workdir / "cache_noref"),
+                                      output_dir=str(workdir / "run_noref")),
+        data=dataclasses.replace(cm.data, reference_cool=None),
+        model=dataclasses.replace(cm.model, reference="none"))
+    hprep.build(bad)
+    bad2 = dataclasses.replace(
+        cm, train=dataclasses.replace(cm.train, cache_dir=str(workdir / "cache_noref"),
+                                      output_dir=str(workdir / "run_noref")))
+    with pytest.raises(RuntimeError, match="no reference windows"):
+        htrain.train(bad2)
+
+
+def test_coarsen_oe_matches_dense_block_mean(workdir):
+    """scripts/coarsen_oe.py equals the bp-overlap weighted mean over each
+    coarse block of the dense symmetric fine matrix, including coarse bins
+    that cut a fine bin in half (2.5 kb over 1 kb bins), and writes only
+    blocks wholly inside the fine band."""
+    import subprocess
+
+    import cooler
+    import pandas as pd
+
+    repo = Path(__file__).resolve().parents[1]
+    fine = cooler.Cooler(str(workdir / "target.cool"))       # band: offsets <= 39
+    for res in (2000, 2500):
+        bins = []
+        for chrom, ln in CHROMS.items():
+            for s in range(0, ln, res):
+                bins.append((chrom, s, min(s + res, ln)))
+        cooler.create_cooler(str(workdir / f"tmpl_{res}.cool"),
+                             bins=pd.DataFrame(bins, columns=["chrom", "start", "end"]),
+                             pixels=pd.DataFrame({"bin1_id": [0], "bin2_id": [0],
+                                                  "count": [1.0]}))
+    subprocess.run([sys.executable, str(repo / "scripts/coarsen_oe.py"),
+                    "--fine", str(workdir / "target.cool"), "--res", "2000", "2500",
+                    "--band", "39000", "--template", str(workdir / "tmpl_{res}.cool"),
+                    "--out", str(workdir / "avg_{res}.cool")],
+                   check=True, cwd=repo, capture_output=True)
+    for res in (2000, 2500):
+        out = cooler.Cooler(str(workdir / f"avg_{res}.cool"))
+        dmax = (39 * BINSIZE + BINSIZE) // res - 1
+        for chrom, ln in CHROMS.items():
+            M = np.asarray(fine.matrix(balance=False).fetch(chrom), float)
+            nf = M.shape[0]
+            nc = -(-ln // res)
+            A = np.zeros((nc, nf))
+            for k in range(nf):
+                s, e = k * BINSIZE, min((k + 1) * BINSIZE, ln)
+                for c in range(s // res, (e - 1) // res + 1):
+                    A[c, k] = (min(e, (c + 1) * res) - max(s, c * res)) / BINSIZE
+            P = (M != 0).astype(float)
+            num, den = A @ M @ A.T, A @ P @ A.T
+            got = np.asarray(out.matrix(balance=False).fetch(chrom), float)
+            full = (res / BINSIZE) ** 2
+            for I in range(nc):
+                for J in range(I, nc):
+                    inside = J - I <= dmax and den[I, J] / full >= 0.5
+                    if inside:
+                        assert got[I, J] == pytest.approx(num[I, J] / den[I, J], rel=1e-5)
+                    else:
+                        assert got[I, J] == 0
