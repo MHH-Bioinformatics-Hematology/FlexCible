@@ -577,6 +577,13 @@ def status(agg, quiet=False):
                 f"| {g(r, 'beats_best_other_map')} | {g(r, 'median_test_windows')} / "
                 f"{g(r, 'median_test_windows_reference_alone')} / "
                 f"{g(r, 'median_test_windows_all12honest_no_reference')} |")
+    lr = HM / "runs/learned_reference/learned_reference.csv"
+    if lr.exists():
+        import pandas as pd
+        lines += ["", "## Section 16: embedded and learned consensus (runs/learned_reference)", ""]
+        for _, r in pd.read_csv(lr).iterrows():
+            items = [f"{k} {v}" for k, v in r.items() if k != "res_kb" and pd.notna(v)]
+            lines.append(f"- {r['res_kb']} kb: " + "; ".join(items))
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")
