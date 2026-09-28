@@ -565,8 +565,9 @@ of 0.935, against 0.887 for the leave-one-out consensus alone, 0.860 for the
 best single other map and 0.830 for all12honest (test windows 0.928, 0.882
 and 0.800); it exceeds the consensus alone in all 12 cells, in 77% to 98% of
 the regions per cell. On held-out cells it exceeds consensus12 for K562
-(0.885 against 0.859) and matches it within 0.007 for HMEC and HUVEC, deep
-and single-lane (0.900 against 0.907, 0.881 against 0.884); all12honest
+(0.885 against 0.859) and matches it within 0.007 for HMEC and HUVEC
+(deep maps 0.900 against 0.907 and 0.881 against 0.884, single-lane maps
+0.806 against 0.809 and 0.769 against 0.769); all12honest
 scores 0.61 to 0.79 on them. With honest validation the no-reference model
 scores 0.830 on the training cells against 0.823 for the section 13 run.
 
