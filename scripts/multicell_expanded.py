@@ -148,9 +148,13 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # (hicmultiome.train_multires, scripts/multires.py); all12multires_<k>kb
     # are its per-resolution views, evaluated like the dedicated runs
     "all12multires": (TRAIN12, None),
+    # coarse-to-fine cascade (scripts/cascade.py): the residual reference model
+    # plus the coarser level's out-of-fold prediction as a prior plane
+    "all12casc": (TRAIN12, None),
 }
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
-            "all12multires": "residual"}
+            "all12multires": "residual", "all12casc": "residual"}
+CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
 HONEST_RUNS = set(REF_RUNS) | {"all12honest"}
@@ -188,6 +192,12 @@ def measured_reference(name: str, cell: str) -> Path:
     consensus12 for a held-out cell."""
     res = split_name(name)[1]
     return consensus_loo(cell, res) if cell in RUNS[split_name(name)[0]][0] else consensus12(res)
+
+
+def cascade_prior(cell: str, coarse_res: int) -> Path:
+    """Out-of-fold prediction of the coarser cascade level for a cell
+    (scripts/cascade.py), at the coarse resolution; named by cell identity."""
+    return OE / "cascade" / f"prior_{CELLS[cell][3]}_{coarse_res // 1000}kb.cool"
 
 
 def reference_of(name: str, cell: str) -> Path:
@@ -234,11 +244,16 @@ def run_config(name, val_per_cell, patience, max_epochs):
         for smp in cfg["data"]["samples"]:
             smp["reference_cool"] = str(reference_of(name, smp["name"]))
         cfg.setdefault("model", {})["reference"] = REF_RUNS[base]
+        if base == "all12casc":
+            for smp in cfg["data"]["samples"]:
+                smp["prior_cool"] = str(cascade_prior(smp["name"], CASCADE_FROM[res]))
+            cfg["model"]["prior"] = True
         if base == "all12multires":
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
     cache_name = (f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
+                  else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
                   else f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
                   else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows
                   else f"mc_{name}")
@@ -309,6 +324,8 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
             if rf != meas:
                 others.append(f"learned={rf}")
             extra = ["--reference", rf]
+            if split_name(ref_run)[0] == "all12casc":
+                extra += ["--prior", cascade_prior(cell, CASCADE_FROM[res])]
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", cfg_path,
                  "--checkpoint", ckpt, "--cell", cell, "--bigwig-dir", bw,
                  "--target", cool, "--tta", "--assay", assay, "--out-dir", out,
