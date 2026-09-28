@@ -83,20 +83,9 @@ def records():
     print("RECORDS_DONE", flush=True)
 
 
-def write_cool(path: Path, bins, chrom_px: list, meta: dict):
-    import cooler
-
-    px = pd.concat(chrom_px, ignore_index=True)
-    part = path.with_name(path.name + ".part")
-    part.unlink(missing_ok=True)
-    cooler.create_cooler(str(part), bins, px, dtypes={"count": np.float64},
-                         ordered=True, symmetric_upper=True)
-    part.rename(path)
-    Path(str(path) + ".json").write_text(json.dumps(meta, indent=1))
-    print(f"-> {path} ({len(px):,} pixels)", flush=True)
-
-
 def cools():
+    """One output at a time, streamed chromosome by chromosome (all outputs'
+    pixels together do not fit in memory)."""
     import cooler
 
     order = pd.read_csv(D / "records_order.tsv", sep="\t")
@@ -110,39 +99,43 @@ def cools():
     outs = {f"akita_{c}_all_2048bp.cool": (c, None) for c in CELLS}
     outs["akita_gm12878_train_2048bp.cool"] = ("gm12878", "train")
     outs["akita_consensus4_2048bp.cool"] = ("consensus4", None)
-    px = {k: [] for k in outs}
-    for chrom in order.chrom.unique():
-        rows = order.index[order.chrom == chrom].values
-        n = nbins[chrom]
-        acc = {k: (np.zeros((n, NB)), np.zeros((n, NB), np.int32)) for k in outs}
-        for r in rows:
-            b0 = (int(order.start[r]) + CROP) // BINSIZE
-            if (int(order.start[r]) + CROP) % BINSIZE:
-                raise SystemExit("window not on the 2048 bp grid")
-            v = np.asarray(rec[r], dtype=np.float32)                 # (NV, 5)
-            with np.errstate(invalid="ignore"), warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                cons = np.nanmean(v[:, [0, 1, 3, 4]], axis=1)     # NaN where all absent
-            for k, (cell, fold) in outs.items():
-                if fold is not None and order.fold[r] != fold:
-                    continue
-                x = cons if cell == "consensus4" else v[:, CELLS.index(cell)]
+    chrom_order = [c for c in bins["chrom"].unique() if c in set(order.chrom)]
+
+    def pixels(cell, fold):
+        for chrom in chrom_order:
+            rows = order.index[(order.chrom == chrom)
+                               & ((order.fold == fold) if fold else True)].values
+            n = nbins[chrom]
+            S = np.zeros((n, NB))
+            C = np.zeros((n, NB), np.int32)
+            for r in rows:
+                if (int(order.start[r]) + CROP) % BINSIZE:
+                    raise SystemExit("window not on the 2048 bp grid")
+                b0 = (int(order.start[r]) + CROP) // BINSIZE
+                v = np.asarray(rec[r], dtype=np.float32)             # (NV, 5)
+                if cell == "consensus4":
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        x = np.nanmean(v[:, [0, 1, 3, 4]], axis=1)  # NaN where all absent
+                else:
+                    x = v[:, CELLS.index(cell)]
                 ok = np.isfinite(x)
                 gi = b0 + iu[0][ok]
                 off = iu[1][ok] - iu[0][ok]
                 keep = gi < n
-                S, C = acc[k]
                 # (bin, offset) pairs are unique within one window
                 S[gi[keep], off[keep]] += x[ok][keep]
                 C[gi[keep], off[keep]] += 1
-        for k in outs:
-            S, C = acc[k]
             gi, off = np.nonzero(C)
-            px[k].append(pd.DataFrame({
-                "bin1_id": gi + first[chrom], "bin2_id": gi + off + first[chrom],
-                "count": S[gi, off] / C[gi, off]}))
-        print(f"  {chrom}: {len(rows)} windows", flush=True)
+            if len(gi):
+                yield pd.DataFrame({"bin1_id": gi + first[chrom],
+                                    "bin2_id": gi + off + first[chrom],
+                                    "count": S[gi, off] / C[gi, off]})
+
     for k, (cell, fold) in outs.items():
+        path = OUTD / k
+        if path.exists():
+            continue
         meta = {"source": "Akita 1m data, gs://basenji_hic/1m/data (targets of "
                           "Fudenberg et al. 2020)", "binsize": BINSIZE,
                 "folds": [fold] if fold else ["train", "valid", "test"],
@@ -154,7 +147,14 @@ def cools():
                                    "and HCT116 targets, then duplicates averaged"})
         else:
             meta["cells"] = [cell]
-        write_cool(OUTD / k, bins, px[k], meta)
+        part = path.with_name(path.name + ".part")
+        part.unlink(missing_ok=True)
+        cooler.create_cooler(str(part), bins, pixels(cell, fold),
+                             dtypes={"count": np.float64}, ordered=True,
+                             symmetric_upper=True)
+        part.rename(path)
+        Path(str(path) + ".json").write_text(json.dumps(meta, indent=1))
+        print(f"-> {path}", flush=True)
     check()
 
 
