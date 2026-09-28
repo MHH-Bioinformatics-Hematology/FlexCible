@@ -217,9 +217,22 @@ def evaluate(res):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--stage", choices=["all", "evals"], default="all")
+    ap.add_argument("--stage", choices=["all", "evals", "precompute", "fold", "priors"],
+                    default="all")
+    ap.add_argument("--res", type=int, default=None)
+    ap.add_argument("--fold", choices=list(FOLDS), default=None)
     a = ap.parse_args()
     PRIOR_DIR.mkdir(parents=True, exist_ok=True)
+    # single steps, for scripts/gpu_scheduler.py
+    if a.stage == "precompute":
+        precompute(a.res)
+        return
+    if a.stage == "fold":
+        train_fold(a.res, a.fold)
+        return
+    if a.stage == "priors":
+        priors(a.res)
+        return
     if a.stage == "evals":
         for r in FINAL:
             evaluate(r)

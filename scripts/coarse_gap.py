@@ -598,12 +598,12 @@ def status(agg, quiet=False):
                 q.append(f"- {d.parent.name}/{d.name}: {last[-1]}")
     if q:
         lines += ["", "## Queue (last milestone per driver)", "",
-                  "Order: Akita-grid pair (done), 10 kb pair (gpu_queue.sh), then "
-                  "multi-resolution model A (multires_driver2.sh) with analysis C "
-                  "(analysis_c.sh) after its evaluation, cascade B "
-                  "(cascade_driver.sh), then gpu_queue.sh resumes: 5 and 2 kb pairs, "
-                  "all12reflearn 25 and 10 kb, all12refin 25 and 10 kb. Evaluations run "
-                  "in the background while the next model trains.", ""] + q
+                  "scripts/gpu_scheduler.py: GPU jobs in priority order, each "
+                  "started the moment the GPUs are free and its inputs exist; caches, "
+                  "cascade priors, evaluations and analyses run on the CPU ahead of "
+                  "time. Priority: all12reflearn 25/10 kb, all12multires (A) with "
+                  "analysis C, cascade B (fold models and final models 10/5/2 kb), "
+                  "5 and 2 kb pairs, all12refin 25/10 kb.", ""] + q
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")
