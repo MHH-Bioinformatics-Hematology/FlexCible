@@ -585,6 +585,7 @@ def status(agg, quiet=False):
             items = [f"{k} {v}" for k, v in r.items() if k != "res_kb" and pd.notna(v)]
             lines.append(f"- {r['res_kb']} kb: " + "; ".join(items))
     drivers = [HM / "runs/multicell_reference/driver.log",
+               HM / "runs/multicell_reference/all12multires_train.log",
                HM / "runs/akita_ref/driver.log",
                HM / "runs/multicell_reference/driver_5_2kb.log",
                HM / "runs/learned_reference/driver.log"]
@@ -597,10 +598,12 @@ def status(agg, quiet=False):
                 q.append(f"- {d.parent.name}/{d.name}: {last[-1]}")
     if q:
         lines += ["", "## Queue (last milestone per driver)", "",
-                  "runs/multicell_reference/gpu_queue.sh (trainings back to back, "
-                  "evaluations in the background): Akita-grid pair, all12refres and "
-                  "all12honest at 10, 5 and 2 kb, all12reflearn 25 and 10 kb, "
-                  "all12refin 25 and 10 kb.", ""] + q
+                  "Order: Akita-grid pair (done), 10 kb pair (gpu_queue.sh), then "
+                  "multi-resolution model A (multires_driver2.sh) with analysis C "
+                  "(analysis_c.sh) after its evaluation, cascade B "
+                  "(cascade_driver.sh), then gpu_queue.sh resumes: 5 and 2 kb pairs, "
+                  "all12reflearn 25 and 10 kb, all12refin 25 and 10 kb. Evaluations run "
+                  "in the background while the next model trains.", ""] + q
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")
