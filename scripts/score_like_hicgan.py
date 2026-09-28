@@ -119,6 +119,9 @@ def main():
     ap.add_argument("--baseline", nargs="*", default=[],
                     help="name=cool: score this measured map itself on the same "
                          "regions and pixels (column base_<name>)")
+    ap.add_argument("--save-pred", default=None,
+                    help="also write every region's prediction (Akita region grid, "
+                         "before masking) to this npz, keyed chrom:start-end")
     a = ap.parse_args()
 
     cfg = Config.load(a.config)
@@ -163,6 +166,7 @@ def main():
         baselines[k] = cooler.Cooler(v)
     track_files = sample_track_files(cfg, sample)
     rows = []
+    saved = {}
 
     for chrom, grp in regions.groupby("chrom"):
         if match_name(chrom, list(tgt.chromnames)) is None:
@@ -215,6 +219,8 @@ def main():
             P = mat_norm.decode(out[0, 0].float().cpu().numpy())
             P = 0.5 * (P + P.T)
             P = resample(P, st * res, res, int(r.start), n_out, tgt.binsize)
+            if a.save_pred:
+                saved[f"{chrom}:{int(r.start)}-{int(r.end)}"] = P.astype(np.float32)
 
             # --- their metric, verbatim ---
             live = np.abs(P).sum(axis=1) > 0
@@ -242,6 +248,8 @@ def main():
         log.info("%s: %d regions", chrom, len(grp))
 
     df = pd.DataFrame(rows)
+    if a.save_pred:
+        np.savez_compressed(a.save_pred, **saved)
     rec_tab = pd.read_csv(TABLE)
     df = df.merge(rec_tab[["region", "akita_gm12878", "hicgan_fixed"]],
                   on="region", how="left")
