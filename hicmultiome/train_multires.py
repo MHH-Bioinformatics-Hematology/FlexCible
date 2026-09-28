@@ -80,6 +80,63 @@ def load_rows(ds: WindowDataset, rows, dtype=np.float16) -> dict:
     return out
 
 
+def stage_arrays(cfgs: list[Config], stage_dir: Path):
+    """Write each resolution's training-split windows (the `train` split of
+    its cache, before the validation split) uncompressed to memory-mapped .npy
+    files in stage_dir/res_<bp>/ (target, cond with the model's rows, ref),
+    in the dataset's index order, one shard decompressed at a time. Training
+    with stage_dir then maps these files: every DDP rank shares one page
+    cache instead of holding its own copy, and nothing is decompressed."""
+    stage_dir = Path(stage_dir)
+    for c in cfgs:
+        d = stage_dir / res_dir(c.data.resolution)
+        if (d / "meta.json").exists():
+            continue
+        d.mkdir(parents=True, exist_ok=True)
+        ds = WindowDataset(c.train.cache_dir, "train")
+        rows, *_ = _select_rows(c, ds.channels)
+        n, W = len(ds), ds.window_size
+        mm = {"target": np.lib.format.open_memmap(d / "target.npy.part", "w+", np.float16, (n, W, W)),
+              "cond": np.lib.format.open_memmap(d / "cond.npy.part", "w+", np.float16,
+                                                (n, len(rows), W))}
+        if ds.reference:
+            mm["ref"] = np.lib.format.open_memmap(d / "ref.npy.part", "w+", np.float16, (n, W, W))
+        for path, pairs in ds.grouped_index().items():
+            z = np.load(path)
+            ks = np.array([k for k, _ in pairs])
+            loc = np.array([l for _, l in pairs])
+            mm["target"][ks] = z["target"][loc, 0]
+            mm["cond"][ks] = z["cond"][loc][:, rows]
+            if "ref" in mm:
+                mm["ref"][ks] = z["ref"][loc]
+            log.info("staged %s", Path(path).name)
+        for k, m in mm.items():
+            m.flush()
+            del m
+            (d / f"{k}.npy.part").rename(d / f"{k}.npy")
+        (d / "meta.json").write_text(json.dumps({
+            "cache": str(c.train.cache_dir), "n": n, "window": W, "rows": rows,
+            "manifest_mtime": (Path(c.train.cache_dir) / "manifest.json").stat().st_mtime}))
+        log.info("staged resolution %d: %d windows -> %s", c.data.resolution, n, d)
+
+
+def open_stage(stage_dir: Path, c: Config, n_expected: int, rows) -> dict:
+    d = Path(stage_dir) / res_dir(c.data.resolution)
+    meta = json.loads((d / "meta.json").read_text())
+    if meta["n"] != n_expected or meta["rows"] != list(rows) or meta["cache"] != str(c.train.cache_dir):
+        raise RuntimeError(f"{d} does not match {c.train.cache_dir}; restage")
+    return {k: np.load(d / f"{k}.npy", mmap_mode="r")
+            for k in ("target", "cond", "ref") if (d / f"{k}.npy").exists()}
+
+
+def _take(src, key, rows, device):
+    """Rows of a resident tensor or a memory-mapped array, on device, float32."""
+    a = src[key]
+    if isinstance(a, np.ndarray):
+        return torch.from_numpy(np.ascontiguousarray(a[rows])).to(device).float()
+    return a[torch.as_tensor(rows)].to(device).float()
+
+
 class _AtRes:
     """Bind a resolution to the model for the single-resolution helpers."""
 
@@ -101,7 +158,7 @@ def res_dir(res: int) -> str:
 
 
 def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
-                   max_epochs: int | None = None):
+                   max_epochs: int | None = None, stage_dir: Path | None = None):
     rank, world, local_rank = ddp_env()
     is_ddp = world > 1
     if is_ddp:
@@ -145,14 +202,23 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
             log_val_split(co, vi, ti, c.train.val_exclude_overlap)
         rows, offset, n_motifs, n_sym = _select_rows(c, ds.channels)
         stripe = ti[rank::world]
-        d = load_rows(ds, stripe)
-        d["cond"] = d["cond"][:, rows, :]
-        data[r] = d
-        if is_main:
-            v = load_rows(ds, vi)
-            v["cond"] = v["cond"][:, rows, :]
-            v["target"] = v["target"][:, None]
-            vdata[r] = v
+        if stage_dir is not None:
+            src = open_stage(stage_dir, c, len(ds), rows)
+            data[r] = {"src": src, "rows": np.asarray(stripe)}
+            if is_main:
+                vs = np.sort(vi)
+                v = {k: torch.from_numpy(np.ascontiguousarray(a[vs])) for k, a in src.items()}
+                v["target"] = v["target"][:, None]
+                vdata[r] = v
+        else:
+            d = load_rows(ds, stripe)
+            d["cond"] = d["cond"][:, rows, :]
+            data[r] = {"src": d, "rows": np.arange(len(stripe))}
+            if is_main:
+                v = load_rows(ds, vi)
+                v["cond"] = v["cond"][:, rows, :]
+                v["target"] = v["target"][:, None]
+                vdata[r] = v
         ich = n_cond_channels(n_sym, n_motifs, c.model.reference_planes, c.model.cond_mode)
         if in_ch is not None and ich != in_ch:
             raise ValueError("input channels differ between resolutions")
@@ -234,15 +300,15 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
         for r in seq:
             r = int(r)
             d, bs = data[r], info[r]["batch"]
-            n = d["target"].shape[0]
+            n = len(d["rows"])
             if r not in perms or cursors[r] + bs > len(perms[r]):
                 perms[r] = prng.permutation(n)
                 cursors[r] = 0
-            idx = torch.from_numpy(perms[r][cursors[r]:cursors[r] + bs])
+            idx = np.sort(d["rows"][perms[r][cursors[r]:cursors[r] + bs]])
             cursors[r] += bs
-            cond = d["cond"][idx].to(device).float()
-            tgt = d["target"][idx].to(device).float()
-            ref = d["ref"][idx].to(device).float() if use_ref else None
+            cond = _take(d["src"], "cond", idx, device)
+            tgt = _take(d["src"], "target", idx, device)
+            ref = _take(d["src"], "ref", idx, device) if use_ref else None
             off, nm = info[r]["offset"], info[r]["n_motifs"]
             if base.train.augment_reverse:
                 m = torch.rand(bs, device=device) < 0.5
@@ -343,8 +409,18 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--max-epochs", type=int, default=None)
+    ap.add_argument("--stage-dir", default=None,
+                    help="memory-mapped training windows (built by --stage-only); "
+                         "without it each rank decompresses its stripe into RAM")
+    ap.add_argument("--stage-only", action="store_true",
+                    help="write the memory-mapped training windows and exit")
     a = ap.parse_args()
-    train_multires([Config.load(c) for c in a.configs], Path(a.out), a.resume, a.max_epochs)
+    cfgs = [Config.load(c) for c in a.configs]
+    if a.stage_only:
+        stage_arrays(cfgs, Path(a.stage_dir))
+        return
+    train_multires(cfgs, Path(a.out), a.resume, a.max_epochs,
+                   Path(a.stage_dir) if a.stage_dir else None)
 
 
 if __name__ == "__main__":

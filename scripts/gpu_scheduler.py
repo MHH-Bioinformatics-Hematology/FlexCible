@@ -108,7 +108,11 @@ def jobs():
     # --- GPU jobs in priority order, with their evaluations
     train12("all12reflearn", 25000, "mc_all12reflearn_25kb")
     train12("all12reflearn", 10000, "mc_all12reflearn_10kb")
-    a_ready = lambda: all(cache_ok(f"mc_all12ref_{k}kb") for k in (2, 5, 10, 25))
+    import multires as mr
+    caches_ready = lambda: all(cache_ok(f"mc_all12ref_{k}kb") for k in (2, 5, 10, 25))
+    J.append(Job("stage_all12multires", f"{PY} scripts/multires.py --stage stage",
+                 caches_ready, mr.staged))
+    a_ready = lambda: caches_ready() and mr.staged()
     a_log = MR / "all12multires_train.log"
     a_done = lambda: "done." in (a_log.read_text(errors="replace") if a_log.exists() else "")
     J.append(Job("train_all12multires", f"{PY} scripts/multires.py --stage train",
@@ -162,6 +166,9 @@ def launch(job: Job):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cpu-slots", type=int, default=3)
+    ap.add_argument("--external", nargs="*", default=[],
+                    help="jobs still running from an earlier scheduler (their wrapper "
+                         "writes the done marker); not started again")
     ap.add_argument("--wait-pid", type=int, nargs="*", default=[],
                     help="GPU trainings started before the scheduler: no GPU job "
                          "starts while one of these runs")
@@ -180,7 +187,7 @@ def main():
                     failed.add(n)
                 del running[n]
         pending = [j for j in all_jobs if j.name not in running and j.name not in failed
-                   and not j.done()]
+                   and j.name not in a.external and not j.done()]
         if not pending and not running:
             note("GPU_SCHEDULER_DONE")
             return

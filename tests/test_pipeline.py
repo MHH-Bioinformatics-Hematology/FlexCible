@@ -1896,3 +1896,45 @@ def test_cascade_prior_plane(workdir):
     p = str(workdir / "pred_casc.cool")
     hpred.predict(c, "chr1", p, batch=4, tta=True)
     assert np.abs(np.nan_to_num(cooler.Cooler(p).matrix(balance=False).fetch("chr1"))).sum() > 0
+
+
+def test_multires_staged_memmaps_match_cache(workdir):
+    """--stage-only writes each resolution's training windows as memory maps
+    identical to the cache (cond reduced to the model's rows), and training
+    from them runs."""
+    import cooler
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome.dataset import WindowDataset
+    from hicmultiome.train import _select_rows
+    from hicmultiome.train_multires import load_rows, open_stage, stage_arrays, train_multires
+
+    c2 = workdir / "target_2kb.cool"
+    if not c2.exists():
+        cooler.coarsen_cooler(str(workdir / "target.cool"), str(c2), factor=2, chunksize=10**6)
+    cfgs = []
+    for res, cool, W in ((BINSIZE, workdir / "target.cool", 32), (2 * BINSIZE, c2, 16)):
+        raw = _ref_raw(workdir, f"mrs{res}", reference="residual", ref_cool=False)
+        raw["data"]["resolution"] = res
+        raw["data"]["samples"][0].update(cool_path=str(cool), reference_cool=str(cool))
+        raw["window"].update(size=W, stride=W // 2)
+        raw["model"].update(resolutions=[BINSIZE, 2 * BINSIZE], res_embed_dim=4)
+        raw["train"].update(cache_dir=str(workdir / f"cache_mr{res}"), val_regions=2,
+                            max_epochs=1, patience_epochs=5, batch_size=2,
+                            select_motifs=[MOTIF])
+        c = Config.from_dict(raw)
+        if not (Path(c.train.cache_dir) / "manifest.json").exists():
+            hprep.build(c)
+        cfgs.append(c)
+    st = workdir / "stage_mr"
+    stage_arrays(cfgs, st)
+    for c in cfgs:
+        ds = WindowDataset(c.train.cache_dir, "train")
+        rows, *_ = _select_rows(c, ds.channels)
+        mm = open_stage(st, c, len(ds), rows)
+        ref = load_rows(ds, range(len(ds)))
+        np.testing.assert_array_equal(np.asarray(mm["target"]), ref["target"].numpy())
+        np.testing.assert_array_equal(np.asarray(mm["cond"]), ref["cond"][:, rows].numpy())
+        np.testing.assert_array_equal(np.asarray(mm["ref"]), ref["ref"].numpy())
+    train_multires(cfgs, workdir / "run_mr_staged", stage_dir=st)
+    assert (workdir / "run_mr_staged" / "checkpoint-best" / "model.pt").exists()

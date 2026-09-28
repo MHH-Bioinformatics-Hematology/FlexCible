@@ -10,8 +10,10 @@ A  all12multires: ONE resolution-conditioned residual reference model on the
    scripts/multicell_expanded.py --stage eval exactly like the dedicated
    all12refres / all12honest runs, and appear in reference_summary.csv.
 
-Stages: precompute (the shared mc_all12ref_<k>kb caches), train (torchrun on
-both GPUs; continues past an epoch cap), views, eval.
+Stages: precompute (the shared mc_all12ref_<k>kb caches), stage (the training
+windows uncompressed as memory maps under ~/scratch/hicmx_multires_stage, so
+both DDP ranks share one page cache), train (torchrun on both GPUs), views,
+eval.
 
     python scripts/multires.py --stage precompute --res 5000 2000
     python scripts/multires.py --stage train
@@ -36,6 +38,9 @@ REPO, PY, TORCHRUN = mx.REPO, mx.PY, mx.TORCHRUN
 OUT = mx.REF_OUT
 RUN = "all12multires"
 TRAIN_DIR = OUT / f"{RUN}_train"
+# memory-mapped training windows on local disk (not /tmp): both DDP ranks map
+# the same files instead of each decompressing the caches from the share
+STAGE = Path.home() / "scratch/hicmx_multires_stage"
 LOG = OUT / f"{RUN}_train.log"
 A = ["gm12878", "imr90", "hct116", "hff", "h1", "hepg2", "a549", "k562", "hmec_deep"]
 B = ["nhek", "gm23248", "mcf7", "cd14mono", "pc9", "hmec", "huvec", "huvec_deep"]
@@ -79,7 +84,7 @@ def train(max_epochs):
     if "done." not in t:
         cmd = [TORCHRUN, "--standalone", "--nproc_per_node=2", "-m",
                "hicmultiome.train_multires", "--configs", *paths, "--out", TRAIN_DIR,
-               "--max-epochs", max_epochs] + (["--resume"] if resume else [])
+               "--max-epochs", max_epochs, "--stage-dir", STAGE] + (["--resume"] if resume else [])
         if sh(cmd, LOG, env):
             raise SystemExit("multi-resolution training failed")
     # continue while stopped by the epoch cap
@@ -87,6 +92,18 @@ def train(max_epochs):
     if m and int(m[-1][2]) < 10:
         raise SystemExit(f"stopped by the epoch cap at {m[-1][0]}; rerun with a larger "
                          "--max-epochs (resumes from checkpoint-latest)")
+
+
+def stage():
+    STAGE.mkdir(parents=True, exist_ok=True)
+    if sh([PY, "-m", "hicmultiome.train_multires", "--configs", *config_paths(),
+           "--out", TRAIN_DIR, "--stage-dir", STAGE, "--stage-only"],
+          OUT / f"{RUN}_stage.log"):
+        raise SystemExit("staging failed")
+
+
+def staged() -> bool:
+    return all((STAGE / f"res_{r}" / "meta.json").exists() for r in mx.MULTIRES)
 
 
 def views():
@@ -111,13 +128,16 @@ def evaluate():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--stage", choices=["precompute", "train", "views", "eval"], required=True)
+    ap.add_argument("--stage", choices=["precompute", "stage", "train", "views", "eval"],
+                    required=True)
     ap.add_argument("--res", nargs="*", type=int, default=mx.MULTIRES)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--max-epochs", type=int, default=500)
     a = ap.parse_args()
     if a.stage == "precompute":
         precompute(a.res, a.workers)
+    elif a.stage == "stage":
+        stage()
     elif a.stage == "train":
         train(a.max_epochs)
     elif a.stage == "views":

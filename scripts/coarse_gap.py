@@ -603,7 +603,13 @@ def status(agg, quiet=False):
                   "cascade priors, evaluations and analyses run on the CPU ahead of "
                   "time. Priority: all12reflearn 25/10 kb, all12multires (A) with "
                   "analysis C, cascade B (fold models and final models 10/5/2 kb), "
-                  "5 and 2 kb pairs, all12refin 25/10 kb.", ""] + q
+                  "5 and 2 kb pairs, all12refin 25/10 kb. Multi-resolution loading "
+                  "fix (2026-09-28 20:10): the first all12multires start spent 45 min "
+                  "with both ranks decompressing every 2 kb shard over SMB at up to 24 "
+                  "GB RSS each; it was stopped, the training windows are now staged "
+                  "once as float16 memory maps on local disk "
+                  "(~/scratch/hicmx_multires_stage, CPU job) and both ranks map the "
+                  "same files, while the next ready GPU job runs.", ""] + q
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")
