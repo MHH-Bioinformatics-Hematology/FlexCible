@@ -89,6 +89,92 @@ def _coords(ds):
     return chroms, starts, samples
 
 
+def overlaps_positions(coords, val_coords, window: int) -> np.ndarray:
+    """Per window of `coords`: True when it shares a bin with any window of
+    `val_coords` on the same chromosome, in ANY sample. Across samples because
+    windows of different cells at one position share the sequence, the motifs
+    and the cell-invariant structure (and any reference map), so a training
+    window of one cell at a validation position of another is not held out."""
+    ch, st, _ = coords
+    vch, vst, _ = val_coords
+    by = {}
+    for c, s in zip(vch, vst):
+        by.setdefault(c, []).append(int(s))
+    by = {c: np.sort(np.asarray(v)) for c, v in by.items()}
+    out = np.zeros(len(ch), dtype=bool)
+    for i, (c, s) in enumerate(zip(ch, st)):
+        v = by.get(c)
+        if v is None:
+            continue
+        k = np.searchsorted(v, int(s))
+        for j in (k - 1, k):
+            if 0 <= j < len(v) and abs(int(v[j]) - int(s)) < window:
+                out[i] = True
+                break
+    return out
+
+
+def split_val_regions(coords, n_val: int, window: int, seed: int,
+                      exclude_overlap: bool):
+    """(vi, ti) row indices for train.val_regions.
+
+    exclude_overlap False (runs before 2026-09-28): the first n_val windows of
+    a seeded permutation are validation, all others train.
+    exclude_overlap True: genomic positions are drawn in the order of the same
+    permutation; every sample's window at a drawn position is validation, until
+    n_val validation windows are reached, and every training window overlapping
+    a validation position in any sample is dropped (overlaps_positions). With
+    one sample this is the same validation set as above, minus the overlapping
+    training windows."""
+    ch, st, sm = coords
+    n = len(ch)
+    perm = np.random.default_rng(seed).permutation(n)
+    if not exclude_overlap:
+        return perm[:n_val], perm[n_val:]
+    at = {}
+    for i in range(n):
+        at.setdefault((ch[i], int(st[i])), []).append(i)
+    chosen, vlist = set(), []
+    for i in perm:
+        if len(vlist) >= n_val:
+            break
+        key = (ch[i], int(st[i]))
+        if key in chosen:
+            continue
+        chosen.add(key)
+        # the drawn window first, so one sample reproduces perm[:n_val]
+        vlist += [i] + [j for j in at[key] if j != i]
+    vi = np.asarray(vlist, dtype=perm.dtype)
+    vset = set(vlist)
+    rest = np.asarray([i for i in perm if i not in vset], dtype=perm.dtype)
+    vcoords = ([ch[i] for i in vi], [st[i] for i in vi], [sm[i] for i in vi])
+    rcoords = ([ch[i] for i in rest], [st[i] for i in rest], [sm[i] for i in rest])
+    ti = rest[~overlaps_positions(rcoords, vcoords, window)]
+    return vi, ti
+
+
+def log_val_split(coords, vi, ti, exclude_overlap: bool):
+    """Per sample: validation windows and training windows kept; warns when a
+    sample has no validation window."""
+    sm = coords[2]
+    n = len(sm)
+    samples = sorted(set(sm))
+    nv = {s: 0 for s in samples}
+    nt = {s: 0 for s in samples}
+    for i in vi:
+        nv[sm[i]] += 1
+    for i in ti:
+        nt[sm[i]] += 1
+    log.info("validation split (%s): %d validation windows, %d training windows, "
+             "%d dropped for overlapping a validation position",
+             "honest, no overlap" if exclude_overlap else "OVERLAPPING training windows",
+             len(vi), len(ti), n - len(vi) - len(ti))
+    for s in samples:
+        log.info("  sample %s: %d validation, %d training windows", s, nv[s], nt[s])
+        if nv[s] == 0:
+            log.warning("  sample %s has NO validation window", s)
+
+
 def _select_rows(cfg: Config, channels: dict):
     """Row indices into the cached cond for cfg.train.select_tracks: the chosen
     ChIP tracks, all sequence features, and each motif whose track is kept.
@@ -281,24 +367,10 @@ def train(cfg: Config):
                           dtype=res_dt)
         vds = ds
         if data is not None:
-            perm = np.random.default_rng(cfg.train.seed).permutation(data["target"].shape[0])
-            vi, ti = perm[: cfg.train.val_regions], perm[cfg.train.val_regions :]
-            if cfg.train.val_exclude_overlap:
-                # windows overlap by (size - stride); drop every training window
-                # sharing any bin with a validation window, so validation cannot
-                # be passed by memorising position (e.g. a DNA encoder)
-                ch_, st_, sm_ = _coords(ds)
-                vset = {}
-                for i in vi:
-                    vset.setdefault((ch_[i], sm_[i]), []).append(int(st_[i]))
-                W_ = ds.window_size
-                ti = np.array([i for i in ti if not any(
-                    abs(int(st_[i]) - v) < W_ for v in vset.get((ch_[i], sm_[i]), ()))],
-                    dtype=ti.dtype)
-                if rank == 0:
-                    log.info("val_exclude_overlap: %d training windows left "
-                             "(%d overlapped validation)",
-                             len(ti), len(perm) - len(vi) - len(ti))
+            vi, ti = split_val_regions(_coords(ds), cfg.train.val_regions, ds.window_size,
+                                       cfg.train.seed, cfg.train.val_exclude_overlap)
+            if rank == 0:
+                log_val_split(_coords(ds), vi, ti, cfg.train.val_exclude_overlap)
             vdata = {k: v[vi] for k, v in data.items()}
             data = {k: v[ti] for k, v in data.items()}
         else:
@@ -308,6 +380,15 @@ def train(cfg: Config):
                           dtype=res_dt)
         vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed, chroms=chroms,
                             dtype=res_dt)
+        if cfg.train.val_exclude_overlap and data is not None and vdata is not None:
+            keep = ~overlaps_positions(_coords(ds), _coords(vds), ds.window_size)
+            if rank == 0:
+                log.info("val_exclude_overlap: %d of %d training windows kept (%d overlap "
+                         "a validation position in any sample)", int(keep.sum()),
+                         len(keep), int((~keep).sum()))
+            idx = np.nonzero(keep)[0]
+            data = {k: v[idx] for k, v in data.items()}
+            ds._index = [ds._index[i] for i in idx]
     if data is None:
         raise RuntimeError("no training windows; run hicmultiome.precompute first")
     use_ref = cfg.model.reference != "none"
@@ -710,7 +791,16 @@ def train_stream(cfg: Config):
     mask = rng.random(len(ds)) < cfg.train.val_fraction
     all_idx = np.arange(len(ds))
     val_idx = all_idx[mask][:400]              # bounded held-out monitor
-    train_ds = Subset(ds, all_idx[~mask].tolist())
+    tr_idx = all_idx[~mask]
+    if cfg.train.val_exclude_overlap and len(val_idx):
+        def _c(ix):
+            e = [ds.index[i] for i in ix]
+            return ([c for _, c, _ in e], [s for _, _, s in e], [n for n, _, _ in e])
+        tr_idx = tr_idx[~overlaps_positions(_c(tr_idx), _c(val_idx), ds.size)]
+        if is_main:
+            log.info("val_exclude_overlap: %d training windows (none overlaps a "
+                     "validation position)", len(tr_idx))
+    train_ds = Subset(ds, tr_idx.tolist())
 
     use_seq = cfg.sequence.uses_encoder
     binsize = int(cfg.data.resolution)

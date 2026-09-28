@@ -1622,3 +1622,72 @@ def test_reference_leakage_guard(workdir):
     assert ds.reference_by_sample() == {"k562": str(ref)}
     with pytest.raises(ValueError, match="reference leakage"):
         ds.check_reference_leakage()
+
+
+def test_honest_validation_default_and_multisample_split():
+    """val_exclude_overlap defaults to True. With one sample the honest split
+    keeps the old validation windows and drops the overlapping training
+    windows; with several samples validation is drawn by position (every
+    sample's window there), each sample gets validation windows, and no
+    training window of any sample overlaps a validation position."""
+    from hicmultiome.config import TrainConfig
+    from hicmultiome.train import overlaps_positions, split_val_regions
+
+    assert TrainConfig().val_exclude_overlap is True
+    W, stride = 8, 4
+    starts = list(range(0, 400, stride))
+    one = (["chr1"] * len(starts), starts, ["a"] * len(starts))
+    old_vi, _ = split_val_regions(one, 10, W, 3, False)
+    vi, ti = split_val_regions(one, 10, W, 3, True)
+    np.testing.assert_array_equal(vi, old_vi)
+    assert not overlaps_positions(([one[0][i] for i in ti], [one[1][i] for i in ti],
+                                   [one[2][i] for i in ti]),
+                                  ([one[0][i] for i in vi], [one[1][i] for i in vi],
+                                   [one[2][i] for i in vi]), W).any()
+    assert len(vi) + len(ti) < len(starts)
+
+    samples = ["a", "b", "c"]
+    ch, st, sm = [], [], []
+    for s in samples:                       # same positions in every sample
+        for c in ("chr1", "chr2"):
+            for x in starts:
+                ch.append(c); st.append(x); sm.append(s)
+    co = (ch, st, sm)
+    vi, ti = split_val_regions(co, 30, W, 0, True)
+    pos = {(ch[i], st[i]) for i in vi}
+    assert len(vi) == 3 * len(pos) >= 30
+    for p in pos:                           # all samples at every validation position
+        assert {sm[i] for i in vi if (ch[i], st[i]) == p} == set(samples)
+    for s in samples:
+        assert sum(sm[i] == s for i in vi) > 0 and sum(sm[i] == s for i in ti) > 0
+    sub = lambda ix: ([ch[i] for i in ix], [st[i] for i in ix], [sm[i] for i in ix])
+    assert not overlaps_positions(sub(ti), sub(vi), W).any()
+    assert set(vi).isdisjoint(ti)
+    # the old rule leaves training windows of other samples at validation positions
+    ovi, oti = split_val_regions(co, 30, W, 0, False)
+    assert overlaps_positions(sub(oti), sub(ovi), W).any()
+
+
+def test_honest_validation_in_multisample_training(workdir, cfg):
+    """Training with val_regions on two samples uses the honest split by
+    default; eval_val_windows reproduces the same validation windows."""
+    import dataclasses
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    raw = _ref_raw(workdir, "honest_ms", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [dict(s0, name="a"), dict(s0, name="b")]
+    raw["train"]["cache_dir"] = str(workdir / "cache_honest_ms")
+    raw["train"].pop("val_exclude_overlap")
+    c = Config.from_dict(raw)
+    assert c.train.val_exclude_overlap
+    hprep.build(c)
+    data, ds = htrain._stack(c.train.cache_dir, "train", 0.0, False, 0)
+    co = htrain._coords(ds)
+    vi, ti = htrain.split_val_regions(co, c.train.val_regions, ds.window_size,
+                                      c.train.seed, True)
+    assert {co[2][i] for i in vi} == {"a", "b"}
+    htrain.train(c)
+    assert (Path(c.train.output_dir) / "best").exists()

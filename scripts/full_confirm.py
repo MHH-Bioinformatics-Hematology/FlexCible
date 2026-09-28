@@ -62,6 +62,7 @@ def main():
             if a.seed is not None:
                 cfg["train"]["seed"] = a.seed
             cfg["train"].update({
+                "val_exclude_overlap": False,   # as run, before the honest default
                 "select_tracks": s["tracks"], "select_motifs": s["motifs"],
                 "chroms": None, "val_regions": a.val_regions,
                 "patience_epochs": a.patience, "max_epochs": a.max_epochs,

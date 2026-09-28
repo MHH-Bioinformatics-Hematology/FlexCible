@@ -92,6 +92,7 @@ def run_config(name: str, val_per_cell: int, patience: int, max_epochs: int) -> 
     cfg["data"]["train_regions_bed"] = str(TRAIN_BED)
     cfg["data"]["assay_indicator"] = assay
     cfg["train"].update({
+        "val_exclude_overlap": False,   # as run, before the honest default
         "output_dir": str(OUT / name), "cache_dir": str(CACHE / f"mc_{name}"),
         "val_regions": val_per_cell * len(cells), "patience_epochs": patience,
         "max_epochs": max_epochs, "resident_dtype": "float16", "resume": False,

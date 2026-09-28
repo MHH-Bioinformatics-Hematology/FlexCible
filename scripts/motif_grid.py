@@ -84,6 +84,7 @@ def main():
             cfg = copy.deepcopy(base)
             cfg["sequence"]["encoder"] = "dilated" if enc else "none"
             cfg["train"].update({
+                "val_exclude_overlap": False,   # as run, before the honest default
                 "select_tracks": CHIP[chip], "select_motifs": motifs,
                 "chroms": chroms, "val_regions": a.val_regions,
                 "patience_epochs": a.patience, "max_epochs": a.max_epochs,

@@ -61,6 +61,7 @@ def run_cfg(base: dict, variant: str, seed: int, out: Path, cache: str) -> dict:
     cfg["model"]["dist_bias"] = False
     cfg["capture"]["use_as_input"] = variant == "B"
     cfg["train"].update({
+        "val_exclude_overlap": False,   # as run, before the honest default
         "seed": seed, "select_tracks": ALL13, "select_motifs": MOTIFS4,
         "chroms": None, "val_regions": 100, "patience_epochs": 10,
         "max_epochs": 100, "max_steps": 10_000_000, "eval_every": 10_000_000,

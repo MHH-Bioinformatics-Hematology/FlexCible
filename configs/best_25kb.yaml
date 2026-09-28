@@ -65,6 +65,7 @@ track:
   norm: zscore
   transform: log1p
 train:
+  val_exclude_overlap: false   # trained before the honest default (2026-09-28)
   batch_size: 16
   cache_dir: cache/best_25kb
   eval_every: 150

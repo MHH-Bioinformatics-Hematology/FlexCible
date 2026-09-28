@@ -25,6 +25,7 @@ model:
   base_channels: 48
   depth: 4
 train:
+  val_exclude_overlap: false   # trained before the honest default (2026-09-28)
   output_dir: runs/sim_rules
   cache_dir: cache/sim_rules
   batch_size: 16

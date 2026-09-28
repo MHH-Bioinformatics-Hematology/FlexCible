@@ -564,7 +564,8 @@ def status(agg, quiet=False):
                   "Median over cells, 413 Akita test regions (test windows for training "
                   "cells in the last columns).", "",
                   "| res | run | cells | model | reference alone | best other map | "
-                  "all12 no ref | beats ref | beats best map | test win model / ref / all12 |",
+                  "all12honest (no ref) | beats ref | beats best map | "
+                  "test win model / ref / all12honest |",
                   "|---|---|---|---|---|---|---|---|---|---|"]
         g = lambda r, c: "" if c not in r or pd.isna(r[c]) else (
             f"{r[c]:.3f}" if isinstance(r[c], float) else str(r[c]))
@@ -572,10 +573,10 @@ def status(agg, quiet=False):
             lines.append(
                 f"| {r['res_kb']} kb | {r['run']} | {r['cells']} | {g(r, 'median_model')} "
                 f"| {g(r, 'median_reference_alone')} | {g(r, 'median_best_other_map')} "
-                f"| {g(r, 'median_all12_no_reference')} | {g(r, 'beats_reference')} "
+                f"| {g(r, 'median_all12honest_no_reference')} | {g(r, 'beats_reference')} "
                 f"| {g(r, 'beats_best_other_map')} | {g(r, 'median_test_windows')} / "
                 f"{g(r, 'median_test_windows_reference_alone')} / "
-                f"{g(r, 'median_test_windows_all12_no_reference')} |")
+                f"{g(r, 'median_test_windows_all12honest_no_reference')} |")
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")

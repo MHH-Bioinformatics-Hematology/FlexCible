@@ -53,6 +53,7 @@ def _run_candidate(base, cache, max_epochs, patience, out_root, selected, track,
     improvement). Returns (Popen, log_path)."""
     cfg = copy.deepcopy(base)
     cfg["train"].update({
+        "val_exclude_overlap": False,   # as run, before the honest default
         "select_tracks": selected + [track],
         "max_epochs": max_epochs, "patience_epochs": patience,
         "max_steps": 10_000_000, "eval_every": 10_000_000,   # epoch-end validate only

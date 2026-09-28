@@ -138,8 +138,12 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # held-out cells the consensus of all 12. Outputs in runs/multicell_reference.
     "all12refres": (TRAIN12, None),
     "all12refin": (TRAIN12, None),
+    # all12 retrained with honest validation: the no-reference comparison
+    "all12honest": (TRAIN12, None),
 }
 REF_RUNS = {"all12refres": "residual", "all12refin": "input"}
+# runs trained with train.val_exclude_overlap (honest validation)
+HONEST_RUNS = set(REF_RUNS) | {"all12honest"}
 REF_OUT = HM / "runs/multicell_reference"
 
 
@@ -160,7 +164,7 @@ def is_ref(name: str) -> bool:
 
 def out_of(name: str) -> Path:
     """Folder of a run's directory, config and logs."""
-    return REF_OUT if is_ref(name) else OUT
+    return REF_OUT if split_name(name)[0] in HONEST_RUNS else OUT
 
 
 def reference_of(name: str, cell: str) -> Path:
@@ -205,12 +209,17 @@ def run_config(name, val_per_cell, patience, max_epochs):
         for smp in cfg["data"]["samples"]:
             smp["reference_cool"] = str(consensus_loo(smp["name"], res))
         cfg.setdefault("model", {})["reference"] = REF_RUNS[base]
-    cache_name = (f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS else f"mc_{name}")
+    cache_name = (f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
+                  else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows
+                  else f"mc_{name}")
     cfg["train"].update({
         "output_dir": str(out_of(name) / name), "cache_dir": str(CACHE / cache_name),
         "val_regions": val_per_cell * len(cells), "patience_epochs": patience,
         "max_epochs": max_epochs, "resident_dtype": "float16", "resume": False,
         "save_checkpoints": True, "track_dropout": 0.0,
+        # honest validation (no training window at a validation position, in
+        # any cell) for the runs made after 2026-09-28; the earlier runs as run
+        "val_exclude_overlap": base in HONEST_RUNS,
     })
     return cfg
 
@@ -365,7 +374,7 @@ def _write(fn, rows):
     print(f"wrote {OUT / fn}")
 
 
-ALL_RUNS = [run_name(b, r) for r in WINDOW for b in RUNS if b not in REF_RUNS]
+ALL_RUNS = [run_name(b, r) for r in WINDOW for b in RUNS if b not in HONEST_RUNS]
 
 
 def summarize():
@@ -601,8 +610,9 @@ def reference_summary():
 
     rows, stops = [], []
     for res in (25000, 10000, 5000, 2000):
-        base_name = run_name("all12", res)
-        for rb in REF_RUNS:
+        base_name = run_name("all12", res)          # overlapping validation (section 13)
+        honest_name = run_name("all12honest", res)  # the same, honest validation
+        for rb in list(REF_RUNS) + ["all12honest"]:
             name = run_name(rb, res)
             run = REF_OUT / name
             if not run.exists():
@@ -633,14 +643,20 @@ def reference_summary():
                         d = df.dropna(subset=["model", f"base_{cons}"])
                         rec["frac_regions_model_above_reference"] = round(
                             float((d["model"] > d[f"base_{cons}"]).mean()), 3)
-                fb = OUT / base_name / "crosscell" / f"predict_{cell}.csv"
-                if fb.exists():
-                    rec["all12_no_reference"] = round(float(pd.read_csv(fb)["model"].median()), 4)
+                for tag, d in (("all12honest_no_reference", REF_OUT / honest_name),
+                               ("all12_overlapval_no_reference", OUT / base_name)):
+                    fb = d / "crosscell" / f"predict_{cell}.csv"
+                    if fb.exists() and d != run:
+                        rec[tag] = round(float(pd.read_csv(fb)["model"].median()), 4)
                 for tag, j in (("test_windows", run / f"test_eval_{cell}.json"),
                                ("test_windows_reference_alone",
                                 run / f"refalone_test_eval_{cell}.json"),
-                               ("test_windows_all12_no_reference",
+                               ("test_windows_all12honest_no_reference",
+                                REF_OUT / honest_name / f"test_eval_{cell}.json"),
+                               ("test_windows_all12_overlapval_no_reference",
                                 OUT / base_name / f"test_eval_{cell}.json")):
+                    if tag.startswith("test_windows_all12honest") and name == honest_name:
+                        continue
                     if j.exists():
                         rec[tag] = round(json.loads(j.read_text())["oe_median_r"], 4)
                 if len(rec) > 4:
@@ -655,14 +671,16 @@ def reference_summary():
         for label, sub in (("12 training cells", g[g["trained_on_cell"]]),
                            ("held-out cells", g[~g["trained_on_cell"]])):
             rec = {"res_kb": k, "run": run, "cells": label, "n_cells": len(sub)}
-            for c in ("model", "reference_alone", "best_other_map", "all12_no_reference",
+            for c in ("model", "reference_alone", "best_other_map",
+                      "all12honest_no_reference", "all12_overlapval_no_reference",
                       "test_windows", "test_windows_reference_alone",
-                      "test_windows_all12_no_reference"):
+                      "test_windows_all12honest_no_reference",
+                      "test_windows_all12_overlapval_no_reference"):
                 if c in sub and sub[c].notna().any():
                     rec[f"median_{c}"] = round(float(sub[c].median()), 4)
             for c, t in (("reference_alone", "beats_reference"),
                          ("best_other_map", "beats_best_other_map"),
-                         ("all12_no_reference", "beats_all12_no_reference")):
+                         ("all12honest_no_reference", "beats_all12honest_no_reference")):
                 if c in sub:
                     s2 = sub.dropna(subset=["model", c])
                     rec[t] = f"{int((s2['model'] > s2[c]).sum())}/{len(s2)}"

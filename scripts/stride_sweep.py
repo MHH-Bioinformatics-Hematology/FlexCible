@@ -120,6 +120,7 @@ def main():
     for stride in strides:
         run_dir = outdir / f"s{stride}"
         cfg = copy.deepcopy(base)
+        cfg["train"].setdefault("val_exclude_overlap", False)   # as run, before the honest default
         cfg["train"].update({"stream": True, "stream_stride": stride,
                              "num_workers": a.workers, "max_minutes": a.minutes,
                              "resume": False, "output_dir": str(run_dir)})

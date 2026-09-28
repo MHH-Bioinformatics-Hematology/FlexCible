@@ -58,6 +58,7 @@ model:
   base_channels: 48
   depth: 4
 train:
+  val_exclude_overlap: false   # trained before the honest default (2026-09-28)
   output_dir: runs/c2k_dcorr
   cache_dir: cache/akita_full_2kb
   batch_size: 3

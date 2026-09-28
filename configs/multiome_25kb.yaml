@@ -60,6 +60,7 @@ model:
   depth: 4
 
 train:
+  val_exclude_overlap: false   # trained before the honest default (2026-09-28)
   output_dir: runs/multiome_25kb
   cache_dir: cache/multiome_25kb
   batch_size: 16            # per GPU; torchrun --nproc_per_node=2 -> effective 32

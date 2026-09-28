@@ -401,10 +401,15 @@ class TrainConfig:
     # -- validation and early stopping then use the median per-region Pearson of
     # log(obs/exp) over them, not the per-distance Pearson. None = old behaviour.
     val_regions: int | None = None
-    # with val_regions: also drop every training window that overlaps a
-    # validation window (strided windows overlap by size - stride bins), so the
-    # validation score cannot come from memorised genomic position
-    val_exclude_overlap: bool = False
+    # Honest validation (default since 2026-09-28): validation windows are
+    # drawn by genomic position (every sample's window at a drawn position),
+    # and every training window, of any sample, sharing a bin with a validation
+    # position is dropped, so checkpoint selection and early stopping cannot
+    # be passed by memorised position. Applies to val_regions and to the
+    # val_fraction split. Runs before that date used false (validation windows
+    # overlapping training windows by up to size - stride bins); their configs
+    # reproduce with an explicit val_exclude_overlap: false.
+    val_exclude_overlap: bool = True
     # write checkpoints during training. Off for the greedy screen, where only
     # the logged best-val matters, to avoid a 128 MB write every epoch stalling
     # the GPU.

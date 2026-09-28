@@ -56,6 +56,7 @@ def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gp
     cfg = copy.deepcopy(base)
     cfg["sequence"]["encoder"] = "none"
     cfg["train"].update({
+        "val_exclude_overlap": False,   # as run, before the honest default
         "select_tracks": sorted(tracks), "val_regions": val_regions,
         "patience_epochs": patience, "max_epochs": max_epochs,
         "max_steps": 10_000_000, "eval_every": 10_000_000, "resume": False,

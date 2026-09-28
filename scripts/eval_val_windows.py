@@ -75,8 +75,9 @@ def main():
     if a.split == "val":
         data, ds = _stack(cache_dir, "train", 0.0, False, cfg.train.seed,
                           chroms=cfg.train.chroms)
-        perm = np.random.default_rng(cfg.train.seed).permutation(data["target"].shape[0])
-        vi = perm[: cfg.train.val_regions]
+        from hicmultiome.train import split_val_regions
+        vi, _ = split_val_regions(_coords(ds), cfg.train.val_regions, ds.window_size,
+                                  cfg.train.seed, cfg.train.val_exclude_overlap)
     else:   # every test window (held-out regions, disjoint from all training windows)
         data, ds = _stack(cache_dir, "test", 0.0, False, cfg.train.seed,
                           chroms=cfg.train.chroms)

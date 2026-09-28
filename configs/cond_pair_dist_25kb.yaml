@@ -67,6 +67,7 @@ model:
   depth: 4
   cond_mode: pair_dist
 train:
+  val_exclude_overlap: false   # trained before the honest default (2026-09-28)
   output_dir: runs/cond_pair_dist_25kb
   cache_dir: cache/multiome_25kb
   batch_size: 16
