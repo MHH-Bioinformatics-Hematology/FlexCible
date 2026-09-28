@@ -1,4 +1,4 @@
-"""Head-to-head benchmark against published Hi-C predictors (registry section 17).
+"""Head-to-head benchmark against published Hi-C predictors (registry section 18).
 
 Every method is scored on identical regions, pixels and targets. Competitor
 predictions are reused as they exist on disk (never re-run): Akita (released

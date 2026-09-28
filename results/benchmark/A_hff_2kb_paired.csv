@@ -1,0 +1,11 @@
+block,ours,other,metric,n,median_diff,win_rate,wilcoxon_p
+A_hff_2kb,all12_2kb,akita,pearson,413,0.01275,0.5593,0.0003048
+A_hff_2kb,all12_2kb,akita,scc,413,0.06248,0.7797,6.743e-35
+A_hff_2kb,all12_2kb,map_gm12878,pearson,413,0.0888,0.7651,5.681e-38
+A_hff_2kb,all12_2kb,map_gm12878,scc,413,0.1492,0.8935,1.253e-59
+A_hff_2kb,all12_2kb,map_h1,pearson,413,0.04141,0.6755,3.813e-19
+A_hff_2kb,all12_2kb,map_h1,scc,413,0.1005,0.8354,4.604e-51
+A_hff_2kb,all12_2kb,map_hct116,pearson,413,0.1035,0.845,3.509e-50
+A_hff_2kb,all12_2kb,map_hct116,scc,413,0.1632,0.9177,7.688e-64
+A_hff_2kb,all12_2kb,map_imr90,pearson,413,0.01487,0.5593,4.7e-06
+A_hff_2kb,all12_2kb,map_imr90,scc,413,0.06903,0.7966,1.518e-40

@@ -1,4 +1,4 @@
-"""In-silico perturbation against degron experiments (registry section 19).
+"""In-silico perturbation against degron experiments (registry section 20).
 
 Experiments (measured Hi-C, hg38):
   rad21  HCT116 RAD21-mAC, untreated vs 6 h auxin (Rao et al. 2017, 4DN

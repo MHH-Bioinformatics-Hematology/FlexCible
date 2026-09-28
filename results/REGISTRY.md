@@ -708,3 +708,179 @@ next level's fold models and its final model trained on all training
 chromosomes.
 
 All three run under `scripts/gpu_scheduler.py`; results follow here.
+
+## 18. Head-to-head benchmark against published predictors (FINAL)
+
+Question: how do our models compare with Akita, Hi-cGAN, Epiphany, HiC-Reg
+and C.Origami on identical regions, pixels and targets?
+
+Predictions. Every competitor is scored from predictions that already exist
+(none was rerun): Akita's released GM12878 and HFF predictions and the Hi-cGAN
+(submitted, under review) 2 kb held-out prediction, both in the Akita-space
+raster `akita_testset_rasters.npz`; Hi-cGAN GM12878 whole-genome predictions
+of the Hi-cGAN Zenodo record 02 (10 kb CTCF+H3K4me2 window 512, 25 kb
+H3K27ac+CTCF window 256, hg19, trained on the odd chromosomes) and its
+cross-cell-type predictions (records 05 and 06: the GM12878 model on K562,
+HMEC, HUVEC and IMR-90 inputs, the IMR-90 model on IMR-90); Epiphany with its
+released GM12878 weights (hg38, 10 kb, chr2, 3, 11, 17; chr3, 11 and 17 held
+out); C.Origami with its released IMR-90 model (hg38, 8192 bp; chr2 test,
+chr3 validation); HiC-Reg's published GM12878 predictions (hg19, 25 kb,
+1 Mb reach; training split undocumented, and HiC-Reg's own protocol splits
+bin pairs within a chromosome). Ours: akita_native_honest and
+akita_native_refres (section 1) at 2 kb, all12 (section 13) for HFF at 2 kb,
+all12refres and all12honest (section 15) at 10 and 25 kb, all predicted on
+the CPU with `--save-pred` and test-time reverse averaging.
+
+Targets and normalization. Block A uses Akita's own target space (Akita's
+GM12878 and HFF targets, 448-bin crop of the 2048 bp grid, offset 2), the
+only space in which Akita's and the Hi-cGAN 2 kb predictions exist; our 2000
+bp all12 prediction is resampled bilinearly onto Akita's bin centres. Blocks B
+to E score against our proper O/E targets (`oe_proper.py`, 4DN GM12878,
+IMR-90 and K562 maps, ENCODE HMEC and HUVEC deep maps). Each competitor's
+predicted matrix goes through the same `oe_proper.py` (expected over mappable
+pairs, log O/E, per-diagonal centring, clip, Gaussian sigma 2 bins), limited
+to its own distance reach (C.Origami log(count+1) back to counts first), and
+is sampled bilinearly at the target's bin centres; hg19 predictions are
+sampled at the target bin centres lifted with the UCSC hg38ToHg19 chain, and
+a region is dropped when its lifted centres are not collinear. A region
+enters a block only when every model and competitor covers it; metrics use
+the pixels finite in the target and in every method (upper triangle, at least
+2 bins off the diagonal, within the shortest reach in the block). Regions:
+the 413 Akita test regions, restricted per block to chromosomes held out by
+the competitors (block A all; B Epiphany: chr3, 11, 17; B, C and E even
+chromosomes and chrX, held out by Hi-cGAN; D: chr2, chr3).
+
+Metrics (`scripts/benchmark_metrics.py`, `scripts/benchmark_blocks.py`):
+median per-region Pearson with its interquartile range; HiCRep SCC (per
+diagonal, rank-variance weights, `scripts/scc_akita_regions.py` is the
+stand-alone Akita-space version); insulation-profile Pearson; boundary
+recall, the share of reference boundaries (HiCExplorer v4 C++ hicFindTADs on
+the measured count map, 10 kb, depth 30 to 100 kb, FDR 0.05; 25 kb calls for
+25 kb blocks) matched within 1 bin (5 bins at 2048 bp) by the K most
+prominent insulation minima of a map, K the number of reference boundaries in
+the region; loop recall, the share of reference loops (hicDetectLoops of
+HiCExplorer 3.7.6 on the measured 10 kb map, peak interaction threshold 0,
+other defaults) matched by the K strongest donut-enrichment peaks of a map
+(bioscore, 2048 bp maps coarsened 5-fold), the APA ratio (prediction peak
+enrichment over the measured one at the same anchors) and the anchor AUROC
+against distance-matched control pixels; per-distance Pearson; paired
+Wilcoxon tests and win rates per region. The measured map of every other
+cell and their leave-one-out consensus (consensus12 for held-out cells,
+consensus4 in block A) are scored the same way. The v4 C++ hicDetectLoops
+aborts with a double free in `neighborhood_merge` on the 4DN GM12878 map, so
+the loop calls come from the released Python tool.
+
+| block | method | regions | Pearson median (IQR) | SCC | insulation r | boundary recall | loop recall | APA ratio | anchor AUROC |
+|---|---|---|---|---|---|---|---|---|---|
+| A GM12878 2 kb | Akita | 411 | 0.551 (0.356 to 0.696) | 0.512 | 0.686 | 0.494 | 0.314 | 0.26 | 0.917 |
+| A GM12878 2 kb | akita_native_honest | 411 | 0.640 (0.455 to 0.741) | 0.611 | 0.819 | 0.547 | 0.394 | 0.38 | 0.933 |
+| A GM12878 2 kb | akita_native_refres | 411 | 0.746 (0.594 to 0.837) | 0.698 | 0.920 | 0.648 | 0.574 | 0.85 | 0.977 |
+| A GM12878 2 kb | consensus4 | 411 | 0.612 (0.420 to 0.748) | 0.559 | 0.781 | 0.590 | 0.513 | 1.03 | 0.967 |
+| A GM12878 2 kb | Hi-cGAN (submitted) | 411 | 0.238 (0.049 to 0.400) | 0.208 | 0.380 | 0.321 | 0.138 | 0.18 | 0.775 |
+| A GM12878 2 kb | best other map (h1) | 411 | 0.516 (0.311 to 0.635) | 0.457 | 0.722 | 0.541 | 0.442 | 1.22 | 0.957 |
+| A HFF 2 kb | Akita | 413 | 0.626 (0.404 to 0.742) | 0.568 | 0.771 | 0.538 | 0.321 | 0.39 | 0.911 |
+| A HFF 2 kb | all12 2 kb | 413 | 0.657 (0.495 to 0.749) | 0.664 | 0.856 | 0.672 | 0.347 | 0.56 | 0.944 |
+| A HFF 2 kb | best other map (imr90) | 413 | 0.625 (0.471 to 0.728) | 0.576 | 0.864 | 0.575 | 0.320 | 0.53 | 0.934 |
+| B GM12878 10 kb chr3/11/17 | all12honest | 42 | 0.856 (0.720 to 0.926) | 0.787 | 0.801 | 0.498 | 0.331 | 0.38 | 0.912 |
+| B GM12878 10 kb chr3/11/17 | all12refres | 42 | 0.948 (0.910 to 0.962) | 0.912 | 0.926 | 0.575 | 0.612 | 0.78 | 0.961 |
+| B GM12878 10 kb chr3/11/17 | consensus of other cells | 42 | 0.876 (0.806 to 0.913) | 0.793 | 0.851 | 0.595 | 0.636 | 0.98 | 0.959 |
+| B GM12878 10 kb chr3/11/17 | Epiphany | 42 | 0.648 (0.523 to 0.808) | 0.552 | 0.442 | 0.328 | 0.058 | 0.22 | 0.723 |
+| B GM12878 10 kb chr3/11/17 | Hi-cGAN (submitted) | 42 | 0.831 (0.667 to 0.892) | 0.666 | 0.551 | 0.344 | 0.207 | 0.51 | 0.793 |
+| B GM12878 10 kb chr3/11/17 | best other map (hct116) | 42 | 0.829 (0.737 to 0.887) | 0.716 | 0.762 | 0.595 | 0.570 | 0.69 | 0.947 |
+| B GM12878 10 kb even | all12honest | 212 | 0.843 (0.739 to 0.911) | 0.777 | 0.794 | 0.455 | 0.336 | 0.42 | 0.938 |
+| B GM12878 10 kb even | all12refres | 212 | 0.944 (0.896 to 0.964) | 0.902 | 0.911 | 0.486 | 0.551 | 0.78 | 0.979 |
+| B GM12878 10 kb even | consensus of other cells | 212 | 0.856 (0.732 to 0.914) | 0.789 | 0.810 | 0.551 | 0.541 | 0.86 | 0.972 |
+| B GM12878 10 kb even | Hi-cGAN (submitted) | 212 | 0.507 (0.328 to 0.646) | 0.380 | 0.203 | 0.181 | 0.048 | 0.18 | 0.692 |
+| B GM12878 10 kb even | best other map (a549) | 212 | 0.801 (0.621 to 0.878) | 0.727 | 0.732 | 0.516 | 0.424 | 0.89 | 0.955 |
+| C GM12878 25 kb even | all12honest | 218 | 0.852 (0.739 to 0.921) | 0.798 | 0.759 | 0.553 | 0.271 | 0.41 | 0.841 |
+| C GM12878 25 kb even | all12refres | 218 | 0.945 (0.897 to 0.965) | 0.910 | 0.907 | 0.660 | 0.437 | 0.71 | 0.898 |
+| C GM12878 25 kb even | consensus of other cells | 218 | 0.880 (0.756 to 0.932) | 0.824 | 0.854 | 0.710 | 0.485 | 0.72 | 0.898 |
+| C GM12878 25 kb even | Hi-cGAN (submitted) | 218 | 0.486 (0.191 to 0.653) | 0.315 | 0.184 | 0.238 | 0.097 | 0.18 | 0.644 |
+| C GM12878 25 kb even | HiC-Reg | 218 | 0.943 (0.908 to 0.961) | 0.910 | 0.805 | 0.667 | 0.326 | 0.31 | 0.861 |
+| C GM12878 25 kb even | best other map (k562) | 218 | 0.838 (0.663 to 0.909) | 0.759 | 0.815 | 0.661 | 0.394 | 0.70 | 0.887 |
+| D IMR-90 10 kb chr2/3 | all12honest | 45 | 0.868 (0.790 to 0.918) | 0.817 | 0.831 | 0.537 | 0.314 | 0.38 | 0.922 |
+| D IMR-90 10 kb chr2/3 | all12refres | 45 | 0.951 (0.927 to 0.967) | 0.908 | 0.948 | 0.570 | 0.524 | 0.76 | 0.969 |
+| D IMR-90 10 kb chr2/3 | consensus of other cells | 45 | 0.916 (0.872 to 0.925) | 0.850 | 0.902 | 0.686 | 0.562 | 0.86 | 0.981 |
+| D IMR-90 10 kb chr2/3 | C.Origami | 45 | 0.908 (0.874 to 0.938) | 0.842 | 0.846 | 0.574 | 0.229 | 0.62 | 0.928 |
+| D IMR-90 10 kb chr2/3 | Hi-cGAN (submitted), GM12878 model | 45 | 0.472 (0.339 to 0.640) | 0.405 | 0.283 | 0.223 | 0.067 | 0.12 | 0.684 |
+| D IMR-90 10 kb chr2/3 | Hi-cGAN (submitted), IMR-90 model | 45 | 0.719 (0.440 to 0.834) | 0.581 | 0.405 | 0.281 | 0.133 | 0.32 | 0.686 |
+| D IMR-90 10 kb chr2/3 | best other map (gm23248) | 45 | 0.919 (0.889 to 0.950) | 0.861 | 0.895 | 0.686 | 0.495 | 0.78 | 0.972 |
+| E K562 10 kb | all12honest | 212 | 0.782 (0.581 to 0.870) | 0.671 | 0.712 | 0.445 | 0.263 | 0.32 | 0.898 |
+| E K562 10 kb | all12refres | 212 | 0.883 (0.800 to 0.922) | 0.812 | 0.860 | 0.462 | 0.510 | 0.75 | 0.960 |
+| E K562 10 kb | consensus of other cells | 212 | 0.851 (0.734 to 0.907) | 0.787 | 0.860 | 0.572 | 0.539 | 0.85 | 0.964 |
+| E K562 10 kb | Hi-cGAN (submitted), GM12878 model | 212 | 0.304 (0.061 to 0.529) | 0.166 | 0.084 | 0.165 | 0.026 | 0.15 | 0.612 |
+| E K562 10 kb | best other map (hct116) | 212 | 0.821 (0.673 to 0.882) | 0.717 | 0.693 | 0.501 | 0.477 | 0.61 | 0.946 |
+| E K562 25 kb | all12honest | 218 | 0.803 (0.609 to 0.904) | 0.720 | 0.720 | 0.521 | 0.283 | 0.27 | 0.795 |
+| E K562 25 kb | all12refres | 218 | 0.906 (0.846 to 0.941) | 0.850 | 0.854 | 0.629 | 0.409 | 0.70 | 0.869 |
+| E K562 25 kb | consensus of other cells | 218 | 0.889 (0.774 to 0.934) | 0.834 | 0.874 | 0.750 | 0.474 | 0.86 | 0.891 |
+| E K562 25 kb | Hi-cGAN (submitted), GM12878 model | 218 | 0.456 (0.167 to 0.651) | 0.274 | 0.108 | 0.233 | 0.089 | 0.40 | 0.656 |
+| E K562 25 kb | best other map (hct116) | 218 | 0.859 (0.726 to 0.928) | 0.773 | 0.779 | 0.677 | 0.415 | 0.72 | 0.884 |
+| E HMEC 10 kb | all12honest | 212 | 0.720 (0.568 to 0.823) | 0.684 | 0.687 | 0.393 | 0.224 | 0.42 | 0.891 |
+| E HMEC 10 kb | all12refres | 212 | 0.904 (0.868 to 0.939) | 0.854 | 0.853 | 0.497 | 0.516 | 0.92 | 0.972 |
+| E HMEC 10 kb | consensus of other cells | 212 | 0.908 (0.847 to 0.939) | 0.857 | 0.901 | 0.594 | 0.562 | 0.98 | 0.973 |
+| E HMEC 10 kb | Hi-cGAN (submitted), GM12878 model | 212 | 0.372 (0.134 to 0.558) | 0.232 | 0.177 | 0.198 | 0.023 | 0.16 | 0.640 |
+| E HMEC 10 kb | best other map (nhek) | 212 | 0.870 (0.824 to 0.913) | 0.779 | 0.821 | 0.569 | 0.266 | 1.02 | 0.963 |
+| E HMEC 25 kb | all12honest | 218 | 0.759 (0.579 to 0.871) | 0.702 | 0.687 | 0.466 | 0.241 | 0.64 | 0.815 |
+| E HMEC 25 kb | all12refres | 218 | 0.916 (0.864 to 0.953) | 0.873 | 0.867 | 0.637 | 0.397 | 0.95 | 0.893 |
+| E HMEC 25 kb | consensus of other cells | 218 | 0.933 (0.877 to 0.957) | 0.902 | 0.922 | 0.802 | 0.465 | 1.00 | 0.904 |
+| E HMEC 25 kb | Hi-cGAN (submitted), GM12878 model | 218 | 0.397 (0.103 to 0.606) | 0.301 | 0.164 | 0.252 | 0.085 | 0.33 | 0.645 |
+| E HMEC 25 kb | best other map (nhek) | 218 | 0.928 (0.875 to 0.954) | 0.866 | 0.872 | 0.744 | 0.411 | 1.22 | 0.905 |
+| E HUVEC 10 kb | all12honest | 212 | 0.812 (0.691 to 0.875) | 0.720 | 0.666 | 0.430 | 0.258 | 0.32 | 0.928 |
+| E HUVEC 10 kb | all12refres | 212 | 0.879 (0.792 to 0.930) | 0.796 | 0.762 | 0.465 | 0.471 | 0.63 | 0.965 |
+| E HUVEC 10 kb | consensus of other cells | 212 | 0.877 (0.792 to 0.930) | 0.802 | 0.838 | 0.564 | 0.519 | 0.68 | 0.962 |
+| E HUVEC 10 kb | Hi-cGAN (submitted), GM12878 model | 212 | 0.392 (0.189 to 0.571) | 0.279 | 0.250 | 0.204 | 0.036 | 0.12 | 0.645 |
+| E HUVEC 10 kb | best other map (imr90) | 212 | 0.833 (0.732 to 0.906) | 0.777 | 0.839 | 0.510 | 0.344 | 0.64 | 0.920 |
+| E HUVEC 25 kb | all12honest | 218 | 0.821 (0.674 to 0.890) | 0.743 | 0.684 | 0.512 | 0.232 | 0.35 | 0.815 |
+| E HUVEC 25 kb | all12refres | 218 | 0.892 (0.802 to 0.943) | 0.831 | 0.802 | 0.563 | 0.325 | 0.69 | 0.855 |
+| E HUVEC 25 kb | consensus of other cells | 218 | 0.912 (0.823 to 0.950) | 0.852 | 0.872 | 0.725 | 0.384 | 0.77 | 0.871 |
+| E HUVEC 25 kb | Hi-cGAN (submitted), GM12878 model | 218 | 0.481 (0.200 to 0.669) | 0.382 | 0.279 | 0.293 | 0.082 | 0.23 | 0.685 |
+| E HUVEC 25 kb | best other map (imr90) | 218 | 0.876 (0.781 to 0.936) | 0.825 | 0.872 | 0.669 | 0.332 | 0.77 | 0.836 |
+
+In Akita's own space (block A, 411 GM12878 regions) the honest akita_native
+model exceeds Akita by a median 0.040 Pearson per region (66% of the
+regions, Wilcoxon p = 2e-17) and 0.061 SCC, and the reference residual model
+by 0.135 (97% of the regions); Hi-cGAN (submitted) reaches 0.238. On HFF,
+Akita's second head, the 12-cell 2 kb model scores 0.657 against 0.626
+(56% of the regions, p = 3e-4) and 0.664 against 0.568 SCC; the HFF block
+converts our proper O/E prediction into Akita's grid only, so SCC, which
+ignores per-diagonal offsets between the two O/E definitions, is the fairer
+measure there.
+
+At 10 kb on Epiphany's held-out chromosomes (42 regions) Epiphany scores
+0.648 and 0.552 SCC; all12honest exceeds it by 0.181 per region (88%,
+p = 2e-6) and all12refres by 0.258 (all regions). Hi-cGAN (submitted) scores
+0.831 on these chromosomes, which are its training chromosomes, and 0.507 on
+its held-out even chromosomes (212 regions), where all12honest reaches 0.843
+and all12refres 0.944. At 25 kb (218 regions on even chromosomes) HiC-Reg
+scores 0.943 and 0.910 SCC, level with all12refres (0.945 and 0.910; median
+difference 0.002, 53% of the regions, p = 0.80) and above all12honest
+(0.852); HiC-Reg's per-distance Pearson is 0.26 at 50 kb against 0.82 for
+all12refres and approaches it only beyond 500 kb, its APA ratio is 0.31
+against 0.71 and its loop recall 0.33 against 0.44, and its training split
+may include these bin pairs. On C.Origami's held-out chromosomes (45 IMR-90
+regions) C.Origami scores 0.908 and 0.842 SCC, all12refres 0.951 and 0.908
+(91% of the regions, p = 6e-10) and all12honest 0.868 (below C.Origami in
+78% of the regions); the best single other map (GM23248) scores 0.919.
+
+On cells never seen in training (block E) the GM12878 Hi-cGAN model applied
+to K562, HMEC and HUVEC inputs scores 0.30 to 0.48 and all12honest 0.72 to
+0.82. all12refres scores 0.88 to 0.92 and exceeds the consensus of the 12
+training cells for K562 (by 0.025 at 10 kb and 0.017 at 25 kb, 78% and 68%
+of the regions), equals it for HUVEC at 10 kb and HMEC at 10 kb, and stays
+below it for HMEC and HUVEC at 25 kb (0.916 against 0.933, 0.892 against
+0.912). The consensus of the other cells' measured maps reaches a higher
+boundary recall than every model in blocks B to E (consensus 0.55 to 0.80,
+all12refres 0.46 to 0.66, HiC-Reg 0.67); the measured target's own
+insulation minima recover 0.63 to 0.88 of the hicFindTADs boundaries. Loop
+recall of all12refres (0.33 to 0.61) lies within 0.07 of the consensus in
+blocks B to E (above it only for GM12878 on the even chromosomes, 0.551
+against 0.541), and at 2 kb akita_native_refres recovers 0.574 of the loops
+against 0.513 for consensus4 and 0.314 for Akita.
+
+Tables `benchmark/benchmark_summary.csv` (every method, every block: median,
+mean, quartiles, SD and n of Pearson, SCC, Spearman and insulation Pearson;
+boundary and loop recall; APA; AUROC), `benchmark_paired.csv` (paired
+Wilcoxon and win rates of each of our models against every other method),
+`<block>_per_region.csv.gz`, `<block>_per_distance.csv`,
+`scc_akita_regions.csv`; figures `runs/benchmark/figures/<block>_per_distance.png`
+and `<block>_regions.png`.

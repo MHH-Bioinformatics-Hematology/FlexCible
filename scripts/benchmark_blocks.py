@@ -10,6 +10,7 @@ distance reach of any method in the block).
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -58,8 +59,10 @@ def params(res: int) -> dict:
                     loop=bs.BioParams(loop_coarsen=1, donut_inner=1, donut_outer=3,
                                       loop_min_dist=3, loop_max_dist=100, loop_match_tol=1,
                                       apa_half=3, apa_corner=1, loop_nms=1))
+    # donut outer 3: with outer 2 the donut (cross removed) keeps only its 4
+    # corner pixels, fewer than the 8 local_enrichment requires
     return dict(ins=3, btol=1, flank=4,
-                loop=bs.BioParams(loop_coarsen=1, donut_inner=1, donut_outer=2,
+                loop=bs.BioParams(loop_coarsen=1, donut_inner=1, donut_outer=3,
                                   loop_min_dist=2, loop_max_dist=40, loop_match_tol=1,
                                   apa_half=2, apa_corner=1, loop_nms=1))
 
@@ -346,6 +349,8 @@ for _c, _t in (("k562", "k562"), ("hmec", "hmec_deep"), ("huvec", "huvec_deep"))
 
 def stage_assemble():
     for bid, fn in BLOCKS.items():
+        if (BLK / f"{bid}.npz").exists() and os.environ.get("BENCH_REBUILD") != "1":
+            continue
         try:
             fn()
         except Exception as e:                                      # noqa: BLE001
@@ -514,7 +519,11 @@ def stage_score():
     for bid in BLOCKS:
         if not (BLK / f"{bid}.npz").exists():
             continue
-        S, P = score_block(bid)
+        sf = bc.RES_OUT / f"{bid}_summary.csv"
+        if sf.exists() and sf.stat().st_mtime > (BLK / f"{bid}.npz").stat().st_mtime:
+            S, P = pd.read_csv(sf), pd.read_csv(bc.RES_OUT / f"{bid}_paired.csv")
+        else:
+            S, P = score_block(bid)
         allS.append(S); allP.append(P)
     if allS:
         S = pd.concat(allS)
