@@ -1757,3 +1757,87 @@ def test_predict_subset_model_sequence_only(workdir, cfg):
     out = str(workdir / "pred_seqonly.cool")
     hpred.predict(c, "chr1", out, batch=4, tta=True)
     assert np.abs(np.nan_to_num(cooler.Cooler(out).matrix(balance=False).fetch("chr1"))).sum() > 0
+
+
+def test_film_resolution_conditioning_identity_at_init():
+    """FiLM projections start at zero, so a resolution-conditioned U-Net
+    initially equals the plain U-Net with the same weights; after changing a
+    projection the resolutions differ; unknown resolutions are refused."""
+    import torch
+
+    from hicmultiome.model import HiCModel, build_backbone, n_cond_channels
+
+    torch.manual_seed(0)
+    in_ch = n_cond_channels(3, 1, 0, "full")
+    plain = build_backbone("unet", in_ch, out_ch=1, base=8, depth=2)
+    film = build_backbone("unet", in_ch, out_ch=1, base=8, depth=2, film_dim=4)
+    film.load_state_dict(plain.state_dict(), strict=False)
+    m0 = HiCModel(plain, "full").eval()
+    m1 = HiCModel(film, "full", resolutions=[1000, 2000], res_embed_dim=4,
+                  default_resolution=1000).eval()
+    cond = torch.randn(2, 3, 16)
+    pairs = cond[:, 1:3].reshape(2, 1, 2, 16)
+    with torch.no_grad():
+        a = m0(cond, pairs)
+        b = m1(cond, pairs)
+        c = m1(cond, pairs, res=2000)
+        torch.nn.init.normal_(m1.backbone.film[0].weight)
+        d1 = m1(cond, pairs, res=1000)
+        d2 = m1(cond, pairs, res=2000)
+    assert torch.allclose(a, b, atol=1e-6) and torch.allclose(a, c, atol=1e-6)
+    assert not torch.allclose(d1, d2)
+    with pytest.raises(ValueError, match="not among"):
+        m1(cond, pairs, res=5000)
+    with pytest.raises(ValueError, match="unet only"):
+        build_backbone("dilated", in_ch, film_dim=4)
+
+
+def test_multires_training_and_views(workdir):
+    """train_multires on 1 kb and 2 kb windows of the fixture (reference
+    residual, honest validation), then per-resolution views that
+    eval_val_windows and predict.py load like single-resolution runs."""
+    import json
+    import subprocess
+
+    import cooler
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import predict as hpred
+    from hicmultiome.train_multires import train_multires, write_views
+
+    c2 = workdir / "target_2kb.cool"
+    if not c2.exists():
+        cooler.coarsen_cooler(str(workdir / "target.cool"), str(c2), factor=2, chunksize=10**6)
+    cfgs = []
+    for res, cool, W in ((BINSIZE, workdir / "target.cool", 32), (2 * BINSIZE, c2, 16)):
+        raw = _ref_raw(workdir, f"mr{res}", reference="residual", ref_cool=False)
+        raw["data"]["resolution"] = res
+        raw["data"]["samples"][0].update(cool_path=str(cool), reference_cool=str(cool))
+        raw["window"].update(size=W, stride=W // 2)
+        raw["model"]["resolutions"] = [BINSIZE, 2 * BINSIZE]
+        raw["model"]["res_embed_dim"] = 4
+        raw["train"].update(cache_dir=str(workdir / f"cache_mr{res}"), val_regions=2,
+                            max_epochs=2, patience_epochs=5, batch_size=2)
+        c = Config.from_dict(raw)
+        hprep.build(c)
+        cfgs.append(c)
+    out = workdir / "run_multires"
+    train_multires(cfgs, out)
+    lc = list(open(out / "learning_curve.csv"))
+    assert len(lc) == 3 and "val_1000" in lc[0] and "loss_2000" in lc[0]
+    views = {BINSIZE: workdir / "view_1kb", 2 * BINSIZE: workdir / "view_2kb"}
+    write_views(out, views)
+    repo = Path(__file__).resolve().parents[1]
+    for res, v in views.items():
+        ck = v / "checkpoint-best"
+        assert (ck / "model.pt").is_symlink()
+        vc = Config.load(ck / "config.yaml")
+        assert vc.data.resolution == res and vc.model.resolutions == [BINSIZE, 2 * BINSIZE]
+        o = v / "val.json"
+        subprocess.run([sys.executable, str(repo / "scripts/eval_val_windows.py"), "--run",
+                        str(v), "--split", "val", "--out", str(o)], check=True, cwd=repo,
+                       capture_output=True)
+        assert json.loads(o.read_text())["n"] > 0
+        p = str(v / "pred.cool")
+        hpred.predict(vc, "chr1", p, checkpoint=str(ck), batch=4)
+        assert cooler.Cooler(p).binsize == res

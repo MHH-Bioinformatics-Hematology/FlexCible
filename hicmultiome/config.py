@@ -312,6 +312,13 @@ class ModelConfig:
     # and bin. Typically the consensus of all training cells; training itself
     # reads data.reference_cool / samples[].reference_cool. None = off.
     embed_reference: str | None = None
+    # Resolution conditioning: bin sizes the model is trained on together
+    # (e.g. [2000, 5000, 10000, 25000]); each gets a learned embedding
+    # (res_embed_dim) that modulates every U-Net block by FiLM
+    # (hicmultiome.train_multires). data.resolution selects the resolution a
+    # single-resolution view of such a model predicts at. None = off.
+    resolutions: list[int] | None = None
+    res_embed_dim: int = 16
 
     def __post_init__(self):
         if self.reference not in REFERENCE_MODES:
@@ -536,6 +543,9 @@ class Config:
                 raise ValueError(f"model.reference={self.model.reference!r} needs "
                                  "data.reference_cool or samples[].reference_cool "
                                  f"(the cached reference map); none for {lack}")
+        if self.model.resolutions and int(self.data.resolution) not in self.model.resolutions:
+            raise ValueError(f"data.resolution {self.data.resolution} not in "
+                             f"model.resolutions {self.model.resolutions}")
         if self.has_reference and self.window.transform != "prescaled":
             raise ValueError("a reference map (data.reference_cool or "
                              "samples[].reference_cool) needs window.transform "

@@ -26,7 +26,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hicmultiome.config import Config                                  # noqa: E402
 from hicmultiome.dataset import split_cond                             # noqa: E402
-from hicmultiome.model import (HiCModel, SeqEncoder, build_backbone,
+from hicmultiome.model import (SeqEncoder, make_model,
                                n_cond_channels)                        # noqa: E402
 from hicmultiome.train import (_coords, _fasta_map, _select_rows, _stack,
                                batch_onehot)                           # noqa: E402
@@ -103,14 +103,10 @@ def main():
     use_seq = cfg.sequence.uses_encoder
     emb = cfg.sequence.embed_dim if use_seq else 0
     W = ds.window_size
-    backbone = build_backbone(cfg.model.kind, n_cond_channels(
-                              n_sym + emb, n_motifs, cfg.model.reference_planes,
-                              cfg.model.cond_mode), out_ch=ds.n_out,
-                              base=cfg.model.base_channels, depth=cfg.model.depth)
     enc = SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width) if use_seq else None
-    model = HiCModel(backbone, cfg.model.cond_mode, enc,
-                     cfg.window.size if cfg.model.dist_bias else 0,
-                     reference=cfg.model.reference).to(device)
+    model = make_model(cfg, n_cond_channels(n_sym + emb, n_motifs,
+                                            cfg.model.reference_planes,
+                                            cfg.model.cond_mode), ds.n_out, enc).to(device)
     model.load_state_dict(torch.load(ck / "model.pt", map_location=device))
     model.eval()
     fm = _fasta_map(cfg)

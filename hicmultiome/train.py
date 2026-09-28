@@ -30,7 +30,7 @@ from .config import Config
 from .dataset import WindowDataset, reverse_cond, split_cond
 from .losses import build_loss
 from .model import (HiCModel, HiCUNet, SeqEncoder, build_backbone,
-                    build_spatial_cond, n_cond_channels)
+                    build_spatial_cond, make_model, n_cond_channels)
 from .sequence import window_codes
 from .utils import get_logger, set_seed
 
@@ -480,13 +480,9 @@ def train(cfg: Config):
     emb = cfg.sequence.embed_dim if use_seq else 0
     in_ch = n_cond_channels(n_sym_eff + emb, n_motifs,
                             (2 if capin else 0) + cfg.model.reference_planes, cond_mode)
-    backbone = build_backbone(cfg.model.kind, in_ch, out_ch=ds.n_out,
-                              base=cfg.model.base_channels, depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if use_seq else None)
-    model = HiCModel(backbone, cond_mode, encoder,
-                     cfg.window.size if cfg.model.dist_bias else 0,
-                     reference=cfg.model.reference).to(device)
+    model = make_model(cfg, in_ch, ds.n_out, encoder).to(device)
     if use_ref and is_main:
         log.info("reference map: %s (%s)", cfg.model.reference, ds.reference)
     if use_seq and is_main:
@@ -811,12 +807,9 @@ def train_stream(cfg: Config):
     W = ds.size
     emb = cfg.sequence.embed_dim if use_seq else 0
     in_ch = n_cond_channels(n_sym + emb, n_motifs, 0, cfg.model.cond_mode)
-    backbone = build_backbone(cfg.model.kind, in_ch, out_ch=1,
-                              base=cfg.model.base_channels, depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if use_seq else None)
-    model = HiCModel(backbone, cfg.model.cond_mode, encoder,
-                     cfg.window.size if cfg.model.dist_bias else 0).to(device)
+    model = make_model(cfg, in_ch, 1, encoder).to(device)
     if is_ddp:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
     core = model.module if is_ddp else model

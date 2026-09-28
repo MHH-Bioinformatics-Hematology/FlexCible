@@ -65,15 +65,11 @@ def load_model(cfg, ckpt, device):
                             (2 if channels.get("capture_input") else 0)
                             + cfg.model.reference_planes,
                             cfg.model.cond_mode)
-    backbone = build_backbone(cfg.model.kind, in_ch,
-                              out_ch=2 if channels.get("has_capture") else 1,
-                              base=cfg.model.base_channels,
-                              depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if cfg.sequence.uses_encoder else None)
-    model = HiCModel(backbone, cfg.model.cond_mode, encoder,
-                     cfg.window.size if cfg.model.dist_bias else 0,
-                     reference=cfg.model.reference).to(device)
+    from hicmultiome.model import make_model
+    model = make_model(cfg, in_ch, 2 if channels.get("has_capture") else 1,
+                       encoder).to(device)
     sd = torch.load(ckpt / "model.pt", map_location=device)
     # older checkpoints stored the bare backbone (no encoder); its keys have no
     # "backbone." prefix, so remap them onto the HiCModel wrapper

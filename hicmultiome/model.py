@@ -102,9 +102,15 @@ class _Block(nn.Module):
 
 
 class HiCUNet(nn.Module):
-    """Small symmetric U-Net: (B, in_ch, W, W) -> (B, out_ch, W, W) in [-1, 1]."""
+    """Small symmetric U-Net: (B, in_ch, W, W) -> (B, out_ch, W, W) in [-1, 1].
 
-    def __init__(self, in_ch: int, out_ch: int = 1, base: int = 48, depth: int = 4):
+    film_dim > 0: every block's output is modulated by FiLM from a
+    conditioning vector (B, film_dim), x * (1 + gamma) + beta per channel, with
+    zero-initialised projections (identity at the start of training). Used for
+    the resolution embedding of the multi-resolution model."""
+
+    def __init__(self, in_ch: int, out_ch: int = 1, base: int = 48, depth: int = 4,
+                 film_dim: int = 0):
         super().__init__()
         self.stem = nn.Conv2d(in_ch, base, 3, padding=1)
         chans = [base * (2 ** i) for i in range(depth + 1)]
@@ -120,18 +126,36 @@ class HiCUNet(nn.Module):
             self.ups.append(nn.ConvTranspose2d(chans[i + 1], chans[i], 4, stride=2, padding=1))
             self.upblocks.append(_Block(chans[i] * 2, chans[i]))
         self.head = nn.Conv2d(base, out_ch, 1)
+        self.film = None
+        if film_dim:
+            widths = ([chans[i] for i in range(depth)] + [chans[-1]]
+                      + [chans[i] for i in reversed(range(depth))])
+            self.film = nn.ModuleList(nn.Linear(film_dim, 2 * c) for c in widths)
+            for lin in self.film:
+                nn.init.zeros_(lin.weight)
+                nn.init.zeros_(lin.bias)
 
-    def forward(self, x):
+    def _mod(self, x, k, film):
+        if self.film is None or film is None:
+            return x
+        g, b = self.film[k](film).to(x.dtype).chunk(2, dim=1)
+        return x * (1 + g[:, :, None, None]) + b[:, :, None, None]
+
+    def forward(self, x, film=None):
         x = self.stem(x)
         skips = []
+        k = 0
         for blk, pool in zip(self.downs, self.pools):
-            x = blk(x)
+            x = self._mod(blk(x), k, film)
+            k += 1
             skips.append(x)
             x = pool(x)
-        x = self.mid(x)
+        x = self._mod(self.mid(x), k, film)
+        k += 1
         for up, blk, skip in zip(self.ups, self.upblocks, reversed(skips)):
             x = up(x)
-            x = blk(torch.cat([x, skip], dim=1))
+            x = self._mod(blk(torch.cat([x, skip], dim=1)), k, film)
+            k += 1
         out = torch.tanh(self.head(x))
         return 0.5 * (out + out.transpose(-1, -2))     # enforce contact symmetry
 
@@ -272,8 +296,17 @@ class HiCModel(nn.Module):
 
     def __init__(self, backbone: nn.Module, cond_mode: str,
                  encoder: SeqEncoder | None = None, dist_bias: int = 0,
-                 reference: str = "none"):
+                 reference: str = "none", resolutions: list[int] | None = None,
+                 res_embed_dim: int = 16, default_resolution: int | None = None):
         super().__init__()
+        # resolution conditioning (config model.resolutions): a learned
+        # embedding per resolution drives FiLM in every U-Net block; forward
+        # takes `res` (bin sizes, (B,) tensor or int), default_resolution when
+        # omitted. Off (None): no parameters, old checkpoints load unchanged.
+        self.resolutions = list(resolutions) if resolutions else None
+        self.default_resolution = default_resolution
+        self.res_embed = (nn.Embedding(len(self.resolutions), res_embed_dim)
+                          if self.resolutions else None)
         self.backbone = backbone
         self.encoder = encoder
         self.cond_mode = cond_mode
@@ -290,9 +323,27 @@ class HiCModel(nn.Module):
         self.dist_bias = (nn.Parameter(torch.zeros(dist_bias)) if dist_bias
                           else None)
 
-    def forward(self, cond, pairs=None, planes=None, seq_onehot=None, ref=None):
+    def res_index(self, res, batch: int, device) -> torch.Tensor:
+        if res is None:
+            res = self.default_resolution
+        if res is None:
+            raise ValueError("resolution-conditioned model called without res")
+        if isinstance(res, torch.Tensor):
+            vals = res.tolist() if res.dim() else [int(res)] * batch
+        elif isinstance(res, (list, tuple)):
+            vals = list(res)
+        else:
+            vals = [int(res)] * batch
+        try:
+            idx = [self.resolutions.index(int(v)) for v in vals]
+        except ValueError:
+            raise ValueError(f"resolution {vals} not among the trained {self.resolutions}")
+        return torch.tensor(idx, device=device, dtype=torch.long)
+
+    def forward(self, cond, pairs=None, planes=None, seq_onehot=None, ref=None, res=None):
         """ref: (B, W, W) encoded reference map; required unless reference is
-        "none" (then ignored)."""
+        "none" (then ignored). res: bin size(s) for a resolution-conditioned
+        model (ignored otherwise)."""
         sym = cond
         if self.encoder is not None and seq_onehot is not None:
             emb = self.encoder(seq_onehot, cond.shape[-1])
@@ -302,7 +353,12 @@ class HiCModel(nn.Module):
                 raise ValueError(f"reference={self.reference!r} model called without ref")
             ref = ref.to(cond.dtype)[:, None]
             planes = ref if planes is None else torch.cat([planes, ref], dim=1)
-        out = self.backbone(build_spatial_cond(sym, pairs, planes, self.cond_mode))
+        x = build_spatial_cond(sym, pairs, planes, self.cond_mode)
+        if self.res_embed is not None:
+            film = self.res_embed(self.res_index(res, cond.shape[0], cond.device))
+            out = self.backbone(x, film)
+        else:
+            out = self.backbone(x)
         if self.dist_bias is not None:
             w = out.shape[-1]
             idx = torch.arange(w, device=out.device)
@@ -317,9 +373,11 @@ BACKBONES = ("unet", "dilated", "axial", "pixelmlp")
 
 
 def build_backbone(kind: str, in_ch: int, out_ch: int = 1, base: int = 48,
-                   depth: int = 4) -> nn.Module:
+                   depth: int = 4, film_dim: int = 0) -> nn.Module:
+    if film_dim and kind != "unet":
+        raise ValueError("resolution conditioning (FiLM) is implemented for the unet only")
     if kind == "unet":
-        return HiCUNet(in_ch, out_ch=out_ch, base=base, depth=depth)
+        return HiCUNet(in_ch, out_ch=out_ch, base=base, depth=depth, film_dim=film_dim)
     if kind == "dilated":
         return DilatedCNN(in_ch, out_ch=out_ch, width=max(base, 64))
     if kind == "axial":
@@ -327,3 +385,16 @@ def build_backbone(kind: str, in_ch: int, out_ch: int = 1, base: int = 48,
     if kind == "pixelmlp":
         return PixelMLP(in_ch, out_ch=out_ch, width=max(base, 64))
     raise ValueError(f"unknown backbone {kind!r} (one of {BACKBONES})")
+
+
+def make_model(cfg, in_ch: int, out_ch: int = 1, encoder: SeqEncoder | None = None):
+    """HiCModel from a Config: backbone, distance bias, reference mode and
+    resolution conditioning, so every loader builds the same architecture."""
+    m = cfg.model
+    film = m.res_embed_dim if m.resolutions else 0
+    backbone = build_backbone(m.kind, in_ch, out_ch=out_ch, base=m.base_channels,
+                              depth=m.depth, film_dim=film)
+    return HiCModel(backbone, m.cond_mode, encoder,
+                    cfg.window.size if m.dist_bias else 0, reference=m.reference,
+                    resolutions=m.resolutions, res_embed_dim=m.res_embed_dim,
+                    default_resolution=int(cfg.data.resolution))

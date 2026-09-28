@@ -144,8 +144,14 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # a sequence-only model's out-of-fold prediction of consensus12 replaces
     # the measured consensus for every cell
     "all12reflearn": (TRAIN12, None),
+    # one resolution-conditioned residual model for 2, 5, 10 and 25 kb
+    # (hicmultiome.train_multires, scripts/multires.py); all12multires_<k>kb
+    # are its per-resolution views, evaluated like the dedicated runs
+    "all12multires": (TRAIN12, None),
 }
-REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual"}
+REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
+            "all12multires": "residual"}
+MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
 HONEST_RUNS = set(REF_RUNS) | {"all12honest"}
 REF_OUT = HM / "runs/multicell_reference"
@@ -228,6 +234,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
         for smp in cfg["data"]["samples"]:
             smp["reference_cool"] = str(reference_of(name, smp["name"]))
         cfg.setdefault("model", {})["reference"] = REF_RUNS[base]
+        if base == "all12multires":
+            cfg["model"]["resolutions"] = list(MULTIRES)
+            cfg["model"]["res_embed_dim"] = 16
+            cfg["train"]["compile"] = False      # four window shapes
     cache_name = (f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
                   else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows

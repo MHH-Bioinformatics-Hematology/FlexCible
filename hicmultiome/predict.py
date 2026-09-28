@@ -102,15 +102,11 @@ def build_model(cfg: Config, ckpt: Path, device):
     n_planes = (2 if channels.get("capture_input") else 0) + cfg.model.reference_planes
     mode = cfg.model.cond_mode
     emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
-    backbone = build_backbone(cfg.model.kind,
-                              n_cond_channels(n_sym + emb, n_motifs, n_planes, mode),
-                              out_ch=n_out, base=cfg.model.base_channels,
-                              depth=cfg.model.depth)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if cfg.sequence.uses_encoder else None)
-    model = HiCModel(backbone, mode, encoder,
-                     cfg.window.size if cfg.model.dist_bias else 0,
-                     reference=cfg.model.reference).to(device)
+    from .model import make_model
+    model = make_model(cfg, n_cond_channels(n_sym + emb, n_motifs, n_planes, mode),
+                       n_out, encoder).to(device)
     sd = torch.load(ckpt / "model.pt", map_location=device)
     # older bare-backbone checkpoints have no "backbone." prefix
     if not any(k.startswith("backbone.") for k in sd):
