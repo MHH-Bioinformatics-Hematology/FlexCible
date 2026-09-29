@@ -1401,3 +1401,55 @@ AML) and 0.843 (held-out / AML), above all12refres for the AML pairs (0.749
 and 0.662). all12honest_drop_25kb and the 10 kb dropout runs enter when
 their predictions exist (the script uses a model once its log reports the
 early stop).
+
+## 24. Hard split: windows where a cell deviates most from its consensus (PENDING)
+
+`scripts/hard_split.py`, tables in `results/hard_split/`. Deviation score of a
+window of cell c against the consensus C that c reads (leave-one-out for the
+12 training cells, consensus12 for K562, HMEC and HUVEC), over the upper
+triangle (offset >= 2 bins) of pixels measured in both maps:
+0.5 * (1 - Pearson(T, C)) + 0.5 * var(T - C) / var(T). Candidates: the
+windows of the 12-cell cache (80 bins at 25 kb, 192 at 10 kb, half-window
+stride, inside Akita's training regions, disjoint from the 413 test
+regions); for the held-out cells the union of these positions.
+
+Noise-aware filters, in this order, over 44739 candidate windows (15 cells,
+2 resolutions): 15 without enough measured pixels,
+72 with more than 20% of bins unbalanced, 6708 in
+each cell's bottom 15% of raw contacts per pixel (the cell's own unbalanced
+matrix), 415 whose deviation does not reproduce between two
+replicate maps (Pearson(R1 - C, R2 - C) < 0.3; gm12878 10 kb 94; gm12878 25 kb 5; hmec_deep 10 kb 128; hmec_deep 25 kb 2; huvec_deep 10 kb 161; huvec_deep 25 kb 2; imr90 10 kb 22; imr90 25 kb 1; replicate pairs
+exist for GM12878 and K562, deep intact, and IMR90, HMEC and HUVEC,
+single lane); 37529 kept (`filters.csv`).
+
+Selection. The requested 3% of the genome per cell, with every hard window
+of any cell removed from training for all cells, removes 62% (25 kb) and 59%
+(10 kb) of all training windows, because the 15 cells' windows barely
+overlap. Preferring loci another cell already claimed (a bonus added to the
+score) and a smaller fraction trade removed training windows against
+hardness (`tradeoff.csv`: median score of the chosen windows relative to the
+pure top windows). The split uses 1.5% of the genome per cell (23 windows at
+25 kb, 24 at 10 kb) with a bonus of 0.2: it removes 33.2% and
+29.2% of training windows (5782 of 17397 and 5363 of
+18393) at 0.99 and 0.95 of the pure top windows' median score. At most
+twice a chromosome's length share of a cell's windows lie on one
+chromosome. Training cells: odd chromosomes hard-validation, even
+chromosomes and chrX hard-test; held-out cells: every hard window is
+hard-test (121 and 140 hard-validation windows over the 12 training
+cells). Median score of the hard windows against all candidate windows,
+per cell, in `selection.csv` (e.g. CD14+ monocytes 2.26 against 0.51,
+A549 0.49 against 0.11 at 25 kb). Files: `<k>kb/<cell>.val.bed`,
+`<k>kb/<cell>.test.bed` (score in column 4), `<k>kb/split.json`.
+
+Training (`train.hard_split`, default off): every training window of any
+cell overlapping any hard window is removed; checkpoints are selected on
+each cell's hard-validation windows (median per-window Pearson), and the
+honest validation of the remaining windows is logged alongside. Runs
+all12refres_drop_hard and all12honest_drop_hard at 25 and 10 kb
+(all12refres_refdrop_hard only if reference dropout wins in section 22),
+queued in `scripts/gpu_scheduler.py` after all12refres_refdrop 10 kb.
+Hard-test metrics per cell: Pearson and SCC on the window, the residual
+correlation corr(P - C, T - C) (0: the model adds nothing beyond the
+consensus), the consensus alone, the best single other measured map and,
+where replicates exist, the replicate ceiling (Pearson of the two replicate
+maps and corr(R1 - C, R2 - C)).
