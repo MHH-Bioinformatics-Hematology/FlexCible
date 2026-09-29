@@ -400,7 +400,10 @@ def write_views(out_dir: Path, views: dict[int, Path], ckpt: str = "checkpoint-b
         link = ck / "model.pt"
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(os.path.relpath(src / "model.pt", ck))
+        try:
+            link.symlink_to(os.path.relpath(src / "model.pt", ck))
+        except OSError:                 # SMB/CIFS shares refuse symlinks
+            shutil.copyfile(src / "model.pt", link)
         (view / "best").write_text("checkpoint-best")
         (view / "multires_source.json").write_text(json.dumps(
             {"shared_checkpoint": str(src), "resolution": int(res)}, indent=1))
