@@ -1240,3 +1240,164 @@ windows, held-out cells against consensus12) and re-scored by
 `scripts/minimal_inputs.py --stage absent`, `scripts/perturb_validate.py`
 and `scripts/aml_eval.py`; queued in `scripts/gpu_scheduler.py` right after
 the multi-resolution model.
+
+## 23. Cell-type-specific structure (all12refres, all12honest FINAL; dropout models PENDING)
+
+Question: are differences between cell types (loops, domain boundaries,
+compartment flips present in one cell and absent in another) predicted, or
+does the model return a shared structure? `scripts/cellspecific.py` (stages
+split, predict, pairref, wide, calls, e1, load, diffmap, features, showcase,
+figures, summary; CPU and GPU inference workers share one queue through lock
+files), tests `tests/test_cellspecific.py`, tables `cellspecific/*.csv`,
+figures and per-figure npz in `runs/cellspecific/figures`.
+
+Setup. Only the 413 Akita test regions; no training window of any cell
+overlaps one of them in the 10 and 25 kb 12-cell caches
+(`cellspecific/split_check.csv`, from `split_disjoint.csv`). Cells: the 12
+training cells (each read with its leave-one-out consensus), K562, HMEC deep
+and HUVEC deep (consensus12), MOLM-13, U-937 wild type and U-937 STAG2
+knockout (consensus12; the knockout predicted from the wild-type ChIP with
+RAD21 and SMC3 declared absent, section 19). Models all12refres and
+all12honest at 10 and 25 kb (section 15), predicted with `--tta`. For each
+of the 153 cell pairs and each region, the difference map pred_A - pred_B
+is correlated with meas_A - meas_B (upper triangle, offset >= 2, pixels
+defined in both measured maps and every prediction). Noise floor: two
+differences from maps that share nothing (single-lane in situ rep1 and rep2
+of GM12878, IMR-90, K562, HMEC, HUVEC; deep intact GM12878 and K562; MOLM-13
+Arima with U-937 clone 2 against the Xu map with clone 3; U-937 WT clone 2 -
+KO clone 1 against WT clone 3 - KO clone 2). Features: loops called by
+hicDetectLoops of the HiCExplorer 3.7.6 release at 10 kb on every measured
+map (settings of section 18), strength = log O/E of the 3 x 3 loop pixels
+minus the donut ring 4 to 7 bins away; a loop is differential for a pair
+when it is called in cell A, not in cell B, and its strength is at least 0.3
+in A and 0.3 above B. Boundaries: minima of the insulation profile (100 kb
+diamond of log O/E) with a dip of at least 0.3 in A, 0.25 above B and no
+minimum of B within 2 bins. Compartment flips: genome-wide cis E1 at 100 kb
+(cooltools, phased by GC) per measured map, z-scored; a flip is a run of at
+least four 25 kb bins with E1 > 0.5 in A and < -0.5 in B, scored by the
+contact of the flipping bins with the bins that are A in both cells minus
+those that are B in both (pairs at least 75 kb apart); the measured contact
+score agrees with the E1 call in 92% of the flips. Overlapping test regions
+are merged, so each genomic feature counts once per pair. Direction accuracy
+is the share of features whose predicted difference has the measured sign;
+since one cell of a pair often has stronger loops or boundaries throughout,
+a predictor that assigns every feature of a pair the same sign reaches 0.67
+to 0.86 for loops and boundaries, so the balanced accuracy (features stronger in A and in B as two
+classes, mean of the two class accuracies, averaged over pairs) is the
+reported measure.
+
+Difference maps, median over regions, then over pairs (all12refres /
+all12honest; the consensus the model reads in the last column):
+
+| pairs | n | 10 kb | 25 kb | consensus read (25 kb) |
+|---|---|---|---|---|
+| training / training | 66 | 0.654 / 0.585 | 0.703 / 0.607 | -1.000 |
+| training / held-out | 36 | 0.513 / 0.446 | 0.552 / 0.466 | -0.702 |
+| held-out / held-out | 3 | 0.421 / 0.307 | 0.474 / 0.358 | none (identical) |
+| training / AML | 36 | 0.490 / 0.369 | 0.548 / 0.456 | -0.686 |
+| held-out / AML | 9 | 0.356 / 0.292 | 0.430 / 0.337 | none |
+| MOLM-13 / U-937 | 1 | 0.349 / 0.266 | 0.481 / 0.382 | none |
+| U-937 WT / STAG2 KO | 1 | 0.183 / -0.027 | 0.115 / 0.089 | none |
+
+The SD of the predicted difference is 0.38 to 0.96 of the measured one for
+all12refres (training pairs 0.61 at 10 kb, 0.68 at 25 kb) and 0.77 to 1.45
+for all12honest (0.78, 0.84). Among training cells the best predicted
+contrasts are IMR-90 / HCT116, IMR-90 / CD14+ monocytes and HFF / CD14+
+monocytes (0.83 to 0.84 at 25 kb) and the worst NHEK / MCF-7, NHEK /
+GM23248 and MCF-7 / PC-9 (0.42 to 0.50). Per cell (median over its pairs, 25 kb) CD14+ monocytes lead (0.783)
+and the held-out HMEC (0.462), HUVEC (0.446) and MOLM-13 (0.485) trail.
+Noise floor at 25 kb: single-lane replicate differences agree at 0.56 to
+0.81, deep intact GM12878 / K562 at 0.899, MOLM-13 / U-937 at 0.526 and the
+U-937 knockout contrast at 0.293. all12refres reaches the replicate level
+for GM12878 / IMR-90 (0.831 against 0.806); the pairs with a held-out cell
+stay 0.05 to 0.32 below it (IMR-90 / K562 0.761 against 0.810, GM12878 /
+K562 0.582 against 0.899, K562 / HUVEC 0.474 against 0.632, HMEC / HUVEC
+0.432 against 0.622). At 10 kb the single-lane replicate differences agree
+at 0.30 to 0.54, below the all12refres difference maps for every pair; one
+independent replicate difference against the deep target difference agrees
+at 0.38 to 0.78.
+
+Leave-one-out references and the pair-common control. For two training
+cells the references differ by (map_B - map_A) / 11, the inverted true
+difference (consensus read, -1.000). Both cells of 24 pairs (all 15 among
+GM12878, IMR-90, HCT116, H1, HepG2 and CD14+ monocytes, the training pairs
+of the showcase and review sets, 4 training / held-out pairs) were
+predicted again with one common reference, the consensus of the training
+cells other than both (10 cells; for a training / held-out pair the
+training cell's leave-one-out map). Median over pairs, same pixels, leave-
+one-out reference / common reference / all12honest: 0.730 / 0.760 / 0.664
+(10 kb, training pairs), 0.550 / 0.574 / 0.551 (10 kb, training / held-out),
+0.773 / 0.796 / 0.699 and 0.567 / 0.590 / 0.572 (25 kb). The common
+reference scores higher in all 48 pair x resolution cases, by 0.017 to
+0.056:
+the inverted difference carried by the leave-one-out references lowers the
+agreement of the predicted difference with the measured one
+(`cellspecific/diffmap_pairref*.csv`, `features_direction_pairref.csv`;
+feature direction on these pairs, leave-one-out / common reference,
+balanced: loops 0.861 / 0.895, boundaries 0.938 / 0.951, compartment flips
+0.917 / 0.920).
+
+Feature direction, all12refres (all12honest), balanced accuracy;
+replicate = share of the same features whose direction an independent
+replicate pair reproduces (`cellspecific/features_direction.csv`):
+
+| feature | pairs | n | balanced | plain | pair-centred r | replicate |
+|---|---|---|---|---|---|---|
+| loops | training / training | 11712 | 0.818 (0.841) | 0.924 (0.888) | 0.340 (0.321) | 0.978 |
+| loops | training / held-out | 5211 | 0.809 (0.811) | 0.877 (0.845) | 0.285 (0.270) | 0.87 to 0.91 |
+| loops | held-out / held-out | 401 | 0.732 (0.738) | 0.793 (0.733) | 0.249 (0.240) | 0.81 to 0.83 |
+| loops | with AML | 8042 | 0.655 to 0.665 (0.655 to 0.667) | 0.71 to 0.83 | 0.05 to 0.20 | 0.88 to 0.97 |
+| loops | U-937 WT / KO | 34 | 0.642 (0.538) | 0.735 (0.529) | -0.137 | 0.706 |
+| boundaries | training / training | 5067 | 0.919 (0.926) | 0.959 (0.927) | 0.543 (0.438) | 1.000 |
+| boundaries | training / held-out | 2203 | 0.890 (0.886) | 0.916 (0.900) | 0.487 (0.400) | 0.96 to 0.99 |
+| boundaries | held-out / held-out | 174 | 0.844 (0.850) | 0.862 (0.862) | 0.492 (0.352) | 0.95 to 0.98 |
+| boundaries | with AML | 3796 | 0.689 to 0.752 (0.713 to 0.748) | 0.83 to 0.89 | 0.36 to 0.42 | 0.96 to 1.00 |
+| compartment flips | training / training | 1829 | 0.880 (0.861) | 0.884 (0.861) | 0.612 (0.537) | 0.92 to 0.95 |
+| compartment flips | training / held-out | 961 | 0.820 (0.827) | 0.839 (0.828) | 0.552 (0.488) | 0.93 |
+| compartment flips | held-out / held-out | 96 | 0.792 (0.845) | 0.719 (0.771) | 0.457 (0.426) | 0.81 to 0.89 |
+| compartment flips | with AML | 1648 | 0.662 to 0.749 (0.678 to 0.726) | 0.57 to 0.69 | 0.42 to 0.51 | 0.53 to 0.90 |
+
+The consensus read gets 0.00 on training pairs (it predicts every
+difference inverted) and has no direction on pairs of cells that both read
+consensus12. Boundaries and compartment flips are learned for training,
+held-out and, less, AML pairs; loops are learned at the level of the cell
+(which cell of a pair has stronger loops) more than loop by loop: the
+pair-centred correlation of loop-strength differences is 0.25 to 0.34 for
+non-AML pairs and 0.05 to 0.20 with an AML cell, while replicate pairs
+reproduce 0.87 to 0.98 of the loop directions. The U-937 STAG2 knockout
+contrast is not learned (difference map 0.18 at 10 kb against a clone-pair
+floor of 0.12 and a target-versus-replicate agreement of 0.34; 34 loops,
+balanced 0.64), as in section 19. The predicted feature differences are
+0.08 to 0.59 of the measured ones (median ratio per pair kind).
+
+Showcase (`cellspecific/showcase.csv`), selected on the measured maps only
+(largest measured feature difference not contradicted by an independent
+replicate pair, one per genomic region): S01 loop HFF > MCF-7
+chr12:114.1 Mb; S02 loop CD14+ monocytes > NHEK chr12:39.4 Mb; S03 loop HFF
+> HUVEC chr16:51.1 Mb; S04 loop PC-9 > MOLM-13 chr17:49.7 Mb; S05 loop U-937
+KO > WT chr5:62.9 Mb; S06 boundary IMR-90 > CD14+ monocytes chr4:7.7 Mb;
+S07 boundary A549 > CD14+ monocytes chr16:77.1 Mb; S08 boundary CD14+
+monocytes > HUVEC chr18:47.0 Mb; S09 boundary PC-9 > U-937 chr4:30.2 Mb;
+S10, S11 compartment flip CD14+ monocytes A / HFF B chr10:18.9 and
+chr5:102.0 Mb; S12 flip GM23248 / HUVEC chr15:61.7 Mb; S13 flip MOLM-13 /
+IMR-90 chr21:14.5 Mb; S14, S15 largest between-cell variance share
+(HFF / HepG2 chr4:32.8 Mb, IMR-90 / CD14+ monocytes chr9:134.5 Mb). Figures
+`<id>_<feature>_<region>.png`: rows A, B and the cells at both extremes of
+the measured feature, columns measured, all12refres, all12honest,
+all12refres_drop (25 kb), consensus read, pair-common reference, per-
+distance Pearson on the test region, and a last row A - B for every source
+on one scale; the review set of 10 regions as `showcase80_*.png` (rows =
+sources, columns GM12878, IMR-90, K562, HMEC, HUVEC, MOLM-13, U-937, A - B).
+Every panel holds 80 bins: at 10 kb an 800 kb crop inside the test region,
+at 25 kb the model's 2 Mb window centred on the test region with the 1 Mb
+test region framed (pixels outside the frame may overlap training windows;
+every metric uses the framed region only).
+
+Dropout models (PENDING). all12refres_drop_25kb (section 22) is included
+at 25 kb: difference maps 0.664 (training pairs), 0.574 (training /
+held-out), 0.548 (held-out pairs), 0.569 (training / AML), 0.498 (held-out
+/ AML); compartment flips balanced 0.867, 0.835, 0.792, 0.846 (training /
+AML) and 0.843 (held-out / AML), above all12refres for the AML pairs (0.749
+and 0.662). all12honest_drop_25kb and the 10 kb dropout runs enter when
+their predictions exist (the script uses a model once its log reports the
+early stop).

@@ -1,0 +1,16 @@
+id,region,feature,why,kind,a,b,res_kb,i,j,meas_a,meas_b,meas_diff,e1_diff,diff__pred__all12refres,ok__pred__all12refres,diff__pred__all12honest,ok__pred__all12honest,diff__cons,ok__cons,diff__pairref__all12refres,ok__pairref__all12refres,ok__rep1,ok__rep2,diff__pred__all12refres_drop,ok__pred__all12refres_drop,ok__meas_vs_e1,diff__pairref__all12refres_drop,ok__pairref__all12refres_drop
+S01,chr12:114114560-115163136,loop,loop (train-train),train-train,hff,mcf7,10,29,56,0.8988,-0.4612,1.3600,,0.2626,1.0000,0.7731,1.0000,-0.1236,0.0000,0.3458,1.0000,,,,,,,
+S02,chr12:39383040-40431616,loop,loop (train-train),train-train,cd14mono,nhek,10,88,97,1.0697,-0.2746,1.3443,,0.4391,1.0000,0.5695,1.0000,-0.1222,0.0000,0.5503,1.0000,,,,,,,
+S03,chr16:51128320-52176896,loop,loop (train-heldout/heldout-heldout),train-heldout,hff,huvec_deep,10,69,85,1.1707,-0.0147,1.1854,,0.1981,1.0000,0.6409,1.0000,-0.0587,0.0000,0.2367,1.0000,,,,,,,
+S04,chr17:49690624-50739200,loop,"loop (train-aml/heldout-aml/aml-aml, MOLM-13)",train-aml,pc9,molm13,10,17,49,0.9454,-0.3462,1.2916,,0.0094,1.0000,0.1738,1.0000,-0.0797,0.0000,,,,,,,,,
+S05,chr5:62867456-63916032,loop,loop (u937_wt_vs_ko),u937_wt_vs_ko,u937_ko,u937,10,46,76,0.4250,-0.3699,0.7949,,0.0077,1.0000,-0.0140,0.0000,0.0000,0.5000,,,1.0000,,,,,,
+S06,chr4:7694336-8742912,boundary,boundary (train-train),train-train,imr90,cd14mono,10,74,74,0.9396,-0.0428,0.9824,,0.5372,1.0000,0.5147,1.0000,-0.0893,0.0000,0.6013,1.0000,,,,,,,
+S07,chr16:77051904-78100480,boundary,boundary (train-train),train-train,a549,cd14mono,10,15,15,0.6942,-0.2550,0.9492,,0.8541,1.0000,0.8494,1.0000,-0.0863,0.0000,0.8872,1.0000,,,,,,,
+S08,chr18:47030272-48078848,boundary,boundary (train-heldout/heldout-heldout),train-heldout,cd14mono,huvec_deep,10,85,85,0.3272,-0.5821,0.9093,,0.1873,1.0000,0.2512,1.0000,-0.0591,0.0000,0.2312,1.0000,,,,,,,
+S09,chr4:30224384-31272960,boundary,"boundary (train-aml/heldout-aml/aml-aml, U-937 WT)",train-aml,pc9,u937,10,48,48,0.9033,0.0407,0.8626,,0.6648,1.0000,0.6638,1.0000,-0.0499,0.0000,,,,,,,,,
+S10,chr10:18911232-19959808,compartment,compartment (train-train),train-train,cd14mono,hff,25,36,43,0.7600,-0.8791,1.6391,1.6259,0.9718,1.0000,1.1806,1.0000,-0.1490,0.0000,1.0395,1.0000,,,1.3792,1.0000,1.0000,1.4740,1.0000
+S11,chr5:101974016-103022592,compartment,compartment (train-train),train-train,cd14mono,hff,25,10,13,0.1566,-1.4230,1.5796,2.4489,1.1514,1.0000,1.5858,1.0000,-0.1436,0.0000,1.2413,1.0000,,,1.0670,1.0000,1.0000,1.1632,1.0000
+S12,chr15:61708288-62756864,compartment,compartment (train-heldout/heldout-heldout),train-heldout,gm23248,huvec_deep,25,28,39,1.3424,-0.2800,1.6224,1.7308,0.7839,1.0000,0.9665,1.0000,-0.0694,0.0000,0.8291,1.0000,,,0.9168,1.0000,1.0000,,
+S13,chr21:14475264-15523840,compartment,"compartment (train-aml/heldout-aml/aml-aml, MOLM-13)",train-aml,molm13,imr90,25,1,4,0.0576,-1.2598,1.3173,2.0787,0.3436,1.0000,0.2540,1.0000,-0.0685,0.0000,,,1.0000,,0.7526,1.0000,1.0000,,
+S14,chr4:32845824-33894400,map,between-cell variance share 0.81,train-train,hff,hepg2,25,-1,-1,,,0.4669,,,,,,,,,,,,,,,,
+S15,chr9:134488064-135536640,map,between-cell variance share 0.66,train-train,imr90,cd14mono,25,-1,-1,,,1.0011,,,,,,,,,,,,,,,,

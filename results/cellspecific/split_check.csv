@@ -1,0 +1,5 @@
+cache,res_kb,cells,train_windows,overlapping_test_regions,overlapping_test_windows
+mc_all12_10kb,10,12,18393,0,0
+mc_all12_25kb,25,12,17397,0,0
+mc_all12ref_10kb,10,12,18393,0,0
+mc_all12ref_25kb,25,12,17397,0,0

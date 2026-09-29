@@ -1,0 +1,3 @@
+res_kb,pc_r__pred__all12refres,pc_sd__pred__all12refres,pc_r__pred__all12honest,pc_sd__pred__all12honest,pc_r__cons,pc_sd__cons,pc_r__pairref__all12refres,pc_sd__pairref__all12refres,pc_r__pred__all12refres_drop,pc_sd__pred__all12refres_drop,pc_r__pairref__all12refres_drop,pc_sd__pairref__all12refres_drop,pairs
+10,0.7108,0.6657,0.6412,0.7921,-1.0000,0.0909,0.7514,0.6986,,,,,24
+25,0.7563,0.7285,0.6829,0.8221,-1.0000,0.0909,0.7852,0.7627,0.7345,0.7428,0.7753,0.8243,24
