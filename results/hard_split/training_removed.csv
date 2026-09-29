@@ -1,0 +1,3 @@
+res_kb,training_split_windows,removed_by_union,removed_pct,kept,hard_val_windows,union_positions
+25,17397,5782,33.2,11615,121,345
+10,18393,5363,29.2,13030,140,360

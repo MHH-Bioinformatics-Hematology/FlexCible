@@ -144,6 +144,28 @@ def jobs():
                      f"{PY} scripts/aml_eval.py --stage predict --models {models} "
                      f"--jobs 2 --threads 3 && {PY} scripts/aml_eval.py --stage score perturb figures",
                      ready, (lambda w=wave: is_marked(f"drop_aml_{w}"))))
+    # --- hard split (scripts/hard_split.py), before the cascade
+    split_ok = {r: (lambda r=r: (mx.HARD_SPLIT_DIR / f"{r // 1000}kb" / "split.json").exists())
+                for r in (25000, 10000)}
+    hard = [("all12refres_drop_hard", 25000, "mc_all12ref_25kb"),
+            ("all12honest_drop_hard", 25000, "mc_all12_25kb"),
+            ("all12refres_drop_hard", 10000, "mc_all12ref_10kb"),
+            ("all12honest_drop_hard", 10000, "mc_all12_10kb")]
+    for run, res, cache in hard:
+        n0 = len(J)
+        train12(run, res, cache)
+        base_ready = J[n0].ready
+        J[n0].ready = (lambda b=base_ready, r=res: b() and split_ok[r]())
+    for res in (25000, 10000):          # only if reference dropout wins (flag file)
+        n0 = len(J)
+        train12("all12refres_refdrop_hard", res, f"mc_all12ref_{res // 1000}kb")
+        base_ready = J[n0].ready
+        J[n0].ready = (lambda b=base_ready, r=res: b() and split_ok[r]()
+                       and (MR / "REFDROP_WINS").exists())
+    J.append(Job("hardeval", f"{PY} scripts/hard_split.py --stage hardeval --jobs 4",
+                 lambda: all(trained(r, k) for r, k, _ in hard),
+                 lambda: is_marked("hardeval")))
+    gate_from = len(J)          # later GPU jobs wait for the hard split to exist
     views = " ".join(str(MR / mx.run_name("all12multires", r)) for r in mx.MULTIRES)
     J.append(Job("analysis_c", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/scale_importance.py "
                                f"--views {views} --out {MR / 'scale_importance'}",
@@ -177,6 +199,7 @@ def jobs():
     train12("all12refin", 25000, "mc_all12ref_25kb")
     train12("all12refin", 10000, "mc_all12ref_10kb")
     # --- dedicated minimal-input models (runs/benchmark/QUEUE_REQUEST.md, section 20)
+    gate_minimal = len(J)
     import minimal_inputs as mi
 
     def mdone(run):
@@ -201,6 +224,9 @@ def jobs():
             J.append(Job(f"eval_{r}", f"{MI} --stage eval --run {r} --device cpu && "
                                       f"{MI} --stage summary",
                          (lambda r=r: mdone(r)), (lambda r=r: is_marked(f"eval_{r}"))))
+    for j in J[gate_from:]:
+        if j.gpu:
+            j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())
     return J
 
 

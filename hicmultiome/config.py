@@ -368,6 +368,14 @@ class TrainConfig:
     # i.e. "no reference"), so the model also learns to predict from its
     # inputs alone. Validation always sees the reference. 0 = off.
     reference_dropout: float = 0.0
+    # Hard split (scripts/hard_split.py select): JSON with, per cell, the
+    # hard-validation and hard-test windows (where the cell's map deviates
+    # most from its consensus) and the union of all cells' hard positions.
+    # With it, every training window of ANY cell overlapping the union is
+    # removed, checkpoints are selected on each cell's hard-validation
+    # windows, and the honest validation (val_regions) is logged alongside.
+    # Needs val_regions. None = off.
+    hard_split: str | None = None
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
     # Used for a fast proxy input-search: far fewer windows -> quick candidates,
     # to check whether the track ranking is stable without all chromosomes.

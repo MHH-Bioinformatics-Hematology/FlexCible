@@ -158,6 +158,30 @@ def split_val_regions(coords, n_val: int, window: int, seed: int,
     return vi, ti
 
 
+def hard_split_rows(coords, split_path: str, window: int, res: int):
+    """(hard-validation rows, rows outside every hard position) of a window
+    list for a hard split JSON (scripts/hard_split.py): a row is hard-validation
+    when its (chrom, start) is a validation window of its own sample; a row is
+    removed from training when it shares a bin with any cell's hard window."""
+    sp = json.loads(Path(split_path).read_text())
+    if int(sp["res"]) != int(res) or int(sp["window"]) != int(window):
+        raise ValueError(f"{split_path}: split for {sp['res']} bp / {sp['window']} bins, "
+                         f"run is {res} bp / {window} bins")
+    ch, st, sm = coords
+    hv = {(s, c, int(b)) for s, v in sp["cells"].items() for c, b in v.get("val", [])}
+    by = {}
+    for c, a, b in sp["union"]:
+        by.setdefault(c, []).append((int(a), int(b)))
+    hv_rows, keep = [], []
+    for i, (c, s, smp) in enumerate(zip(ch, st, sm)):
+        s = int(s)
+        if (smp, c, s) in hv:
+            hv_rows.append(i)
+        if not any(s < b and a < s + window for a, b in by.get(c, ())):
+            keep.append(i)
+    return np.asarray(hv_rows, dtype=np.int64), np.asarray(keep, dtype=np.int64)
+
+
 def log_val_split(coords, vi, ti, exclude_overlap: bool):
     """Per sample: validation windows and training windows kept; warns when a
     sample has no validation window."""
@@ -370,16 +394,35 @@ def train(cfg: Config):
     chroms = cfg.train.chroms                    # optional fast-proxy chrom restriction
     res_dt = {"float32": torch.float32, "float16": torch.float16}[cfg.train.resident_dtype]
     vi = ti = None                               # val_regions row split of ds
+    hdata = None                                 # hard-validation windows (train.hard_split)
+    if cfg.train.hard_split and not cfg.train.val_regions:
+        raise ValueError("train.hard_split needs train.val_regions")
     if cfg.train.val_regions:
         # hold out a fixed set of whole windows as an Akita-style validation set
         data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed, chroms=chroms,
                           dtype=res_dt)
         vds = ds
         if data is not None:
-            vi, ti = split_val_regions(_coords(ds), cfg.train.val_regions, ds.window_size,
+            co = _coords(ds)
+            base = np.arange(len(co[0]))
+            if cfg.train.hard_split:
+                hv_rows, base = hard_split_rows(co, cfg.train.hard_split, ds.window_size,
+                                                cfg.data.resolution)
+                hdata = {k: v[hv_rows] for k, v in data.items()}
+                if rank == 0:
+                    per = {}
+                    for i in hv_rows:
+                        per[co[2][i]] = per.get(co[2][i], 0) + 1
+                    log.info("hard split %s: %d hard-validation windows %s; %d of %d "
+                             "training-split windows removed (any cell's hard position)",
+                             cfg.train.hard_split, len(hv_rows), per,
+                             len(co[0]) - len(base), len(co[0]))
+                co = ([co[0][i] for i in base], co[1][base], [co[2][i] for i in base])
+            vi, ti = split_val_regions(co, cfg.train.val_regions, ds.window_size,
                                        cfg.train.seed, cfg.train.val_exclude_overlap)
             if rank == 0:
-                log_val_split(_coords(ds), vi, ti, cfg.train.val_exclude_overlap)
+                log_val_split(co, vi, ti, cfg.train.val_exclude_overlap)
+            vi, ti = base[vi], base[ti]
             vdata = {k: v[vi] for k, v in data.items()}
             data = {k: v[ti] for k, v in data.items()}
         else:
@@ -423,6 +466,8 @@ def train(cfg: Config):
         data["cond"] = data["cond"][:, rows, :]
         if vdata is not None:
             vdata["cond"] = vdata["cond"][:, rows, :]
+        if hdata is not None:
+            hdata["cond"] = hdata["cond"][:, rows, :]
         if is_main:
             log.info("select_tracks=%s -> %d tracks, %d motifs, %d sym rows",
                      cfg.train.select_tracks,
@@ -470,9 +515,11 @@ def train(cfg: Config):
     bt = data["bait"][sl].to(device)
     rf = data["ref"][sl].to(device) if use_ref else None
     pf = data["prior"][sl].to(device) if cfg.model.prior else None
-    vdata_d = None
+    vdata_d = hdata_d = None
     if is_main and vdata is not None:
         vdata_d = {k2: v.to(device) for k2, v in vdata.items()}
+    if is_main and hdata is not None:
+        hdata_d = {k2: v.to(device) for k2, v in hdata.items()}
     N = tg.shape[0]
 
     tr_coords = val_coords = None
@@ -599,6 +646,13 @@ def train(cfg: Config):
                 r = val_akita_median(model, vdata_d, device, vb, offset, n_motifs,
                                      cond_mode=cond_mode, seq_fn=seq_fn, capin=capin,
                                      use_ref=use_ref)
+                if hdata_d is not None:
+                    # selection on the hard-validation windows; honest logged
+                    r_h = val_akita_median(model, hdata_d, device, vb, offset, n_motifs,
+                                           cond_mode=cond_mode, capin=capin, use_ref=use_ref)
+                    log.info("  [val] epoch %d honest-val %.4f hard-val %.4f",
+                             epoch, r, r_h)
+                    r = r_h
             else:
                 r = val_distance_pearson(model, vdata_d, device, vb, offset, n_motifs,
                                          capin=capin, cond_mode=cond_mode, seq_fn=seq_fn,
@@ -798,8 +852,8 @@ def train_stream(cfg: Config):
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    if cfg.model.reference != "none" or cfg.model.prior:
-        raise NotImplementedError("model.reference / model.prior are supported on the "
+    if cfg.model.reference != "none" or cfg.model.prior or cfg.train.hard_split:
+        raise NotImplementedError("model.reference / model.prior / train.hard_split are supported on the "
                                   "resident cache path only (train.stream: false)")
     ds = StreamWindowDataset(cfg, "train", str(cache_dir), stride=cfg.train.stream_stride)
     if ds.n_out != 1:

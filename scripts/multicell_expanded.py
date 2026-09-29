@@ -156,16 +156,24 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     "all12refres_drop": (TRAIN12, None),
     "all12honest_drop": (TRAIN12, None),
     "all12refres_refdrop": (TRAIN12, None),
+    # the dropout runs on the hard split (scripts/hard_split.py): every cell's
+    # hard windows removed from training, selection on hard-validation
+    "all12refres_drop_hard": (TRAIN12, None),
+    "all12honest_drop_hard": (TRAIN12, None),
+    "all12refres_refdrop_hard": (TRAIN12, None),
 }
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
+DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
+HARD_SPLIT_DIR = REPO / "results/hard_split"
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
             "all12multires": "residual", "all12casc": "residual",
-            "all12refres_drop": "residual", "all12refres_refdrop": "residual"}
+            "all12refres_drop": "residual", "all12refres_refdrop": "residual",
+            "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
-HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop"}
+HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop", "all12honest_drop_hard"}
 REF_OUT = HM / "runs/multicell_reference"
 
 
@@ -262,7 +270,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["train"]["compile"] = False      # four window shapes
     cache_name = (f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
-                  else f"mc_{run_name('all12', res)}" if base == "all12honest_drop"
+                  else f"mc_{run_name('all12', res)}" if base in ("all12honest_drop",
+                                                                   "all12honest_drop_hard")
                   else f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
                   else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows
                   else f"mc_{name}")
@@ -279,6 +288,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
         td, rd = DROPOUT_RUNS[base]
         cfg["train"].update({"track_dropout": td, "track_dropout_mode": "uniform_count",
                              "reference_dropout": rd})
+    if base.endswith("_hard"):
+        cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg
 
 

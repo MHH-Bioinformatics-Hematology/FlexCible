@@ -1964,3 +1964,47 @@ def test_reference_dropout_config_and_training(workdir):
         hprep.build(c2)
     with pytest.raises(ValueError, match="reference_dropout"):
         htrain.train(c2)
+
+
+def test_hard_split_training(workdir):
+    """train.hard_split: every window overlapping any cell's hard position is
+    removed from training for all cells, the hard-validation windows are the
+    listed ones of each sample, and training selects on them."""
+    import json
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    raw = _ref_raw(workdir, "hard", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [dict(s0, name="a"), dict(s0, name="b")]
+    raw["train"]["cache_dir"] = str(workdir / "cache_hard")
+    c = Config.from_dict(raw)
+    if not (Path(c.train.cache_dir) / "manifest.json").exists():
+        hprep.build(c)
+    data, ds = htrain._stack(c.train.cache_dir, "train", 0.0, False, 0)
+    co = htrain._coords(ds)
+    W = ds.window_size
+    a_rows = [i for i, s in enumerate(co[2]) if s == "a"]
+    v = (co[0][a_rows[0]], int(co[1][a_rows[0]]))
+    t = (co[0][a_rows[-1]], int(co[1][a_rows[-1]]))
+    sp = {"res": BINSIZE, "window": W,
+          "cells": {"a": {"val": [list(v)], "test": [list(t)]}, "b": {"val": [], "test": []}},
+          "union": [[v[0], v[1], v[1] + W], [t[0], t[1], t[1] + W]]}
+    f = workdir / "hard_split.json"
+    f.write_text(json.dumps(sp))
+    hv, keep = htrain.hard_split_rows(co, str(f), W, BINSIZE)
+    assert [co[2][i] for i in hv] == ["a"] and (co[0][hv[0]], int(co[1][hv[0]])) == v
+    for i in keep:                      # no kept window of any sample touches a hard position
+        for ch, a, b in sp["union"]:
+            assert not (co[0][i] == ch and int(co[1][i]) < b and a < int(co[1][i]) + W)
+    b_at_v = [i for i in range(len(co[0])) if co[2][i] == "b" and co[0][i] == v[0]
+              and int(co[1][i]) == v[1]]
+    assert b_at_v and not set(b_at_v) & set(keep)        # removed for the other cell too
+    with pytest.raises(ValueError, match="split for"):
+        htrain.hard_split_rows(co, str(f), W + 1, BINSIZE)
+    raw["train"].update(hard_split=str(f), output_dir=str(workdir / "run_hard"))
+    c2 = Config.from_dict(raw)
+    htrain.train(c2)
+    txt = (workdir / "run_hard" / "best").exists()
+    assert txt
