@@ -709,6 +709,19 @@ chromosomes.
 
 All three run under `scripts/gpu_scheduler.py`; results follow here.
 
+Model A training: stopped by patience at epoch 50 (665,050 steps), best
+mean validation 0.8729 at epoch 40, with honest validation per resolution
+of 0.758 (2 kb), 0.860 (5 kb), 0.923 (10 kb) and 0.951 (25 kb). The
+validation windows are those of the dedicated runs (same caches, seed and
+split): all12refres reached 0.9445 at 25 kb and 0.9181 at 10 kb, so on
+validation sharing raises 25 kb by 0.006 and 10 kb by 0.005; the dedicated
+5 and 2 kb reference models for the same comparison are queued. Test
+scores follow from the evaluation now running. The training windows were
+staged once as float16 memory maps on local disk
+(`hicmultiome.train_multires --stage-only`); the first start, in which
+each rank decompressed its stripe from the network share, was stopped
+after 45 minutes of loading.
+
 ## 18. Head-to-head benchmark against published predictors (FINAL)
 
 Question: how do our models compare with Akita, Hi-cGAN, Epiphany, HiC-Reg
