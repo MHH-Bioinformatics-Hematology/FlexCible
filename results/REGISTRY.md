@@ -1457,10 +1457,10 @@ maps and corr(R1 - C, R2 - C)).
 Quick answer without retraining (`hard_split.py --stage quick`, tables
 `results/hard_split/quick_*.csv`). The existing models on the 413 Akita test
 regions (never trained on by any cell), per cell ranked by the same score
-and filters (quick_filters.csv: of 6195 cell-regions per resolution, 783
-(25 kb) and 931 (10 kb) removed by coverage, masked bins and, at 10 kb
-mainly for HUVEC (128), HMEC (57), GM12878 (29) and IMR90 (16),
-replicate reproducibility); the hardest 20% of each cell's passing regions
+and filters (quick_filters.csv: of 6195 cell-regions per resolution, 941
+(25 kb) and 1164 (10 kb) removed, most by the coverage rule and at 10 kb
+230 by replicate reproducibility: HUVEC 128, HMEC 57, GM12878 29, IMR90
+16); the hardest 20% of each cell's passing regions
 (about 70) against all passing regions. The best single other map is the
 one other cell whose map has the highest median over the subset; its
 per-region values come from the section 15 crosscell tables (same regions,
@@ -1508,6 +1508,6 @@ cells track dropout raises the residual correlation from 0.58 to 0.64
 to 0.828, while it lowers the residual correlation on the training cells
 (0.76 to 0.72, 0.77 to 0.72). Reference dropout in addition lowers both at
 25 kb (0.68 and 0.56), so the gated all12refres_refdrop_hard runs are not
-queued. Without a reference the residual correlation is 0.57 to 0.67, so
+queued. Without a reference the residual correlation is 0.50 to 0.67, so
 the residual reference models add the most cell-specific signal beyond the
 consensus.
