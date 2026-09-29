@@ -72,6 +72,11 @@ MODELS = {  # name -> (run dir, res, reference run name or None)
     "all12honest_25kb": (mx.REF_OUT / "all12honest_25kb", 25000, None),
     "all12refres_10kb": (mx.REF_OUT / "all12refres_10kb", 10000, "all12refres"),
     "all12refres_25kb": (mx.REF_OUT / "all12refres_25kb", 25000, "all12refres"),
+    # trained with track dropout (registry section 22)
+    **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000,
+                      None if b.startswith("all12honest") else b)
+       for b in ("all12refres_drop", "all12honest_drop", "all12refres_refdrop")
+       for k in (10, 25)},
 }
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # measured ChIP of the degron cells (4DN GRCh38 fold change: RAD21 and CTCF from
@@ -140,6 +145,8 @@ def pred_file(model: str, pert: str) -> Path:
 
 def stage_predict():
     for model, (run, res, ref) in MODELS.items():
+        if not (run / "best").exists():          # not trained yet
+            continue
         ck = run / (run / "best").read_text().strip()
         _, bw, assay, _ = mx.CELLS["hct116"]
         if all(pred_file(model, p).exists() for p in PERTS):
@@ -158,6 +165,8 @@ def stage_predict():
 
 def stage_predict_chip():
     for model, (run, res, ref) in MODELS.items():
+        if not (run / "best").exists():          # not trained yet
+            continue
         ck = run / (run / "best").read_text().strip()
         _, _, assay, _ = mx.CELLS["hct116"]
         for name, bw in CHIP_DIRS.items():

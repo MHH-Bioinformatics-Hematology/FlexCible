@@ -403,6 +403,8 @@ def train(cfg: Config):
     use_ref = cfg.model.reference != "none"
     if use_ref:
         ds.check_reference_leakage()
+    if cfg.train.reference_dropout > 0 and not use_ref:
+        raise ValueError("train.reference_dropout needs a model.reference model")
     if cfg.model.prior and "prior" not in data:
         raise RuntimeError(f"model.prior but the cache {cache_dir} holds no prior "
                            "windows: set data.prior_cool / samples[].prior_cool and "
@@ -644,6 +646,9 @@ def train(cfg: Config):
             cond_b, tgt, bait_b = cd[idx].float(), tg[idx].float(), bt[idx]
             ref_b = rf[idx].float() if rf is not None else None
             prior_b = pf[idx].float() if pf is not None else None
+            if ref_b is not None and cfg.train.reference_dropout > 0:
+                keep = (torch.rand(bs, device=device) >= cfg.train.reference_dropout)
+                ref_b = ref_b * keep[:, None, None].to(ref_b.dtype)
             rev_mask = None
             if cfg.train.augment_reverse:
                 rmask = torch.rand(bs, device=device) < 0.5

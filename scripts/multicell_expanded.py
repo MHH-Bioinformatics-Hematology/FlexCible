@@ -151,13 +151,21 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # coarse-to-fine cascade (scripts/cascade.py): the residual reference model
     # plus the coarser level's out-of-fold prediction as a prior plane
     "all12casc": (TRAIN12, None),
+    # with track dropout (uniform_count, as configs/full2k_proper.yaml): a
+    # missing track means "unknown"; refdrop adds reference dropout 0.3
+    "all12refres_drop": (TRAIN12, None),
+    "all12honest_drop": (TRAIN12, None),
+    "all12refres_refdrop": (TRAIN12, None),
 }
+DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
+                "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
-            "all12multires": "residual", "all12casc": "residual"}
+            "all12multires": "residual", "all12casc": "residual",
+            "all12refres_drop": "residual", "all12refres_refdrop": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
-HONEST_RUNS = set(REF_RUNS) | {"all12honest"}
+HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop"}
 REF_OUT = HM / "runs/multicell_reference"
 
 
@@ -254,6 +262,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["train"]["compile"] = False      # four window shapes
     cache_name = (f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
+                  else f"mc_{run_name('all12', res)}" if base == "all12honest_drop"
                   else f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
                   else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows
                   else f"mc_{name}")
@@ -266,6 +275,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
         # any cell) for the runs made after 2026-09-28; the earlier runs as run
         "val_exclude_overlap": base in HONEST_RUNS,
     })
+    if base in DROPOUT_RUNS:
+        td, rd = DROPOUT_RUNS[base]
+        cfg["train"].update({"track_dropout": td, "track_dropout_mode": "uniform_count",
+                             "reference_dropout": rd})
     return cfg
 
 

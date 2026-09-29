@@ -1938,3 +1938,29 @@ def test_multires_staged_memmaps_match_cache(workdir):
         np.testing.assert_array_equal(np.asarray(mm["ref"]), ref["ref"].numpy())
     train_multires(cfgs, workdir / "run_mr_staged", stage_dir=st)
     assert (workdir / "run_mr_staged" / "checkpoint-best" / "model.pt").exists()
+
+
+def test_reference_dropout_config_and_training(workdir):
+    """train.reference_dropout (default 0) trains a reference model with the
+    reference plane withheld in some windows, together with track dropout;
+    it is refused for a model without reference."""
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+    from hicmultiome.config import TrainConfig
+
+    assert TrainConfig().reference_dropout == 0.0
+    raw = _ref_raw(workdir, "refdrop", reference="residual")
+    raw["train"].update(reference_dropout=0.5, track_dropout=0.5,
+                        track_dropout_mode="uniform_count")
+    c = Config.from_dict(raw)
+    if not (Path(c.train.cache_dir) / "manifest.json").exists():
+        hprep.build(c)
+    htrain.train(c)
+    assert (Path(c.train.output_dir) / "best").exists()
+    raw2 = _ref_raw(workdir, "refdrop_bad", ref_cool=False)
+    raw2["train"].update(reference_dropout=0.5, cache_dir=str(workdir / "cache_noref"))
+    c2 = Config.from_dict(raw2)
+    if not (Path(c2.train.cache_dir) / "manifest.json").exists():
+        hprep.build(c2)
+    with pytest.raises(ValueError, match="reference_dropout"):
+        htrain.train(c2)

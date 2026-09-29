@@ -1209,3 +1209,21 @@ panels, the three regions with the strongest measured change per model).
 Not analysed: HeLa CTCF-AID (Wutz et al. 2017) and the HAP1 CTCF-site
 deletions (Sanborn et al. 2015, 20 maps, 4DN), both downloaded to
 `perturb/`; neither cell has a ChIP set among the model inputs.
+
+## 22. Track dropout in the 12-cell models (PENDING)
+
+Models trained without track dropout collapse when tracks are missing
+(section 20), read a missing RAD21 as HFF-like sharp loops (section 21) and
+add little beyond the consensus for unseen cells (section 19). Runs
+all12refres_drop (residual reference, per-cell leave-one-out consensus) and
+all12honest_drop (no reference) at 25 and 10 kb repeat all12refres and
+all12honest (section 15) with track dropout 0.5 in `uniform_count` mode (per
+window a uniform number of kept tracks, the rest set to their absent value,
+as `configs/full2k_proper.yaml`), honest validation, everything else equal.
+all12refres_refdrop additionally withholds the reference plane in 30% of the
+training windows (`train.reference_dropout`, default 0; the plane is set to
+0, the expected level). Evaluated as in section 15 (413 regions, test
+windows, held-out cells against consensus12) and re-scored by
+`scripts/minimal_inputs.py --stage absent`, `scripts/perturb_validate.py`
+and `scripts/aml_eval.py`; queued in `scripts/gpu_scheduler.py` right after
+the multi-resolution model.

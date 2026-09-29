@@ -182,6 +182,9 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
     if sorted(reslist) != sorted(base.model.resolutions):
         raise ValueError(f"configs cover {reslist}, model.resolutions {base.model.resolutions}")
 
+    if any(c.train.reference_dropout > 0 or c.train.track_dropout > 0 for c in cfgs):
+        raise NotImplementedError("track / reference dropout are not supported in "
+                                  "multi-resolution training")
     if base.model.prior:
         raise NotImplementedError("model.prior is not supported in multi-resolution training")
     use_ref = base.model.reference != "none"

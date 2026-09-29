@@ -363,6 +363,11 @@ class TrainConfig:
     # from only a couple of tracks. Active whenever track_dropout > 0 (its value
     # is ignored in uniform_count mode).
     track_dropout_mode: str = "independent"
+    # Reference dropout (model.reference models): probability per training
+    # window that the reference plane is replaced by 0 (the expected level,
+    # i.e. "no reference"), so the model also learns to predict from its
+    # inputs alone. Validation always sees the reference. 0 = off.
+    reference_dropout: float = 0.0
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
     # Used for a fast proxy input-search: far fewer windows -> quick candidates,
     # to check whether the track ranking is stable without all chromosomes.

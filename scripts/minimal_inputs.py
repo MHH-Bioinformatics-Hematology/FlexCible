@@ -74,6 +74,9 @@ EXISTING = {
     "all12refres_10kb": (mx.REF_OUT / "all12refres_10kb", 10000, ["gm12878", "imr90", "k562"], False),
     "all12honest_25kb": (mx.REF_OUT / "all12honest_25kb", 25000, ["gm12878", "imr90", "k562"], False),
     "all12honest_10kb": (mx.REF_OUT / "all12honest_10kb", 10000, ["gm12878", "imr90", "k562"], False),
+    # 12-cell models trained with track dropout (registry section 22)
+    **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000, ["gm12878", "imr90", "k562"], True)
+       for b in ("all12refres_drop", "all12honest_drop", "all12refres_refdrop") for k in (25, 10)},
     "akita_native_trackdrop": (REPO / "runs/akita_native_trackdrop", 2048, ["gm12878"], True),
     "akita_native_honest": (HM / "runs/akita_ref/akita_native_honest", 2048, ["gm12878"], False),
     "akita_native_refres": (HM / "runs/akita_ref/akita_native_refres", 2048, ["gm12878"], False),
@@ -166,7 +169,7 @@ def stage_absent(models=None, sets=None):
     for name, (run, res, cells, _) in EXISTING.items():
         if models and name not in models:
             continue
-        ref = "all12refres" if name.startswith("all12refres") else None
+        ref = name.rsplit("_", 1)[0] if name.startswith("all12refres") else None
         ks = {k: v for k, v in SETS.items() if not sets or k in sets}
         for cell in cells:
             # one pass per model and cell; every keep set in the same pass

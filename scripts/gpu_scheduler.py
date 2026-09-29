@@ -120,6 +120,30 @@ def jobs():
     J.append(Job("eval_all12multires", f"{PY} scripts/multires.py --stage views && "
                                        f"{PY} scripts/multires.py --stage eval",
                  a_done, lambda: is_marked("eval_all12multires")))
+    # --- track dropout (registry section 22), right after model A
+    drop = [("all12refres_drop", 25000, "mc_all12ref_25kb"),
+            ("all12honest_drop", 25000, "mc_all12_25kb"),
+            ("all12refres_drop", 10000, "mc_all12ref_10kb"),
+            ("all12honest_drop", 10000, "mc_all12_10kb"),
+            ("all12refres_refdrop", 25000, "mc_all12ref_25kb"),
+            ("all12refres_refdrop", 10000, "mc_all12ref_10kb")]
+    for run, res, cache in drop:
+        train12(run, res, cache)
+    drop_names = [mx.run_name(r, k) for r, k, _ in drop]
+    for wave, n in (("main", 4), ("all", 6)):
+        ready = (lambda n=n: all(trained(r, k) for r, k, _ in drop[:n]))
+        models = " ".join(drop_names[:n])
+        J.append(Job(f"drop_minimal_{wave}",
+                     f"{PY} scripts/minimal_inputs.py --stage absent --models {models} && "
+                     f"{PY} scripts/minimal_inputs.py --stage summary",
+                     ready, (lambda w=wave: is_marked(f"drop_minimal_{w}"))))
+        J.append(Job(f"drop_perturb_{wave}",
+                     f"{PY} scripts/perturb_validate.py --stage predict score figures",
+                     ready, (lambda w=wave: is_marked(f"drop_perturb_{w}"))))
+        J.append(Job(f"drop_aml_{wave}",
+                     f"{PY} scripts/aml_eval.py --stage predict --models {models} "
+                     f"--jobs 2 --threads 3 && {PY} scripts/aml_eval.py --stage score perturb figures",
+                     ready, (lambda w=wave: is_marked(f"drop_aml_{w}"))))
     views = " ".join(str(MR / mx.run_name("all12multires", r)) for r in mx.MULTIRES)
     J.append(Job("analysis_c", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/scale_importance.py "
                                f"--views {views} --out {MR / 'scale_importance'}",
@@ -152,6 +176,31 @@ def jobs():
     train12("all12honest", 2000, "mc_all12")
     train12("all12refin", 25000, "mc_all12ref_25kb")
     train12("all12refin", 10000, "mc_all12ref_10kb")
+    # --- dedicated minimal-input models (runs/benchmark/QUEUE_REQUEST.md, section 20)
+    import minimal_inputs as mi
+
+    def mdone(run):
+        f = mi.OUT / f"{run}.train.log"
+        return "done." in (f.read_text(errors="replace") if f.exists() else "")
+    MI = f"{PY} scripts/minimal_inputs.py"
+    groups = [["min_ctcf_h3k27ac_refres_25kb"], ["min_ctcf_rad21_refres_25kb"],
+              ["min_one_per_group_refres_25kb"], ["min_ctcf_h3k27ac_refres_10kb"],
+              ["min_ctcf_rad21_refres_10kb"], ["min_one_per_group_refres_10kb"],
+              ["min_ctcf_h3k27ac_gm2kb", "min_ctcf_rad21_gm2kb"],
+              ["min_one_per_group_gm2kb", "min_motifs_only_gm2kb"],
+              ["min_motifs_only_refres_25kb"], ["min_motifs_only_refres_10kb"]]
+    for g in groups:
+        if len(g) == 1:
+            cmd = f"{MI} --stage train --run {g[0]} --gpus 0,1"
+        else:              # two single-GPU trainings side by side
+            cmd = (f"{MI} --stage train --run {g[0]} --gpus 0 & "
+                   f"{MI} --stage train --run {g[1]} --gpus 1 & wait")
+        J.append(Job("train_" + "+".join(g), cmd, lambda: True,
+                     (lambda g=g: all(mdone(r) for r in g)), gpu=True))
+        for r in g:
+            J.append(Job(f"eval_{r}", f"{MI} --stage eval --run {r} --device cpu && "
+                                      f"{MI} --stage summary",
+                         (lambda r=r: mdone(r)), (lambda r=r: is_marked(f"eval_{r}"))))
     return J
 
 
