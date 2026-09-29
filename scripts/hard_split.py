@@ -250,8 +250,18 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
     raw = cooler.Cooler(raw_uri(cell, res))
     rp = rep_pair(cell, res)
     reps = [cooler.Cooler(str(p)) for p in rp] if rp else None
-    others = {o: cooler.Cooler(str(mx.target(o, res))) for o in mx.BASELINE_MAPS
-              if mx.CELLS[o][3] != mx.CELLS[cell][3] and mx.target(o, res).exists()}
+    # other cells' measured maps: from the section 15 crosscell table of the
+    # same regions and target when it exists (per-region base_<cell> columns),
+    # else fetched here
+    base_tab = None
+    cc = mx.REF_OUT / mx.run_name("all12refres", res) / "crosscell" / f"predict_{cell}.csv"
+    if regions is None and cc.exists():
+        bt = pd.read_csv(cc).set_index("region")
+        base_tab = bt[[c for c in bt.columns if c.startswith("base_")
+                       and not c.startswith("base_consensus")]]
+    others = ({} if base_tab is not None else
+              {o: cooler.Cooler(str(mx.target(o, res))) for o in mx.BASELINE_MAPS
+               if mx.CELLS[o][3] != mx.CELLS[cell][3] and mx.target(o, res).exists()})
     if regions is None:
         regions = pd.read_csv(sc.REGIONS, sep="\t", usecols=[0, 1, 2],
                               names=["chrom", "start", "end"])
@@ -287,6 +297,10 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
             mask = valid
             rec["consensus_pearson"] = bm.pearson(C, T, mask)
             rec["consensus_scc"] = bm.scc(C, T, mask)
+            key = f"{chrom}:{s}-{e}"
+            if base_tab is not None and key in base_tab.index:
+                for c_, v in base_tab.loc[key].items():
+                    rec[f"map_{c_[5:]}"] = v
             for o, oc in others.items():
                 O = fetch(oc, chrom, s, e)
                 if O.shape == T.shape:

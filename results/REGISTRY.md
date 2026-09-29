@@ -1453,3 +1453,61 @@ correlation corr(P - C, T - C) (0: the model adds nothing beyond the
 consensus), the consensus alone, the best single other measured map and,
 where replicates exist, the replicate ceiling (Pearson of the two replicate
 maps and corr(R1 - C, R2 - C)).
+
+Quick answer without retraining (`hard_split.py --stage quick`, tables
+`results/hard_split/quick_*.csv`). The existing models on the 413 Akita test
+regions (never trained on by any cell), per cell ranked by the same score
+and filters (quick_filters.csv: of 6195 cell-regions per resolution, 783
+(25 kb) and 931 (10 kb) removed by coverage, masked bins and, at 10 kb
+mainly for HUVEC (128), HMEC (57), GM12878 (29) and IMR90 (16),
+replicate reproducibility); the hardest 20% of each cell's passing regions
+(about 70) against all passing regions. The best single other map is the
+one other cell whose map has the highest median over the subset; its
+per-region values come from the section 15 crosscell tables (same regions,
+target and pixel rule). all12refres_refdrop at 10 kb was still training
+and is not included.
+
+Hardest 20% of the passing 413 regions per cell, 25 kb, median over cells (training cells / held-out cells); Pearson, SCC, residual correlation:
+
+| model | Pearson | SCC | residual correlation |
+|---|---|---|---|
+| residual reference (all12refres) | 0.880 / 0.809 | 0.857 / 0.770 | 0.759 / 0.579 |
+| residual reference, track dropout (all12refres_drop) | 0.880 / 0.851 | 0.853 / 0.825 | 0.723 / 0.641 |
+| residual, track and reference dropout (all12refres_refdrop) | 0.869 / 0.830 | 0.842 / 0.788 | 0.681 / 0.557 |
+| multi-resolution residual (all12multires) | 0.902 / 0.824 | 0.877 / 0.797 | 0.800 / 0.582 |
+| no reference (all12honest) | 0.762 / 0.629 | 0.719 / 0.618 | 0.647 / 0.512 |
+| no reference, track dropout (all12honest_drop) | 0.719 / 0.686 | 0.677 / 0.633 | 0.563 / 0.674 |
+| consensus alone | 0.784 / 0.751 | 0.752 / 0.707 | 0 by definition |
+| best single other map | 0.811 / 0.740 | | |
+| replicate maps (where they exist) | 0.929 / 0.988 | | 0.882 / 0.984 |
+
+Hardest 20% of the passing 413 regions per cell, 10 kb, median over cells (training cells / held-out cells); Pearson, SCC, residual correlation:
+
+| model | Pearson | SCC | residual correlation |
+|---|---|---|---|
+| residual reference (all12refres) | 0.888 / 0.801 | 0.839 / 0.742 | 0.773 / 0.585 |
+| residual reference, track dropout (all12refres_drop) | 0.868 / 0.828 | 0.816 / 0.781 | 0.716 / 0.639 |
+| multi-resolution residual (all12multires) | 0.897 / 0.813 | 0.851 / 0.763 | 0.785 / 0.597 |
+| no reference (all12honest) | 0.747 / 0.668 | 0.683 / 0.618 | 0.625 / 0.497 |
+| no reference, track dropout (all12honest_drop) | 0.727 / 0.680 | 0.655 / 0.638 | 0.572 / 0.585 |
+| consensus alone | 0.768 / 0.695 | 0.716 / 0.648 | 0 by definition |
+| best single other map | 0.755 / 0.667 | | |
+| replicate maps (where they exist) | 0.805 / 0.696 | | 0.642 / 0.558 |
+
+On the hardest regions every model loses Pearson against all passing
+regions, and the consensus alone loses more (25 kb training cells 0.924 to
+0.784): the regions are those where the cell departs from the consensus.
+The residual reference models keep 0.880 (25 kb) and 0.888 (10 kb) on the
+training cells, and their residual correlation, the part of the departure
+they predict, is 0.76 and 0.77 (multi-resolution model 0.80 and 0.79),
+against a replicate ceiling of 0.88 (25 kb) and 0.64 (10 kb) where
+replicate pairs exist (GM12878, IMR90, K562, HMEC, HUVEC; at 10 kb the
+single-lane pairs are noisier than the models' target). On the held-out
+cells track dropout raises the residual correlation from 0.58 to 0.64
+(25 kb) and 0.58 to 0.64 (10 kb) and Pearson from 0.809 to 0.851 and 0.801
+to 0.828, while it lowers the residual correlation on the training cells
+(0.76 to 0.72, 0.77 to 0.72). Reference dropout in addition lowers both at
+25 kb (0.68 and 0.56), so the gated all12refres_refdrop_hard runs are not
+queued. Without a reference the residual correlation is 0.57 to 0.67, so
+the residual reference models add the most cell-specific signal beyond the
+consensus.
