@@ -1,0 +1,10 @@
+{
+ "label": "u937_wt_c1",
+ "res": 5000,
+ "contacts": 3263987123.0,
+ "nnz": 1336079835,
+ "ice_masked_frac": 0.14682939515645513,
+ "sources": [
+  "/mnt/processed/wolffjoa/hic-multiome/aml/u937/GSM9916468_WT_dmso_Rep1_all.250.mcool"
+ ]
+}

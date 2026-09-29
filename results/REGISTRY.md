@@ -885,6 +885,157 @@ Wilcoxon and win rates of each of our models against every other method),
 `scc_akita_regions.csv`; figures `runs/benchmark/figures/<block>_per_distance.png`
 and `<block>_regions.png`.
 
+## 19. AML cell lines never seen in training (FINAL)
+
+`scripts/aml_fetch.py` (ChIP inputs), `scripts/aml_eval.py` (stages targets,
+perturb_inputs, predict, score, perturb, figures), tests
+`tests/test_aml_eval.py`. Data under `/mnt/processed/wolffjoa/hic-multiome/aml/`
+(`STATUS.md` there). Tables `aml/summary.csv` (every method, median Pearson
+and median SCC per target and resolution), `grid.csv`, `per_distance.csv`,
+`replicates.csv`, `replicates_per_region.csv`, `perturb_summary.csv`,
+`targets/*.json` (contacts, ICE masked fraction, agreement with the GEO
+weights); figures `per_distance.png`, `regions_<target>_<k>kb.png`,
+`perturb_<k>kb_<model>_<input>.png`.
+
+Measured maps. MOLM-13: Arima in situ Hi-C GSE285123 / GSM9769670 (hg38
+mcool, 434 M contacts, levels from 5 kb) as the target; MboI in situ Hi-C of
+Xu et al. 2022, GSE147123 / GSM4417606 (hg38 .hic through the C++ hic2cool,
+124 M contacts) as the second, independent map. Neither holds a 2 kb level,
+so MOLM-13 is scored at 5, 10 and 25 kb; the 2 x 474 M read pairs of
+GSE224931 exist only as raw reads and were not mapped. U-937: Micro-C
+GSE341752, wild-type clones 1 to 3 (GSM9916468-70; 3.26, 1.72 and 2.18 B
+contacts) and STAG2 knockout clones 1 and 2 (GSM9916471-72; 1.22 and 0.98 B).
+Targets are wild-type clone 1 and knockout clone 1; the other clones are the
+replicates. Every map was balanced with cooler ICE (`--ignore-diags 2
+--max-iters 500`) and converted with `scripts/oe_proper.py`. For the U-937
+clones the GEO weights were used; at 25 kb they equal a fresh ICE (Pearson
+1.000), as do the MOLM-13 Arima weights at 5 and 10 kb.
+
+ChIP inputs. One ChIP-Atlas hg38 experiment per mark (untreated or control
+arm, most reads and peaks; picks in `aml/picks_<cell>.tsv`). The ChIP-Atlas
+bigWigs are RPM coverage that omits uncovered runs; they are written on a
+200 bp grid with uncovered bases as 0 and scaled so the genome-wide mean
+equals the mean of the training cells' ENCODE fold-change bigWigs of the same
+mark. MOLM-13: CTCF SRX3927299, RAD21 SRX9891934, H3K27ac SRX1735804,
+H3K27me3 SRX7480103, H3K36me3 SRX13440075, H3K4me1 SRX1735805, H3K4me3
+SRX1735806, H3K79me2 SRX5444521, H3K9ac SRX1735807, H3K9me3 SRX9522726;
+absent SMC3 (also absent in 8 of the 12 training cells; STAG1/STAG2 ChIP
+exists but no substitution was used, since section 3 tested only RAD21 with
+SMC3), H3K4me2 and H4K20me1. U-937: CTCF ERX704042, RAD21 ERX626810, SMC3
+ERX626812, H3K27ac SRX11712771, H3K4me3 SRX685532, H3K9ac SRX18235716,
+H3K9me3 SRX9407972; absent H3K27me3 (GSE285122 deposits peaks only),
+H3K36me3, H3K4me1, H3K4me2, H3K79me2 and H4K20me1. The U-937 CTCF, RAD21 and
+SMC3 experiments carry 10443, 1044 and 780 peaks. No ChIP of the U-937 STAG2
+knockout is public (ChIP-Atlas; GEO GSE165038, GSE198518, GSE341414).
+
+Input-processing control. K562 (held out from every model) predicted from
+ChIP-Atlas processing of the same ENCODE experiments as `hg38_k562` (11 of
+13 marks; RAD21 and H3K4me3 from other ENCODE K562 experiments) against the
+ENCODE fold-change inputs on the same pixels: all12honest 0.808 / 0.775 (25
+kb) and 0.770 / 0.749 (10 kb), all12refres 0.932 / 0.906 and 0.905 / 0.885
+(ChIP-Atlas / ENCODE, median Pearson). all12 at 5 and 2 kb from ChIP-Atlas
+inputs scores 0.693 and 0.579 on K562.
+
+Models: all12 (section 13, 2 to 25 kb), all12honest and all12refres
+(section 15, 10 and 25 kb; reference consensus12, which contains no AML map;
+the reference guard passed), GM12878-only models (section 6 model at 2 kb,
+section 14 "all" seed 0 at 5 to 25 kb, section 15 A2 residual seed 0 with
+consensus11 at 10 and 25 kb). `scripts/crosscell_predict.py --tta` on the
+CPU, U-937 with `--assay microc`. Scoring: the 413 Akita test regions, one
+pixel mask per target and resolution shared by every method (upper triangle,
+offset >= 2 bins, measured in the target and defined in every map and
+prediction), median over regions of Pearson and of SCC
+(`scripts/benchmark_metrics.py`).
+
+Median Pearson / median SCC, 413 regions; best map = the best of the 12
+training cells' maps:
+
+| target | res | all12refres | GM12878 refres | all12honest | all12 | GM12878 only | consensus12 | best map | K562 map | replicate |
+|---|---|---|---|---|---|---|---|---|---|---|
+| MOLM-13 | 25 kb | 0.904 / 0.829 | 0.906 / 0.828 | 0.782 / 0.645 | 0.782 / 0.659 | 0.677 / 0.567 | 0.909 / 0.844 | 0.878 / 0.811 (GM12878) | 0.866 / 0.783 | 0.913 / 0.859 |
+| MOLM-13 | 10 kb | 0.865 / 0.769 | 0.872 / 0.798 | 0.725 / 0.595 | 0.730 / 0.600 | 0.693 / 0.586 | 0.864 / 0.780 | 0.826 / 0.744 (GM12878) | 0.792 / 0.704 | 0.802 / 0.717 |
+| MOLM-13 | 5 kb | | | | 0.621 / 0.539 | 0.542 / 0.477 | 0.790 / 0.686 | 0.727 / 0.642 (GM12878) | 0.658 / 0.578 | 0.629 / 0.540 |
+| MOLM-13 (Xu map) | 25 kb | 0.890 / 0.843 | 0.891 / 0.831 | 0.751 / 0.657 | 0.752 / 0.648 | 0.622 / 0.535 | 0.908 / 0.859 | 0.866 / 0.802 (A549) | 0.846 / 0.794 | 0.913 / 0.859 |
+| MOLM-13 (Xu map) | 10 kb | 0.809 / 0.735 | 0.803 / 0.725 | 0.600 / 0.550 | 0.609 / 0.540 | 0.594 / 0.526 | 0.822 / 0.749 | 0.759 / 0.683 (A549) | 0.741 / 0.669 | 0.802 / 0.717 |
+| MOLM-13 (Xu map) | 5 kb | | | | 0.464 / 0.416 | 0.352 / 0.333 | 0.676 / 0.586 | 0.605 / 0.518 (HFF) | 0.561 / 0.502 | 0.629 / 0.540 |
+| U-937 WT | 25 kb | 0.837 / 0.759 | 0.851 / 0.768 | 0.652 / 0.535 | 0.530 / 0.490 | 0.234 / 0.304 | 0.866 / 0.787 | 0.825 / 0.755 (GM12878) | 0.815 / 0.726 | 0.959, 0.982 / 0.928, 0.960 |
+| U-937 WT | 10 kb | 0.832 / 0.735 | 0.805 / 0.703 | 0.328 / 0.360 | 0.483 / 0.443 | 0.128 / 0.165 | 0.818 / 0.722 | 0.783 / 0.696 (GM12878) | 0.743 / 0.644 | 0.896, 0.937 / 0.834, 0.883 |
+| U-937 WT | 5 kb | | | | 0.389 / 0.347 | 0.037 / 0.053 | 0.749 / 0.648 | 0.698 / 0.610 (GM12878) | 0.624 / 0.542 | 0.765, 0.832 / 0.699, 0.753 |
+| U-937 WT | 2 kb | | | | 0.335 / 0.284 | 0.423 / 0.390 | 0.587 / 0.494 | 0.507 / 0.423 (HFF) | 0.420 / 0.329 | 0.523, 0.587 / 0.437, 0.486 |
+| U-937 STAG2 KO | 25 kb | 0.795 / 0.736 | 0.796 / 0.718 | 0.583 / 0.499 | 0.509 / 0.489 | 0.189 / 0.276 | 0.801 / 0.745 | 0.774 / 0.707 (GM12878) | 0.776 / 0.711 | 0.948 / 0.906 |
+| U-937 STAG2 KO | 10 kb | 0.752 / 0.677 | 0.722 / 0.650 | 0.281 / 0.357 | 0.440 / 0.434 | 0.077 / 0.148 | 0.727 / 0.672 | 0.696 / 0.628 (GM12878) | 0.684 / 0.613 | 0.843 / 0.768 |
+| U-937 STAG2 KO | 5 kb | | | | 0.291 / 0.336 | -0.028 / 0.049 | 0.617 / 0.558 | 0.586 / 0.525 (GM12878) | 0.545 / 0.479 | 0.649 / 0.559 |
+| U-937 STAG2 KO | 2 kb | | | | 0.306 / 0.234 | 0.301 / 0.298 | 0.416 / 0.373 | 0.350 / 0.312 (HFF) | 0.303 / 0.248 | 0.396 / 0.306 |
+
+Replicate column (on the shared mask of the row): MOLM-13, the Arima map
+against the Xu map; U-937 WT, clone 1 against clone 2 and against clone 3;
+KO, clone 1 against clone 2.
+The U-937 KO rows score the wild-type ChIP input; the measured wild-type
+clone 1 map scores 0.905 / 0.885, 0.838 / 0.788, 0.705 / 0.636 and 0.441 /
+0.378 against KO clone 1 at 25, 10, 5 and 2 kb. Wild-type clone 2 against
+clone 3 on their own pixels (`replicates.csv`): 0.952, 0.885, 0.749 and
+0.504. The 5 and 2 kb honest and
+reference 12-cell runs do not exist yet.
+
+On MOLM-13 the residual reference models (12-cell and GM12878) score within
+0.01 of consensus12 at 10 and 25 kb against the Arima map (0.904 and 0.906
+against 0.909 at 25 kb; 0.865 and 0.872 against 0.864 at 10 kb) and above
+the best single training map by 0.03 to 0.05; against the Xu map they score
+0.013 to 0.019 below consensus12. The two independent MOLM-13 maps agree at
+0.913, 0.802 and 0.629 (25, 10, 5 kb); at 10 kb consensus12 (0.864) and the
+reference models exceed this replicate agreement, since the Xu map holds 124
+M contacts. Without the reference the 12-cell models score 0.72 to 0.78 on
+MOLM-13 at 10 and 25 kb, below 11 of the 12 training maps at 25 kb (0.782
+against 0.817 to 0.878; CD14+ monocytes 0.722) and below the median training
+map at 10 kb (0.725 and 0.730 against 0.783). On U-937, with 7 of 13 marks
+and cohesin ChIP of about 1000 peaks, the models without reference score 0.04
+to 0.65 at 5 to 25 kb;
+all12refres scores 0.832 (WT, 10 kb), 0.014 above consensus12, and 0.837 at
+25 kb, 0.029 below it. At 2 kb the GM12878-only model with track dropout
+(0.423) exceeds all12 (0.335); both stay below consensus12 (0.587) and the
+best single training map (0.507, HFF).
+
+STAG2 knockout. The knockout was predicted from the wild-type ChIP with the
+cohesin tracks changed (`aml_eval.py`, block STAG2-KO inputs): ko_absent
+(RAD21 and SMC3 declared absent), ko_ctcfonly (cohesin signal kept within 1
+kb of a U-937 CTCF peak and set to the track mean elsewhere, the retention of
+STAG1-cohesin at CTCF sites after STAG2 loss) and ko_half (enrichment above
+the mean halved). Change = KO map minus WT map (log O/E), predicted change =
+prediction from the KO input minus prediction from the WT input, Pearson per
+region on the shared mask (median over 413 regions). Loops: donut calls on
+the measured WT and KO maps (union, `hicmultiome.bioscore.call_loops` on a 10
+kb grid, 60 to 600 kb), strength = log2 donut enrichment; boundaries: minima
+of the WT insulation profile (diamond mean of log O/E, 100 kb). Ceiling: the
+change between independent clone pairs, (KO c1 - WT c1) against (KO c2 - WT
+c2), (KO c2 - WT c3), and (KO c1 - WT c2) against (KO c2 - WT c3).
+
+| res | model:input | change map Pearson / SCC | loop change Pearson (Spearman) | loop change sign agreement | predicted mean loop change (short / long) | boundary change Pearson |
+|---|---|---|---|---|---|---|
+| 10 kb | all12refres ko_absent | 0.183 / 0.118 | 0.351 (0.281) | 0.565 | -0.144 / -0.109 | 0.082 |
+| 10 kb | all12refres ko_ctcfonly | 0.041 / 0.082 | 0.354 (0.405) | 0.586 | -0.056 / -0.037 | 0.121 |
+| 10 kb | all12refres ko_half | 0.071 / 0.104 | 0.369 (0.427) | 0.588 | -0.035 / -0.022 | 0.111 |
+| 10 kb | all12 ko_absent | 0.070 / 0.038 | 0.156 (0.156) | 0.532 | -0.044 / -0.034 | -0.169 |
+| 10 kb | all12 ko_ctcfonly | -0.019 / 0.046 | 0.175 (0.254) | 0.573 | -0.038 / -0.020 | -0.071 |
+| 10 kb | all12honest ko_ctcfonly | -0.114 / 0.001 | 0.066 (0.070) | 0.514 | -0.009 / -0.006 | -0.121 |
+| 10 kb | GM12878 refres ko_absent | -0.145 / -0.102 | -0.372 (-0.342) | 0.415 | 0.064 / 0.043 | -0.109 |
+| 25 kb | all12honest ko_ctcfonly | 0.164 / 0.073 | 0.103 (0.180) | 0.649 | -0.044 / -0.040 | -0.028 |
+| 25 kb | all12refres ko_absent | 0.115 / 0.102 | 0.183 (0.229) | 0.588 | 0.000 / -0.041 | -0.158 |
+| 2 kb | all12 ko_absent | 0.108 / 0.086 | -0.003 (-0.016) | 0.550 | -0.018 / -0.061 | -0.098 |
+
+Measured at 10 kb (626 loops, 221 shorter than 200 kb, 832 boundaries):
+loop strength changes by -0.105 (short) and +0.181 (long) log2 units, WT
+boundaries weaken (insulation +0.087). Clone-pair ceiling of the change map:
+0.254, 0.339 and 0.122 at 10 kb; 0.547, 0.615 and 0.293 at 25 kb; 0.118,
+0.183 and 0.042 at 2 kb. The 12-cell models predict weaker short and long
+loops alike (all12refres at 10 kb: -0.022 to -0.144); the measured gain of
+long loops (+0.181) appears in no variant, and the measured weakening of WT
+boundaries (+0.087) appears in all12refres at 0.008 to 0.018. The best change map
+(all12refres, ko_absent, 10 kb, 0.183) lies within the clone-pair range at
+that resolution; loop-level changes correlate at 0.35 to 0.37 for
+all12refres, where the sign agreement stays at 0.57 to 0.59. Full grid in
+`perturb_summary.csv` (every model, input and resolution, loop and boundary
+counts).
+
 ## 20. Minimal input sets (absent-at-inference FINAL, dedicated trainings PENDING)
 
 Question: how well do practical small input sets predict, and can the
