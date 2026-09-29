@@ -884,3 +884,177 @@ Wilcoxon and win rates of each of our models against every other method),
 `<block>_per_region.csv.gz`, `<block>_per_distance.csv`,
 `scc_akita_regions.csv`; figures `runs/benchmark/figures/<block>_per_distance.png`
 and `<block>_regions.png`.
+
+## 20. Minimal input sets (absent-at-inference FINAL, dedicated trainings PENDING)
+
+Question: how well do practical small input sets predict, and can the
+existing models be run with the other tracks absent? Sets (`scripts/minimal_inputs.py`;
+every set keeps all motif channels of its model and GC/CpG): (a) CTCF and
+H3K27ac, the C.Origami-like analogue (accessibility is not a model track);
+(b) CTCF and RAD21; (c) CTCF, RAD21, H3K27ac, H3K4me3 and H3K27me3, one mark
+per group of section 14; (d) motifs only.
+
+Absent at inference. The existing models predict with every track outside
+the set filled with its absent value (`crosscell_predict.py --keep-sets`,
+one pass per model and cell, test-time reverse averaging, CPU): the 12-cell
+models at 25 and 10 kb for GM12878, IMR-90 (training cells) and K562 (held
+out) on the 413 Akita test regions against the proper O/E targets, and the
+GM12878 2048 bp models against Akita's target (section 1 metric). Only
+akita_native_trackdrop (section 4) was trained with track dropout; the
+12-cell models and akita_native_honest/refres were trained with dropout 0,
+and in the 12-cell training an absent track occurs only where a cell lacks
+the ChIP (cohesin for HFF, SMC3 for HCT116, several marks for HFF, HMEC and
+HUVEC). Median per-region Pearson (full inputs first):
+
+| model | cell | full | (a) CTCF + H3K27ac | (b) CTCF + RAD21 | (c) one per group | (d) motifs only |
+|---|---|---|---|---|---|---|
+| akita_native_trackdrop | gm12878 | 0.642 | 0.564 | 0.488 | 0.609 | 0.301 |
+| akita_native_honest | gm12878 | 0.636 | 0.002 | -0.001 | 0.028 | -0.005 |
+| akita_native_refres | gm12878 | 0.751 | 0.656 | 0.630 | 0.685 | 0.636 |
+| all12honest_25kb | gm12878 | 0.822 | 0.574 | 0.508 | 0.655 | 0.269 |
+| all12honest_25kb | imr90 | 0.881 | 0.597 | 0.490 | 0.712 | 0.271 |
+| all12honest_25kb | k562 | 0.771 | 0.495 | 0.416 | 0.601 | 0.252 |
+| all12refres_25kb | gm12878 | 0.938 | 0.872 | 0.841 | 0.854 | 0.854 |
+| all12refres_25kb | imr90 | 0.955 | 0.880 | 0.888 | 0.909 | 0.896 |
+| all12refres_25kb | k562 | 0.906 | 0.853 | 0.857 | 0.846 | 0.864 |
+| all12honest_10kb | gm12878 | 0.835 | 0.571 | 0.346 | 0.584 | 0.081 |
+| all12honest_10kb | imr90 | 0.881 | 0.560 | 0.302 | 0.597 | 0.044 |
+| all12honest_10kb | k562 | 0.750 | 0.461 | 0.256 | 0.483 | 0.053 |
+| all12refres_10kb | gm12878 | 0.938 | 0.879 | 0.792 | 0.877 | 0.826 |
+| all12refres_10kb | imr90 | 0.948 | 0.889 | 0.826 | 0.880 | 0.862 |
+| all12refres_10kb | k562 | 0.885 | 0.846 | 0.772 | 0.855 | 0.813 |
+
+The track-dropout model degrades gradually: 0.642 with all 13 tracks, 0.609
+with one mark per group, 0.564 with CTCF and H3K27ac (Akita scores 0.548 on
+the same 413 regions, section 1), 0.488 with CTCF and RAD21 and 0.301 with
+the CTCF motif alone. The same architecture trained without dropout
+(akita_native_honest) collapses to 0.00 to 0.03 with any track absent, so
+absent-at-inference results need a dropout-trained model. The 12-cell
+no-reference models keep 0.42 to 0.71 with sets (a) to (c) at 25 kb and 0.26
+to 0.60 at 10 kb and fall to 0.04 to 0.27 with motifs only. The reference
+residual models keep 0.77 to 0.91 with every set, but with the tracks absent
+they score below the leave-one-out consensus they read in 22 of the 24
+set, cell and resolution combinations (consensus alone 0.882, 0.928, 0.897
+for GM12878, IMR-90, K562 at 25 kb; 0.858, 0.903, 0.859 at 10 kb); only (a)
+and (c) at 10 kb for GM12878 exceed it (0.879 and 0.877). At 2 kb the residual model
+with motifs only scores 0.636, level with consensus4 alone (0.618 on the 413
+regions, section 1), and 0.656 to 0.685 with sets (a) and (c).
+
+Dedicated trainings (PENDING, GPU). Configs `configs/minimal/min_<set>_<setup>.yaml`
+for the 12-cell residual setup at 25 and 10 kb (base all12refres, existing
+caches, `train.select_tracks` / `select_motifs`) and for GM12878 at 2 kb
+(base akita_native_honest), honest validation, track dropout 0. The running
+scheduler (`scripts/gpu_scheduler.py`) holds its job list in memory, so the
+request is in `runs/benchmark/QUEUE_REQUEST.md` with a driver
+`runs/benchmark/minimal_queue.sh` and a scheduler snippet; evaluation by
+`python scripts/minimal_inputs.py --stage eval --run <run>` and the table by
+`--stage summary`. Table `minimal_inputs/minimal_inputs_summary.csv`
+(median, mean, quartiles and n per model, set and cell).
+
+## 21. In-silico perturbation against degron experiments (FINAL)
+
+Question: does removing a protein from the input reproduce the measured
+change of the contact map when that protein is degraded?
+
+Experiments (hg38, `runs/perturb_validate`, data provenance in
+`/mnt/processed/wolffjoa/hic-multiome/perturb/README.md`): HCT116 RAD21-mAC,
+untreated against 6 h auxin (Rao et al. 2017, 4DN 4DNFIFLDVASC and
+4DNFILP99QJS, 2.69 and 2.55 billion contacts); HCT116 CTCF-mAID2, untreated
+against 6 h 5-Ph-IAA (ENCODE intact Hi-C ENCSR086RCC and ENCSR669VZH, .hic
+converted with the C++ hic2cool, cooler ICE). Every map goes through
+`oe_proper.py` at 10 and 25 kb; the measured change is treated minus
+untreated log O/E. The untreated RAD21-mAC map is the HCT116 training target
+of the 12-cell models; the 413 Akita test regions are held out from their
+training.
+
+Predictions (`scripts/perturb_validate.py`, CPU): all12honest and
+all12refres at 10 and 25 kb predict HCT116 from its ENCODE ChIP (no SMC3
+track exists for HCT116) with all tracks and with one track set to its
+absent value (`crosscell_predict.py --keep-sets`): RAD21, CTCF, and H3K36me3
+as a control; motif channels unchanged. A second RAD21 prediction reads
+measured ChIP of the degron cells (4DN GRCh38 fold change; RAD21 and CTCF of
+Kim et al. 2024, eight histone marks of Rao et al. 2017, untreated and
+6 h auxin; H3K4me2, H3K9ac and H4K20me1 from ENCODE in both), predicted change
+= auxin-ChIP prediction minus untreated-ChIP prediction. The residual
+models read the leave-one-out consensus in both conditions. Metrics per
+region (upper triangle, at least 2 bins off the diagonal): Pearson and SCC
+between predicted and measured change maps; at the 536 (10 kb) and 549
+(25 kb) loops that hicDetectLoops calls in the untreated RAD21-mAC map
+inside the regions, the change of the log O/E maximum within 1 bin, the share
+of loops that weaken and APA (centre over lower-left 3 x 3 corner, 7 x 7
+window); at the 10 kb hicFindTADs boundaries the change of the insulation
+score.
+
+Measured effect. After RAD21 degradation 99.4% of the loops weaken (median
+log O/E change -0.75 at 10 kb), APA falls from 1.45 to 1.05 and boundary
+insulation rises by 0.063 (weaker boundaries). After CTCF degradation 99.1%
+weaken (median -0.49), APA falls from 1.70 to 1.35.
+
+| experiment | model | input change | change Pearson median (IQR) | change SCC | loops weaker, predicted (measured) | loop change Spearman | APA full / perturbed (measured untreated / treated) |
+|---|---|---|---|---|---|---|---|
+| RAD21 degron | all12honest_10kb | RAD21 absent | 0.041 (-0.184 to 0.302) | -0.031 | 0.24 (0.99) | -0.06 | 1.19 / 1.22 (1.45 / 1.05) |
+| RAD21 degron | all12honest_10kb | measured ChIP, auxin vs untreated | 0.032 (-0.226 to 0.206) | 0.110 | 0.62 (0.99) | -0.07 | 1.29 / 1.26 (1.45 / 1.05) |
+| RAD21 degron | all12honest_10kb | CTCF absent | 0.151 (-0.102 to 0.403) | 0.195 | 0.78 (0.99) | 0.33 | 1.19 / 1.09 (1.45 / 1.05) |
+| RAD21 degron | all12honest_10kb | H3K36me3 absent (control) | 0.116 (-0.137 to 0.357) | 0.033 | 0.36 (0.99) | -0.12 | 1.19 / 1.19 (1.45 / 1.05) |
+| RAD21 degron | all12honest_25kb | RAD21 absent | -0.067 (-0.318 to 0.249) | -0.133 | 0.13 (0.99) | -0.15 | 1.14 / 1.18 (1.33 / 1.02) |
+| RAD21 degron | all12honest_25kb | measured ChIP, auxin vs untreated | -0.098 (-0.374 to 0.184) | 0.000 | 0.56 (0.99) | 0.03 | 1.18 / 1.17 (1.33 / 1.02) |
+| RAD21 degron | all12honest_25kb | CTCF absent | 0.207 (-0.104 to 0.523) | 0.317 | 0.75 (0.99) | 0.38 | 1.14 / 1.07 (1.33 / 1.02) |
+| RAD21 degron | all12honest_25kb | H3K36me3 absent (control) | 0.076 (-0.265 to 0.427) | -0.038 | 0.13 (0.99) | -0.31 | 1.14 / 1.19 (1.33 / 1.02) |
+| RAD21 degron | all12refres_10kb | RAD21 absent | -0.342 (-0.556 to 0.085) | -0.388 | 0.02 (0.99) | -0.32 | 1.38 / 1.52 (1.45 / 1.05) |
+| RAD21 degron | all12refres_10kb | measured ChIP, auxin vs untreated | 0.168 (-0.098 to 0.409) | 0.195 | 0.79 (0.99) | 0.10 | 1.43 / 1.41 (1.45 / 1.05) |
+| RAD21 degron | all12refres_10kb | CTCF absent | -0.421 (-0.610 to -0.190) | -0.421 | 0.08 (0.99) | -0.19 | 1.38 / 1.37 (1.45 / 1.05) |
+| RAD21 degron | all12refres_10kb | H3K36me3 absent (control) | 0.131 (-0.106 to 0.339) | 0.049 | 0.18 (0.99) | 0.13 | 1.38 / 1.36 (1.45 / 1.05) |
+| RAD21 degron | all12refres_25kb | RAD21 absent | -0.228 (-0.526 to 0.141) | -0.352 | 0.16 (0.99) | -0.27 | 1.26 / 1.31 (1.33 / 1.02) |
+| RAD21 degron | all12refres_25kb | measured ChIP, auxin vs untreated | -0.091 (-0.384 to 0.242) | 0.016 | 0.40 (0.99) | 0.07 | 1.27 / 1.30 (1.33 / 1.02) |
+| RAD21 degron | all12refres_25kb | CTCF absent | -0.577 (-0.738 to -0.336) | -0.532 | 0.10 (0.99) | -0.42 | 1.26 / 1.27 (1.33 / 1.02) |
+| RAD21 degron | all12refres_25kb | H3K36me3 absent (control) | 0.305 (0.010 to 0.510) | 0.166 | 0.24 (0.99) | 0.02 | 1.26 / 1.25 (1.33 / 1.02) |
+| CTCF degron | all12honest_10kb | RAD21 absent | 0.057 (-0.101 to 0.271) | 0.005 | 0.24 (0.99) | 0.24 | 1.19 / 1.22 (1.70 / 1.35) |
+| CTCF degron | all12honest_10kb | CTCF absent | 0.093 (-0.055 to 0.291) | 0.191 | 0.78 (0.99) | 0.05 | 1.19 / 1.09 (1.70 / 1.35) |
+| CTCF degron | all12honest_10kb | H3K36me3 absent (control) | 0.117 (-0.051 to 0.325) | 0.033 | 0.36 (0.99) | 0.15 | 1.19 / 1.19 (1.70 / 1.35) |
+| CTCF degron | all12honest_25kb | RAD21 absent | -0.063 (-0.285 to 0.229) | -0.107 | 0.13 (0.96) | 0.21 | 1.14 / 1.18 (1.43 / 1.26) |
+| CTCF degron | all12honest_25kb | CTCF absent | 0.271 (0.003 to 0.469) | 0.315 | 0.75 (0.96) | 0.30 | 1.14 / 1.07 (1.43 / 1.26) |
+| CTCF degron | all12honest_25kb | H3K36me3 absent (control) | 0.219 (-0.065 to 0.450) | 0.047 | 0.13 (0.96) | 0.10 | 1.14 / 1.19 (1.43 / 1.26) |
+| CTCF degron | all12refres_10kb | RAD21 absent | -0.311 (-0.492 to 0.017) | -0.300 | 0.02 (0.99) | -0.06 | 1.38 / 1.53 (1.70 / 1.35) |
+| CTCF degron | all12refres_10kb | CTCF absent | -0.371 (-0.520 to -0.161) | -0.317 | 0.08 (0.99) | -0.17 | 1.38 / 1.38 (1.70 / 1.35) |
+| CTCF degron | all12refres_10kb | H3K36me3 absent (control) | 0.039 (-0.141 to 0.224) | 0.024 | 0.18 (0.99) | 0.06 | 1.38 / 1.36 (1.70 / 1.35) |
+| CTCF degron | all12refres_25kb | RAD21 absent | -0.149 (-0.423 to 0.195) | -0.236 | 0.16 (0.96) | 0.10 | 1.26 / 1.31 (1.43 / 1.26) |
+| CTCF degron | all12refres_25kb | CTCF absent | -0.519 (-0.653 to -0.286) | -0.409 | 0.10 (0.96) | -0.28 | 1.26 / 1.27 (1.43 / 1.26) |
+| CTCF degron | all12refres_25kb | H3K36me3 absent (control) | 0.248 (0.005 to 0.463) | 0.183 | 0.24 (0.96) | 0.13 | 1.26 / 1.25 (1.43 / 1.26) |
+
+Setting CTCF absent in the no-reference model weakens 75 to 78% of the
+loops in the prediction (both experiments, both resolutions; median change
+-0.09 to -0.13 against -0.26 to -0.75 measured), lowers the predicted APA
+from 1.19 to 1.09 (10 kb), and the predicted loop changes rank-correlate with
+the measured ones after CTCF degradation (Spearman 0.05 at 10 kb and 0.30 at
+25 kb) and after RAD21 degradation (0.33 and 0.38). Setting RAD21 absent
+predicts the opposite of the RAD21 degron: 2 to 24% of the loops weaken, the
+predicted APA rises (1.19 to 1.22 at 10 kb, 1.38 to 1.52 for the residual
+model), and the change maps anticorrelate with the measured ones (residual
+model median Pearson -0.34 at 10 kb, -0.23 at 25 kb). The H3K36me3 control
+changes the prediction by a similar amount (mean absolute change 0.05 to 0.17
+against 0.09 to 0.12 for CTCF) and weakens 13 to 36% of the loops, yet its
+change maps correlate with
+the measured change about as well as the CTCF perturbation (median Pearson
+0.04 to 0.31), so the pixel-level change correlation is not specific to the
+perturbed protein; the loop-level measures are. With measured degron ChIP as
+input the predicted change is small (mean absolute change 0.05 to 0.09
+against 0.20 to 0.22 measured): 40 to 79% of the loops weaken, by a median
+between -0.06 and +0.01 log O/E, and the change maps correlate at 0.17 (residual, 10 kb) or
+below. In the residual models every perturbation of CTCF or RAD21 moves the
+prediction against the measured change (median Pearson -0.15 to -0.58); the
+leave-one-out consensus they read carries the loops in both conditions.
+
+The 12-cell models were trained without track dropout (section 15). In
+training, an absent cohesin track occurs only for HFF, a Micro-C map with
+the sharpest loops of the 12 cells (no RAD21 or SMC3 ChIP), and SMC3 is
+absent for HCT116; an absent RAD21 input therefore marks a cell identity in
+training rather than the loss of cohesin, and the model responds with the
+loop strength of that identity. CTCF is present in all 12 training cells.
+Tables `perturb_validate/perturb_summary.csv` (all metrics, full grid),
+`change_per_region.csv.gz`, `change_per_distance.csv`,
+`loops_per_anchor.csv.gz`, `boundaries_per_bin.csv.gz`; figures
+`runs/perturb_validate/figures/` (per-distance change correlation, APA
+panels, the three regions with the strongest measured change per model).
+Not analysed: HeLa CTCF-AID (Wutz et al. 2017) and the HAP1 CTCF-site
+deletions (Sanborn et al. 2015, 20 maps, 4DN), both downloaded to
+`perturb/`; neither cell has a ChIP set among the model inputs.
