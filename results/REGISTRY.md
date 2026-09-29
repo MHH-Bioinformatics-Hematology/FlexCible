@@ -1448,6 +1448,9 @@ honest validation of the remaining windows is logged alongside. Runs
 all12refres_drop_hard and all12honest_drop_hard at 25 and 10 kb
 (all12refres_refdrop_hard only if reference dropout wins in section 22),
 queued in `scripts/gpu_scheduler.py` after all12refres_refdrop 10 kb.
+At 25 kb the hard runs train on 8664 windows (11,615 left by the union,
+then 1211 honest-validation windows and 1740 overlapping them removed),
+against 14,325 for all12refres_drop.
 Hard-test metrics per cell: Pearson and SCC on the window, the residual
 correlation corr(P - C, T - C) (0: the model adds nothing beyond the
 consensus), the consensus alone, the best single other measured map and,
