@@ -722,6 +722,41 @@ staged once as float16 memory maps on local disk
 each rank decompressed its stripe from the network share, was stopped
 after 45 minutes of loading.
 
+Analysis C on model A (`results/scale_importance/`): median over cells of
+the per-window Pearson on the disjoint test windows with all inputs, and
+the median per-cell loss when one group is set to its absent value
+(`importance_drop.csv`; gradient x input shares per distance band in
+`importance_attr.csv`, figure `importance.png`):
+
+| dropped group | 2 kb | 5 kb | 10 kb | 25 kb |
+|---|---|---|---|---|
+| none (score) | 0.764 | 0.864 | 0.924 | 0.946 |
+| CTCF | 0.038 | 0.041 | 0.039 | 0.033 |
+| cohesin | 0.100 | 0.052 | 0.042 | 0.033 |
+| active | 0.114 | 0.100 | 0.115 | 0.121 |
+| gene body | 0.033 | 0.028 | 0.022 | 0.023 |
+| repressive | 0.034 | 0.037 | 0.031 | 0.032 |
+| motifs | 0.000 | 0.000 | 0.000 | 0.004 |
+| sequence | 0.102 | 0.108 | 0.090 | 0.066 |
+| reference map | 0.276 | 0.301 | 0.313 | 0.350 |
+
+The reference plane carries most of the score at every resolution (loss
+0.28 at 2 kb to 0.35 at 25 kb); among the inputs the active marks cost most
+(0.10 to 0.12), then GC/CpG (0.07 to 0.11) and cohesin, which matters most
+at 2 kb (0.10) and least at 25 kb (0.03); CTCF, gene-body and repressive
+marks cost 0.02 to 0.04 each. The motif planes cost 0.000 to 0.004. This is
+no wiring error: the dropped rows are the model's motif rows (the fwd/rev
+rows at the motif offset that also build the directed pair planes), all of
+their values change, and the prediction changes (25 kb: maximum 0.35, mean
+0.016 absolute, against a prediction standard deviation of 0.24), but the
+change is almost uncorrelated with the target. The reference map makes the
+motifs redundant: on 1500 test windows the motif-drop loss (median paired
+per window) is 0.029 at 25 kb and 0.014 at 10 kb for all12honest (no
+reference), against 0.002 and 0.0002 for all12refres and 0.001 for model A
+at 25 kb. CTCF sites are largely cell-invariant, so the consensus already
+holds the loops and boundaries they anchor; section 8 measured the motif
+gain on GM12878 models without a reference.
+
 ## 18. Head-to-head benchmark against published predictors (FINAL)
 
 Question: how do our models compare with Akita, Hi-cGAN, Epiphany, HiC-Reg

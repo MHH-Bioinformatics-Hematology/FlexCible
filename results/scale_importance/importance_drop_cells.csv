@@ -1,0 +1,433 @@
+res_kb,dropped,cell,median_r
+2,all inputs,a549,0.7653
+2,all inputs,cd14mono,0.6189
+2,all inputs,gm12878,0.8018
+2,all inputs,gm23248,0.8042
+2,all inputs,h1,0.7657
+2,all inputs,hct116,0.759
+2,all inputs,hepg2,0.7627
+2,all inputs,hff,0.8728
+2,all inputs,imr90,0.8118
+2,all inputs,mcf7,0.7398
+2,all inputs,nhek,0.6853
+2,all inputs,pc9,0.7219
+2,CTCF,a549,0.6846
+2,CTCF,cd14mono,0.5031
+2,CTCF,gm12878,0.7821
+2,CTCF,gm23248,0.8042
+2,CTCF,h1,0.7312
+2,CTCF,hct116,0.7295
+2,CTCF,hepg2,0.7201
+2,CTCF,hff,0.8548
+2,CTCF,imr90,0.8076
+2,CTCF,mcf7,0.6027
+2,CTCF,nhek,0.6429
+2,CTCF,pc9,0.5501
+2,cohesin,a549,0.5496
+2,cohesin,cd14mono,0.6189
+2,cohesin,gm12878,0.5205
+2,cohesin,gm23248,0.8042
+2,cohesin,h1,0.6248
+2,cohesin,hct116,0.5078
+2,cohesin,hepg2,0.5889
+2,cohesin,hff,0.8728
+2,cohesin,imr90,0.6583
+2,cohesin,mcf7,0.6804
+2,cohesin,nhek,0.6853
+2,cohesin,pc9,0.7219
+2,active,a549,0.6993
+2,active,cd14mono,0.4157
+2,active,gm12878,0.6885
+2,active,gm23248,0.6731
+2,active,h1,0.6618
+2,active,hct116,0.5957
+2,active,hepg2,0.7194
+2,active,hff,0.7573
+2,active,imr90,0.7771
+2,active,mcf7,0.6146
+2,active,nhek,0.6053
+2,active,pc9,0.5733
+2,gene body,a549,0.6909
+2,gene body,cd14mono,0.5898
+2,gene body,gm12878,0.7819
+2,gene body,gm23248,0.7935
+2,gene body,h1,0.7289
+2,gene body,hct116,0.7429
+2,gene body,hepg2,0.7088
+2,gene body,hff,0.8634
+2,gene body,imr90,0.7927
+2,gene body,mcf7,0.6162
+2,gene body,nhek,0.6321
+2,gene body,pc9,0.638
+2,repressive,a549,0.6749
+2,repressive,cd14mono,0.596
+2,repressive,gm12878,0.7872
+2,repressive,gm23248,0.735
+2,repressive,h1,0.7199
+2,repressive,hct116,0.7456
+2,repressive,hepg2,0.6946
+2,repressive,hff,0.8585
+2,repressive,imr90,0.7944
+2,repressive,mcf7,0.5344
+2,repressive,nhek,0.6693
+2,repressive,pc9,0.5826
+2,motifs,a549,0.7658
+2,motifs,cd14mono,0.6176
+2,motifs,gm12878,0.8002
+2,motifs,gm23248,0.8038
+2,motifs,h1,0.7652
+2,motifs,hct116,0.759
+2,motifs,hepg2,0.7627
+2,motifs,hff,0.873
+2,motifs,imr90,0.8135
+2,motifs,mcf7,0.7396
+2,motifs,nhek,0.685
+2,motifs,pc9,0.7233
+2,sequence,a549,0.6663
+2,sequence,cd14mono,0.4482
+2,sequence,gm12878,0.6603
+2,sequence,gm23248,0.7234
+2,sequence,h1,0.6768
+2,sequence,hct116,0.6325
+2,sequence,hepg2,0.6828
+2,sequence,hff,0.7762
+2,sequence,imr90,0.7471
+2,sequence,mcf7,0.5854
+2,sequence,nhek,0.5801
+2,sequence,pc9,0.5849
+2,reference map,a549,0.5339
+2,reference map,cd14mono,0.4825
+2,reference map,gm12878,0.4369
+2,reference map,gm23248,0.338
+2,reference map,h1,0.5794
+2,reference map,hct116,0.4103
+2,reference map,hepg2,0.4626
+2,reference map,hff,0.6067
+2,reference map,imr90,0.5262
+2,reference map,mcf7,0.547
+2,reference map,nhek,0.3748
+2,reference map,pc9,0.5089
+5,all inputs,a549,0.8652
+5,all inputs,cd14mono,0.7741
+5,all inputs,gm12878,0.9026
+5,all inputs,gm23248,0.8941
+5,all inputs,h1,0.862
+5,all inputs,hct116,0.8848
+5,all inputs,hepg2,0.8538
+5,all inputs,hff,0.9168
+5,all inputs,imr90,0.9006
+5,all inputs,mcf7,0.8334
+5,all inputs,nhek,0.8357
+5,all inputs,pc9,0.8166
+5,CTCF,a549,0.8158
+5,CTCF,cd14mono,0.6293
+5,CTCF,gm12878,0.8619
+5,CTCF,gm23248,0.8941
+5,CTCF,h1,0.8268
+5,CTCF,hct116,0.8435
+5,CTCF,hepg2,0.8102
+5,CTCF,hff,0.9024
+5,CTCF,imr90,0.8933
+5,CTCF,mcf7,0.7667
+5,CTCF,nhek,0.8147
+5,CTCF,pc9,0.7318
+5,cohesin,a549,0.7522
+5,cohesin,cd14mono,0.7741
+5,cohesin,gm12878,0.7572
+5,cohesin,gm23248,0.8941
+5,cohesin,h1,0.7852
+5,cohesin,hct116,0.7724
+5,cohesin,hepg2,0.7612
+5,cohesin,hff,0.9168
+5,cohesin,imr90,0.8522
+5,cohesin,mcf7,0.7781
+5,cohesin,nhek,0.8357
+5,cohesin,pc9,0.8166
+5,active,a549,0.8144
+5,active,cd14mono,0.5501
+5,active,gm12878,0.8092
+5,active,gm23248,0.7626
+5,active,h1,0.7857
+5,active,hct116,0.774
+5,active,hepg2,0.7947
+5,active,hff,0.8097
+5,active,imr90,0.8576
+5,active,mcf7,0.7184
+5,active,nhek,0.7605
+5,active,pc9,0.7067
+5,gene body,a549,0.8382
+5,gene body,cd14mono,0.7463
+5,gene body,gm12878,0.8706
+5,gene body,gm23248,0.8755
+5,gene body,h1,0.8196
+5,gene body,hct116,0.8709
+5,gene body,hepg2,0.823
+5,gene body,hff,0.9062
+5,gene body,imr90,0.8877
+5,gene body,mcf7,0.7915
+5,gene body,nhek,0.8086
+5,gene body,pc9,0.7755
+5,repressive,a549,0.8264
+5,repressive,cd14mono,0.7534
+5,repressive,gm12878,0.8666
+5,repressive,gm23248,0.8542
+5,repressive,h1,0.8162
+5,repressive,hct116,0.8595
+5,repressive,hepg2,0.8089
+5,repressive,hff,0.8927
+5,repressive,imr90,0.8863
+5,repressive,mcf7,0.7116
+5,repressive,nhek,0.8202
+5,repressive,pc9,0.7491
+5,motifs,a549,0.8651
+5,motifs,cd14mono,0.7722
+5,motifs,gm12878,0.9012
+5,motifs,gm23248,0.8937
+5,motifs,h1,0.8624
+5,motifs,hct116,0.8835
+5,motifs,hepg2,0.8531
+5,motifs,hff,0.9171
+5,motifs,imr90,0.9005
+5,motifs,mcf7,0.8342
+5,motifs,nhek,0.8362
+5,motifs,pc9,0.8174
+5,sequence,a549,0.7807
+5,sequence,cd14mono,0.5608
+5,sequence,gm12878,0.7835
+5,sequence,gm23248,0.7773
+5,sequence,h1,0.771
+5,sequence,hct116,0.7825
+5,sequence,hepg2,0.7458
+5,sequence,hff,0.8088
+5,sequence,imr90,0.7992
+5,sequence,mcf7,0.7003
+5,sequence,nhek,0.699
+5,sequence,pc9,0.7091
+5,reference map,a549,0.5475
+5,reference map,cd14mono,0.6113
+5,reference map,gm12878,0.5891
+5,reference map,gm23248,0.4853
+5,reference map,h1,0.6277
+5,reference map,hct116,0.5804
+5,reference map,hepg2,0.55
+5,reference map,hff,0.6666
+5,reference map,imr90,0.6359
+5,reference map,mcf7,0.5755
+5,reference map,nhek,0.4583
+5,reference map,pc9,0.5185
+10,all inputs,a549,0.9272
+10,all inputs,cd14mono,0.8546
+10,all inputs,gm12878,0.9351
+10,all inputs,gm23248,0.9367
+10,all inputs,h1,0.9208
+10,all inputs,hct116,0.9436
+10,all inputs,hepg2,0.916
+10,all inputs,hff,0.9522
+10,all inputs,imr90,0.9427
+10,all inputs,mcf7,0.8905
+10,all inputs,nhek,0.9002
+10,all inputs,pc9,0.8771
+10,CTCF,a549,0.8914
+10,CTCF,cd14mono,0.6785
+10,CTCF,gm12878,0.8905
+10,CTCF,gm23248,0.9367
+10,CTCF,h1,0.8864
+10,CTCF,hct116,0.902
+10,CTCF,hepg2,0.8726
+10,CTCF,hff,0.9429
+10,CTCF,imr90,0.9306
+10,CTCF,mcf7,0.8414
+10,CTCF,nhek,0.8817
+10,CTCF,pc9,0.8106
+10,cohesin,a549,0.8755
+10,cohesin,cd14mono,0.8546
+10,cohesin,gm12878,0.8495
+10,cohesin,gm23248,0.9366
+10,cohesin,h1,0.8515
+10,cohesin,hct116,0.8713
+10,cohesin,hepg2,0.8585
+10,cohesin,hff,0.9522
+10,cohesin,imr90,0.9099
+10,cohesin,mcf7,0.8335
+10,cohesin,nhek,0.9001
+10,cohesin,pc9,0.8771
+10,active,a549,0.8725
+10,active,cd14mono,0.5976
+10,active,gm12878,0.8347
+10,active,gm23248,0.8029
+10,active,h1,0.7655
+10,active,hct116,0.8261
+10,active,hepg2,0.8357
+10,active,hff,0.8393
+10,active,imr90,0.8874
+10,active,mcf7,0.7205
+10,active,nhek,0.823
+10,active,pc9,0.7459
+10,gene body,a549,0.9042
+10,gene body,cd14mono,0.8332
+10,gene body,gm12878,0.9101
+10,gene body,gm23248,0.9175
+10,gene body,h1,0.8827
+10,gene body,hct116,0.9273
+10,gene body,hepg2,0.8904
+10,gene body,hff,0.9424
+10,gene body,imr90,0.9294
+10,gene body,mcf7,0.8633
+10,gene body,nhek,0.8807
+10,gene body,pc9,0.8371
+10,repressive,a549,0.8998
+10,repressive,cd14mono,0.8328
+10,repressive,gm12878,0.8984
+10,repressive,gm23248,0.9016
+10,repressive,h1,0.8764
+10,repressive,hct116,0.919
+10,repressive,hepg2,0.8759
+10,repressive,hff,0.9273
+10,repressive,imr90,0.9253
+10,repressive,mcf7,0.8228
+10,repressive,nhek,0.8882
+10,repressive,pc9,0.821
+10,motifs,a549,0.9275
+10,motifs,cd14mono,0.853
+10,motifs,gm12878,0.9335
+10,motifs,gm23248,0.9364
+10,motifs,h1,0.921
+10,motifs,hct116,0.9428
+10,motifs,hepg2,0.9165
+10,motifs,hff,0.9527
+10,motifs,imr90,0.9435
+10,motifs,mcf7,0.8912
+10,motifs,nhek,0.8998
+10,motifs,pc9,0.8751
+10,sequence,a549,0.8758
+10,sequence,cd14mono,0.6398
+10,sequence,gm12878,0.8413
+10,sequence,gm23248,0.8378
+10,sequence,h1,0.8294
+10,sequence,hct116,0.8587
+10,sequence,hepg2,0.8274
+10,sequence,hff,0.857
+10,sequence,imr90,0.8535
+10,sequence,mcf7,0.8013
+10,sequence,nhek,0.7785
+10,sequence,pc9,0.8161
+10,reference map,a549,0.5885
+10,reference map,cd14mono,0.7056
+10,reference map,gm12878,0.6198
+10,reference map,gm23248,0.4944
+10,reference map,h1,0.6317
+10,reference map,hct116,0.6303
+10,reference map,hepg2,0.5941
+10,reference map,hff,0.7051
+10,reference map,imr90,0.672
+10,reference map,mcf7,0.5808
+10,reference map,nhek,0.4571
+10,reference map,pc9,0.565
+25,all inputs,a549,0.9574
+25,all inputs,cd14mono,0.8985
+25,all inputs,gm12878,0.9454
+25,all inputs,gm23248,0.9512
+25,all inputs,h1,0.9455
+25,all inputs,hct116,0.9593
+25,all inputs,hepg2,0.9459
+25,all inputs,hff,0.9652
+25,all inputs,imr90,0.9577
+25,all inputs,mcf7,0.9347
+25,all inputs,nhek,0.9425
+25,all inputs,pc9,0.9168
+25,CTCF,a549,0.9377
+25,CTCF,cd14mono,0.7194
+25,CTCF,gm12878,0.9078
+25,CTCF,gm23248,0.9512
+25,CTCF,h1,0.9172
+25,CTCF,hct116,0.9184
+25,CTCF,hepg2,0.9085
+25,CTCF,hff,0.9546
+25,CTCF,imr90,0.943
+25,CTCF,mcf7,0.8978
+25,CTCF,nhek,0.9203
+25,CTCF,pc9,0.8736
+25,cohesin,a549,0.9263
+25,cohesin,cd14mono,0.8986
+25,cohesin,gm12878,0.8828
+25,cohesin,gm23248,0.9512
+25,cohesin,h1,0.8842
+25,cohesin,hct116,0.8946
+25,cohesin,hepg2,0.9011
+25,cohesin,hff,0.9652
+25,cohesin,imr90,0.9229
+25,cohesin,mcf7,0.8777
+25,cohesin,nhek,0.9425
+25,cohesin,pc9,0.9168
+25,active,a549,0.8919
+25,active,cd14mono,0.6092
+25,active,gm12878,0.8397
+25,active,gm23248,0.8278
+25,active,h1,0.7483
+25,active,hct116,0.7985
+25,active,hepg2,0.8408
+25,active,hff,0.8468
+25,active,imr90,0.8851
+25,active,mcf7,0.7209
+25,active,nhek,0.86
+25,active,pc9,0.7391
+25,gene body,a549,0.9399
+25,gene body,cd14mono,0.8783
+25,gene body,gm12878,0.9208
+25,gene body,gm23248,0.9295
+25,gene body,h1,0.9117
+25,gene body,hct116,0.943
+25,gene body,hepg2,0.9156
+25,gene body,hff,0.9551
+25,gene body,imr90,0.9454
+25,gene body,mcf7,0.9053
+25,gene body,nhek,0.9188
+25,gene body,pc9,0.8781
+25,repressive,a549,0.9332
+25,repressive,cd14mono,0.8685
+25,repressive,gm12878,0.9096
+25,repressive,gm23248,0.917
+25,repressive,h1,0.8986
+25,repressive,hct116,0.936
+25,repressive,hepg2,0.9044
+25,repressive,hff,0.9378
+25,repressive,imr90,0.9343
+25,repressive,mcf7,0.879
+25,repressive,nhek,0.9262
+25,repressive,pc9,0.8605
+25,motifs,a549,0.9585
+25,motifs,cd14mono,0.8933
+25,motifs,gm12878,0.9418
+25,motifs,gm23248,0.9466
+25,motifs,h1,0.9451
+25,motifs,hct116,0.9556
+25,motifs,hepg2,0.9409
+25,motifs,hff,0.9629
+25,motifs,imr90,0.9578
+25,motifs,mcf7,0.9312
+25,motifs,nhek,0.9375
+25,motifs,pc9,0.9157
+25,sequence,a549,0.921
+25,sequence,cd14mono,0.7066
+25,sequence,gm12878,0.8702
+25,sequence,gm23248,0.8916
+25,sequence,h1,0.8803
+25,sequence,hct116,0.894
+25,sequence,hepg2,0.8675
+25,sequence,hff,0.8984
+25,sequence,imr90,0.8896
+25,sequence,mcf7,0.8786
+25,sequence,nhek,0.8596
+25,sequence,pc9,0.8815
+25,reference map,a549,0.6123
+25,reference map,cd14mono,0.7423
+25,reference map,gm12878,0.5912
+25,reference map,gm23248,0.51
+25,reference map,h1,0.6485
+25,reference map,hct116,0.6202
+25,reference map,hepg2,0.5918
+25,reference map,hff,0.7211
+25,reference map,imr90,0.6856
+25,reference map,mcf7,0.5501
+25,reference map,nhek,0.4732
+25,reference map,pc9,0.5604
