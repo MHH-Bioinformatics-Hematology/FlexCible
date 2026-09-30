@@ -75,7 +75,8 @@ MODELS = {  # name -> (run dir, res, reference run name or None)
     # trained with track dropout (registry section 22)
     **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000,
                       None if b.startswith("all12honest") else b)
-       for b in ("all12refres_drop", "all12honest_drop", "all12refres_refdrop")
+       for b in ("all12refres_drop", "all12honest_drop", "all12refres_refdrop",
+                 "all12refres_drop_hard", "all12honest_drop_hard")
        for k in (10, 25)},
 }
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}

@@ -306,11 +306,13 @@ for _k in (2, 5):   # 12-cell honest/reference runs at 5 and 2 kb once they exis
 # 12-cell models trained with track dropout (registry section 22)
 for _k in (10, 25):
     for _b, _ref in (("all12refres_drop", "consensus12"), ("all12honest_drop", None),
-                     ("all12refres_refdrop", "consensus12")):
+                     ("all12refres_refdrop", "consensus12"),
+                     ("all12refres_drop_hard", "consensus12"), ("all12honest_drop_hard", None)):
         MODELS[f"{_b}_{_k}kb"] = (
             _k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
             RUNS / f"multicell_reference/{_b}_{_k}kb", _b, _ref)
-_DROP = {"all12refres_drop", "all12honest_drop", "all12refres_refdrop"}
+_DROP = {"all12refres_drop", "all12honest_drop", "all12refres_refdrop",
+         "all12refres_drop_hard", "all12honest_drop_hard"}
 
 # input sets: ChIP folder and, for the perturbation, the keep sets
 INPUTS = {
@@ -928,7 +930,9 @@ FAMILY_COLOR = {"all12refres": "#2a78d6", "all12honest": "#eb6834", "all12": "#1
                 "gm12878": "#eda100", "gm12878_refres": "#e87ba4",
                 # track-dropout models (section 22), palette slots 6 to 8
                 "all12refres_drop": "#008300", "all12honest_drop": "#e34948",
-                "all12refres_refdrop": "#4a3aa7"}
+                "all12refres_refdrop": "#4a3aa7",
+                # hard-split runs (section 24): the dropout models' hues, reused
+                "all12refres_drop_hard": "#008300", "all12honest_drop_hard": "#e34948"}
 MAP_STYLE = {"consensus12": ("#52514e", "--"), "best_train_map": ("#0b0b0b", ":"),
              "replicate": ("#4a3aa7", "-.")}
 

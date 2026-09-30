@@ -165,6 +165,16 @@ def jobs():
     J.append(Job("hardeval", f"{PY} scripts/hard_split.py --stage hardeval --jobs 4",
                  lambda: all(trained(r, k) for r, k, _ in hard),
                  lambda: is_marked("hardeval")))
+    hard_names = " ".join(mx.run_name(r, k) for r, k, _ in hard)
+    hard_ready = lambda: all(trained(r, k) for r, k, _ in hard)
+    J.append(Job("hard_minimal", f"{PY} scripts/minimal_inputs.py --stage absent --models "
+                                 f"{hard_names} && {PY} scripts/minimal_inputs.py --stage summary",
+                 hard_ready, lambda: is_marked("hard_minimal")))
+    J.append(Job("hard_perturb", f"{PY} scripts/perturb_validate.py --stage predict score figures",
+                 hard_ready, lambda: is_marked("hard_perturb")))
+    J.append(Job("hard_aml", f"{PY} scripts/aml_eval.py --stage predict --models {hard_names} "
+                             f"--jobs 2 --threads 3 && {PY} scripts/aml_eval.py --stage score "
+                             "perturb figures", hard_ready, lambda: is_marked("hard_aml")))
     gate_from = len(J)          # later GPU jobs wait for the hard split to exist
     views = " ".join(str(MR / mx.run_name("all12multires", r)) for r in mx.MULTIRES)
     J.append(Job("analysis_c", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/scale_importance.py "
