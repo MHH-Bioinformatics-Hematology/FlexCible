@@ -1549,3 +1549,55 @@ to 0.828, while it lowers the residual correlation on the training cells
 queued. Without a reference the residual correlation is 0.50 to 0.67, so
 the residual reference models add the most cell-specific signal beyond the
 consensus.
+
+Hard-split trainings (stopped by patience; best hard-validation median
+Pearson): all12refres_drop_hard 0.789 at 25 kb (epoch 55) and 0.748 at 10
+kb (epoch 37), all12honest_drop_hard 0.701 (epoch 20) and 0.661 (epoch 32).
+Hard-test evaluation (`hard_split.py --stage hardeval`, tables
+`results/hard_split/hardtest_*.csv`): 12 hard-test windows per training cell
+on average and 23 to 24 per held-out cell. Only the hard-split models never
+saw these loci: for the training cells the hard windows come from the
+training grid, so the other models were trained on them for the same cell
+and their rows there are in-sample (listed for reference); for the held-out
+cells those models were trained on the loci for other cells.
+
+Hard-test windows, 25 kb, median over cells, training cells / held-out cells (Pearson; SCC; residual correlation):
+
+| model | Pearson | SCC | residual correlation |
+|---|---|---|---|
+| reference, track dropout, hard split | 0.828 / 0.710 | 0.824 / 0.747 | 0.787 / 0.656 |
+| no reference, track dropout, hard split | 0.661 / 0.685 | 0.648 / 0.657 | 0.761 / 0.713 |
+| reference (trained on these loci) | 0.860 / 0.745 | 0.839 / 0.692 | 0.869 / 0.635 |
+| reference, track dropout (trained on these loci) | 0.846 / 0.747 | 0.828 / 0.783 | 0.837 / 0.692 |
+| multi-resolution reference (trained on these loci) | 0.909 / 0.709 | 0.865 / 0.749 | 0.917 / 0.689 |
+| no reference, track dropout (trained on these loci) | 0.760 / 0.682 | 0.708 / 0.687 | 0.797 / 0.766 |
+| consensus alone | 0.538 / 0.543 | 0.567 / 0.560 | 0 |
+| best single other map | 0.668 / 0.565 | | |
+| replicate maps (GM12878, IMR90; K562, HMEC, HUVEC) | 0.874 / 0.978 | | 0.868 / 0.982 |
+
+Hard-test windows, 10 kb, median over cells, training cells / held-out cells (Pearson; SCC; residual correlation):
+
+| model | Pearson | SCC | residual correlation |
+|---|---|---|---|
+| reference, track dropout, hard split | 0.755 / 0.701 | 0.724 / 0.659 | 0.759 / 0.652 |
+| no reference, track dropout, hard split | 0.633 / 0.662 | 0.593 / 0.558 | 0.685 / 0.599 |
+| reference (trained on these loci) | 0.840 / 0.673 | 0.803 / 0.580 | 0.843 / 0.560 |
+| reference, track dropout (trained on these loci) | 0.808 / 0.755 | 0.788 / 0.687 | 0.791 / 0.663 |
+| multi-resolution reference (trained on these loci) | 0.854 / 0.696 | 0.818 / 0.636 | 0.859 / 0.640 |
+| no reference, track dropout (trained on these loci) | 0.693 / 0.630 | 0.650 / 0.566 | 0.704 / 0.571 |
+| consensus alone | 0.559 / 0.541 | 0.598 / 0.539 | 0 |
+| best single other map | 0.604 / 0.496 | | |
+| replicate maps (GM12878, IMR90; K562, HMEC, HUVEC) | 0.730 / 0.621 | | 0.683 / 0.567 |
+
+On windows where the cell departs most from its consensus the consensus
+alone scores 0.54 to 0.56 and the best single other map 0.60 to 0.67 (0.50
+to 0.56 for held-out cells). The hard-split residual reference model scores
+0.828 at 25 kb and 0.755 at 10 kb on the training cells and predicts the
+departure from the consensus with a residual correlation of 0.79 and 0.76,
+against a replicate ceiling of 0.87 at 25 kb (at 10 kb the single-lane
+replicate pairs, 0.68, are noisier than the target). Without a reference
+the hard-split model scores 0.661 and 0.633 with residual correlations of
+0.76 and 0.69. On the held-out cells the hard-split reference model scores
+0.710 and 0.701 (residual correlation 0.66 and 0.65), 0.04 to 0.05 below the
+dropout model trained on these loci for other cells (0.747 and 0.755),
+which quantifies what seeing a locus in other cells contributes there.
