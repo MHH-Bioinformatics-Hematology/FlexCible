@@ -72,9 +72,12 @@ def eval_cmd(run, res):
 
 
 class Job:
-    def __init__(self, name, cmd, ready, done, gpu=False, after=None):
+    def __init__(self, name, cmd, ready, done, gpu=False, after=None, loaded=None):
         self.name, self.cmd, self.ready, self.done, self.gpu = name, cmd, ready, done, gpu
         self.after = after          # name of the job whose completion adds this one's marker
+        # loaded(): False while the job is still loading its data; no CPU job
+        # starts meanwhile (None: no load phase to protect)
+        self.loaded = loaded
 
     def __repr__(self):
         return self.name
@@ -85,9 +88,25 @@ def jobs():
 
     def train12(run, res, cache):
         n = f"train_{mx.run_name(run, res)}"
+        cfg = mx.run_config(mx.run_name(run, res), 100, 10, 500)
+        ready = lambda: cache_ok(cache)
+        loaded = None
+        if cfg["train"].get("stage_dir"):
+            st = Path(cfg["train"]["stage_dir"]) / cache / "train" / "meta.json"
+            J.append(Job(f"stage_{cache}", f"{PY} -m hicmultiome.train --config "
+                                           f"{MR / (mx.run_name(run, res) + '.stage.yaml')} --stage-only",
+                         lambda: cache_ok(cache),
+                         (lambda st=st, r=run, k=res: st.exists() or trained(r, k))))
+            import yaml
+            yaml.safe_dump(cfg, open(MR / f"{mx.run_name(run, res)}.stage.yaml", "w"),
+                           sort_keys=False)
+            ready = (lambda st=st: cache_ok(cache) and st.exists())
+            lg = MR / f"{mx.run_name(run, res)}.log"
+            loaded = (lambda lg=lg: lg.exists() and "train windows (" in
+                      lg.read_text(errors="replace"))
         J.append(Job(n, f"{M} --runs {run} --res {res} --stage precompute --workers 8 && "
                         f"{M} --runs {run} --res {res} --stage train --gpus 0,1",
-                     lambda: cache_ok(cache), lambda: trained(run, res), gpu=True))
+                     ready, lambda: trained(run, res), gpu=True, loaded=loaded))
         J.append(Job(f"eval_{mx.run_name(run, res)}", eval_cmd(run, res),
                      lambda: trained(run, res), lambda: is_marked(f"eval_{mx.run_name(run, res)}")))
 
@@ -284,6 +303,8 @@ def main():
                     running[j.name] = launch(j)
                     break
         cpu_running = sum(1 for j in all_jobs if j.name in running and not j.gpu)
+        if any(j.loaded is not None and not j.loaded() for j in all_jobs if j.name in running):
+            cpu_running = a.cpu_slots            # a training is loading: start no CPU job
         for j in pending:
             if cpu_running >= a.cpu_slots:
                 break

@@ -46,11 +46,132 @@ def ddp_env():
     )
 
 
+class LazyRows:
+    """Rows of a memory-mapped array (train.stage_dir), indexed like a tensor
+    without loading it: row selections compose, `[:, rows, :]` selects
+    columns (the cond rows of select_tracks), `.to(device)` only records the
+    device, and indexing with a torch tensor after `.to` loads those rows and
+    returns a tensor on that device (one batch at a time)."""
+
+    def __init__(self, arr, rows=None, cols=None, device=None, dtype=None):
+        self.arr, self.cols, self.device, self.dtype = arr, cols, device, dtype
+        self.rows = np.arange(arr.shape[0]) if rows is None else np.asarray(rows)
+
+    @property
+    def shape(self):
+        s = list(self.arr.shape)
+        s[0] = len(self.rows)
+        if self.cols is not None:
+            s[1] = len(self.cols)
+        return tuple(s)
+
+    def _new(self, rows=None, cols=None, device=None):
+        return LazyRows(self.arr, self.rows if rows is None else rows,
+                        self.cols if cols is None else cols,
+                        self.device if device is None else device, self.dtype)
+
+    def materialize(self, rows=None) -> torch.Tensor:
+        r = self.rows if rows is None else self.rows[rows]
+        order = np.argsort(r, kind="stable")
+        x = np.asarray(self.arr[r[order]])
+        if self.cols is not None:
+            x = x[:, self.cols]
+        inv = np.empty_like(order)
+        inv[order] = np.arange(len(order))
+        t = torch.from_numpy(np.ascontiguousarray(x[inv]))
+        return t.to(self.dtype) if self.dtype is not None else t
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            if len(key) >= 2 and key[0] == slice(None) and all(k == slice(None) for k in key[2:]):
+                return self._new(cols=list(key[1]))
+            raise IndexError("LazyRows supports [rows] and [:, cols, :]")
+        if isinstance(key, torch.Tensor):
+            t = self.materialize(key.detach().cpu().numpy())
+            return t.to(self.device) if self.device is not None else t
+        if isinstance(key, slice):
+            return self._new(rows=self.rows[key])
+        return self._new(rows=self.rows[np.asarray(key)])
+
+    def to(self, device):
+        return self._new(device=device)
+
+
+def _dense(v, device):
+    """A validation tensor on device (LazyRows loaded in full)."""
+    return (v.materialize() if isinstance(v, LazyRows) else v).to(device)
+
+
+STAGE_KEYS = ("target", "cond", "bait", "ref", "prior")
+
+
+def stage_cache(cache_dir, split: str, stage_dir) -> Path:
+    """Write the split of a cache uncompressed as float16 .npy memory maps
+    (bait uint8) in WindowDataset index order, one shard decompressed at a
+    time, into stage_dir/<cache name>/<split>/ (restartable; meta.json last)."""
+    ds = WindowDataset(cache_dir, split)
+    d = Path(stage_dir) / Path(cache_dir).name / split
+    man = Path(cache_dir) / "manifest.json"
+    meta = {"cache": str(cache_dir), "split": split, "n": len(ds),
+            "manifest_mtime": man.stat().st_mtime,
+            "index": [[x[2], x[3], x[4]] for x in ds._index]}
+    if (d / "meta.json").exists():
+        old = json.loads((d / "meta.json").read_text())
+        if old["n"] == meta["n"] and old["manifest_mtime"] == meta["manifest_mtime"]:
+            return d
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "meta.json").unlink(missing_ok=True)
+    n, w = len(ds), ds.window_size
+    shapes = {"target": ((n, ds.n_out, w, w), np.float16), "cond": ((n, ds.n_sym, w), np.float16),
+              "bait": ((n, w), np.uint8)}
+    if ds.reference:
+        shapes["ref"] = ((n, w, w), np.float16)
+    if ds.prior:
+        shapes["prior"] = ((n, w, w), np.float16)
+    mm = {k: np.lib.format.open_memmap(d / f"{k}.npy.part", "w+", dt, sh)
+          for k, (sh, dt) in shapes.items()}
+    for path, pairs in ds.grouped_index().items():
+        z = np.load(path)
+        rows = np.array([r for r, _ in pairs])
+        loc = np.array([l for _, l in pairs])
+        for k in mm:
+            if k == "bait":
+                mm[k][rows] = z["bait"][loc] if "bait" in z else 0
+            else:
+                mm[k][rows] = z[k][loc]
+        log.info("staged %s", Path(path).name)
+    for k, m in mm.items():
+        m.flush()
+        del m
+        (d / f"{k}.npy.part").rename(d / f"{k}.npy")
+    (d / "meta.json").write_text(json.dumps(meta))
+    log.info("staged %s %s: %d windows -> %s", Path(cache_dir).name, split, n, d)
+    return d
+
+
 def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
-           dtype=torch.float32):
+           dtype=torch.float32, stage_dir=None):
     ds = WindowDataset(cache_dir, split, val_fraction, want_val, seed, chroms=chroms)
     if len(ds) == 0:
         return None, ds
+    if stage_dir is not None:
+        d = Path(stage_dir) / Path(cache_dir).name / split
+        if not (d / "meta.json").exists():
+            raise RuntimeError(f"{d}: not staged; run python -m hicmultiome.train "
+                               "--config <cfg> --stage-only first")
+        meta = json.loads((d / "meta.json").read_text())
+        man = Path(cache_dir) / "manifest.json"
+        if meta["manifest_mtime"] != man.stat().st_mtime:
+            raise RuntimeError(f"{d} is older than {man}; restage")
+        pos = {tuple(x): i for i, x in enumerate(meta["index"])}
+        rows = np.array([pos[(x[2], x[3], x[4])] for x in ds._index])
+        out = {}
+        for k in STAGE_KEYS:
+            f = d / f"{k}.npy"
+            if f.exists():
+                out[k] = LazyRows(np.load(f, mmap_mode="r"), rows,
+                                  dtype=torch.float32 if k == "bait" else dtype)
+        return out, ds
     n, w = len(ds), ds.window_size
     tg = torch.empty((n, ds.n_out, w, w), dtype=dtype)
     cd = torch.empty((n, ds.n_sym, w), dtype=dtype)
@@ -400,7 +521,7 @@ def train(cfg: Config):
     if cfg.train.val_regions:
         # hold out a fixed set of whole windows as an Akita-style validation set
         data, ds = _stack(str(cache_dir), "train", 0.0, False, cfg.train.seed, chroms=chroms,
-                          dtype=res_dt)
+                          dtype=res_dt, stage_dir=cfg.train.stage_dir)
         vds = ds
         if data is not None:
             co = _coords(ds)
@@ -429,9 +550,9 @@ def train(cfg: Config):
             vdata = None
     else:
         data, ds = _stack(str(cache_dir), "train", cfg.train.val_fraction, False, cfg.train.seed, chroms=chroms,
-                          dtype=res_dt)
+                          dtype=res_dt, stage_dir=cfg.train.stage_dir)
         vdata, vds = _stack(str(cache_dir), "train", cfg.train.val_fraction, True, cfg.train.seed, chroms=chroms,
-                            dtype=res_dt)
+                            dtype=res_dt, stage_dir=cfg.train.stage_dir)
         if cfg.train.val_exclude_overlap and data is not None and vdata is not None:
             keep = ~overlaps_positions(_coords(ds), _coords(vds), ds.window_size)
             if rank == 0:
@@ -517,9 +638,9 @@ def train(cfg: Config):
     pf = data["prior"][sl].to(device) if cfg.model.prior else None
     vdata_d = hdata_d = None
     if is_main and vdata is not None:
-        vdata_d = {k2: v.to(device) for k2, v in vdata.items()}
+        vdata_d = {k2: _dense(v, device) for k2, v in vdata.items()}
     if is_main and hdata is not None:
-        hdata_d = {k2: v.to(device) for k2, v in hdata.items()}
+        hdata_d = {k2: _dense(v, device) for k2, v in hdata.items()}
     N = tg.shape[0]
 
     tr_coords = val_coords = None
@@ -1046,8 +1167,17 @@ def train_stream(cfg: Config):
 def main():
     ap = argparse.ArgumentParser(description="Train the multi-omic Hi-C U-Net.")
     ap.add_argument("--config", required=True)
+    ap.add_argument("--stage-only", action="store_true",
+                    help="write the train split of the cache as memory maps into "
+                         "train.stage_dir and exit (single process, before torchrun)")
     args = ap.parse_args()
-    train(Config.load(args.config))
+    cfg = Config.load(args.config)
+    if args.stage_only:
+        if not cfg.train.stage_dir:
+            raise SystemExit("--stage-only needs train.stage_dir")
+        stage_cache(cfg.train.cache_dir, "train", cfg.train.stage_dir)
+        return
+    train(cfg)
 
 
 if __name__ == "__main__":

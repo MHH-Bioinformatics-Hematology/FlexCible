@@ -166,6 +166,7 @@ DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
 DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
 HARD_SPLIT_DIR = REPO / "results/hard_split"
+STAGE_ROOT = Path.home() / "scratch/hicmx_stage"      # local disk, not /tmp
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
             "all12multires": "residual", "all12casc": "residual",
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",
@@ -288,6 +289,11 @@ def run_config(name, val_per_cell, patience, max_epochs):
         td, rd = DROPOUT_RUNS[base]
         cfg["train"].update({"track_dropout": td, "track_dropout_mode": "uniform_count",
                              "reference_dropout": rd})
+    if res == 2000 and base in HONEST_RUNS:
+        # 2 kb with a reference or prior plane does not fit resident in RAM on
+        # both DDP ranks (earlyoom killed all12refres and all12casc on
+        # 2026-09-30): read the train split from memory maps on local disk
+        cfg["train"]["stage_dir"] = str(STAGE_ROOT)
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg
@@ -371,6 +377,11 @@ def train(name, a, gpus):
         yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
         log.write_text("")
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
+        if cfg["train"].get("stage_dir"):
+            # memory-mapped training windows on local disk, written once
+            if sh([PY, "-m", "hicmultiome.train", "--config", cp, "--stage-only"],
+                  O / f"{name}.stage.log"):
+                raise SystemExit(f"staging failed for {name}")
         sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
             "-m", "hicmultiome.train", "--config", cp], log, env)
         if not done(log):

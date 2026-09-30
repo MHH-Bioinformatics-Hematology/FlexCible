@@ -376,6 +376,12 @@ class TrainConfig:
     # windows, and the honest validation (val_regions) is logged alongside.
     # Needs val_regions. None = off.
     hard_split: str | None = None
+    # Memory-mapped training windows: the train split of cache_dir staged
+    # uncompressed on local disk (python -m hicmultiome.train --stage-only)
+    # and read batch by batch, so DDP ranks share the page cache instead of
+    # each holding the whole split in RAM and its stripe on the GPU (2 kb
+    # runs with a reference plane). None = resident (previous behaviour).
+    stage_dir: str | None = None
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
     # Used for a fast proxy input-search: far fewer windows -> quick candidates,
     # to check whether the track ranking is stable without all chromosomes.

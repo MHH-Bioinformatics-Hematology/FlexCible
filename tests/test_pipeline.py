@@ -2008,3 +2008,37 @@ def test_hard_split_training(workdir):
     htrain.train(c2)
     txt = (workdir / "run_hard" / "best").exists()
     assert txt
+
+
+def test_train_from_staged_memmaps(workdir):
+    """train.stage_dir: the staged split read through LazyRows equals the
+    resident load (rows, column selection, val split), and training runs."""
+    import torch
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    raw = _ref_raw(workdir, "staged", reference="residual")
+    raw["train"].update(cache_dir=str(workdir / "cache_ref"),
+                        stage_dir=str(workdir / "stage"), track_dropout=0.5,
+                        track_dropout_mode="uniform_count")
+    c = Config.from_dict(raw)
+    if not (Path(c.train.cache_dir) / "manifest.json").exists():
+        hprep.build(c)
+    htrain.stage_cache(c.train.cache_dir, "train", c.train.stage_dir)
+    eager, _ = htrain._stack(c.train.cache_dir, "train", 0.0, False, 0)
+    lazy, _ = htrain._stack(c.train.cache_dir, "train", 0.0, False, 0,
+                            stage_dir=c.train.stage_dir)
+    assert set(lazy) >= {"target", "cond", "ref"}
+    rows = np.array([3, 0, 2])
+    for k in ("target", "cond", "ref"):
+        assert lazy[k].shape == tuple(eager[k].shape)
+        got = lazy[k][rows].to("cpu")[torch.arange(3)]
+        assert torch.equal(got.float(), eager[k][rows].float())
+    sel = lazy["cond"][:, [0, 2], :].materialize()
+    assert torch.equal(sel.float(), eager["cond"][:, [0, 2], :].float())
+    htrain.train(c)
+    assert (Path(c.train.output_dir) / "best").exists()
+    with pytest.raises(RuntimeError, match="not staged"):
+        htrain._stack(c.train.cache_dir, "train", 0.0, False, 0,
+                      stage_dir=str(workdir / "nostage"))
