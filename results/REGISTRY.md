@@ -715,7 +715,14 @@ of 0.758 (2 kb), 0.860 (5 kb), 0.923 (10 kb) and 0.951 (25 kb). The
 validation windows are those of the dedicated runs (same caches, seed and
 split): all12refres reached 0.9445 at 25 kb and 0.9181 at 10 kb, so on
 validation sharing raises 25 kb by 0.006 and 10 kb by 0.005; the dedicated
-5 and 2 kb reference models for the same comparison are queued. Test
+5 and 2 kb reference models for the same comparison are queued. The first
+2 kb all12refres and all12casc starts (2026-09-30 11:35 and 14:55) were
+stopped by earlyoom (SIGTERM to both ranks during loading): each rank held
+the whole 2 kb train split with a 512 x 512 target and a reference (and
+prior) plane in float16 in RAM, about 40 GB per rank, next to other jobs;
+all12honest (no reference plane) fitted. These runs now read their windows
+from memory maps staged once on local disk (`train.stage_dir`,
+`python -m hicmultiome.train --stage-only`), one batch at a time. Test
 scores follow from the evaluation now running. The training windows were
 staged once as float16 memory maps on local disk
 (`hicmultiome.train_multires --stage-only`); the first start, in which
