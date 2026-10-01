@@ -219,7 +219,11 @@ def predict_region(b, sym_full, st, ref_block, device, reg_start, n_out, res, tg
     return sc.resample(P, st * res, res, reg_start, n_out, tgt_bin)
 
 
-def quick_task(cell: str, res: int, device: str, regions=None, families=None, out=None):
+SHRINK = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]
+
+
+def quick_task(cell: str, res: int, device: str, regions=None, families=None, out=None,
+               shrink: bool = False):
     """All regions of one cell at one resolution, every model (default: the
     413 Akita test regions and the existing models)."""
     import cooler
@@ -262,7 +266,7 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
         bt = pd.read_csv(cc).set_index("region")
         base_tab = bt[[c for c in bt.columns if c.startswith("base_")
                        and not c.startswith("base_consensus")]]
-    others = ({} if base_tab is not None else
+    others = ({} if base_tab is not None or shrink else
               {o: cooler.Cooler(str(mx.target(o, res))) for o in mx.BASELINE_MAPS
                if mx.CELLS[o][3] != mx.CELLS[cell][3] and mx.target(o, res).exists()})
     if regions is None:
@@ -326,6 +330,10 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
                 rec[f"{fam}_pearson"] = bm.pearson(P, T, m)
                 rec[f"{fam}_scc"] = bm.scc(P, T, m)
                 rec[f"{fam}_resid_corr"] = corr((P - C)[m], (T - C)[m])
+                if shrink:
+                    # residual shrinkage toward the consensus: C + lam * (P - C)
+                    for lam in SHRINK:
+                        rec[f"{fam}_shrink{lam}"] = bm.pearson(C + lam * (P - C), T, m)
             rows.append(rec)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".part")
@@ -333,9 +341,9 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
     tmp.rename(out)
 
 
-def quick(jobs: int, families=None, tag=None):
+def quick(jobs: int, families=None, tag=None, cells=None, region_set="test", shrink=False):
     qdir = "quick" if not tag else f"quick_{tag}"
-    tasks = [(c, r) for r in RES for c in CELLS
+    tasks = [(c, r) for r in RES for c in (cells or CELLS)
              if not (OUT / qdir / f"{c}_{r // 1000}kb.csv").exists()]
     procs = []
     k = 0
@@ -349,12 +357,14 @@ def quick(jobs: int, families=None, tag=None):
                        MKL_NUM_THREADS="3")
             logf = OUT / qdir / f"{c}_{r // 1000}kb.log"
             logf.parent.mkdir(parents=True, exist_ok=True)
-            extra = (["--families", *families] if families else []) + (["--tag", tag] if tag else [])
+            extra = ((["--families", *families] if families else []) + (["--tag", tag] if tag else [])
+                     + ["--region-set", region_set] + (["--shrink"] if shrink else []))
             procs.append(subprocess.Popen([PY, __file__, "--stage", "quick_task", "--cell", c,
                                            "--res", str(r), *extra], env=env, cwd=REPO,
                                           stdout=open(logf, "w"), stderr=subprocess.STDOUT))
         time.sleep(10)
-    quick_summary(tag)
+    if not shrink:
+        quick_summary(tag)
 
 
 def apply_filters(df: pd.DataFrame, cell_col="cell") -> tuple[pd.DataFrame, list[dict]]:
@@ -648,6 +658,38 @@ def select(frac=None, union_heldout=True, share_bonus=None, out_dir=None, write=
     print(pd.DataFrame(stats).to_string(), flush=True)
 
 
+def shrink_summary(families):
+    """lam per family and resolution: the highest median Pearson over the
+    held-out cells' Akita validation regions (quick_shrinkval/); applied to
+    their 413 test regions (quick_shrinktest/). Writes shrink_summary.csv."""
+    rows = []
+    for res in RES:
+        k = res // 1000
+        val = [pd.read_csv(f) for f in (OUT / "quick_shrinkval").glob(f"*_{k}kb.csv")]
+        tst = [pd.read_csv(f) for f in (OUT / "quick_shrinktest").glob(f"*_{k}kb.csv")]
+        if not val or not tst:
+            continue
+        V, T = pd.concat(val), pd.concat(tst)
+        for fam in families:
+            cols = [f"{fam}_shrink{l}" for l in SHRINK]
+            if not all(c in V and c in T for c in cols):
+                continue
+            # median over regions per cell, then over cells
+            vm = {l: V.groupby("cell")[f"{fam}_shrink{l}"].median().median() for l in SHRINK}
+            lam = max(vm, key=vm.get)
+            for cell, g in T.groupby("cell"):
+                rows.append({"res_kb": k, "family": fam, "cell": cell, "lambda": lam,
+                             "lambda_val_median": round(vm[lam], 4),
+                             "val_median_lambda1": round(vm[1.0], 4),
+                             "test_model": round(g[f"{fam}_shrink1.0"].median(), 4),
+                             "test_shrunk": round(g[f"{fam}_shrink{lam}"].median(), 4),
+                             "test_consensus": round(g["consensus_pearson"].median(), 4),
+                             "n_test": len(g)})
+    df = pd.DataFrame(rows)
+    df.to_csv(SPLIT_DIR / "shrink_summary.csv", index=False)
+    print(df.to_string(), flush=True)
+
+
 def hardeval_task(cell: str, res: int, device: str):
     """Hard-test windows of one cell: the hard-split models and, for
     comparison, the models trained on those loci (flagged in the summary)."""
@@ -704,21 +746,35 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stage", required=True,
                     choices=["quick", "quick_task", "quick_summary", "score", "score_task",
-                             "select", "hardeval", "hardeval_task", "hard_summary"])
+                             "select", "hardeval", "hardeval_task", "hard_summary",
+                             "shrink_summary"])
     ap.add_argument("--cell")
     ap.add_argument("--res", type=int)
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--families", nargs="*", default=None)
+    ap.add_argument("--region-set", choices=["test", "valid"], default="test",
+                    help="Akita's 413 test or 419 validation regions (quick_task)")
+    ap.add_argument("--shrink", action="store_true",
+                    help="also score C + lam * (P - C) for the lam grid")
+    ap.add_argument("--cells", nargs="*", default=None)
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.stage == "quick_task":
         import torch
         qd = OUT / ("quick" if not a.tag else f"quick_{a.tag}")
+        regs = None
+        if a.region_set == "valid":
+            import resolution_inputs as ri
+            regs = pd.read_csv(ri.VALID_REGIONS, sep="\t", usecols=[0, 1, 2],
+                               names=["chrom", "start", "end"])
         quick_task(a.cell, a.res, "cuda" if torch.cuda.is_available() else "cpu",
-                   families=a.families, out=qd / f"{a.cell}_{a.res // 1000}kb.csv")
+                   regions=regs, families=a.families, shrink=a.shrink,
+                   out=qd / f"{a.cell}_{a.res // 1000}kb.csv")
     elif a.stage == "quick":
-        quick(a.jobs, a.families, a.tag)
+        quick(a.jobs, a.families, a.tag, a.cells, a.region_set, a.shrink)
+    elif a.stage == "shrink_summary":
+        shrink_summary(a.families)
     elif a.stage == "score_task":
         score_task(a.cell, a.res)
     elif a.stage == "score":
