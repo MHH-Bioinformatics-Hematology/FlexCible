@@ -192,18 +192,8 @@ def hspc_consensus_path(res: int) -> Path:
 def build_hspc_consensus(res: int) -> Path:
     """Mean of the four HSPC maps (aml_primary.build_aml_consensus code path
     with another sample list)."""
-    out = hspc_consensus_path(res)
-    if out.exists():
-        return out
-    saved = ap.aml_patients
-    try:
-        ap.aml_patients = lambda r: [h for h in HSPC if ap.map_path(h, r)]
-        p = ap.build_aml_consensus(res, None)
-        p.rename(out)
-        Path(str(p) + ".json").rename(Path(str(out) + ".json"))
-    finally:
-        ap.aml_patients = saved
-    return out
+    return ap.build_aml_consensus(res, None, labs=[h for h in HSPC if ap.map_path(h, res)],
+                                  out=hspc_consensus_path(res))
 
 
 def explain_scores_res(res: int) -> pd.DataFrame:

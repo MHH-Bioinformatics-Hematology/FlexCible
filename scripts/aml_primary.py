@@ -728,15 +728,16 @@ def aml_consensus_path(res: int, exclude: str | None) -> Path:
     return CONS_DIR / f"amlcons_{tag}_{res // 1000}kb.cool"
 
 
-def build_aml_consensus(res: int, exclude: str | None) -> Path:
+def build_aml_consensus(res: int, exclude: str | None, labs: list[str] | None = None,
+                        out: Path | None = None) -> Path:
     """Mean of the AML patients' proper O/E maps (all share one bin grid and
-    pixel table, checked chunk by chunk), excluding `exclude`."""
+    pixel table, checked chunk by chunk), excluding `exclude`; or of `labs`
+    written to `out`."""
     import cooler
-    import h5py
-    out = aml_consensus_path(res, exclude)
+    out = out or aml_consensus_path(res, exclude)
     if out.exists():
         return out
-    labs = [p for p in aml_patients(res) if p != exclude]
+    labs = labs or [p for p in aml_patients(res) if p != exclude]
     clrs = [cooler.Cooler(str(map_path(p, res))) for p in labs]
     n = int(clrs[0].info["nnz"])
     if any(int(c.info["nnz"]) != n for c in clrs):
