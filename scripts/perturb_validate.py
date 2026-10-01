@@ -81,7 +81,8 @@ MODELS = {  # name -> (run dir, res, reference run name or None)
     # trained with the RAD21 degron pair on the odd chromosomes (section 25)
     **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000,
                       None if "honest" in b else b)
-       for b in ("all12deg_refres_drop", "all12deg_honest_drop") for k in (10, 25)},
+       for b in ("all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop")
+       for k in (10, 25)},
 }
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # measured ChIP of the degron cells (4DN GRCh38 fold change: RAD21 and CTCF from

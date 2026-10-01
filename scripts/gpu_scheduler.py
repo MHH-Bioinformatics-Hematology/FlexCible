@@ -288,6 +288,24 @@ def jobs():
                                    "--families all12refin_drop all12refin_drop_ctcfac "
                                    "all12refres_drop_varw all12refres_drop all12refin "
                                    "--tag t2", t2_ready, lambda: is_marked("t2_hardregions")))
+    # --- Track 1a: HFF with cohesin ChIP (needs aml_fetch.py --cells hffcoh first)
+    try:
+        coh = [("all12hffcoh_refres_drop", 25000), ("all12hffcoh_refres_drop", 10000)]
+        for run, res in coh:
+            mx.run_config(mx.run_name(run, res), 100, 10, 500)      # raises until fetched
+        for run, res in coh:
+            prep_cache(run, res, f"mc_{run}_{res // 1000}kb")
+            train12(run, res, f"mc_{run}_{res // 1000}kb")
+        coh_names = " ".join(mx.run_name(r, k) for r, k in coh)
+        coh_ready = lambda: all(trained(r, k) for r, k in coh)
+        J.append(Job("coh_perturb", f"{PY} scripts/perturb_validate.py --stage predict "
+                                    "predict_chip score figures",
+                     coh_ready, lambda: is_marked("coh_perturb")))
+        J.append(Job("coh_aml", f"{PY} scripts/aml_eval.py --stage predict --models {coh_names} "
+                                f"--jobs 2 --threads 3 && {PY} scripts/aml_eval.py --stage score "
+                                "perturb figures", coh_ready, lambda: is_marked("coh_aml")))
+    except SystemExit:
+        pass
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())

@@ -172,6 +172,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     "all12refin_drop": (TRAIN12, None),
     "all12refin_drop_ctcfac": (TRAIN12, None),
     "all12refres_drop_varw": (TRAIN12, None),
+    # HFF with cohesin ChIP (HFFc6 SMC1A from ChIP-Atlas in the RAD21 and SMC3
+    # slots; registry section 25): no training cell then lacks cohesin
+    "all12hffcoh_refres_drop": (TRAIN12, None),
 }
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
@@ -179,7 +182,31 @@ DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
 DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop": (0.5, 0.0)})
 DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0.5, 0.0),
                      "all12refres_drop_varw": (0.5, 0.0)})
+DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
+HFF_COHESIN_DIR = HM / "hg38_hff_cohesin"
+
+
+def hff_cohesin_dir() -> Path:
+    """HFF's ChIP folder plus RAD21 and SMC3 from the HFFc6 SMC1A replicates
+    (aml_fetch.py --cells hffcoh), as copies, with missing.json and the
+    picks of the SMC1A tracks."""
+    src, coh = HM / "hg38_hff", HM / "aml/hg38_hffcoh"
+    if not (coh / "RAD21.bigwig").exists() or not (coh / "SMC3.bigwig").exists():
+        raise SystemExit(f"{coh}: run scripts/aml_fetch.py --cells hffcoh first")
+    d = HFF_COHESIN_DIR
+    d.mkdir(exist_ok=True)
+    import shutil
+    for f in list(src.glob("*.bigwig")) + [coh / "RAD21.bigwig", coh / "SMC3.bigwig"]:
+        dst = d / f.name                      # copies: the share refuses symlinks
+        if not dst.exists() or dst.stat().st_size != f.stat().st_size:
+            tmp = dst.with_name(dst.name + ".part")
+            shutil.copyfile(f, tmp)
+            tmp.rename(dst)
+    have = {p.stem.upper() for p in d.glob("*.bigwig")}
+    (d / "missing.json").write_text(json.dumps([t for t in ALL13 if t.upper() not in have]))
+    (d / "picks.csv").write_text((coh / "picks.csv").read_text())
+    return d
 PERTURB_CHIP = Path.home() / "data/hic-multiome/perturb_chip"
 DEGRON_TRAIN_CHROMS = [f"chr{i}" for i in range(1, 23, 2)]     # odd autosomes
 # the auxin condition's identity (consensus, leakage guard): HCT116
@@ -192,7 +219,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
             "all12deg_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
-            "all12refres_drop_varw": "residual"}
+            "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
@@ -274,6 +301,11 @@ def run_config(name, val_per_cell, patience, max_epochs):
         {"name": c, "cool_path": str(target(c, res)), "bigwig_dir": str(CELLS[c][1]),
          "missing_tracks": missing_marks(CELLS[c][1]), "assay": CELLS[c][2]}
         for c in cells]
+    if base == "all12hffcoh_refres_drop":
+        hff = next(s for s in cfg["data"]["samples"] if s["name"] == "hff")
+        d = hff_cohesin_dir()
+        hff["bigwig_dir"] = str(d)
+        hff["missing_tracks"] = missing_marks(d)
     if base in DEGRON_RUNS:
         import perturb_validate as pv
         hct = next(s for s in cfg["data"]["samples"] if s["name"] == "hct116")
@@ -303,7 +335,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS
+    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | {"all12hffcoh_refres_drop"}
                   else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
                   else f"mc_{run_name('all12', res)}" if base in ("all12honest_drop",

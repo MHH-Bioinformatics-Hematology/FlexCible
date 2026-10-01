@@ -1608,3 +1608,59 @@ the hard-split model scores 0.661 and 0.633 with residual correlations of
 0.710 and 0.701 (residual correlation 0.66 and 0.65), 0.04 to 0.05 below the
 dropout model trained on these loci for other cells (0.747 and 0.755),
 which quantifies what seeing a locus in other cells contributes there.
+
+## 25. Cohesin response (PENDING)
+
+Problem (sections 19 and 21): removing RAD21 at inference made the models
+predict stronger loops, opposite to the measured RAD21 degron; HFF, the only
+training cell without cohesin ChIP, is Micro-C with the sharpest loops, so
+"no cohesin input" reads as "HFF-like".
+
+1b, the RAD21 degron as training data (runs all12deg_refres_drop and
+all12deg_honest_drop, 25 and 10 kb, track dropout 0.5, honest validation).
+Rao et al. 2017 HCT116 RAD21-mAC: the existing hct116 training target is
+already this study's untreated Hi-C (4DN 4DNES3QAGOZZ), so the untreated
+condition is not added a second time; in these runs hct116 reads the
+matched untreated degron ChIP (Kim et al. 2024 RAD21 and CTCF, Rao 2017
+histone marks, H3K4me2/H3K9ac/H4K20me1 from ENCODE HCT116; no SMC3) instead
+of the ENCODE HCT116 set, and a 13th sample hct116_auxin holds the 6 h auxin
+Hi-C (4DNESJV9TH8Q, `oe_proper.py`) with the auxin ChIP, on the odd autosomes
+only (`samples[].train_chroms`). Its reference is the HCT116 leave-one-out
+consensus. The RAD21 degron is scored on the even chromosomes (never seen
+under auxin); the HCT116 CTCF degron (ENCODE intact) and the U-937 STAG2
+knockout stay fully held out.
+
+1a, HFF cohesin ChIP. No RAD21, SMC3, STAG1/2 or NIPBL ChIP of HFF or HFFc6
+exists on ENCODE; ChIP-Atlas holds two HFFc6 SMC1A experiments (SRX9995801,
+30.6 M reads, 44,030 peaks; SRX9995802, 19.9 M reads, 32,989 peaks), the
+cohesin ring subunit that co-occupies RAD21 and SMC3 sites, and RAD21/SMC3 of
+BJ, a different foreskin fibroblast line (not used). Run
+all12hffcoh_refres_drop (25 and 10 kb) gives HFF the two SMC1A replicates in
+the RAD21 and SMC3 slots (`aml_fetch.py --cells hffcoh`, rescaled to the
+training cells' genome-wide mean), so no training cell lacks cohesin.
+
+1c (cohesin-unknown indicator) is not run unless 1a and 1b leave the
+direction wrong.
+
+Washout (held-out test, `scripts/washout.py`): Rao 2017 measured Hi-C 20, 40,
+60 and 180 min after auxin withdrawal (4DN 4DNESCOJ3ADI, 4DNES7RDRS69,
+4DNES4KDIQNN, 4DNESOGIV7NG, GRCh38 mcools). Kim 2024 ChIP exists only at 9 h
+and 12 h of washout, so no time point has matching ChIP; the maps are never
+trained on and are predicted approximately with the RAD21 track interpolated
+between the auxin and the untreated track. Nora et al. 2017 (CTCF degron with
+washout) is mouse ES cells and is not used by this hg38 model.
+
+## 26. Gain beyond the consensus on new cells (PENDING)
+
+(a) all12refin_drop: input-only reference (model.reference input) with track
+dropout, and all12refin_drop_ctcfac, the same reading CTCF and H3K27ac only.
+(b) all12refres_drop_varw: residual reference with track dropout and
+`train.loss_weighting` between_cell_var (per pixel 1 + v / mean(v), v the
+variance across the training cells' maps at that locus and pixel, from
+training windows only; mean 1 per batch). (c) residual shrinkage for unseen
+cells, C + lambda * (P - C), lambda chosen per model and resolution on the
+held-out cells' Akita validation regions (419, disjoint from the 413 test
+regions), then applied to their test regions (`hard_split.py --shrink`,
+`shrink_summary.csv`). Key numbers: model above the consensus alone on the
+held-out cells (K562, HMEC deep, HUVEC deep; AML MOLM-13 and U-937 through
+`aml_eval.py`) and the residual correlation on the hardest regions.
