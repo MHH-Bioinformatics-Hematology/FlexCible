@@ -1,0 +1,7 @@
+{
+ "label": "fi_rad21_mut",
+ "res": 10000,
+ "contacts": 985397205.0,
+ "nnz": 318523941,
+ "ice_masked_frac": 0.14522453446617817
+}
