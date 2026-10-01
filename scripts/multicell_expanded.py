@@ -175,6 +175,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # HFF with cohesin ChIP (HFFc6 SMC1A from ChIP-Atlas in the RAD21 and SMC3
     # slots; registry section 25): no training cell then lacks cohesin
     "all12hffcoh_refres_drop": (TRAIN12, None),
+    # mean DNA methylation (ENCODE WGBS, scripts/methylation.py) as a 14th
+    # track, a proxy for marks primary samples lack (registry section 27)
+    "all12refres_drop_meth": (TRAIN12, None),
 }
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
@@ -183,6 +186,8 @@ DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop":
 DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0.5, 0.0),
                      "all12refres_drop_varw": (0.5, 0.0)})
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
+DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
+METH_RUNS = {"all12refres_drop_meth"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
 HFF_COHESIN_DIR = HM / "hg38_hff_cohesin"
 
@@ -219,7 +224,8 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
             "all12deg_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
-            "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual"}
+            "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
+            "all12refres_drop_meth": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
@@ -306,6 +312,14 @@ def run_config(name, val_per_cell, patience, max_epochs):
         d = hff_cohesin_dir()
         hff["bigwig_dir"] = str(d)
         hff["missing_tracks"] = missing_marks(d)
+    if base in METH_RUNS:
+        import methylation as me
+        cfg["data"]["tracks"].append({"name": me.TRACK, "type": "methylation"})
+        for smp in cfg["data"]["samples"]:
+            if me.has_meth(smp["name"]):
+                smp["extra_bigwig_dirs"] = [str(me.meth_dir(smp["name"]))]
+            else:
+                smp["missing_tracks"] = smp["missing_tracks"] + [me.TRACK]
     if base in DEGRON_RUNS:
         import perturb_validate as pv
         hct = next(s for s in cfg["data"]["samples"] if s["name"] == "hct116")
@@ -335,7 +349,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | {"all12hffcoh_refres_drop"}
+    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS
+                  | {"all12hffcoh_refres_drop"}
                   else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
                   else f"mc_{run_name('all12', res)}" if base in ("all12honest_drop",
@@ -427,6 +442,10 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
             extra = ["--reference", rf]
             if split_name(ref_run)[0] == "all12casc":
                 extra += ["--prior", cascade_prior(cell, CASCADE_FROM[res])]
+        if ref_run is not None and split_name(ref_run)[0] in METH_RUNS:
+            import methylation as me
+            if me.has_meth(cell):
+                extra += ["--extra-bigwig-dir", me.meth_dir(cell)]
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", cfg_path,
                  "--checkpoint", ckpt, "--cell", cell, "--bigwig-dir", bw,
                  "--target", cool, "--tta", "--assay", assay, "--out-dir", out,

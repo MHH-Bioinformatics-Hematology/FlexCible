@@ -75,6 +75,9 @@ def main():
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--cell", required=True)
     ap.add_argument("--bigwig-dir", required=True)
+    ap.add_argument("--extra-bigwig-dir", nargs="*", default=[],
+                    help="further folders of this cell's track bigWigs (e.g. its methylation "
+                         "folder), searched after --bigwig-dir")
     ap.add_argument("--target", required=True, help="this cell's measured O/E cool (2kb)")
     ap.add_argument("--others", nargs="*", default=[], help="cell=cool of OTHER cells")
     ap.add_argument("--binsize", type=int, default=2000)
@@ -134,9 +137,11 @@ def main():
     # this cell's sample: point tracks at its bigwig dir; which marks it has
     sample = cfg.get_sample(None)
     sample.bigwig_dir = a.bigwig_dir
+    sample.extra_bigwig_dirs = list(a.extra_bigwig_dir)    # this cell's, never the config's
     if a.assay is not None:
         sample.assay = a.assay
-    have = {p.stem.upper(): p for p in Path(a.bigwig_dir).glob("*.bigwig")}
+    have = {p.stem.upper(): p for d in [*reversed(a.extra_bigwig_dir), a.bigwig_dir]
+            for p in Path(d).glob("*.bigwig")}
     missing = [t for t in channels["tracks"] if t.upper() not in have]
     if a.keep_tracks is not None:
         keep = {t.strip().upper() for t in a.keep_tracks.split(",") if t.strip()}

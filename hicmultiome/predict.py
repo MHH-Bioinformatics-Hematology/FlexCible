@@ -138,7 +138,7 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             zero_regions: list[tuple[str, str, int, int]] | None = None,
             renormalize_tracks: bool = False, bigwig_dir: str | None = None,
             cell: str | None = None, reference: str | None = None,
-            prior: str | None = None):
+            prior: str | None = None, extra_bigwig_dirs: list[str] | None = None):
     """bigwig_dir: predict a cell from this folder of ChIP bigWigs (tracks it
     lacks enter as absent) with the configured sample's bin grid and
     normalisers; `cell` names it (default: the sample name, or the folder
@@ -158,7 +158,9 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
     if bigwig_dir:
         sample = type(sample)(**{**sample.__dict__})
         sample.bigwig_dir = str(bigwig_dir)
-        have = {q.stem.upper() for q in Path(bigwig_dir).glob("*.bigwig")}
+        sample.extra_bigwig_dirs = [str(d) for d in (extra_bigwig_dirs or [])]
+        have = {q.stem.upper() for d in [bigwig_dir, *sample.extra_bigwig_dirs]
+                for q in Path(d).glob("*.bigwig")}
         missing_new = [t for t in cfg.track_names if t.upper() not in have]
         sample.missing_tracks = list(missing_new)
         cell = cell or Path(bigwig_dir).name
@@ -451,6 +453,8 @@ def main():
                          "distance-decay inversion)")
     ap.add_argument("--bigwig-dir", default=None,
                     help="predict a new cell from this folder of ChIP bigWigs")
+    ap.add_argument("--extra-bigwig-dir", nargs="*", default=[],
+                    help="with --bigwig-dir: further folders of the cell's track bigWigs")
     ap.add_argument("--cell", default=None,
                     help="name of the predicted cell (reference choice and "
                          "leakage guard; default: sample or bigWig folder name)")
@@ -472,7 +476,7 @@ def main():
             args.batch_size, args.pchic_out, args.sample, zt, args.capture_input,
             args.tta, args.obs_exp, args.capture_cool, zr or None,
             args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference,
-            args.prior)
+            args.prior, args.extra_bigwig_dir)
 
 
 if __name__ == "__main__":

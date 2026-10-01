@@ -190,7 +190,9 @@ def assemble_chrom(
 def sample_track_files(cfg: Config, sample: SampleSpec):
     """discover_tracks, tolerating files absent for missing/zeroed tracks."""
     dead = set(sample.missing_tracks) | set(sample.zeroed_tracks)
-    files = {n: p for n, p in discover_tracks(sample.bigwig_dir, None)}
+    files = {}
+    for d in [*reversed(sample.extra_bigwig_dirs), sample.bigwig_dir]:
+        files.update(discover_tracks(d, None))     # earlier folders win
     out = []
     for name in cfg.track_names:
         if name in files:
@@ -200,7 +202,7 @@ def sample_track_files(cfg: Config, sample: SampleSpec):
         else:
             raise FileNotFoundError(
                 f"sample {sample.name!r}: track {name!r} not in "
-                f"{sample.bigwig_dir} and not declared missing/zeroed"
+                f"{[sample.bigwig_dir, *sample.extra_bigwig_dirs]} and not declared missing/zeroed"
             )
     return out
 

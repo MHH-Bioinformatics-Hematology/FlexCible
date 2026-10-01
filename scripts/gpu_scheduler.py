@@ -288,6 +288,15 @@ def jobs():
                                    "--families all12refin_drop all12refin_drop_ctcfac "
                                    "all12refres_drop_varw all12refres_drop all12refin "
                                    "--tag t2", t2_ready, lambda: is_marked("t2_hardregions")))
+    # --- mean DNA methylation as a 14th track (registry section 27; needs
+    # scripts/methylation.py --stage fetch build)
+    import methylation as me
+    meth_ok = lambda: all(me.has_meth(c) for c in me.FILES)
+    prep_cache("all12refres_drop_meth", 10000, "mc_all12refres_drop_meth_10kb", meth_ok)
+    train12("all12refres_drop_meth", 10000, "mc_all12refres_drop_meth_10kb")
+    J.append(Job("meth_eval", f"{PY} scripts/meth_eval.py --stage predict summary",
+                 lambda: trained("all12refres_drop_meth", 10000) and trained("all12refres_drop", 10000),
+                 lambda: is_marked("meth_eval")))
     # --- Track 1a: HFF with cohesin ChIP (needs aml_fetch.py --cells hffcoh first)
     try:
         coh = [("all12hffcoh_refres_drop", 25000), ("all12hffcoh_refres_drop", 10000)]

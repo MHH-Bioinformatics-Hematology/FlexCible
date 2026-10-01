@@ -119,6 +119,10 @@ class SampleSpec:
     # perturbation condition trained on odd chromosomes and evaluated on the
     # even ones); test windows are unaffected. None = every training chromosome.
     train_chroms: list[str] | None = None
+    # further folders searched for track bigWigs after bigwig_dir (e.g. a
+    # per-cell methylation or copy-number folder kept apart from the ChIP);
+    # the first folder holding a track wins. Empty = bigwig_dir only.
+    extra_bigwig_dirs: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.assay not in ASSAYS:
