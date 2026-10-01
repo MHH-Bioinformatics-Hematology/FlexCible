@@ -1801,8 +1801,8 @@ level at 20, 40, 60 and 180 min of washout.
 
 With the measured auxin RAD21 track (reduced, not absent) the models point
 in the measured direction at most loops, unlike the absent-RAD21 test of
-section 21, but the predicted weakening is 8 to 80 times smaller than the
-measured one, and 1 to 44% of the loops still strengthen. The predicted
+section 21, but the predicted weakening is 12 to 80 times smaller than the
+measured one, and 10 to 44% of the loops still strengthen. The predicted
 loop strength rises with the RAD21 fraction f, so recovery is ordered in
 time: the measured 20, 40 and 60 min states match RAD21 at about 10, 30
 and 45% of its untreated level for the 10 kb dropout model (an
