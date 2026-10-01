@@ -643,55 +643,166 @@ def predict_jobs() -> list[tuple[str, str]]:
     return jobs
 
 
-def predict_one(model: str, inp: str, device: str, threads: int) -> None:
+def predict_one(model: str, inp: str, device: str, threads: int,
+                reference: Path | None = None, tag: str = "", cell: str | None = None,
+                bigwig_dir: Path | None = None, assay: str = "hic") -> None:
+    """crosscell_predict of one model on one input set. `reference` replaces
+    consensus12 for reference models (saved as <inp><tag>.npz); `cell` is
+    the name the leakage guard checks against the reference's cell list."""
     import os
     res, run, fam, ref = PMODELS[model]
-    done = pred_file(model, inp)
+    done = pred_file(model, inp + tag)
     if done.exists():
         return
     out = PRED / model
     out.mkdir(parents=True, exist_ok=True)
-    assay = "hic"
     cmd = [PY, "scripts/crosscell_predict.py", "--config", str(pmodel_config(model)),
            "--checkpoint", str(run / (run / "best").read_text().strip()),
-           "--cell", f"aml_{inp}", "--bigwig-dir", str(INP / inp),
+           "--cell", cell or f"aml_{inp}", "--bigwig-dir", str(bigwig_dir or INP / inp),
            "--target", str(grid_cool(res)), "--tta", "--assay", assay,
            "--binsize", str(res), "--device", "cuda" if device != "cpu" else "cpu",
-           "--out-dir", str(out / f"{inp}_csv"), "--save-pred", str(done) + ".tmp.npz"]
+           "--out-dir", str(out / f"{inp}{tag}_csv"), "--save-pred", str(done) + ".tmp.npz"]
     if ref:
-        cmd += ["--reference", str(consensus12(res))]
+        cmd += ["--reference", str(reference or consensus12(res))]
     env = dict(os.environ, OMP_NUM_THREADS=str(threads), MKL_NUM_THREADS=str(threads),
                CUDA_VISIBLE_DEVICES="" if device == "cpu" else device)
-    with open(out / f"{inp}.log", "w") as fh:
+    with open(out / f"{inp}{tag}.log", "w") as fh:
         rc = subprocess.run(cmd, cwd=REPO, env=env, stdout=fh, stderr=subprocess.STDOUT).returncode
     if rc:
-        log(f"[FAILED] {model} {inp} rc={rc}")
+        log(f"[FAILED] {model} {inp}{tag} rc={rc}")
         return
     Path(str(done) + ".tmp.npz").rename(done)
-    log(f"[predict ok] {model} {inp} ({device})")
+    log(f"[predict ok] {model} {inp}{tag} ({device})")
 
 
-def stage_predict(devices: list[str], threads: int) -> None:
+def stage_predict(devices: list[str], threads: int, jobs: list | None = None) -> None:
     """One worker per entry of `devices` ('0', '1' = GPU ids, 'cpu')."""
     import queue
     import threading
     q = queue.Queue()
-    for j in predict_jobs():
+    for j in (jobs if jobs is not None else predict_jobs()):
         q.put(j)
     log(f"[predict] {q.qsize()} jobs on {devices}")
 
     def worker(dev):
         while True:
             try:
-                m, inp = q.get_nowait()
+                job = q.get_nowait()
             except queue.Empty:
                 return
-            predict_one(m, inp, dev, threads)
+            if isinstance(job, dict):
+                predict_one(job.pop("model"), job.pop("inp"), dev, threads, **job)
+            else:
+                predict_one(job[0], job[1], dev, threads)
     ts = [threading.Thread(target=worker, args=(d,)) for d in devices]
     for t in ts:
         t.start()
     for t in ts:
         t.join()
+
+
+# ---------------------------------------------------------------- AML consensus reference
+# A disease-matched reference: the pixel-wise mean of AML patients' proper O/E
+# maps (HSPC donors excluded). For a scored patient the mean leaves that
+# patient out (leave-one-patient-out); MOLM-13 and U-937 read the mean of
+# all AML patients. The reference models use it in place of consensus12 at
+# inference, without retraining. The cell list is written to <cool>.json as
+# "amlxu<patient>" and the prediction runs as cell "amlxu<patient>", so
+# hicmultiome.reference.assert_reference_excludes rejects a reference that
+# contains the scored patient.
+CONS_DIR = PRIM / "consensus"
+REF_MODELS = [m for m, s in PMODELS.items() if s[3]]
+AMLREF = "__amlref"
+
+
+def guard_name(patient_label: str) -> str:
+    return "amlxu" + patient_label.replace("xu_", "").replace("-", "").lower()
+
+
+def aml_patients(res: int) -> list[str]:
+    return [p for p in patients(res) if "HSPC" not in p]
+
+
+def aml_consensus_path(res: int, exclude: str | None) -> Path:
+    tag = f"lopo_{exclude}" if exclude else "all"
+    return CONS_DIR / f"amlcons_{tag}_{res // 1000}kb.cool"
+
+
+def build_aml_consensus(res: int, exclude: str | None) -> Path:
+    """Mean of the AML patients' proper O/E maps (all share one bin grid and
+    pixel table, checked chunk by chunk), excluding `exclude`."""
+    import cooler
+    import h5py
+    out = aml_consensus_path(res, exclude)
+    if out.exists():
+        return out
+    labs = [p for p in aml_patients(res) if p != exclude]
+    clrs = [cooler.Cooler(str(map_path(p, res))) for p in labs]
+    n = int(clrs[0].info["nnz"])
+    if any(int(c.info["nnz"]) != n for c in clrs):
+        raise SystemExit(f"{res}: pixel tables differ between patient maps")
+    bins = clrs[0].bins()[:][["chrom", "start", "end"]]
+    CONS_DIR.mkdir(parents=True, exist_ok=True)
+
+    def chunks():
+        step = 20_000_000
+        for i in range(0, n, step):
+            ref = clrs[0].pixels()[i:i + step]
+            acc = ref["count"].to_numpy(np.float64).copy()
+            for c in clrs[1:]:
+                px = c.pixels()[i:i + step]
+                if not (np.array_equal(px["bin1_id"].values, ref["bin1_id"].values)
+                        and np.array_equal(px["bin2_id"].values, ref["bin2_id"].values)):
+                    raise SystemExit(f"{c.filename}: pixel ids differ")
+                acc += px["count"].to_numpy(np.float64)
+            yield pd.DataFrame({"bin1_id": ref["bin1_id"].values, "bin2_id": ref["bin2_id"].values,
+                                "count": (acc / len(clrs)).astype(np.float32)})
+    tmp = out.with_name(out.stem + ".tmp.cool")
+    tmp.unlink(missing_ok=True)
+    cooler.create_cooler(str(tmp), bins, chunks(), dtypes={"count": np.float32},
+                         ordered=True, assembly="hg38")
+    meta = {"cells": [guard_name(p) for p in labs], "patients": labs,
+            "excluded": exclude, "res": res}
+    Path(str(out) + ".json").write_text(json.dumps(meta, indent=1))
+    tmp.rename(out)
+    log(f"[aml consensus] {out.name}: {len(labs)} patients")
+    return out
+
+
+def stage_amlref(res_list: list[int], devices: list[str], threads: int) -> None:
+    """Leave-one-patient-out AML consensus per scored patient (and the
+    all-patient consensus for MOLM-13 / U-937), then the reference models
+    with it as reference."""
+    from concurrent.futures import ProcessPoolExecutor
+    tasks = []
+    for res in res_list:
+        tasks.append((res, None))
+        for p in aml_patients(res):
+            if (INP / p).exists():
+                tasks.append((res, p))
+    with ProcessPoolExecutor(max_workers=4) as ex:
+        list(ex.map(_build_cons, tasks))
+    jobs = []
+    for m in REF_MODELS:
+        res = PMODELS[m][0]
+        if res not in res_list or not pmodel_ready(m):
+            continue
+        for p in aml_patients(res):
+            if (INP / p).exists() and input_complete(p):
+                jobs.append({"model": m, "inp": p, "tag": AMLREF, "cell": guard_name(p),
+                             "reference": aml_consensus_path(res, p)})
+        for line, bw, assay in (("molm13", AML / "hg38_molm13", "hic"),
+                                ("u937", AML / "hg38_u937", "microc")):
+            jobs.append({"model": m, "inp": f"line_{line}", "tag": AMLREF, "cell": line,
+                         "bigwig_dir": bw, "assay": assay,
+                         "reference": aml_consensus_path(res, None)})
+            jobs.append({"model": m, "inp": f"line_{line}", "cell": line, "bigwig_dir": bw,
+                         "assay": assay, "reference": consensus12(res)})
+    stage_predict(devices, threads, jobs)
+
+
+def _build_cons(t):
+    return build_aml_consensus(*t)
 
 
 # ---------------------------------------------------------------- score
@@ -787,6 +898,52 @@ def score_k562(res: int, models: list[str]) -> list[dict]:
     return rows
 
 
+def score_lines(res: int, models: list[str]) -> list[dict]:
+    """MOLM-13 and U-937 (section 19 targets) predicted by the reference
+    models with consensus12 and with the consensus of all AML patients as
+    reference, against both references alone; one mask per target."""
+    import cooler
+    import benchmark_metrics as bm
+    from aml_eval import fetch_region, pred_matrix
+    ac = aml_consensus_path(res, None)
+    if not ac.exists():
+        return []
+    aclr, cclr = cooler.Cooler(str(ac)), cooler.Cooler(str(consensus12(res)))
+    rows = []
+    for line in LINES:
+        tp = map_path(line, res)
+        if tp is None:
+            continue
+        tclr = cooler.Cooler(str(tp))
+        preds = {}
+        for m in models:
+            for tag, nm in (("", m), (AMLREF, m + "@amlref")):
+                f = pred_file(m, f"line_{line}{tag}")
+                if f.exists():
+                    preds[nm] = dict(np.load(f))
+        for r in region_list().itertuples():
+            cache: dict = {}
+            T = fetch_region(tclr, r.region, cache)
+            if T is None:
+                continue
+            mats = {f"model:{m}": pred_matrix(p[r.region]) for m, p in preds.items()
+                    if r.region in p and p[r.region].shape == T.shape}
+            for nm, c in (("map:consensus12", cclr), ("map:aml_consensus", aclr)):
+                M = fetch_region(c, r.region, cache)
+                if M is not None and M.shape == T.shape:
+                    mats[nm] = M
+            mask = bm.triu_mask(T.shape[0], 2) & np.isfinite(T)
+            for M in mats.values():
+                mask &= np.isfinite(M)
+            if mask.sum() < 100:
+                continue
+            for kk, M in mats.items():
+                rows.append({"target": f"line_{line}", "res_kb": res // 1000, "method": kk,
+                             "region": r.region, "pearson": bm.pearson(M, T, mask),
+                             "scc": bm.scc(M, T, mask), "n_pixels": int(mask.sum())})
+    return rows
+
+
 def score_res(res: int) -> Path | None:
     """Per patient target at one resolution, per region: every model
     prediction from the patient's own tracks, consensus12, the 12 training
@@ -808,6 +965,13 @@ def score_res(res: int) -> Path | None:
     models = [m for m, s in PMODELS.items() if s[0] == res]
     preds = {(m, t): dict(np.load(pred_file(m, t))) for m in models for t in targets
              if pred_file(m, t).exists()}
+    for m in models:                         # the same models with the AML reference
+        for t in targets:
+            if pred_file(m, t + AMLREF).exists():
+                preds[(m + "@amlref", t)] = dict(np.load(pred_file(m, t + AMLREF)))
+    lopo = {t: cooler.Cooler(str(aml_consensus_path(res, t))) for t in targets
+            if aml_consensus_path(res, t).exists()}
+    models = models + [m + "@amlref" for m in models]
     rows, other_rows, dist = [], [], {}
     for r in region_list().itertuples():
         cache: dict = {}
@@ -823,6 +987,10 @@ def score_res(res: int) -> Path | None:
                 M = get.get(lab)
                 if M is not None and M.shape == T.shape:
                     mats[f"map:{lab}"] = M
+            if t in lopo:                         # leave-one-patient-out AML consensus
+                M = fetch_region(lopo[t], r.region, cache)
+                if M is not None and M.shape == T.shape:
+                    mats["map:aml_consensus"] = M
             mask = bm.triu_mask(T.shape[0], 2) & np.isfinite(T)
             for M in mats.values():
                 mask &= np.isfinite(M)
@@ -846,10 +1014,11 @@ def score_res(res: int) -> Path | None:
                        "pearson": bm.pearson(Q, T, mq), "scc": bm.scc(Q, T, mq),
                        "n_pixels": int(mq.sum())}
                 for kk, M in mats.items():
-                    if kk.startswith("model:") or kk == "map:consensus12":
+                    if kk.startswith("model:") or kk in ("map:consensus12", "map:aml_consensus"):
                         rec[f"{kk}|pearson"] = bm.pearson(M, T, mq)
                 other_rows.append(rec)
-    rows += score_k562(res, models)
+    rows += score_k562(res, [m for m in models if "@" not in m])
+    rows += score_lines(res, [m for m in models if "@" not in m])
     out = WORK / "score_parts" / f"{k}kb.pkl"
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(str(out) + ".tmp", "wb") as fh:
@@ -917,9 +1086,11 @@ def stage_score(res_list: list[int]) -> None:
     osum.to_csv(RES_DIR / "other_patients.csv", index=False)
     pm = P.groupby(["res_kb", "a", "b"])["pearson"].median().reset_index()
     pm.to_csv(RES_DIR / "patient_pairs.csv", index=False)
-    per_patient_table(summ[summ.target != "k562"], osum).to_csv(RES_DIR / "per_patient.csv",
+    per_patient_table(summ[summ.target.str.startswith("xu_")], osum).to_csv(RES_DIR / "per_patient.csv",
                                                                  index=False)
     summ[summ.target == "k562"].to_csv(RES_DIR / "k562_control.csv", index=False)
+    summ[summ.target.str.startswith("line_")].to_csv(RES_DIR / "lines_aml_reference.csv",
+                                                     index=False)
 
 
 def per_patient_table(summ: pd.DataFrame, osum: pd.DataFrame) -> pd.DataFrame:
@@ -932,7 +1103,7 @@ def per_patient_table(summ: pd.DataFrame, osum: pd.DataFrame) -> pd.DataFrame:
         rec = {"patient": t, "res_kb": k, "n_regions": int(g["n_regions"].max())}
         for m in g.index:
             if m.startswith("model:") or m in ("map:consensus12", "map:molm13", "map:u937",
-                                               "map:k562"):
+                                               "map:k562", "map:aml_consensus"):
                 rec[f"{m.split(':', 1)[1]}|pearson"] = g.loc[m, "pearson_median"]
                 rec[f"{m.split(':', 1)[1]}|scc"] = g.loc[m, "scc_median"]
         tm = g[g.index.str[4:].isin(TRAIN12)]
@@ -948,7 +1119,8 @@ def per_patient_table(summ: pd.DataFrame, osum: pd.DataFrame) -> pd.DataFrame:
                         "best_other_patient|scc": b.scc_median,
                         "median_other_patient|pearson": aml.pearson_median.median()})
             for c in o.columns:
-                if c.endswith("|pearson") and c.startswith(("model:", "map:consensus12")):
+                if c.endswith("|pearson") and c.startswith(("model:", "map:consensus12",
+                                                             "map:aml_consensus")):
                     rec[f"{c.split('|')[0].split(':', 1)[1]}|pearson_on_best_patient_pixels"] = b[c]
         hs = o[o.other.str.contains("HSPC")]
         if len(hs):
@@ -983,6 +1155,10 @@ def specific_res(res: int) -> pd.DataFrame:
     models = [m for m, s in PMODELS.items() if s[0] == res]
     preds = {(m, t): dict(np.load(pred_file(m, t))) for m in models for t in targets
              if pred_file(m, t).exists()}
+    for m in models:
+        for t in targets:
+            if pred_file(m, t + AMLREF).exists():
+                preds[(m + "@amlref", t)] = dict(np.load(pred_file(m, t + AMLREF)))
     rows = []
     for r in region_list().itertuples():
         cache: dict = {}
@@ -1322,9 +1498,11 @@ def fig_per_distance() -> None:
         d = D[D.res_kb == k]
         for m, g in d.groupby("method"):
             if m.startswith("model:"):
-                fam = PMODELS[m.split(":")[1]][2]
-                ax.plot(g.distance_kb, g.pearson, color=colors[fam], lw=1.6, label=m.split(":")[1])
-        for m, col, ls in (("map:consensus12", "#52514e", "--"),
+                nm = m.split(":")[1]
+                fam = PMODELS[nm.split("@")[0]][2]
+                ax.plot(g.distance_kb, g.pearson, color=colors[fam], lw=1.6,
+                        ls="--" if "@" in nm else "-", label=nm)
+        for m, col, ls in (("map:consensus12", "#52514e", "--"), ("map:aml_consensus", "#e87ba4", "--"),
                            ("map:other_aml_patient", "#0b0b0b", ":"),
                            ("map:hspc", "#e34948", ":"), ("map:molm13", "#008300", "-.")):
             g = d[d.method == m]
@@ -1352,7 +1530,9 @@ def fig_per_patient() -> None:
     fig, axes = plt.subplots(1, len(ress), figsize=(5 * len(ress), 3.6), squeeze=False)
     cols = [("all12refres_drop_{k}kb|pearson", "#2a78d6", "o", "all12refres_drop"),
             ("all12refres_{k}kb|pearson", "#4a3aa7", "s", "all12refres"),
+            ("all12refres_drop_{k}kb@amlref|pearson", "#1baf7a", "P", "all12refres_drop, AML reference"),
             ("consensus12|pearson", "#52514e", "D", "consensus12"),
+            ("aml_consensus|pearson", "#e87ba4", "X", "AML consensus (other patients)"),
             ("best_other_patient|pearson", "#0b0b0b", "^", "best other AML patient"),
             ("best_train_map|pearson", "#eda100", "v", "best training map")]
     for ax, k in zip(axes[0], ress):
@@ -1385,7 +1565,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True,
-                    choices=["fetch", "fetch_pairs", "targets", "inputs", "predict", "score", "specific",
+                    choices=["fetch", "fetch_pairs", "amlref", "targets", "inputs", "predict", "score", "specific",
                              "fischer", "figures"])
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--devices", nargs="+", default=["0", "0", "1", "1"],
@@ -1406,6 +1586,8 @@ def main():
         stage_inputs(a.workers)
     if "predict" in a.stage:
         stage_predict(a.devices, a.threads)
+    if "amlref" in a.stage:
+        stage_amlref(a.res, a.devices, a.threads)
     if "score" in a.stage:
         stage_score(a.res)
     if "specific" in a.stage:

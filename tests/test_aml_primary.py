@@ -32,3 +32,17 @@ def test_quantile_map_ties_get_the_block_mean():
     f = ap.quantile_map(src, _q(ref))
     assert f(np.array([0.0]))[0] == pytest.approx(2.5, abs=0.05)
     assert f(src).mean() == pytest.approx(ref.mean(), rel=0.01)
+
+
+def test_aml_consensus_leakage_guard(tmp_path):
+    from hicmultiome.reference import assert_reference_excludes
+    import json
+    ref = tmp_path / "amlcons_lopo_xu_103_25kb.cool"
+    ref.write_text("")
+    cells = [ap.guard_name(p) for p in ["xu_018", "xu_673", "xu_HSPC-050"]]
+    (tmp_path / (ref.name + ".json")).write_text(json.dumps({"cells": cells}))
+    assert ap.guard_name("xu_103") == "amlxu103"
+    assert_reference_excludes(ref, ap.guard_name("xu_103"))          # left out: allowed
+    with pytest.raises(ValueError):
+        assert_reference_excludes(ref, ap.guard_name("xu_673"))      # contained: rejected
+    assert ap.guard_name("xu_10") != ap.guard_name("xu_103")
