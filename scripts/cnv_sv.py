@@ -16,8 +16,9 @@ channel stands for a copy-number profile that would come from WGS or arrays
 in practice, and the segmentation keeps only Mb-scale steps.
 
 SV: EagleC2 predictSV (env eaglec, pretrained models under <HM>/sv) on the
-ICE-balanced 10 and 25 kb maps of each training cell and K562; both ends of
-every call are breakpoints. A cell where EagleC2 fails falls back to its CNV
+ICE-balanced 10 and 25 kb maps of the five cancer training lines and K562;
+both ends of every call are breakpoints; the karyotypically normal cells
+carry no mask. A cell where EagleC2 fails falls back to its CNV
 change points. The breakpoints go to <HM>/sv/breakpoints.json for
 train.sv_mask.
 
@@ -70,9 +71,10 @@ ENCODE_CELLS = ["hepg2", "a549", "nhek", "gm23248", "mcf7", "cd14mono", "pc9",
                 "hmec_deep", "huvec_deep"]
 CELLS = list(MCOOL) + ENCODE_CELLS
 ALIAS = {"hmec": "hmec_deep", "huvec": "huvec_deep"}
-# EagleC2 order: the aneuploid cancer lines first
-SV_CELLS = ["k562", "hepg2", "a549", "mcf7", "pc9", "hct116", "gm12878", "imr90", "h1",
-            "hff", "nhek", "gm23248", "cd14mono"]
+# EagleC2 on the cancer lines (training cells first, then the held-out K562);
+# the karyotypically normal cells carry no SV mask. A whole genome takes
+# EagleC2 hours on the CPU.
+SV_CELLS = ["hepg2", "a549", "mcf7", "pc9", "hct116", "k562"]
 SV_RES = [10000, 25000]
 
 
