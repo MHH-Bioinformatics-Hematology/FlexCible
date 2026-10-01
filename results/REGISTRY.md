@@ -1778,6 +1778,37 @@ trained on and are predicted approximately with the RAD21 track interpolated
 between the auxin and the untreated track. Nora et al. 2017 (CTCF degron with
 washout) is mouse ES cells and is not used by this hg38 model.
 
+Washout and auxin baseline, models without degron training
+(`results/washout/washout_summary.csv`): HCT116 predicted from the untreated
+degron ChIP with only the RAD21 track replaced by (1 - f) * auxin + f *
+untreated, at the loops called in the untreated map (536 at 10 kb, 549 at
+25 kb, on the 413 test regions; even chromosomes alone in brackets). Measured:
+99.4% of these loops are weaker after 6 h auxin (median log O/E change -0.75
+at 10 kb, -0.48 at 25 kb), and the loop strength recovers to 0.18, 0.48,
+0.66 and 1.12 (10 kb) and 0.15, 0.41, 0.60 and 1.01 (25 kb) of the untreated
+level at 20, 40, 60 and 180 min of washout.
+
+| model | res | loops weaker with auxin RAD21 | median predicted change | f matching 20 / 40 / 60 / 180 min |
+|---|---|---|---|---|
+| all12refres_drop | 10 kb | 89.7% (89.4%) | -0.050 | 0.11 / 0.30 / 0.45 / 1.0 |
+| all12refres_drop | 25 kb | 78.0% (81.5%) | -0.033 | 0.10 / 0.29 / 0.48 / 1.0 |
+| all12refres | 10 kb | 88.3% (85.1%) | -0.062 | 0.13 / 0.37 / 0.53 / 1.0 |
+| all12refres | 25 kb | 57.0% (57.3%) | -0.008 | 0.07 / 0.20 / 0.34 / 1.0 |
+| all12honest | 10 kb | 76.9% (77.3%) | -0.061 | 0.08 / 0.22 / 0.35 / 1.0 |
+| all12honest | 25 kb | 67.6% (70.8%) | -0.024 | 0.08 / 0.21 / 0.36 / 1.0 |
+| all12honest_drop | 10 kb | 71.1% (72.2%) | -0.043 | not monotone |
+| all12honest_drop | 25 kb | 55.6% (58.9%) | -0.006 | not monotone |
+
+With the measured auxin RAD21 track (reduced, not absent) the models point
+in the measured direction at most loops, unlike the absent-RAD21 test of
+section 21, but the predicted weakening is 8 to 80 times smaller than the
+measured one, and 1 to 44% of the loops still strengthen. The predicted
+loop strength rises with the RAD21 fraction f, so recovery is ordered in
+time: the measured 20, 40 and 60 min states match RAD21 at about 10, 30
+and 45% of its untreated level for the 10 kb dropout model (an
+approximation: the actual RAD21 occupancy at these times is not measured).
+The degron-trained and HFF-cohesin models follow in the same table.
+
 ## 26. Gain beyond the consensus on new cells (PENDING)
 
 (a) all12refin_drop: input-only reference (model.reference input) with track
