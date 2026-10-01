@@ -1855,3 +1855,53 @@ is above the consensus on all three held-out cells, but by at most 0.005 at
 10 kb already exceeds the consensus on all three (0.911, 0.897, 0.905
 against 0.908, 0.884, 0.859) with the highest median (0.905); shrinkage
 lowers its median to 0.897.
+
+## 27. Mean DNA methylation as an input (PENDING)
+
+Model all12refres_drop_meth (10 kb): all12refres_drop with a 14th track,
+Meth, the mean CpG methylation per 1 kb bin from one ENCODE4 GRCh38 WGBS
+file per cell (scripts/methylation.py; bin value 1 + coverage-weighted
+methylated fraction, bins under 5 CpG reads at 1 + the genome mean, so a raw
+zero stays "no data"). Seven of the 12 training cells have WGBS (GM12878,
+IMR-90, H1, HepG2, A549, GM23248, CD14+ monocytes); HCT116, MCF-7 and HFF
+(hg19 RRBS only), NHEK and PC-9 carry the track as missing. Held-out cells
+with WGBS: K562 and HMEC. Mean bin values range from 1.22 (K562) to 1.85
+(H1). Methylation stands in for marks primary samples lack: partially
+methylated domains coincide with H3K9me3 heterochromatin and gene-body
+methylation with H3K36me3. Evaluation (scripts/meth_eval.py) against
+all12refres_drop_10kb with full inputs and with only CTCF, H3K27ac and
+H3K27me3 present, the marks of the Xu 2022 primary AML samples, each with
+and without Meth; cells K562, HMEC deep, GM12878 and IMR-90.
+
+## 28. Copy number as an input and a structural-variant loss mask (PENDING)
+
+Model all12refres_drop_cnv (10 kb): all12refres_drop with two more tracks,
+CNVgain and CNVloss (positive and negative part of the called log2 copy
+ratio, raw zero = copy neutral), and train.sv_mask: in a training window
+holding a breakpoint, every pixel whose two bins lie on opposite sides of it
+gets loss weight 0. Validation and test are unmasked.
+
+Copy number (scripts/cnv_sv.py) comes from Hi-C coverage in 100 kb bins:
+log2 ratio to the median of the 15 maps, corrected for GC content (median
+per GC class; uncorrected, coverage follows GC with |r| up to 0.79 in
+copy-neutral cells), binary segmentation (segments of at least 1 Mb, t above
+8), segments with |log2| of 0.3 or more called, values clipped at 3. GC
+correction lowers the 2 Mb-scale spread of GM12878 from 0.32 to 0.15 and of
+HFF from 0.31 to 0.16. Called fraction of the autosomes
+(`results/cnv_sv/cnv_sv_summary.csv`): MCF-7 0.52, A549 0.47, PC-9 0.46,
+K562 0.45, HepG2 0.27, HCT116 0.12; GM12878 0.05, CD14+ monocytes 0.05,
+IMR-90 0.04, NHEK 0.03, H1 0.02, GM23248 and HMEC 0.004 to 0.005. HFF (Micro-C)
+reaches 0.08 and the held-out HUVEC deep map 0.28, which we read as residual
+protocol bias of those maps. The calls recover the known K562 lesions: the
+homozygous 9p21 deletion around CDKN2A (chr9:20.8-25.3 Mb, log2 -8), the
+BCR amplicon on chr22 (up to 23.3 Mb, log2 2.0 to 2.6) and the ABL1 region
+on 9q34 (130.4-131.4 Mb, log2 1.6); HCT116 shows gains on chr8, 10, 16 and
+17, as in its karyotype. The coverage of a map is a one-dimensional summary
+of the measured Hi-C, for held-out cells too; the channel stands for a
+copy-number profile from WGS or arrays.
+
+Structural variants: EagleC2 2.1.1 predictSV (pretrained models) on the
+ICE-balanced 10 and 25 kb maps of HepG2, A549, MCF-7, PC-9, HCT116 and K562;
+both ends of each call are breakpoints. The karyotypically normal cells
+carry no mask. Comparison (`results/cnv_sv/cnv_compare.csv`) against
+all12refres_drop_10kb per cell, cancer lines apart.
