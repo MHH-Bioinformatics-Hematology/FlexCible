@@ -1,0 +1,5 @@
+cell,features,chrom,pairs,regions,regions_held_out_per_fold,pairs_in_training_of_k_models_3,pairs_in_training_of_k_models_4,train_share_per_model,fold_changes_between_adjacent_regions,expected_if_random,neighbour_pixels_in_training_mean,neighbour_pixels_in_training_mean_upper,pixels_with_any_trained_neighbour_upper,pixels_with_any_trained_neighbour,pixels_with_trained_row_neighbour
+gm12878,WINDOW,chr14,3175713,17540,3511.2000,0.7999,0.2001,0.6400,0.7982,0.8000,0.1907,0.6945,0.9793,0.7239,0.7425
+gm12878,WINDOW,chr17,2748295,15412,3085.6000,0.8001,0.1999,0.6400,0.7990,0.8000,0.1934,0.7051,0.9798,0.7286,0.7479
+k562,WINDOW,chr14,1811846,17531,3511.8000,0.8001,0.1999,0.6400,0.7995,0.8000,0.1343,0.4912,0.9295,0.5940,0.5891
+k562,WINDOW,chr17,1933967,15390,3084.2000,0.7996,0.2004,0.6401,0.7986,0.8000,0.1547,0.5662,0.9536,0.6461,0.6497

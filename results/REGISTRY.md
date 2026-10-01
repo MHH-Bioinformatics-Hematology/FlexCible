@@ -780,8 +780,8 @@ HMEC, HUVEC and IMR-90 inputs, the IMR-90 model on IMR-90); Epiphany with its
 released GM12878 weights (hg38, 10 kb, chr2, 3, 11, 17; chr3, 11 and 17 held
 out); C.Origami with its released IMR-90 model (hg38, 8192 bp; chr2 test,
 chr3 validation); HiC-Reg's published GM12878 predictions (hg19, 25 kb,
-1 Mb reach; training split undocumented, and HiC-Reg's own protocol splits
-bin pairs within a chromosome). Ours: akita_native_honest and
+1 Mb reach; cross-validation within each chromosome, so the scored pixels'
+neighbours are training pixels: see "HiC-Reg training split" below). Ours: akita_native_honest and
 akita_native_refres (section 1) at 2 kb, all12 (section 13) for HFF at 2 kb,
 all12refres and all12honest (section 15) at 10 and 25 kb, all predicted on
 the CPU with `--save-pred` and test-time reverse averaging.
@@ -911,8 +911,9 @@ scores 0.943 and 0.910 SCC, level with all12refres (0.945 and 0.910; median
 difference 0.002, 53% of the regions, p = 0.80) and above all12honest
 (0.852); HiC-Reg's per-distance Pearson is 0.26 at 50 kb against 0.82 for
 all12refres and approaches it only beyond 500 kb, its APA ratio is 0.31
-against 0.71 and its loop recall 0.33 against 0.44, and its training split
-may include these bin pairs. On C.Origami's held-out chromosomes (45 IMR-90
+against 0.71 and its loop recall 0.33 against 0.44. These HiC-Reg maps are
+cross-validation predictions within the chromosome (next subsection); its
+leak-free cross-chromosome predictions score 0.66. On C.Origami's held-out chromosomes (45 IMR-90
 regions) C.Origami scores 0.908 and 0.842 SCC, all12refres 0.951 and 0.908
 (91% of the regions, p = 6e-10) and all12honest 0.868 (below C.Origami in
 78% of the regions); the best single other map (GM23248) scores 0.919.
@@ -939,6 +940,133 @@ Wilcoxon and win rates of each of our models against every other method),
 `<block>_per_region.csv.gz`, `<block>_per_distance.csv`,
 `scc_akita_regions.csv`; figures `runs/benchmark/figures/<block>_per_distance.png`
 and `<block>_regions.png`.
+
+HiC-Reg training split (`scripts/hicreg_audit.py`, tables
+`benchmark/hicreg_*.csv`). The section 18 HiC-Reg maps are the authors'
+published GM12878 predictions, files `Gm12878_chr<N>_RF_tree20_prediction`
+(5 kb, log(count + 1), maximum distance 1 Mb), which is the file name of
+HiC-Reg's cross-validation (CV) mode; the HiC-Reg Zenodo release (records
+3525432, 3525510, 3525514) holds per cell the CV predictions, the five CV
+models, cross-chromosome predictions (model of chr17 applied to chr14 and
+vice versa) and cross-cell predictions for chr14 and chr17. The released
+models carry their training pair lists (`trainset_error.txt`), from which
+the folds follow (`hicreg_split.csv`; GM12878 and K562, WINDOW features,
+chr14 and chr17): each chromosome's 5 kb regions are assigned to five folds
+at random (adjacent regions fall in different folds in 79.8 to 79.9% of the
+cases, 80% expected for random assignment), each model trains on the bin
+pairs with both regions outside its fold (64.0% of the chromosome's pairs)
+and predicts the rest, so every pixel is predicted by a model trained on the
+same chromosome of the same cell, on the same Hi-C map. Of the 8 neighbouring
+5 kb pixels of a predicted pixel, 19% are training pixels of every model
+that can have predicted it and 69% of at least one (GM12878; K562 13 to 15%
+and 49 to 57%); 72 to 98% of the predicted pixels have a training pixel
+among their 8 neighbours, and each 25 kb pixel of section 18 sums 25 such
+5 kb predictions. The published chr1-22 maps match the released CV
+predictions and not the cross-chromosome ones: on chr14 their
+distance-centred log counts correlate at 0.970 with the CV predictions and
+at 0.665 to 0.678 with the cross-chromosome predictions
+(`hicreg_published_vs_released.csv`; the Zenodo data archive, which would
+document the chr1-22 run, ended early in transfer with an unexpected end
+of stream and was not completed). The section 18
+HiC-Reg score is therefore a within-chromosome interpolation score: the
+model saw neighbouring pixels of the same map.
+
+Leak-free HiC-Reg. The released cross-chromosome predictions (model trained
+on all pairs of the other chromosome, chr17 for chr14 and chr14 for chr17,
+same cell, same features) are HiC-Reg's own leak-free setting, available
+for chr14 and chr17 only (feature files for other chromosomes are not
+released, so a genome-wide odd-to-even retraining is not cheap and was not
+run). All released maps go through the section 18 conversion
+(exp(value) - 1, summed into 10 or 25 kb bins, `oe_proper.py`, 1 Mb reach);
+the published set is also rescored in this count space, which raises it
+from 0.943 to 0.959 (block C2; section 18 summed the log values). Blocks
+F: the 23 Akita test regions on chr14 and chr17 (13 and 10), identical
+pixels, median per-region Pearson / SCC:
+
+| block | all12refres | all12honest | HiC-Reg CV, WINDOW / MULTICELL | HiC-Reg cross-chromosome, WINDOW / MULTICELL | HiC-Reg cross-cell (other cell's model) | consensus | best other map |
+|---|---|---|---|---|---|---|---|
+| GM12878 25 kb | 0.957 / 0.898 | 0.813 / 0.683 | 0.961 / 0.976 (SCC 0.929 / 0.953) | 0.660 / 0.712 (SCC 0.434 / 0.477) | 0.668 | 0.923 | 0.919 |
+| GM12878 10 kb | 0.935 / 0.889 | 0.781 / 0.730 | 0.937 / 0.961 | 0.609 / 0.634 | 0.597 | 0.898 | 0.870 |
+| K562 25 kb | 0.909 / 0.830 | 0.792 / 0.604 | 0.949 / 0.965 | 0.845 / 0.858 | 0.815 | 0.914 | 0.889 |
+| K562 10 kb | 0.904 / 0.823 | 0.741 / 0.565 | 0.907 / 0.928 | 0.715 / 0.760 | 0.774 | 0.897 | 0.852 |
+| C2 GM12878 25 kb even (218) | 0.945 / 0.910 | 0.852 / 0.798 | published CV: 0.943 (log sum), 0.959 (counts) | | | 0.880 | 0.838 |
+
+Without the within-chromosome leak HiC-Reg falls by 0.30 (GM12878, 25 kb,
+WINDOW) and by 0.10 (K562): all12honest exceeds the GM12878
+cross-chromosome predictions by a median 0.17 at 25 kb and 0.14 at 10 kb
+(87% of the regions, p = 1e-4 and 3e-4) and all12refres by 0.27 and 0.32
+(all regions); for K562 all12honest is level with the cross-chromosome
+and cross-cell predictions (median differences -0.02 to 0.04, p = 0.20 to
+0.99) and all12refres exceeds them by 0.05 to 0.13 (78 to 87% of the
+regions, p = 3e-4 to 0.004). With the leak, the CV predictions score level
+with all12refres for GM12878 (25 kb 0.961 against 0.957, p = 0.16; 10 kb
+0.937 against 0.935, p = 0.89) and for K562 at 10 kb (0.907 against 0.904,
+p = 0.15), above it for K562 at 25 kb (0.949 against 0.909, p = 0.008) and
+with the MULTICELL features (0.976 against 0.957 for GM12878 at 25 kb,
+p = 0.03),
+and the published set in count space exceeds all12refres on the 218 even-
+chromosome regions (0.959 against 0.945, all12refres higher in 33% of the
+regions, p < 1e-4). The 25 kb tie of section 18 is a comparison with
+within-chromosome interpolation; on held-out chromosomes HiC-Reg ranks below
+both 12-cell models for GM12878 and below all12refres for K562.
+
+Structure on identical pixels (blocks C2 and F; `<block>_summary.csv`,
+`hicreg_distance_bands.csv`, `hicreg_local_e1.csv`). Distance bands
+(median over regions of the per-region Pearson per 25 kb diagonal, up to
+950 kb; the regions span 1 Mb and HiC-Reg reaches 1 Mb, so no band beyond
+1 Mb exists for it): on the even chromosomes the published CV maps score
+0.59 at 50 kb, 0.80 at 100 kb, 0.96 at 250 kb and 0.99 at 500 kb, against
+0.86, 0.90, 0.94 and 0.95 for all12refres and 0.74, 0.76, 0.83 and 0.88 for
+all12honest; the cross-chromosome HiC-Reg (GM12878, chr14 and chr17)
+scores 0.28, 0.40, 0.58 and 0.58 at the same distances. Loops and
+boundaries (25 kb, GM12878): loop recall CV 0.30 to 0.34, cross-chromosome
+0.06 to 0.09, all12refres 0.36, all12honest 0.21; APA ratio CV 0.66 to
+0.80, cross-chromosome -0.05 to 0.08, all12refres 0.65; boundary recall CV
+0.64 to 0.71, cross-chromosome 0.37 to 0.40, all12refres 0.60, consensus
+0.71; insulation-profile Pearson CV 0.82 to 0.91, cross-chromosome 0.43 to
+0.44, all12refres 0.85. Local compartment structure (absolute Pearson of
+the first eigenvector of the region's O/E row correlation, target against
+prediction; a 1 Mb region carries local A/B structure only, and HiC-Reg's
+1 Mb reach excludes chromosome-wide E1): published CV 0.986, all12refres
+0.975, all12honest 0.950, consensus 0.939 (block C2); cross-chromosome
+HiC-Reg 0.81 (WINDOW) and 0.88 (MULTICELL) against 0.975 for all12refres
+(GM12878, block F).
+
+Cell-specific difference (`hicreg_cellspecific.csv`): the measured GM12878
+minus K562 O/E difference on the 23 chr14/chr17 regions against each
+method's GM12878 minus K562 prediction, median per-region Pearson (25 kb /
+10 kb): HiC-Reg CV 0.92 / 0.81 (WINDOW) and 0.94 / 0.83 (MULTICELL);
+HiC-Reg cross-chromosome 0.33 / 0.38 and 0.37 / 0.41; HiC-Reg cross-cell
+(each cell predicted by the other cell's model from its own features) 0.42 /
+0.38; all12refres 0.53 / 0.51; all12honest 0.46 / 0.36. The CV maps
+reproduce the cell difference because each cell's CV model is trained on
+that cell's map of the same chromosome; held out by chromosome, HiC-Reg
+distinguishes the two cells less than all12refres at 25 kb and 10 kb and
+about as well as all12honest. The predicted difference of all12refres has
+a standard deviation of 0.12 against 0.17 to 0.22 measured (HiC-Reg 0.12 to
+0.29).
+
+Noise-corrected 2 kb scores (`noise_corrected_2kb.csv`). Per region r /
+sqrt(r_replicate), with r_replicate the GM12878 replicate agreement at 2 kb
+on the same region (`runs/worst_regions/replicates_per_region.csv`, proper
+O/E; regions with r_replicate < 0.1 left out, 411 regions kept), block A
+GM12878, median over regions. The replicate maps are shallower than the
+4DN target (single-lane in situ pair, median r_replicate 0.386; deepest
+intact pair ENCSR965OVH, 0.520), so the corrected values are upper bounds
+and exceed 1 where the target is less noisy than the replicates; HFF has
+no replicate pair and no corrected score.
+
+| method | raw Pearson | corrected, in situ lane pair | corrected, intact ENCSR965OVH | raw SCC | corrected SCC, in situ / intact |
+|---|---|---|---|---|---|
+| akita_native_refres | 0.746 | 1.184 | 1.035 | 0.698 | 1.114 / 0.974 |
+| akita_native_honest | 0.640 | 1.001 | 0.884 | 0.611 | 0.960 / 0.844 |
+| consensus4 | 0.612 | 0.986 | 0.872 | 0.559 | 0.890 / 0.779 |
+| Akita | 0.552 | 0.872 | 0.768 | 0.512 | 0.816 / 0.708 |
+| best other map (H1) | 0.516 | 0.827 | 0.725 | 0.457 | 0.755 / 0.645 |
+| Hi-cGAN (submitted) | 0.238 | 0.369 | 0.335 | 0.208 | 0.340 / 0.304 |
+
+The correction keeps the ranking of section 18; it compresses the gap
+between models where replicate agreement is low.
 
 ## 19. AML cell lines never seen in training (FINAL)
 

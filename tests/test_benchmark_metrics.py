@@ -64,3 +64,12 @@ def test_summarize_full_grid():
     s = bm.summarize([0.1, 0.2, 0.3, np.nan], "x")
     assert s["x_n"] == 3 and abs(s["x_median"] - 0.2) < 1e-12
     assert set(s) == {"x_median", "x_mean", "x_q25", "x_q75", "x_sd", "x_n"}
+
+
+def test_local_e1_recovers_compartments():
+    import hicreg_audit as ha
+    n = 40
+    s = np.where(np.arange(n) % 10 < 5, 1.0, -1.0)
+    m = 0.5 * np.outer(s, s) + 0.01 * np.random.default_rng(0).normal(size=(n, n))
+    e = ha.local_e1(m)
+    assert abs(np.corrcoef(e, s)[0, 1]) > 0.99
