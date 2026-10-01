@@ -213,13 +213,18 @@ def build_loss(spec: str, max_dist: int | None = None, stride: int = 1):
         if n not in known:
             raise ValueError(f"unknown loss term {n!r} (of {sorted(known)})")
 
-    def loss_fn(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def loss_fn(pred: torch.Tensor, target: torch.Tensor,
+                pixel_weight: torch.Tensor | None = None) -> torch.Tensor:
+        """pixel_weight (B, W, W), mean 1 over the batch: weights the l1 and
+        mse terms per pixel (other terms ignore it)."""
         total = pred.new_zeros(())
         for weight, name in terms:
             if name == "l1":
-                v = F.l1_loss(pred, target)
+                v = (F.l1_loss(pred, target) if pixel_weight is None
+                     else ((pred - target).abs() * pixel_weight).mean())
             elif name == "mse":
-                v = F.mse_loss(pred, target)
+                v = (F.mse_loss(pred, target) if pixel_weight is None
+                     else ((pred - target).pow(2) * pixel_weight).mean())
             elif name == "scc":
                 v = scc_loss(pred, target, max_dist=max_dist, stride=stride)
             elif name == "dcorr":

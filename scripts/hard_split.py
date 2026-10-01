@@ -57,6 +57,9 @@ CELLS = mx.TRAIN12 + HELD
 RES = [25000, 10000]
 FAMILIES = ["all12refres", "all12honest", "all12refres_drop", "all12honest_drop",
             "all12refres_refdrop", "all12multires"]
+# further families scored with --families (Track 2, section 26)
+MORE_FAMILIES = ["all12refin", "all12refin_drop", "all12refin_drop_ctcfac",
+                 "all12refres_drop_varw"]
 REF_FAMILIES = {"all12refres", "all12refres_drop", "all12refres_refdrop", "all12multires"}
 COVERAGE_Q, MASK_MAX, REP_MIN, HARD_FRAC = 0.15, 0.20, 0.3, 0.20
 
@@ -330,9 +333,10 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
     tmp.rename(out)
 
 
-def quick(jobs: int):
+def quick(jobs: int, families=None, tag=None):
+    qdir = "quick" if not tag else f"quick_{tag}"
     tasks = [(c, r) for r in RES for c in CELLS
-             if not (OUT / "quick" / f"{c}_{r // 1000}kb.csv").exists()]
+             if not (OUT / qdir / f"{c}_{r // 1000}kb.csv").exists()]
     procs = []
     k = 0
     while tasks or procs:
@@ -343,13 +347,14 @@ def quick(jobs: int):
             k += 1
             env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu, OMP_NUM_THREADS="3",
                        MKL_NUM_THREADS="3")
-            logf = OUT / "quick" / f"{c}_{r // 1000}kb.log"
+            logf = OUT / qdir / f"{c}_{r // 1000}kb.log"
             logf.parent.mkdir(parents=True, exist_ok=True)
+            extra = (["--families", *families] if families else []) + (["--tag", tag] if tag else [])
             procs.append(subprocess.Popen([PY, __file__, "--stage", "quick_task", "--cell", c,
-                                           "--res", str(r)], env=env, cwd=REPO,
+                                           "--res", str(r), *extra], env=env, cwd=REPO,
                                           stdout=open(logf, "w"), stderr=subprocess.STDOUT))
         time.sleep(10)
-    quick_summary()
+    quick_summary(tag)
 
 
 def apply_filters(df: pd.DataFrame, cell_col="cell") -> tuple[pd.DataFrame, list[dict]]:
@@ -376,13 +381,15 @@ def apply_filters(df: pd.DataFrame, cell_col="cell") -> tuple[pd.DataFrame, list
     return pd.concat(keep), counts
 
 
-def quick_summary():
-    files = sorted((OUT / "quick").glob("*.csv"))
+def quick_summary(tag=None):
+    qdir = "quick" if not tag else f"quick_{tag}"
+    sfx = "" if not tag else f"_{tag}"
+    files = sorted((OUT / qdir).glob("*.csv"))
     if not files:
         return
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     kept, counts = apply_filters(df)
-    pd.DataFrame(counts).to_csv(OUT / "quick_filters.csv", index=False)
+    pd.DataFrame(counts).to_csv(OUT / f"quick_filters{sfx}.csv", index=False)
     rows = []
     for (cell, rk), g in kept.groupby(["cell", "res_kb"]):
         hard = g.nlargest(max(1, int(round(HARD_FRAC * len(g)))), "score")
@@ -402,14 +409,16 @@ def quick_summary():
             for c in ("replicate_pearson", "replicate_resid_corr"):
                 if c in sub:
                     rec[c] = sub[c].median()
-            for fam in FAMILIES:
+            for fam in sorted({c.rsplit("_", 1)[0] for c in sub.columns
+                               if c.endswith("_pearson") and c not in
+                               ("consensus_pearson", "replicate_pearson")}):
                 for m in ("pearson", "scc", "resid_corr"):
                     col = f"{fam}_{m}"
                     if col in sub:
                         rec[col] = sub[col].median()
             rows.append(rec)
     s = pd.DataFrame(rows).round(4)
-    s.to_csv(OUT / "quick_per_cell.csv", index=False)
+    s.to_csv(OUT / f"quick_per_cell{sfx}.csv", index=False)
     agg = []
     for (rk, sub_name, trained), g in s.groupby(["res_kb", "subset", "trained_on_cell"]):
         rec = {"res_kb": rk, "subset": sub_name,
@@ -419,7 +428,7 @@ def quick_summary():
                     and pd.api.types.is_numeric_dtype(s[c]):
                 rec[c] = round(float(g[c].median()), 4) if g[c].notna().any() else None
         agg.append(rec)
-    pd.DataFrame(agg).to_csv(OUT / "quick_summary.csv", index=False)
+    pd.DataFrame(agg).to_csv(OUT / f"quick_summary{sfx}.csv", index=False)
     print(pd.DataFrame(agg).T.to_string(), flush=True)
 
 
@@ -699,13 +708,17 @@ def main():
     ap.add_argument("--cell")
     ap.add_argument("--res", type=int)
     ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument("--families", nargs="*", default=None)
+    ap.add_argument("--tag", default=None)
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.stage == "quick_task":
         import torch
-        quick_task(a.cell, a.res, "cuda" if torch.cuda.is_available() else "cpu")
+        qd = OUT / ("quick" if not a.tag else f"quick_{a.tag}")
+        quick_task(a.cell, a.res, "cuda" if torch.cuda.is_available() else "cpu",
+                   families=a.families, out=qd / f"{a.cell}_{a.res // 1000}kb.csv")
     elif a.stage == "quick":
-        quick(a.jobs)
+        quick(a.jobs, a.families, a.tag)
     elif a.stage == "score_task":
         score_task(a.cell, a.res)
     elif a.stage == "score":
@@ -724,7 +737,7 @@ def main():
     elif a.stage == "hard_summary":
         hard_summary()
     else:
-        quick_summary()
+        quick_summary(a.tag)
 
 
 if __name__ == "__main__":

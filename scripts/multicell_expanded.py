@@ -166,11 +166,19 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # hct116_auxin the 6 h auxin Hi-C and ChIP, on odd chromosomes only
     "all12deg_refres_drop": (TRAIN12, None),
     "all12deg_honest_drop": (TRAIN12, None),
+    # gain beyond the consensus on new cells (registry section 26): input-only
+    # reference with track dropout, the same on CTCF + H3K27ac only, and the
+    # residual dropout model with between-cell-variance loss weighting
+    "all12refin_drop": (TRAIN12, None),
+    "all12refin_drop_ctcfac": (TRAIN12, None),
+    "all12refres_drop_varw": (TRAIN12, None),
 }
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
 DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
 DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop": (0.5, 0.0)})
+DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0.5, 0.0),
+                     "all12refres_drop_varw": (0.5, 0.0)})
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
 PERTURB_CHIP = Path.home() / "data/hic-multiome/perturb_chip"
 DEGRON_TRAIN_CHROMS = [f"chr{i}" for i in range(1, 23, 2)]     # odd autosomes
@@ -182,7 +190,9 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12multires": "residual", "all12casc": "residual",
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",
             "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
-            "all12deg_refres_drop": "residual"}
+            "all12deg_refres_drop": "residual",
+            "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
+            "all12refres_drop_varw": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
@@ -319,6 +329,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
         # both DDP ranks (earlyoom killed all12refres and all12casc on
         # 2026-09-30): read the train split from memory maps on local disk
         cfg["train"]["stage_dir"] = str(STAGE_ROOT)
+    if base == "all12refin_drop_ctcfac":
+        cfg["train"]["select_tracks"] = ["CTCF", "H3K27ac"]
+    if base == "all12refres_drop_varw":
+        cfg["train"].update({"loss_weighting": "between_cell_var", "loss_weight_alpha": 1.0})
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg

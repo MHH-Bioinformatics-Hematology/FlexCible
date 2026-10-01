@@ -2061,3 +2061,61 @@ def test_sample_train_chroms(workdir):
     tr = {(x["sample"], x["chrom"]) for x in man["shards"] if x["split"] == "train"}
     assert ("a", "chr1") in tr and ("a", "chr2") in tr
     assert ("b", "chr1") in tr and ("b", "chr2") not in tr
+
+
+def test_between_cell_variance_loss_weighting(workdir):
+    """between_cell_weights: per locus the variance across samples; the
+    weights have mean 1 + alpha over multi-sample loci, are 1 where the
+    samples agree; training with them runs."""
+    import torch
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    t = torch.zeros(4, 1, 3, 3)
+    t[1, 0, 0, 0] = 2.0                          # locus A: samples differ at one pixel
+    coords = (["chr1", "chr1", "chr1", "chr1"], np.array([0, 0, 5, 5]), ["a", "b", "a", "b"])
+    pos, w = htrain.between_cell_weights(t, coords, 1.0)
+    assert pos.tolist() == [0, 0, 1, 1]
+    assert float(w[1].max()) == 1.0 and float(w[0, 0, 0]) > 1.0
+    raw = _ref_raw(workdir, "varw", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [dict(s0, name="a"), dict(s0, name="b")]
+    raw["train"].update(cache_dir=str(workdir / "cache_honest_ms"), loss_weighting="between_cell_var",
+                        val_regions=1)
+    c = Config.from_dict(raw)
+    if not (Path(c.train.cache_dir) / "manifest.json").exists():
+        hprep.build(c)
+    htrain.train(c)
+    assert (Path(c.train.output_dir) / "best").exists()
+
+
+def test_track_dropout_with_selected_tracks(workdir):
+    """Track dropout on a model trained on a subset of the tracks acts on the
+    kept ChIP rows only (they lead the reduced cond) with their own absent
+    values, and trains."""
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    channels = {"tracks": ["CTCF", "RAD21", "H3K27ac"], "seq_features": ["gc", "cpg"],
+                "motif_ids": [MOTIF]}
+    raw = _ref_raw(workdir, "dropsel", ref_cool=False)
+    raw["data"]["tracks"] = [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                             {"name": "RAD21", "type": "cofactor", "motif": MOTIF},
+                             {"name": "H3K27ac", "type": "histone"}]
+    raw["train"].update(select_tracks=["CTCF", "H3K27ac"], select_motifs=[MOTIF])
+    c = Config.from_dict(raw)
+    assert htrain.dropout_chip_rows(c, channels) == [0, 2]
+    rows, *_ = htrain._select_rows(c, channels)
+    assert rows[:2] == [0, 2]
+    raw["train"]["select_tracks"] = None
+    raw["train"]["select_motifs"] = None
+    assert htrain.dropout_chip_rows(Config.from_dict(raw), channels) == [0, 1, 2]
+    raw = _ref_raw(workdir, "dropsel2", ref_cool=False)
+    raw["train"].update(select_tracks=["H3K27ac"], select_motifs=[MOTIF], track_dropout=0.5,
+                        track_dropout_mode="uniform_count", cache_dir=str(workdir / "cache_ref"),
+                        max_steps=4)
+    c2 = Config.from_dict(raw)
+    if not (Path(c2.train.cache_dir) / "manifest.json").exists():
+        hprep.build(c2)
+    htrain.train(c2)

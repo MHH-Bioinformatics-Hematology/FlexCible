@@ -279,6 +279,33 @@ def split_val_regions(coords, n_val: int, window: int, seed: int,
     return vi, ti
 
 
+def between_cell_weights(target, coords, alpha: float):
+    """(position index per row, weight map per position) for the
+    between_cell_var loss weighting: rows at one (chrom, start) are the
+    samples' windows at that locus; v = variance across them per pixel."""
+    ch, st, _ = coords
+    key = {}
+    pos = np.empty(len(ch), dtype=np.int64)
+    for i, (c, s) in enumerate(zip(ch, st)):
+        pos[i] = key.setdefault((c, int(s)), len(key))
+    W = target.shape[-1]
+    s1 = torch.zeros((len(key), W, W), dtype=torch.float64)
+    s2 = torch.zeros_like(s1)
+    n = torch.zeros(len(key), dtype=torch.float64)
+    p = torch.from_numpy(pos)
+    for i in range(0, len(ch), 256):
+        t = target[i:i + 256]
+        t = (t.materialize() if hasattr(t, "materialize") else t)[:, 0].double()
+        s1.index_add_(0, p[i:i + 256], t)
+        s2.index_add_(0, p[i:i + 256], t * t)
+        n.index_add_(0, p[i:i + 256], torch.ones(len(t), dtype=torch.float64))
+    m = s1 / n[:, None, None]
+    var = (s2 / n[:, None, None] - m * m).clamp_min(0)
+    var[n < 2] = 0
+    w = 1 + alpha * var / var[n >= 2].mean().clamp_min(1e-12)
+    return p, w.float()
+
+
 def hard_split_rows(coords, split_path: str, window: int, res: int):
     """(hard-validation rows, rows outside every hard position) of a window
     list for a hard split JSON (scripts/hard_split.py): a row is hard-validation
@@ -323,6 +350,17 @@ def log_val_split(coords, vi, ti, exclude_overlap: bool):
         log.info("  sample %s: %d validation, %d training windows", s, nv[s], nt[s])
         if nv[s] == 0:
             log.warning("  sample %s has NO validation window", s)
+
+
+def dropout_chip_rows(cfg: Config, channels: dict) -> list[int]:
+    """Cache rows of the ChIP tracks the model reads, in the order they lead
+    its (possibly reduced) cond: track dropout acts on cond rows
+    [0, len(result)) and uses these rows' absent values."""
+    n = len(channels["tracks"])
+    if cfg.train.select_tracks is None and cfg.train.select_motifs is None:
+        return list(range(n))
+    rows, *_ = _select_rows(cfg, channels)
+    return [r for r in rows if r < n]
 
 
 def _select_rows(cfg: Config, channels: dict):
@@ -615,6 +653,8 @@ def train(cfg: Config):
     # re-precomputing the cache -- every k-th of the 50%-overlap windows is
     # exactly the coarser-stride tiling.
     k = max(1, int(cfg.train.window_subsample))
+    if k > 1 and cfg.train.loss_weighting != "none":
+        raise ValueError("train.loss_weighting with window_subsample is not supported")
     if k > 1:
         keep = list(range(0, data["target"].shape[0], k))
         data = {kk: v[keep] for kk, v in data.items()}
@@ -635,6 +675,18 @@ def train(cfg: Config):
     cd = data["cond"][sl].to(device)
     bt = data["bait"][sl].to(device)
     rf = data["ref"][sl].to(device) if use_ref else None
+    pw_pos = pw_map = None
+    if cfg.train.loss_weighting == "between_cell_var":
+        tco = ([ds._index[i][2] for i in ti], np.array([ds._index[i][3] for i in ti]),
+               [ds._index[i][4] for i in ti]) if ti is not None else _coords(ds)
+        pos_all, pw_map = between_cell_weights(data["target"], tco, cfg.train.loss_weight_alpha)
+        pw_pos = pos_all[:n_even][rank::world].to(device) if world > 1 else pos_all.to(device)
+        pw_map = pw_map.to(device)
+        if is_main:
+            log.info("loss weighting between_cell_var: %d loci, weight mean %.3f max %.2f",
+                     pw_map.shape[0], float(pw_map.mean()), float(pw_map.max()))
+    elif cfg.train.loss_weighting != "none":
+        raise ValueError(f"unknown train.loss_weighting {cfg.train.loss_weighting!r}")
     pf = data["prior"][sl].to(device) if cfg.model.prior else None
     vdata_d = hdata_d = None
     if is_main and vdata is not None:
@@ -653,13 +705,14 @@ def train(cfg: Config):
         elif is_main and vds is not None:
             val_coords = _coords(vds)
 
-    n_chip = len(ds.channels["tracks"])
+    chip_rows = dropout_chip_rows(cfg, ds.channels)
+    n_chip = len(chip_rows)
     absent_t = None
-    if cfg.train.track_dropout > 0:
+    if cfg.train.track_dropout > 0 and n_chip > 0:
         from .tracks import TrackNormalizer
 
         tn = TrackNormalizer.load(cache_dir / "norm_tracks.json")
-        absent_t = torch.from_numpy(tn.absent_values()[:n_chip]).to(device)
+        absent_t = torch.from_numpy(tn.absent_values()[chip_rows]).to(device)
 
     capin = bool(cfg.capture.use_as_input and ds.n_out == 2)
     cond_mode = cfg.model.cond_mode
@@ -876,7 +929,14 @@ def train(cfg: Config):
                                 enabled=amp_dtype is not None):
                 pred = model(cond_b, pairs, planes, seq_oh, ref_b, prior=prior_b)
             pred = pred.float()
-            loss = hic_loss(pred[:, 0], tgt[:, 0])
+            pwb = None
+            if pw_map is not None:
+                pwb = pw_map[pw_pos[idx]]
+                if rev_mask is not None:
+                    pwb = torch.where(rev_mask[:, None, None], torch.flip(pwb, dims=[-1, -2]), pwb)
+                pwb = pwb / pwb.mean()
+            loss = hic_loss(pred[:, 0], tgt[:, 0], pwb) if pwb is not None else \
+                hic_loss(pred[:, 0], tgt[:, 0])
             if cap_w > 0:
                 bait_eff = bait_b
                 if dropped is not None:

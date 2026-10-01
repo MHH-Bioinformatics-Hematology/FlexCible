@@ -270,6 +270,24 @@ def jobs():
     J.append(Job("deg_minimal", f"{PY} scripts/minimal_inputs.py --stage absent --models "
                                 f"{deg_names} && {PY} scripts/minimal_inputs.py --stage summary",
                  deg_ready, lambda: is_marked("deg_minimal")))
+    # --- Track 2: gain beyond the consensus (registry section 26)
+    t2 = [("all12refin_drop", 25000, "mc_all12ref_25kb"),
+          ("all12refin_drop_ctcfac", 25000, "mc_all12ref_25kb"),
+          ("all12refres_drop_varw", 25000, "mc_all12ref_25kb"),
+          ("all12refin_drop", 10000, "mc_all12ref_10kb"),
+          ("all12refin_drop_ctcfac", 10000, "mc_all12ref_10kb"),
+          ("all12refres_drop_varw", 10000, "mc_all12ref_10kb")]
+    for run, res, cache in t2:
+        train12(run, res, cache)
+    t2_names = " ".join(mx.run_name(r, k) for r, k, _ in t2)
+    t2_ready = lambda: all(trained(r, k) for r, k, _ in t2)
+    J.append(Job("t2_aml", f"{PY} scripts/aml_eval.py --stage predict --models {t2_names} "
+                           f"--jobs 2 --threads 3 && {PY} scripts/aml_eval.py --stage score "
+                           "figures", t2_ready, lambda: is_marked("t2_aml")))
+    J.append(Job("t2_hardregions", f"{PY} scripts/hard_split.py --stage quick --jobs 4 "
+                                   "--families all12refin_drop all12refin_drop_ctcfac "
+                                   "all12refres_drop_varw all12refres_drop all12refin "
+                                   "--tag t2", t2_ready, lambda: is_marked("t2_hardregions")))
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())

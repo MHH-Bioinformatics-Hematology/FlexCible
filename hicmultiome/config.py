@@ -386,6 +386,13 @@ class TrainConfig:
     # each holding the whole split in RAM and its stripe on the GPU (2 kb
     # runs with a reference plane). None = resident (previous behaviour).
     stage_dir: str | None = None
+    # Loss weighting per pixel. "between_cell_var": weight 1 + alpha * v /
+    # mean(v), v the variance across the training samples of the target at
+    # that pixel of that genomic window (computed from the training windows
+    # only), so the loss leans on where cells differ from each other; the
+    # weights of a batch are renormalised to mean 1. "none" = off.
+    loss_weighting: str = "none"
+    loss_weight_alpha: float = 1.0
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
     # Used for a fast proxy input-search: far fewer windows -> quick candidates,
     # to check whether the track ranking is stable without all chromosomes.

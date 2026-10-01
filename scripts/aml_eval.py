@@ -308,7 +308,9 @@ for _k in (10, 25):
     for _b, _ref in (("all12refres_drop", "consensus12"), ("all12honest_drop", None),
                      ("all12refres_refdrop", "consensus12"),
                      ("all12refres_drop_hard", "consensus12"), ("all12honest_drop_hard", None),
-                     ("all12deg_refres_drop", "consensus12"), ("all12deg_honest_drop", None)):
+                     ("all12deg_refres_drop", "consensus12"), ("all12deg_honest_drop", None),
+                     ("all12refin_drop", "consensus12"), ("all12refin_drop_ctcfac", "consensus12"),
+                     ("all12refres_drop_varw", "consensus12"), ("all12refin", "consensus12")):
         MODELS[f"{_b}_{_k}kb"] = (
             _k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
             RUNS / f"multicell_reference/{_b}_{_k}kb", _b, _ref)
@@ -938,7 +940,9 @@ FAMILY_COLOR = {"all12refres": "#2a78d6", "all12honest": "#eb6834", "all12": "#1
                 # the eight palette hues are taken: the degron-trained models
                 # share their non-degron counterpart's hue (compare them in
                 # separate panels or tables, never on one axis)
-                "all12deg_refres_drop": "#008300", "all12deg_honest_drop": "#e34948"}
+                "all12deg_refres_drop": "#008300", "all12deg_honest_drop": "#e34948",
+                "all12refin_drop": "#4a3aa7", "all12refin_drop_ctcfac": "#4a3aa7",
+                "all12refres_drop_varw": "#008300", "all12refin": "#4a3aa7"}
 MAP_STYLE = {"consensus12": ("#52514e", "--"), "best_train_map": ("#0b0b0b", ":"),
              "replicate": ("#4a3aa7", "-.")}
 
