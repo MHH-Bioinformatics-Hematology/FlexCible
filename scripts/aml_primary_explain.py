@@ -519,14 +519,14 @@ def stage_features() -> None:
         for r in g.itertuples():
             win = f"{r.chrom}:{int(r.start)}-{int(r.end)}"
             cache: dict = {}
-            mats = {"patient": fetch_region(T, win, cache), "hspc_consensus": fetch_region(HC, win, cache),
+            mats = {"measured": fetch_region(T, win, cache), "hspc_consensus": fetch_region(HC, win, cache),
                     "consensus12": fetch_region(C12, win, cache)}
             for m, pr in preds.items():
                 if win in pr:
                     mats[m] = pred_matrix(pr[win])
             if any(v is None for v in mats.values()):
                 continue
-            n = mats["patient"].shape[0]
+            n = mats["measured"].shape[0]
             if any(v.shape != (n, n) for v in mats.values()):
                 continue
             rec = {"patient": p, "kind": r.kind, "window": win}
@@ -562,10 +562,10 @@ def stage_features() -> None:
     for (kind, typ), g in F.groupby(["kind", "type"]):
         rec = {"kind": kind, "type": typ, "n": len(g), "patients": g.patient.nunique()}
         for ref in ("hspc_consensus", "consensus12"):
-            rec[f"measured_minus_{ref}"] = (g["patient"] - g[ref]).median()
+            rec[f"measured_minus_{ref}"] = (g["measured"] - g[ref]).median()
             for m in FEAT_MODELS:
                 if m in g:
-                    d_meas = g["patient"] - g[ref]
+                    d_meas = g["measured"] - g[ref]
                     d_pred = g[m] - g[ref]
                     rec[f"{m}_minus_{ref}"] = d_pred.median()
                     rec[f"{m}_frac_above_{ref}"] = float((d_pred > 0).mean())
@@ -581,7 +581,8 @@ def main():
     a = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--stage", nargs="+", required=True,
-                   choices=["cnv", "annotate", "scores", "learn", "features_predict", "features"])
+                   choices=["cnv", "annotate", "scores", "learn", "features_predict", "features",
+                            "figures"])
     a.add_argument("--res", nargs="*", type=int, default=[25000, 10000, 5000])
     a.add_argument("--devices", nargs="+", default=["0", "0", "1", "1"])
     a = a.parse_args()
@@ -597,6 +598,108 @@ def main():
         stage_features_predict(a.devices)
     if "features" in a.stage:
         stage_features()
+    if "figures" in a.stage:
+        fig_features()
+        fig_sv()
+
+
+
+# ---------------------------------------------------------------- figures
+def _panel(ax, M, title, lim=1.5, diff=False):
+    ax.imshow(M, cmap="RdBu_r", vmin=-lim, vmax=lim, interpolation="none")
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title(title, fontsize=7)
+
+
+def _crop(M, centre, n=ap.PANEL_BINS):
+    s = int(max(0, min(M.shape[0] - n, centre - n // 2)))
+    return M[s:s + n, s:s + n]
+
+
+def fig_features(n_rows: int = 6) -> None:
+    """AML-specific loops with the largest measured gain over the HSPC
+    consensus: measured, HSPC consensus, consensus12 and two predictions,
+    80 bins (800 kb) per panel centred on the loop."""
+    import cooler
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from aml_eval import fetch_region, pred_matrix
+    F = pd.read_csv(ap.WORK / "explain_features.csv.gz")
+    F = F[F.kind == "loop"].assign(gain=lambda d: d.measured - d.hspc_consensus)
+    F = F.sort_values("gain", ascending=False).drop_duplicates("patient").head(n_rows)
+    C12 = cooler.Cooler(str(ap.consensus12(FEAT_RES)))
+    HC = cooler.Cooler(str(hspc_consensus_path(FEAT_RES)))
+    W = pd.read_csv(ap.WORK / "feature_windows.csv")
+    fig, axes = plt.subplots(len(F), 5, figsize=(13, 2.7 * len(F)), squeeze=False)
+    for i, r in enumerate(F.itertuples()):
+        cache: dict = {}
+        mats = {"measured " + r.patient: fetch_region(cooler.Cooler(str(ap.map_path(r.patient, FEAT_RES))),
+                                                      r.window, cache),
+                "HSPC consensus": fetch_region(HC, r.window, cache),
+                "consensus12": fetch_region(C12, r.window, cache)}
+        for m in FEAT_MODELS[:2]:
+            f = ap.PRED / "features" / f"{m}__{r.patient}.npz"
+            if f.exists():
+                z = np.load(f)
+                if r.window in z.files:
+                    mats[m] = pred_matrix(z[r.window])
+        w = W[(W.patient == r.patient) & (W.kind == "loop")]
+        ch, se = r.window.split(":")
+        s0 = int(se.split("-")[0])
+        row = w[(w.chrom == ch) & (w.start == s0)].iloc[0]
+        centre = ((row.a1 + row.a2) // 2 - s0) // FEAT_RES
+        for j, (t, M) in enumerate(mats.items()):
+            _panel(axes[i, j], _crop(np.nan_to_num(M), centre), t)
+        axes[i, 0].set_ylabel(f"{r.window}\n{r.type}, gain {r.gain:.2f}", fontsize=6)
+    fig.suptitle("AML-specific loops (Xu et al. Suppl. Table 1), 10 kb, 80 bins per panel, log O/E",
+                 fontsize=9)
+    fig.tight_layout()
+    fig.savefig(ap.RES_DIR / "explain_features_loops.png", dpi=110)
+    plt.close(fig)
+
+
+def fig_sv(n_rows: int = 6) -> None:
+    """SV junctions: measured cis window around breakpoint 1, the naive and
+    the SV-aware prediction, the derivative prediction and the measured
+    junction block (rows = left piece, columns = right piece); 80 bins."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    D = pd.read_csv(ap.RES_DIR / "sv_junctions.csv")
+    D = D[(D.model == "all12refres_drop_10kb") & D["meas_cross_mean_logoe"].notna()]
+    D = D.sort_values("meas_cross_mean_logoe", ascending=False).drop_duplicates("patient").head(n_rows)
+    fig, axes = plt.subplots(len(D), 5, figsize=(13, 2.7 * len(D)), squeeze=False)
+    for i, r in enumerate(D.itertuples()):
+        f = ap.PRIM / "sv" / f"windows_{r.patient}.npz"
+        z = np.load(f) if f.exists() else {}
+        key = f"{r.model}|{r.sv_index}"
+        get = (lambda k: z[f"{key}|{k}"] if f"{key}|{k}" in z else None)
+        T, Pn, comb, Pd, M = get("T"), get("Pn"), get("comb"), get("Pd"), get("M")
+        size = Pd.shape[0] if Pd is not None else 192
+        c = size // 2
+        items = [("measured cis", T), ("naive prediction", Pn), ("SV-aware (0.5/0.5)", comb),
+                 ("derivative allele", Pd)]
+        for j, (t, X) in enumerate(items):
+            if X is not None and X.ndim == 2:
+                _panel(axes[i, j], _crop(np.nan_to_num(X), c), t)
+            else:
+                axes[i, j].set_axis_off()
+        if M is not None and M.ndim == 2 and M.size > 1:
+            h = M.shape[0]
+            sub = np.log(np.where(M > 0, M, np.nan))
+            sub = sub - np.nanmean(sub)
+            k = ap.PANEL_BINS // 2
+            _panel(axes[i, 4], np.nan_to_num(sub[h - k:, :k]), "measured junction block")
+        else:
+            axes[i, 4].set_axis_off()
+        axes[i, 0].set_ylabel(f"{r.patient} {r.sv_type}\n{r.chrom1}:{r.pos1}|{r.chrom2}:{r.pos2} "
+                              f"{r.orientation}", fontsize=6)
+    fig.suptitle("SV junctions, all12refres_drop 10 kb, 80 bins per panel (junction block 40 x 40)",
+                 fontsize=9)
+    fig.tight_layout()
+    fig.savefig(ap.RES_DIR / "sv_junctions.png", dpi=110)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
