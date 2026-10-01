@@ -4,7 +4,8 @@ section 28).
 CNV: per cell, Hi-C read coverage (row sums of the raw contact map, cis and
 trans) in 100 kb bins, depth-normalised, as log2 ratio against the median of
 all 15 maps (12 training cells, K562, HMEC, HUVEC), median-centred and
-segmented per autosome by binary segmentation (segments of at least
+corrected for GC content (median per GC class), segmented per autosome by
+binary segmentation (segments of at least
 MIN_SEG_BINS bins, split while the two-sample t statistic exceeds T_SPLIT).
 A segment whose mean |log2| is below CALL_LOG2 counts as copy neutral. The
 calls go to two bigWigs per cell under <HM>/cnv/<cell>/: CNVgain = max(log2,
@@ -51,7 +52,9 @@ MODELS = SV / "EagleC2-models"
 BIN = 100_000
 MIN_SEG_BINS = 10              # 1 Mb
 T_SPLIT = 8.0
-CALL_LOG2 = 0.15
+CALL_LOG2 = 0.3
+GC_BINS = 50
+FASTA = Path.home() / "data/hic-multiome/genome/hg38.fa"
 AUTOSOMES = [f"chr{i}" for i in range(1, 23)]
 TRACKS = ("CNVgain", "CNVloss")
 # cell -> raw contact map: (uri, resolution of that map)
@@ -178,8 +181,15 @@ def stage_cnv():
     ok = ref > 0.2 * ref[ref > 0].median()
     seg_rows, prof_rows = [], []
     sizes = {}
+    gc = gc_content(M.index[ok])
+    gq = pd.Series(pd.qcut(gc, GC_BINS, labels=False, duplicates="drop"), index=gc.index)
     for cell in CELLS:
         r = np.log2(M.loc[ok, cell].clip(lower=1e-12) / ref[ok])
+        # GC correction: subtract the median log2 ratio of the bin's GC class
+        # (coverage of the protocols follows GC by up to r = 0.8 in copy-
+        # neutral cells); bins without GC (assembly gaps) dropped
+        r = r[gq.notna()]
+        r = r - r.groupby(gq[gq.notna()]).transform("median")
         r = r - r.median()
         d = np.diff(r.values)
         sd = float(1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2))
@@ -191,7 +201,8 @@ def stage_cnv():
             starts = g.index.values
             for a, b in binary_segment(g.values, sd):
                 m = float(np.mean(g.values[a:b]))
-                v = m if abs(m) >= CALL_LOG2 else 0.0
+                # homozygous deletions reach log2 -8: clipped at +-3
+                v = float(np.clip(m, -3, 3)) if abs(m) >= CALL_LOG2 else 0.0
                 seg_rows.append({"cell": cell, "chrom": chrom, "start": int(starts[a]),
                                  "end": int(starts[b - 1] + BIN), "bins": b - a,
                                  "mean_log2": m, "call_log2": v})
@@ -208,6 +219,27 @@ def stage_cnv():
     pd.concat(prof_rows).to_csv(CNV / "cnv_log2_100kb.csv.gz", index=False,
                                 float_format="%.4f")
     return S
+
+
+def gc_content(index) -> pd.Series:
+    """GC fraction of every 100 kb bin (NaN for bins under half sequenced)."""
+    f = CNV / "gc_100kb.csv.gz"
+    if f.exists():
+        g = pd.read_csv(f).set_index(["chrom", "start"])["gc"]
+    else:
+        import pyfaidx
+        fa = pyfaidx.Fasta(str(FASTA))
+        rows = []
+        for c in AUTOSOMES:
+            seq = str(fa[c][:]).upper()
+            for st in range(0, len(seq), BIN):
+                w = seq[st:st + BIN]
+                n = len(w) - w.count("N")
+                rows.append((c, st, (w.count("G") + w.count("C")) / n if n > BIN // 2 else np.nan))
+        g = pd.DataFrame(rows, columns=["chrom", "start", "gc"])
+        g.to_csv(f, index=False)
+        g = g.set_index(["chrom", "start"])["gc"]
+    return g.reindex(index)
 
 
 def _chrom_sizes(sizes: dict) -> dict:
