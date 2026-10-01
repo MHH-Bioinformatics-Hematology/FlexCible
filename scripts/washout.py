@@ -111,6 +111,156 @@ def stage_oe():
             log(f"oe {t} min {res}")
 
 
+F_GRID = [0.0, 0.25, 0.5, 0.75, 1.0]
+CHIP = Path.home() / "data/hic-multiome/perturb_chip"
+FAMILIES = ["all12refres_drop", "all12honest_drop", "all12deg_refres_drop",
+            "all12deg_honest_drop", "all12hffcoh_refres_drop", "all12refres", "all12honest"]
+
+
+def _trained(fam, res):
+    si = mx.stop_info(mx.run_name(fam, res), 10)
+    return bool(si and si[2] == "patience")
+
+
+def stage_predict():
+    """Per model and resolution: HCT116 on the 413 Akita test regions from the
+    untreated degron ChIP with RAD21 = (1 - f) * auxin + f * untreated (raw
+    signal), for f in F_GRID; loop strength (max log O/E within +/- 1 bin) at
+    the loops called in the untreated map, with the measured untreated, auxin
+    and washout maps at the same pixels. One table per model."""
+    import numpy as np
+    import pandas as pd
+    import torch
+    import hard_split as hs
+    import perturb_validate as pv
+    import score_like_hicgan as sc
+    from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+    from hicmultiome.reference import reference_block
+    from hicmultiome.tracks import TrackNormalizer
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    regs = pd.read_csv(sc.REGIONS, sep="\t", usecols=[0, 1, 2], names=["chrom", "start", "end"])
+    for res in RES:
+        maps = {"meas_untreated": mx.target("hct116", res),
+                "meas_auxin": pv.oe_path("rad21", "treated", res),
+                **{f"meas_washout{t}": oe_path(t, res) for t in TIMES}}
+        if not all(Path(m).exists() for m in maps.values()):
+            log(f"predict {res}: measured maps missing, skipped")
+            continue
+        for fam in FAMILIES:
+            if not _trained(fam, res):
+                continue
+            out = OUT / "pred" / f"{fam}_{res // 1000}kb.csv.gz"
+            if out.exists():
+                continue
+            run = mx.REF_OUT / mx.run_name(fam, res)
+            b = hs.load_bundle(run, device, "hct116", res)
+            cfg = b["cfg"]
+            tn = TrackNormalizer.load(b["ck"] / "norm_tracks.json")
+            absent = tn.absent_values()
+            tracks = b["channels"]["tracks"]
+            cons = None
+            if b["ref"]:
+                import cooler
+                cons = cooler.Cooler(str(mx.consensus_loo("hct116", res)))
+            files = {}
+            for cond in ("untreated", "auxin6h"):
+                smp = cfg.get_sample("hct116") if "hct116" in [x.name for x in cfg.data.samples] \
+                    else cfg.get_sample(None)
+                smp = type(smp)(**{**smp.__dict__})
+                smp.bigwig_dir = str(CHIP / cond)
+                have = {q.stem.upper() for q in (CHIP / cond).glob("*.bigwig")}
+                smp.missing_tracks = [t for t in tracks if t.upper() not in have]
+                files[cond] = (smp, sample_track_files(cfg, smp))
+            ri = tracks.index("RAD21")
+            rows = []
+            for chrom, grp in regs.groupby("chrom"):
+                import cooler
+                tgt = cooler.Cooler(str(maps["meas_untreated"]))
+                nb = chrom_nbins_of(tgt, chrom)
+                raw_u = assemble_chrom(cfg, files["untreated"][0], files["untreated"][1], chrom, nb)
+                raw_a = assemble_chrom(cfg, files["auxin6h"][0], files["auxin6h"][1], chrom, nb)
+                syms = {}
+                for f in F_GRID:
+                    raw = raw_u.copy()
+                    raw[ri] = (1 - f) * raw_a[ri] + f * raw_u[ri]
+                    sy = tn.apply(raw)
+                    for t in files["untreated"][0].missing_tracks:
+                        sy[tracks.index(t)] = absent[tracks.index(t)]
+                    syms[f] = sy
+                for r in grp.itertuples():
+                    b0, b1 = int(r.start) // res, -(-int(r.end) // res)
+                    n = b1 - b0
+                    ij = pv.loop_anchors("hct116", chrom, b0, n, res)
+                    if not len(ij):
+                        continue
+                    M = {k: pv._fetch(v, chrom, b0, b1) for k, v in maps.items()}
+                    if any(v is None for v in M.values()):
+                        continue
+                    rec = {k: pv.strength(v, ij) for k, v in M.items()}
+                    centre = (b0 + b1) // 2
+                    st = max(0, min(nb - b["size"], centre - b["size"] // 2))
+                    rb = reference_block(cons, chrom, st, b["size"], b["mat_norm"]) if cons else None
+                    for f in F_GRID:
+                        P = hs.predict_region(b, syms[f], st, rb, device, b0 * res, n, res, res)
+                        rec[f"pred_f{f}"] = pv.strength(P, ij)
+                    df = pd.DataFrame(rec)
+                    df["region"], df["chrom"] = f"{chrom}:{r.start}-{r.end}", chrom
+                    df["i"], df["j"] = ij[:, 0], ij[:, 1]
+                    rows.append(df)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_name(out.name + ".part")
+            pd.concat(rows).to_csv(tmp, index=False, compression="gzip")
+            tmp.rename(out)
+            log(f"predict {fam} {res}: {sum(len(x) for x in rows)} loops")
+
+
+def stage_score():
+    """Measured recovery at each time point, rec_t = median(S_t - S_aux) /
+    median(S_untreated - S_aux) over the loops; predicted recovery for each f,
+    rec_f = median(P_f - P_0) / median(P_1 - P_0); f matching each time point
+    (linear interpolation of rec_f); the share of loops predicted weaker at
+    f = 0 than at f = 1 (measured: auxin weaker than untreated); on all regions
+    and on the even chromosomes."""
+    import numpy as np
+    import pandas as pd
+
+    rows = []
+    for f in sorted((OUT / "pred").glob("*.csv.gz")):
+        fam, k = f.name.replace(".csv.gz", "").rsplit("_", 1)
+        D = pd.read_csv(f)
+        num = pd.to_numeric(D.chrom.str.replace("chr", "", regex=False), errors="coerce")
+        for subset, d in (("all", D), ("even_chromosomes", D[num % 2 == 0])):
+            d = d.dropna()
+            if not len(d):
+                continue
+            base = np.median(d.meas_untreated - d.meas_auxin)
+            pbase = np.median(d["pred_f1.0"] - d["pred_f0.0"])
+            rec = {"model": fam, "res_kb": int(k.replace("kb", "")), "subset": subset,
+                   "loops": len(d),
+                   "meas_frac_weaker_auxin": float((d.meas_auxin < d.meas_untreated).mean()),
+                   "pred_frac_weaker_rad21_auxin": float((d["pred_f0.0"] < d["pred_f1.0"]).mean()),
+                   "meas_median_change_auxin": float(np.median(d.meas_auxin - d.meas_untreated)),
+                   "pred_median_change_rad21_auxin": float(np.median(d["pred_f0.0"] - d["pred_f1.0"]))}
+            recf = {fv: (np.median(d[f"pred_f{fv}"] - d["pred_f0.0"]) / pbase if pbase else np.nan)
+                    for fv in F_GRID}
+            for fv, v in recf.items():
+                rec[f"pred_recovery_f{fv}"] = float(v)
+            for t in TIMES:
+                rt = float(np.median(d[f"meas_washout{t}"] - d.meas_auxin) / base) if base else np.nan
+                rec[f"meas_recovery_{t}min"] = rt
+                xs, ys = np.array(F_GRID), np.array([recf[x] for x in F_GRID])
+                ok = np.isfinite(ys)
+                rec[f"matching_f_{t}min"] = (float(np.interp(rt, ys[ok], xs[ok]))
+                                            if ok.sum() > 1 and np.all(np.diff(ys[ok]) > 0) else np.nan)
+            rows.append(rec)
+    S = pd.DataFrame(rows).round(4)
+    S.to_csv(OUT / "washout_summary.csv", index=False)
+    (mx.REPO / "results/washout").mkdir(parents=True, exist_ok=True)
+    S.to_csv(mx.REPO / "results/washout/washout_summary.csv", index=False)
+    print(S.to_string(), flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stage", nargs="+", required=True)

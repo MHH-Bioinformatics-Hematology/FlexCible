@@ -306,6 +306,13 @@ def jobs():
                                 "perturb figures", coh_ready, lambda: is_marked("coh_aml")))
     except SystemExit:
         pass
+    # washout test (registry section 25) once the degron and HFF-cohesin runs exist
+    import washout as wo
+    wo_ready = lambda: deg_ready() and all(
+        trained("all12hffcoh_refres_drop", k) for k in (25000, 10000)) and all(
+        wo.oe_path(t, r).exists() for t in wo.TIMES for r in wo.RES)
+    J.append(Job("washout", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/washout.py --stage predict score",
+                 wo_ready, lambda: is_marked("washout")))
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())
