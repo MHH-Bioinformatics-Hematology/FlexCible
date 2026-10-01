@@ -307,12 +307,14 @@ for _k in (2, 5):   # 12-cell honest/reference runs at 5 and 2 kb once they exis
 for _k in (10, 25):
     for _b, _ref in (("all12refres_drop", "consensus12"), ("all12honest_drop", None),
                      ("all12refres_refdrop", "consensus12"),
-                     ("all12refres_drop_hard", "consensus12"), ("all12honest_drop_hard", None)):
+                     ("all12refres_drop_hard", "consensus12"), ("all12honest_drop_hard", None),
+                     ("all12deg_refres_drop", "consensus12"), ("all12deg_honest_drop", None)):
         MODELS[f"{_b}_{_k}kb"] = (
             _k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
             RUNS / f"multicell_reference/{_b}_{_k}kb", _b, _ref)
 _DROP = {"all12refres_drop", "all12honest_drop", "all12refres_refdrop",
-         "all12refres_drop_hard", "all12honest_drop_hard"}
+         "all12refres_drop_hard", "all12honest_drop_hard",
+         "all12deg_refres_drop", "all12deg_honest_drop"}
 
 # input sets: ChIP folder and, for the perturbation, the keep sets
 INPUTS = {
@@ -932,7 +934,11 @@ FAMILY_COLOR = {"all12refres": "#2a78d6", "all12honest": "#eb6834", "all12": "#1
                 "all12refres_drop": "#008300", "all12honest_drop": "#e34948",
                 "all12refres_refdrop": "#4a3aa7",
                 # hard-split runs (section 24): the dropout models' hues, reused
-                "all12refres_drop_hard": "#008300", "all12honest_drop_hard": "#e34948"}
+                "all12refres_drop_hard": "#008300", "all12honest_drop_hard": "#e34948",
+                # the eight palette hues are taken: the degron-trained models
+                # share their non-degron counterpart's hue (compare them in
+                # separate panels or tables, never on one axis)
+                "all12deg_refres_drop": "#008300", "all12deg_honest_drop": "#e34948"}
 MAP_STYLE = {"consensus12": ("#52514e", "--"), "best_train_map": ("#0b0b0b", ":"),
              "replicate": ("#4a3aa7", "-.")}
 

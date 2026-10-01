@@ -2042,3 +2042,22 @@ def test_train_from_staged_memmaps(workdir):
     with pytest.raises(RuntimeError, match="not staged"):
         htrain._stack(c.train.cache_dir, "train", 0.0, False, 0,
                       stage_dir=str(workdir / "nostage"))
+
+
+def test_sample_train_chroms(workdir):
+    """samples[].train_chroms keeps a sample's training windows on the listed
+    chromosomes only; other samples and the test split are unaffected."""
+    from hicmultiome import precompute as hprep
+
+    raw = _ref_raw(workdir, "tchroms", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["holdout_bed"] = None
+    raw["data"]["chroms"] = ["chr1", "chr2"]
+    raw["data"]["train_parity"] = "all"
+    raw["data"]["samples"] = [dict(s0, name="a"), dict(s0, name="b", train_chroms=["chr1"])]
+    raw["train"]["cache_dir"] = str(workdir / "cache_tchroms")
+    c = Config.from_dict(raw)
+    man = hprep.build(c)
+    tr = {(x["sample"], x["chrom"]) for x in man["shards"] if x["split"] == "train"}
+    assert ("a", "chr1") in tr and ("a", "chr2") in tr
+    assert ("b", "chr1") in tr and ("b", "chr2") not in tr

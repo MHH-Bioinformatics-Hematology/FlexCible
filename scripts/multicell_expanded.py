@@ -161,20 +161,33 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     "all12refres_drop_hard": (TRAIN12, None),
     "all12honest_drop_hard": (TRAIN12, None),
     "all12refres_refdrop_hard": (TRAIN12, None),
+    # with the HCT116 RAD21-mAC degron (Rao et al. 2017) as training data:
+    # hct116 reads the matched untreated degron ChIP (perturb_chip/untreated),
+    # hct116_auxin the 6 h auxin Hi-C and ChIP, on odd chromosomes only
+    "all12deg_refres_drop": (TRAIN12, None),
+    "all12deg_honest_drop": (TRAIN12, None),
 }
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
 DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
+DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop": (0.5, 0.0)})
+DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
+PERTURB_CHIP = Path.home() / "data/hic-multiome/perturb_chip"
+DEGRON_TRAIN_CHROMS = [f"chr{i}" for i in range(1, 23, 2)]     # odd autosomes
+# the auxin condition's identity (consensus, leakage guard): HCT116
+SAMPLE_IDENT = {"hct116_auxin": "hct116"}
 HARD_SPLIT_DIR = REPO / "results/hard_split"
 STAGE_ROOT = Path.home() / "scratch/hicmx_stage"      # local disk, not /tmp
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
             "all12multires": "residual", "all12casc": "residual",
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",
-            "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual"}
+            "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
+            "all12deg_refres_drop": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
-HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop", "all12honest_drop_hard"}
+HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop", "all12honest_drop_hard",
+                               "all12deg_honest_drop"}
 REF_OUT = HM / "runs/multicell_reference"
 
 
@@ -221,7 +234,7 @@ def reference_of(name: str, cell: str) -> Path:
     """The reference map a reference run reads for `cell`."""
     if split_name(name)[0] == "all12reflearn":
         return learned_map(split_name(name)[1])
-    return measured_reference(name, cell)
+    return measured_reference(name, SAMPLE_IDENT.get(cell, cell))
 # earlier models: name -> (run dir, cells trained on)
 OLD_RUNS = {"ref": (REF_RUN, ["gm12878"]), "gm1": (OLD / "gm1", ["gm12878"]),
             "hic3": (OLD / "hic3", ["gm12878", "imr90", "hct116"]),
@@ -251,6 +264,17 @@ def run_config(name, val_per_cell, patience, max_epochs):
         {"name": c, "cool_path": str(target(c, res)), "bigwig_dir": str(CELLS[c][1]),
          "missing_tracks": missing_marks(CELLS[c][1]), "assay": CELLS[c][2]}
         for c in cells]
+    if base in DEGRON_RUNS:
+        import perturb_validate as pv
+        hct = next(s for s in cfg["data"]["samples"] if s["name"] == "hct116")
+        hct["bigwig_dir"] = str(PERTURB_CHIP / "untreated")
+        hct["missing_tracks"] = missing_marks(PERTURB_CHIP / "untreated")
+        cfg["data"]["samples"].append({
+            "name": "hct116_auxin", "cool_path": str(pv.oe_path("rad21", "treated", res)),
+            "bigwig_dir": str(PERTURB_CHIP / "auxin6h"),
+            "missing_tracks": missing_marks(PERTURB_CHIP / "auxin6h"), "assay": "hic",
+            "train_chroms": list(DEGRON_TRAIN_CHROMS)})
+        cells = cells + ["hct116_auxin"]
     cfg["data"]["resolution"] = res
     cfg["window"]["size"], cfg["window"]["stride"] = WINDOW[res]
     cfg["data"]["train_regions_bed"] = str(TRAIN_BED)
@@ -269,7 +293,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
+    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS
+                  else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
                   else f"mc_{run_name('all12', res)}" if base in ("all12honest_drop",
                                                                    "all12honest_drop_hard")

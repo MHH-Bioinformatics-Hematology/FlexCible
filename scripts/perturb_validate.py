@@ -78,6 +78,10 @@ MODELS = {  # name -> (run dir, res, reference run name or None)
        for b in ("all12refres_drop", "all12honest_drop", "all12refres_refdrop",
                  "all12refres_drop_hard", "all12honest_drop_hard")
        for k in (10, 25)},
+    # trained with the RAD21 degron pair on the odd chromosomes (section 25)
+    **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000,
+                      None if "honest" in b else b)
+       for b in ("all12deg_refres_drop", "all12deg_honest_drop") for k in (10, 25)},
 }
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # measured ChIP of the degron cells (4DN GRCh38 fold change: RAD21 and CTCF from
@@ -340,10 +344,27 @@ def stage_score():
                         "n": int(a.size)})
     PD = pd.DataFrame(pdr)
     PD.to_csv(RES_OUT / "change_per_distance.csv", index=False, float_format="%.5f")
-    # summary
+    # summary: every region, and the even chromosomes only (the degron-trained
+    # models saw the auxin condition on the odd chromosomes; every model is
+    # also summarised on the even subset so they compare on identical regions)
+    def even(df):
+        c = df.region.str.split(":").str[0].str.replace("chr", "", regex=False)
+        return df[c.str.isdigit() & (pd.to_numeric(c, errors="coerce") % 2 == 0)]
+    summ = []
+    for subset in ("all", "even_chromosomes"):
+        DD = D if subset == "all" else even(D)
+        LL = L if subset == "all" or not len(L) else even(L)
+        BB = Bn if subset == "all" or not len(Bn) else even(Bn)
+        summ += _summ_rows(DD, LL, BB, apa if subset == "all" else {}, subset)
+    S = pd.DataFrame(summ)
+    S.to_csv(RES_OUT / "perturb_summary.csv", index=False, float_format="%.4f")
+    log(f"summary {len(S)} rows")
+
+
+def _summ_rows(D, L, Bn, apa, subset):
     summ = []
     for (exp, model, pert), g in D.groupby(["experiment", "model", "perturbation"]):
-        s = {"experiment": exp, "model": model, "perturbation": pert}
+        s = {"subset": subset, "experiment": exp, "model": model, "perturbation": pert}
         for k in ("pearson", "scc", "spearman"):
             s.update(bm.summarize(g[k], f"change_{k}"))
         s["pred_abs_change_mean"] = g.pred_abs_change.mean()
@@ -378,9 +399,7 @@ def stage_score():
                       "boundary_change_spearman": float(pd.Series(dm[ok]).corr(
                           pd.Series(dp[ok]), method="spearman"))})
         summ.append(s)
-    S = pd.DataFrame(summ)
-    S.to_csv(RES_OUT / "perturb_summary.csv", index=False, float_format="%.4f")
-    log(f"summary {len(S)} rows")
+    return summ
 
 
 def stage_figures():

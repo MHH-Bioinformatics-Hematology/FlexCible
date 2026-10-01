@@ -115,6 +115,10 @@ class SampleSpec:
     # coarser model's out-of-fold prediction for this cell, at the COARSER
     # resolution; windows are resampled to this resolution's bins.
     prior_cool: str | None = None
+    # Restrict this sample's TRAINING windows to these chromosomes (e.g. a
+    # perturbation condition trained on odd chromosomes and evaluated on the
+    # even ones); test windows are unaffected. None = every training chromosome.
+    train_chroms: list[str] | None = None
 
     def __post_init__(self):
         if self.assay not in ASSAYS:

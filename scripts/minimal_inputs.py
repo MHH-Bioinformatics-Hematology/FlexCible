@@ -77,7 +77,8 @@ EXISTING = {
     # 12-cell models trained with track dropout (registry section 22)
     **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000, ["gm12878", "imr90", "k562"], True)
        for b in ("all12refres_drop", "all12honest_drop", "all12refres_refdrop",
-                 "all12refres_drop_hard", "all12honest_drop_hard") for k in (25, 10)},
+                 "all12refres_drop_hard", "all12honest_drop_hard",
+                 "all12deg_refres_drop", "all12deg_honest_drop") for k in (25, 10)},
     "akita_native_trackdrop": (REPO / "runs/akita_native_trackdrop", 2048, ["gm12878"], True),
     "akita_native_honest": (HM / "runs/akita_ref/akita_native_honest", 2048, ["gm12878"], False),
     "akita_native_refres": (HM / "runs/akita_ref/akita_native_refres", 2048, ["gm12878"], False),

@@ -417,6 +417,10 @@ def build(cfg: Config, workers: int = 1) -> dict:
                     continue
                 if split == "test" and state != "inside":
                     continue
+            if (split == "train" and s.train_chroms is not None
+                    and chrom not in s.train_chroms):
+                n_outside_train += 1
+                continue
             if split == "train" and train_regions is not None and window_region_state(
                     train_regions, chrom, w.start * res_bp,
                     (w.start + w.size) * res_bp) != "inside":

@@ -253,6 +253,23 @@ def jobs():
             J.append(Job(f"eval_{r}", f"{MI} --stage eval --run {r} --device cpu && "
                                       f"{MI} --stage summary",
                          (lambda r=r: mdone(r)), (lambda r=r: is_marked(f"eval_{r}"))))
+    # --- Track 1b: RAD21 degron pair in training (registry section 25)
+    deg = [("all12deg_refres_drop", 25000), ("all12deg_honest_drop", 25000),
+           ("all12deg_refres_drop", 10000), ("all12deg_honest_drop", 10000)]
+    for run, res in deg:
+        prep_cache(run, res, f"mc_{run}_{res // 1000}kb")       # CPU, ahead of time
+        train12(run, res, f"mc_{run}_{res // 1000}kb")
+    deg_names = " ".join(mx.run_name(r, k) for r, k in deg)
+    deg_ready = lambda: all(trained(r, k) for r, k in deg)
+    J.append(Job("deg_perturb", f"{PY} scripts/perturb_validate.py --stage predict "
+                                "predict_chip score figures",
+                 deg_ready, lambda: is_marked("deg_perturb")))
+    J.append(Job("deg_aml", f"{PY} scripts/aml_eval.py --stage predict --models {deg_names} "
+                            f"--jobs 2 --threads 3 && {PY} scripts/aml_eval.py --stage score "
+                            "perturb figures", deg_ready, lambda: is_marked("deg_aml")))
+    J.append(Job("deg_minimal", f"{PY} scripts/minimal_inputs.py --stage absent --models "
+                                f"{deg_names} && {PY} scripts/minimal_inputs.py --stage summary",
+                 deg_ready, lambda: is_marked("deg_minimal")))
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())
