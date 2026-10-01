@@ -1905,3 +1905,171 @@ ICE-balanced 10 and 25 kb maps of HepG2, A549, MCF-7, PC-9, HCT116 and K562;
 both ends of each call are breakpoints. The karyotypically normal cells
 carry no mask. Comparison (`results/cnv_sv/cnv_compare.csv`) against
 all12refres_drop_10kb per cell, cancer lines apart.
+
+## 29. Primary AML patients (FINAL)
+
+`scripts/aml_primary.py` (stages fetch, fetch_pairs, targets, inputs,
+predict, amlref, score, specific, fischer, figures),
+`scripts/aml_primary_explain.py` (cnv, annotate, scores, learn,
+features_predict, features, figures), `scripts/aml_sv_predict.py`; tests
+`tests/test_aml_primary.py`. Data under
+`/mnt/processed/wolffjoa/hic-multiome/aml/primary/` (`../STATUS_primary.md`).
+Tables in `results/aml_primary/`.
+
+Data. Xu et al., Nature 2022, GSE152136: in situ MboI Hi-C of 28 AML
+patients and 4 CD34+ HSPC donors (GSE152135; pairs files, since the
+.iced.mcool start at 10 kb in steps of 2), CUT&Tag of 12 patients (GSE152132:
+H3K27ac and H3K27me3 for all 12, CTCF for 9; only MACS2 -log10 p-value
+bigWigs are public), and the supplementary tables of the paper (Nature
+MOESM3: AML-specific loops, stripes, SVs from WGS plus hic_breakfinder,
+neo-loop hijacking; as CSV in `xu_tables/`). The 3 PBMC controls of the
+paper have no public Hi-C. Fischer et al., Cell Rep 2024, GSE268035:
+per-patient CTCF, RAD21 and H3K27ac ChIP (GSE268031, CNV-normalised
+bigWigs; cohesin wild type 17 to 21 patients, RAD21-mutant 8 to 9,
+STAG2-mutant 10 to 15) and pooled group Hi-C (GSE267780; named .hic, the
+files are FAN-C HDF5 objects with 10 kb bins, converted to cooler). Every
+map: 5 kb cooler from the pairs (cooler cload pairs), 10 and 25 kb by
+coarsening, ICE (`--ignore-diags 2 --max-iters 500`), `scripts/oe_proper.py`.
+Contacts per sample 0.11 to 0.41 B (`targets/*.json`); 2 kb maps were not
+built.
+
+Inputs. Each track is quantile-matched per mark to the pooled 200 bp
+fold-change values of the 12 training cells (rank intervals of tied source
+values get the mean of the training quantile function over the interval);
+monotone, so the ordering of the source is kept. Control on K562 (held out
+from every model), only CTCF, H3K27ac and H3K27me3 given, median Pearson at
+25 / 10 / 5 kb (`k562_control.csv`): all12refres_drop with ENCODE fold
+change 0.913 / 0.890, ENCODE fold change quantile-matched 0.921 / 0.895,
+ENCODE p-value quantile-matched 0.921 / 0.895, K562 CUT&Tag (ChIP-Atlas
+SRX5242662, SRX19742232, SRX5545339) quantile-matched 0.913 / 0.889, CUT&Tag
+with the section 19 mean scaling 0.910 / 0.886; consensus12 0.897 / 0.859.
+
+Models: all12refres_drop and all12honest_drop (section 22) and the dedicated
+min_ctcf_h3k27ac_refres (section 20) at 25 and 10 kb, all12refres at 25, 10
+and 5 kb and all12honest at 5 kb; reference consensus12 (no AML map in it).
+Each reference model was also run with a leave-one-patient-out AML
+consensus as reference (pixel-wise mean of the other 27 AML patients' maps,
+HSPC excluded; its cell list `amlxu<patient>` lets the reference guard reject
+a map containing the scored patient), without retraining. Scoring on the 413
+Akita test regions, one pixel mask per patient and resolution shared by
+every method.
+
+Median over the 12 patients of the per-patient median Pearson (SCC in
+`per_patient.csv`):
+
+| method | 25 kb | 10 kb | 5 kb |
+|---|---|---|---|
+| all12refres_drop | 0.822 | 0.688 | |
+| min_ctcf_h3k27ac_refres | 0.828 | 0.702 | |
+| all12refres | 0.795 | 0.687 | 0.518 |
+| all12honest_drop (5 kb: all12honest) | 0.530 | 0.414 | 0.196 |
+| all12refres_drop, AML-consensus reference | 0.886 | 0.773 | |
+| min_ctcf_h3k27ac_refres, AML-consensus reference | 0.882 | 0.770 | |
+| all12refres, AML-consensus reference | 0.846 | 0.757 | 0.596 |
+| AML consensus (other 27 patients) alone | 0.906 | 0.784 | 0.682 |
+| consensus12 | 0.816 | 0.669 | 0.513 |
+| HSPC consensus (4 donors) | 0.868 | 0.717 | 0.578 |
+| best single HSPC map | 0.856 | 0.668 | 0.493 |
+| best other AML patient (maximum of 27) | 0.900 | 0.722 | 0.549 |
+| median other AML patient | 0.826 | 0.639 | 0.479 |
+| best training-cell map | 0.840 | 0.701 | 0.495 |
+| GM12878 / CD14+ monocytes / K562 | 0.794 / 0.786 / 0.751 | 0.665 / 0.656 / 0.595 | 0.474 / 0.473 / 0.430 |
+| MOLM-13 / U-937 (section 19) | 0.792 / 0.775 | 0.650 / 0.636 | 0.488 / 0.462 |
+
+With the AML consensus as reference the reference models exceed their
+consensus12 version in 11 or 12 of 12 patients and consensus12 alone in 10
+to 12 of 12 patients at every resolution, and stay
+below the AML consensus alone in all 12 patients at every resolution
+(0.886 against 0.906 at 25 kb). For MOLM-13 and U-937 (maps from other labs)
+the all-patient AML consensus scores below consensus12 (0.876 / 0.852
+against 0.909 / 0.866 at 25 kb), and the reference models drop with it
+(all12refres_drop 0.874 / 0.865 against 0.907 / 0.892;
+`lines_aml_reference.csv`).
+
+Structural variants and copy number. SVs of Suppl. Table 5 for 10 of the 12
+patients (none listed for 103 and 673); copy number from Hi-C coverage per
+500 kb against the mean of the four HSPC maps (autosomes, segments of at
+least 3 Mb with |log2 ratio| >= max(0.3, 4 robust SD)): 54 segments in 18
+samples, among them trisomy 8 in 1916, monosomy 7 in 936 and del(5q) in 168
+and 496, which share identical copy-number breakpoints
+(`explain_cnv_segments.csv`). A test region is flagged when it lies within
+1 Mb of an SV breakpoint, inside an intra-chromosomal SV or on a copy-number
+segment: 514 of 13216 sample-regions. Without them every median above
+changes by at most 0.015 (`explain_scores.csv`, `explain_lineage.csv`); on
+the flagged regions alone the models and maps score within 0.06 of the
+unflagged regions, in both directions.
+
+Lineage and protocol (`explain_lineage.csv`, 25 / 10 / 5 kb, all regions):
+HSPC maps agree with each other at 0.915 / 0.711 / 0.492, AML patients with
+HSPC maps at 0.836 / 0.639 / 0.449 and AML patients with each other at
+0.813 / 0.612 / 0.434. A single healthy HSPC map of the same study scores a
+patient as well as the median other patient (0.82 to 0.86 against 0.826 at
+25 kb), while blood maps from other laboratories (GM12878, CD14+
+monocytes, K562, MOLM-13, U-937) score below consensus12. Averaging lifts
+every group: HSPC consensus of 4 maps 0.868, AML consensus of 27 maps 0.906.
+
+Patient-specific structure. Deviation score of the patient map T from
+consensus12 C (section 24 score) per region, coverage and masked-bin
+filters of the hard split (no replicate maps exist per patient), hardest
+20% per patient (`specific_summary.csv`, 25 / 10 kb): the mean of the other
+AML patients' maps A reproduces T - C at 0.818 / 0.681 (residual
+correlation), the models with consensus12 at 0.43 to 0.52 / 0.31 to 0.47 and
+with the AML reference at 0.76 to 0.79 / 0.65 to 0.68. Against A, the
+patient's own deviation T - A is reproduced at 0.00 to 0.18 by every model.
+Regions deviating from both C and the HSPC consensus H (top 20% of both
+scores, SV/CNV excluded, 1589 patient-regions; `explain_learn.csv`): the AML
+consensus reproduces T - H at 0.48 / 0.43, single HSPC maps at -0.02 to 0.02,
+the reference models with consensus12 at 0.25 to 0.30 / 0.23 to 0.29 (the
+CD14+ monocyte map 0.29 / 0.23), with the AML reference at 0.43 to 0.46 /
+0.38 to 0.42. The mean absolute change of the patient's CUT&Tag tracks in
+these regions against the training cells' tracks does not track the residual
+correlation (Spearman between -0.16 and 0.16 per mark and model,
+`explain_learn_regions.csv`).
+
+Xu et al.'s features (10 kb, `explain_features.csv`; windows of 192 bins
+centred on each feature, up to 150 loops and 150 stripes per patient, 10
+patients with listed features; loops typed by the patient's CUT&Tag at the
+anchors). AML-specific loops are stronger in the patient maps than in the
+HSPC consensus by 0.39 (P-E-like, 176 loops), 0.45 (P-S-like, 156) and 0.40
+(other, 1147) log2 donut enrichment, and stronger than in consensus12 by
+0.29 to 0.31. all12refres_drop places 0.14 above the HSPC consensus (above
+it at 78 to 83% of the loops; correlation with the measured gain 0.27 to
+0.32) and 0.02 to 0.04 above consensus12 (correlation with the measured gain
+over consensus12 -0.03 to 0.06); all12honest_drop and the minimal model show
+correlations of 0.07 to 0.34 against consensus12. Stripes (1067): measured
++0.22 over the HSPC consensus, predicted +0.03 to +0.04 (correlation 0.39 to
+0.43). Compartment switches are not assessable on the 1 to 2 Mb prediction
+windows, and the CTCF sites lost through hypermethylation are listed only
+for patient 424, who has no CUT&Tag.
+
+SV-aware prediction (`sv_junctions.csv`, `sv_summary.csv`, 10 kb, 158
+junctions of 10 patients): the derivative allele of each junction (pieces of
+the patient's input rows joined in the called orientation, reversed pieces
+with swapped motif strands, reference blocks per piece and the expected
+level between pieces), predicted and mixed 0.5 / 0.5 with the normal allele
+in contact space (the tracks cannot be phased and are used as measured on
+both alleles). In the cis window around the breakpoint the SV-aware
+prediction differs from the naive one by less than 0.01 in Pearson for
+all12refres_drop (median change 0.000). In the junction block (rows of the
+left piece, columns of the right piece; 84 junctions with measured
+contacts) the predicted log O/E correlates with the measured block at -0.24
+to 0.12 (median per SV type and model), below the distance-only junction model log E(d) (0.21
+to 0.33); measured junction blocks lie 0.21 to 0.41 above the cis expected
+of their derivative distance (deletions, inversions, translocations), the
+predictions -0.10 to -0.12 below it. The neo-loops of Suppl. Table 6 that
+fall inside a window (15 junctions, among them HSF4 and MYH11 at the inv(16)
+of 629) are not enriched in the derivative predictions (log2 donut
+enrichment -0.24 to 0.21, measured -0.47 to 0.28).
+
+Cohesin-mutant groups (Fischer, 10 kb, `fischer_groups.csv`,
+`fischer_change.csv`): each group map is predicted from the group's mean
+quantile-matched tracks at 0.86 to 0.91 by all12refres_drop (consensus12
+0.84 to 0.88; the other groups' measured maps 0.92 to 0.94). The predicted
+mutant - wild-type change correlates with the measured change at 0.180
+(RAD21-mutant) and 0.197 (STAG2-mutant) per region (all12refres_drop; the
+two measured changes, which share the wild-type map, correlate at 0.50);
+loop-strength changes at 0.07 / 0.19 and insulation changes at 0.22 / 0.19.
+
+Figures: `per_patient.png`, `per_distance.png` (pooled per-distance Pearson),
+`showcase_{25,10,5}kb.png` (hardest regions, 80 bins per panel),
+`explain_features_loops.png`, `sv_junctions.png` (80 bins per panel).
