@@ -71,3 +71,33 @@ def test_methylation_binning(tmp_path):
     assert vals["chr1"][1] == pytest.approx(1 + mean)   # low coverage -> genome mean
     assert vals["chr2"][0] == pytest.approx(1.0)
     assert np.all(vals["chr1"] >= 1.0)                  # raw zero stays "no data"
+
+
+def test_sv_mask_rows(tmp_path):
+    import json
+
+    from hicmultiome.train import sv_mask_rows
+    p = tmp_path / "bp.json"
+    # breakpoint at bin 12 of chr1 (res 1000) for sample a only
+    p.write_text(json.dumps({"breakpoints": {"a": [["chr1", 12_500]]}}))
+    coords = (["chr1", "chr1", "chr1", "chr2"], np.array([10, 20, 10, 10]), ["a", "a", "b", "a"])
+    idx, masks = sv_mask_rows(coords, str(p), window=8, res=1000)
+    assert idx.tolist() == [0, -1, -1, -1]          # only row 0 holds the breakpoint
+    m = masks[0].numpy()
+    o = 2                                            # bin 12 at offset 2 of the window at 10
+    assert m[0, 1] == 1 and m[3, 7] == 1             # both bins on one side
+    assert m[0, 5] == 0 and m[5, 0] == 0             # across the breakpoint, symmetric
+    assert m[o, o] == 0 and m[1, o] == 0
+    assert np.allclose(m, m.T)
+
+
+def test_binary_segmentation_finds_step():
+    import cnv_sv
+    rng = np.random.default_rng(0)
+    x = np.concatenate([rng.normal(0, 0.1, 60), rng.normal(0.6, 0.1, 40), rng.normal(0, 0.1, 50)])
+    segs = cnv_sv.binary_segment(x, 0.1)
+    bounds = [a for a, _ in segs[1:]]
+    assert len(segs) == 3
+    assert abs(bounds[0] - 60) <= 1 and abs(bounds[1] - 100) <= 1
+    flat = cnv_sv.binary_segment(rng.normal(0, 0.1, 150), 0.1)
+    assert flat == [(0, 150)]

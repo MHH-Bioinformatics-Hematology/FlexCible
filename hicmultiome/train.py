@@ -306,6 +306,34 @@ def between_cell_weights(target, coords, alpha: float):
     return p, w.float()
 
 
+def sv_mask_rows(coords, mask_path: str, window: int, res: int):
+    """(per-row index into the masks or -1, (n, W, W) float masks) for
+    train.sv_mask: in a window holding a breakpoint at bin o, pixels (r, c)
+    with min(r, c) <= o <= max(r, c) get weight 0."""
+    bp = json.loads(Path(mask_path).read_text())["breakpoints"]
+    by = {}
+    for smp, lst in bp.items():
+        for c, pos in lst:
+            by.setdefault((smp, str(c)), []).append(int(pos) // int(res))
+    ch, st, sm = coords
+    idx = np.full(len(ch), -1, dtype=np.int64)
+    masks = []
+    ar = np.arange(window)
+    for i, (c, s, smp) in enumerate(zip(ch, st, sm)):
+        offs = [b - int(s) for b in by.get((smp, c), ()) if 0 <= b - int(s) < window]
+        if not offs:
+            continue
+        m = np.ones((window, window), dtype=np.float32)
+        for o in offs:
+            m[np.ix_(ar <= o, ar >= o)] = 0.0
+            m[np.ix_(ar >= o, ar <= o)] = 0.0
+        idx[i] = len(masks)
+        masks.append(m)
+    out = (torch.from_numpy(np.stack(masks)) if masks
+           else torch.ones((0, window, window), dtype=torch.float32))
+    return torch.from_numpy(idx), out
+
+
 def hard_split_rows(coords, split_path: str, window: int, res: int):
     """(hard-validation rows, rows outside every hard position) of a window
     list for a hard split JSON (scripts/hard_split.py): a row is hard-validation
@@ -653,8 +681,9 @@ def train(cfg: Config):
     # re-precomputing the cache -- every k-th of the 50%-overlap windows is
     # exactly the coarser-stride tiling.
     k = max(1, int(cfg.train.window_subsample))
-    if k > 1 and cfg.train.loss_weighting != "none":
-        raise ValueError("train.loss_weighting with window_subsample is not supported")
+    if k > 1 and (cfg.train.loss_weighting != "none" or cfg.train.sv_mask):
+        raise ValueError("train.loss_weighting / train.sv_mask with window_subsample "
+                         "is not supported")
     if k > 1:
         keep = list(range(0, data["target"].shape[0], k))
         data = {kk: v[keep] for kk, v in data.items()}
@@ -687,6 +716,22 @@ def train(cfg: Config):
                      pw_map.shape[0], float(pw_map.mean()), float(pw_map.max()))
     elif cfg.train.loss_weighting != "none":
         raise ValueError(f"unknown train.loss_weighting {cfg.train.loss_weighting!r}")
+    sv_idx = sv_maps = None
+    if cfg.train.sv_mask:
+        sco = ([ds._index[i][2] for i in ti], np.array([ds._index[i][3] for i in ti]),
+               [ds._index[i][4] for i in ti]) if ti is not None else _coords(ds)
+        sv_all, sv_maps = sv_mask_rows(sco, cfg.train.sv_mask, ds.window_size,
+                                       cfg.data.resolution)
+        if is_main:
+            per = {}
+            for i in np.nonzero(sv_all.numpy() >= 0)[0]:
+                per[sco[2][i]] = per.get(sco[2][i], 0) + 1
+            frac = float(1 - sv_maps.mean()) if len(sv_maps) else 0.0
+            log.info("sv_mask %s: %d of %d training windows hold a breakpoint %s; "
+                     "%.1f%% of their pixels masked", cfg.train.sv_mask, len(sv_maps),
+                     len(sv_all), per, 100 * frac)
+        sv_idx = (sv_all[:n_even][rank::world] if world > 1 else sv_all).to(device)
+        sv_maps = sv_maps.to(device)
     pf = data["prior"][sl].to(device) if cfg.model.prior else None
     vdata_d = hdata_d = None
     if is_main and vdata is not None:
@@ -932,6 +977,14 @@ def train(cfg: Config):
             pwb = None
             if pw_map is not None:
                 pwb = pw_map[pw_pos[idx]]
+            if sv_maps is not None:
+                si = sv_idx[idx]
+                if bool((si >= 0).any()):
+                    m = torch.ones((bs, W, W), device=device)
+                    hit = si >= 0
+                    m[hit] = sv_maps[si[hit]]
+                    pwb = m if pwb is None else pwb * m
+            if pwb is not None:
                 if rev_mask is not None:
                     pwb = torch.where(rev_mask[:, None, None], torch.flip(pwb, dims=[-1, -2]), pwb)
                 pwb = pwb / pwb.mean()
@@ -1033,8 +1086,10 @@ def train_stream(cfg: Config):
     if is_main:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    if cfg.model.reference != "none" or cfg.model.prior or cfg.train.hard_split:
-        raise NotImplementedError("model.reference / model.prior / train.hard_split are supported on the "
+    if (cfg.model.reference != "none" or cfg.model.prior or cfg.train.hard_split
+            or cfg.train.sv_mask or cfg.train.loss_weighting != "none"):
+        raise NotImplementedError("model.reference / model.prior / train.hard_split / "
+                                  "train.sv_mask / train.loss_weighting are supported on the "
                                   "resident cache path only (train.stream: false)")
     ds = StreamWindowDataset(cfg, "train", str(cache_dir), stride=cfg.train.stream_stride)
     if ds.n_out != 1:

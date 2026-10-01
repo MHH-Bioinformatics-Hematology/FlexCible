@@ -178,6 +178,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # mean DNA methylation (ENCODE WGBS, scripts/methylation.py) as a 14th
     # track, a proxy for marks primary samples lack (registry section 27)
     "all12refres_drop_meth": (TRAIN12, None),
+    # copy number (CNVgain, CNVloss from Hi-C coverage, scripts/cnv_sv.py) as
+    # two more tracks and the structural-variant loss mask (registry section 28)
+    "all12refres_drop_cnv": (TRAIN12, None),
 }
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
@@ -187,7 +190,9 @@ DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0
                      "all12refres_drop_varw": (0.5, 0.0)})
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
+DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 METH_RUNS = {"all12refres_drop_meth"}
+CNV_RUNS = {"all12refres_drop_cnv"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
 HFF_COHESIN_DIR = HM / "hg38_hff_cohesin"
 
@@ -225,7 +230,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12deg_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
-            "all12refres_drop_meth": "residual"}
+            "all12refres_drop_meth": "residual", "all12refres_drop_cnv": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
@@ -320,6 +325,13 @@ def run_config(name, val_per_cell, patience, max_epochs):
                 smp["extra_bigwig_dirs"] = [str(me.meth_dir(smp["name"]))]
             else:
                 smp["missing_tracks"] = smp["missing_tracks"] + [me.TRACK]
+    if base in CNV_RUNS:
+        import cnv_sv as cs_
+        for t in cs_.TRACKS:
+            cfg["data"]["tracks"].append({"name": t, "type": "copynumber"})
+        for smp in cfg["data"]["samples"]:        # written by cnv_sv.py --stage cnv
+            smp["extra_bigwig_dirs"] = [str(cs_.cnv_dir(smp["name"]))]
+        cfg["train"]["sv_mask"] = str(cs_.SV / "breakpoints.json")
     if base in DEGRON_RUNS:
         import perturb_validate as pv
         hct = next(s for s in cfg["data"]["samples"] if s["name"] == "hct116")
@@ -349,7 +361,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS
+    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS
                   | {"all12hffcoh_refres_drop"}
                   else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
@@ -446,6 +458,10 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
             import methylation as me
             if me.has_meth(cell):
                 extra += ["--extra-bigwig-dir", me.meth_dir(cell)]
+        if ref_run is not None and split_name(ref_run)[0] in CNV_RUNS:
+            import cnv_sv as cs_
+            if cs_.has_cnv(cell):
+                extra += ["--extra-bigwig-dir", cs_.cnv_dir(cell)]
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", cfg_path,
                  "--checkpoint", ckpt, "--cell", cell, "--bigwig-dir", bw,
                  "--target", cool, "--tta", "--assay", assay, "--out-dir", out,

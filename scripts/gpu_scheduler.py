@@ -297,6 +297,19 @@ def jobs():
     J.append(Job("meth_eval", f"{PY} scripts/meth_eval.py --stage predict summary",
                  lambda: trained("all12refres_drop_meth", 10000) and trained("all12refres_drop", 10000),
                  lambda: is_marked("meth_eval")))
+    # --- copy number as two tracks + structural-variant loss mask (registry
+    # section 28; inputs from scripts/cnv_sv.py)
+    import cnv_sv as cv
+    J.append(Job("sv_breakpoints", f"{PY} scripts/cnv_sv.py --stage breakpoints summary",
+                 lambda: cv.eaglec_finished() and (cv.RES_OUT / "cnv_segments.csv").exists(),
+                 lambda: (cv.SV / "breakpoints.json").exists()))
+    cnv_ok = lambda: (cv.SV / "breakpoints.json").exists() and all(
+        cv.has_cnv(c) for c in mx.TRAIN12)
+    prep_cache("all12refres_drop_cnv", 10000, "mc_all12refres_drop_cnv_10kb", cnv_ok)
+    train12("all12refres_drop_cnv", 10000, "mc_all12refres_drop_cnv_10kb")
+    J.append(Job("cnv_compare", f"{PY} scripts/cnv_sv.py --stage compare",
+                 lambda: is_marked("eval_all12refres_drop_cnv_10kb"),
+                 lambda: is_marked("cnv_compare")))
     # --- Track 1a: HFF with cohesin ChIP (needs aml_fetch.py --cells hffcoh first)
     try:
         coh = [("all12hffcoh_refres_drop", 25000), ("all12hffcoh_refres_drop", 10000)]

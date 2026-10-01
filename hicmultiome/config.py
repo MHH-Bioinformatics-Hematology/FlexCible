@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 
 TF_TYPES = ("tf", "cofactor")           # DNA-binding: motif REQUIRED
-NONMOTIF_TYPES = ("histone", "accessibility", "methylation", "annotation")
+NONMOTIF_TYPES = ("histone", "accessibility", "methylation", "annotation", "copynumber")
 # SampleSpec.assay: "hic" = in situ Hi-C, "intact" = intact Hi-C (MNase and/or
 # DNaseI digestion), "microc" = Micro-C
 ASSAYS = ("hic", "intact", "microc")
@@ -40,6 +40,8 @@ class TrackSpec:
                     binder)
       accessibility DNase/ATAC -> no motif
       methylation   DNA methylation level (WGBS/RRBS fraction) -> no motif
+      copynumber    copy-number state per bin (e.g. CNVgain / CNVloss from
+                    scripts/cnv_sv.py; raw zero = copy neutral) -> no motif
       annotation    cell-invariant genome annotation (CpG islands, TSS, gene
                     bodies, repeat classes; scripts/build_annotation_tracks.py)
                     -> no motif
@@ -397,6 +399,13 @@ class TrainConfig:
     # weights of a batch are renormalised to mean 1. "none" = off.
     loss_weighting: str = "none"
     loss_weight_alpha: float = 1.0
+    # Structural-variant loss mask: JSON {"breakpoints": {sample: [[chrom,
+    # pos], ...]}} (scripts/cnv_sv.py). In a training window holding a
+    # breakpoint, every pixel whose two bins lie on opposite sides of it (or
+    # on its bin) gets loss weight 0: the rearranged genome no longer has the
+    # reference-coordinate contacts there. Validation and test are unmasked.
+    # None = off.
+    sv_mask: str | None = None
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
     # Used for a fast proxy input-search: far fewer windows -> quick candidates,
     # to check whether the track ranking is stable without all chromosomes.
