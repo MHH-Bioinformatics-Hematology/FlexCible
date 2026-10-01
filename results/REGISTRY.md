@@ -1792,3 +1792,35 @@ regions), then applied to their test regions (`hard_split.py --shrink`,
 `shrink_summary.csv`). Key numbers: model above the consensus alone on the
 held-out cells (K562, HMEC deep, HUVEC deep; AML MOLM-13 and U-937 through
 `aml_eval.py`) and the residual correlation on the hardest regions.
+
+(c) Residual shrinkage, existing models (`results/hard_split/shrink_beats.csv`,
+`shrink_summary.csv`). lambda in 0 to 1.5 (steps of 0.25) maximises the
+median over K562, HMEC deep and HUVEC deep of their median Pearson on Akita's
+419 validation regions; the test numbers are the 413 test regions, never
+used for the choice. Median Pearson per held-out cell, cells above
+consensus12 alone:
+
+| res | model | lambda | model above consensus | shrunk above consensus | median model / shrunk / consensus |
+|---|---|---|---|---|---|
+| 25 kb | all12refres | 0.25 | 1/3 | 2/3 | 0.906 / 0.916 / 0.916 |
+| 25 kb | all12refres_drop | 0.5 | 1/3 | 3/3 | 0.918 / 0.920 / 0.916 |
+| 25 kb | all12refin | 0.25 | 1/3 | 2/3 | 0.901 / 0.913 / 0.916 |
+| 25 kb | all12multires | 0.25 | 1/3 | 3/3 | 0.904 / 0.918 / 0.916 |
+| 25 kb | all12refres_refdrop | 0.5 | 1/3 | 3/3 | 0.918 / 0.918 / 0.916 |
+| 10 kb | all12refres | 0.5 | 1/3 | 3/3 | 0.885 / 0.890 / 0.884 |
+| 10 kb | all12refres_drop | 0.5 | 3/3 | 3/3 | 0.905 / 0.896 / 0.884 |
+| 10 kb | all12refin | 0.75 | 2/3 | 3/3 | 0.896 / 0.894 / 0.884 |
+| 10 kb | all12multires | 0.5 | 1/3 | 3/3 | 0.892 / 0.891 / 0.884 |
+| 10 kb | all12refres_refdrop | 0.5 | 2/3 | 3/3 | 0.901 / 0.893 / 0.884 |
+
+The chosen lambda is 0.25 to 0.75 for every model: on unseen cells the
+predicted deviation from the consensus is too large, and halving it raises
+HMEC and HUVEC (deep maps) by 0.01 to 0.03 at 25 kb while K562, the one
+held-out cell the models already predict above the consensus, loses up to
+0.013. With shrinkage every model except all12refres and all12refin at 25 kb
+is above the consensus on all three held-out cells, but by at most 0.005 at
+25 kb (HMEC 0.934 to 0.938 against 0.933, HUVEC 0.916 to 0.918 against
+0.916) and 0.003 to 0.033 at 10 kb. Without shrinkage, all12refres_drop at
+10 kb already exceeds the consensus on all three (0.911, 0.897, 0.905
+against 0.908, 0.884, 0.859) with the highest median (0.905); shrinkage
+lowers its median to 0.897.
