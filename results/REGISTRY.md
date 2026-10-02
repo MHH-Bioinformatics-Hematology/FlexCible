@@ -1784,7 +1784,7 @@ holds 228 instead of 229 windows, 226 shared. The 25 kb hard-split models
 keep the original split, which differs in 3 of 229 union windows. The 10 kb
 split is unchanged.
 
-## 25. Cohesin response (PENDING)
+## 25. Cohesin response (FINAL)
 
 Problem (sections 19 and 21): removing RAD21 at inference made the models
 predict stronger loops, opposite to the measured RAD21 degron; HFF, the only
@@ -1854,7 +1854,59 @@ loop strength rises with the RAD21 fraction f, so recovery is ordered in
 time: the measured 20, 40 and 60 min states match RAD21 at about 10, 30
 and 45% of its untreated level for the 10 kb dropout model (an
 approximation: the actual RAD21 occupancy at these times is not measured).
-The degron-trained and HFF-cohesin models follow in the same table.
+
+Degron-trained and HFF-cohesin models (`washout_summary.csv`, all 536 / 549
+loops; the auxin condition was trained on odd chromosomes only, the even
+chromosomes alone give the same picture):
+
+| model | res | loops weaker with auxin RAD21 | median predicted change (measured -0.75 / -0.48) | f matching 20 / 40 / 60 / 180 min |
+|---|---|---|---|---|
+| all12deg_refres_drop | 10 kb | 99.1% (98.4%) | -0.381 | 0.09 / 0.24 / 0.39 / 1.0 |
+| all12deg_refres_drop | 25 kb | 96.0% (98.9%) | -0.105 | 0.09 / 0.24 / 0.44 / 1.0 |
+| all12deg_honest_drop | 10 kb | 98.7% (98.8%) | -0.172 | 0.17 / 0.46 / 0.64 / 1.0 |
+| all12deg_honest_drop | 25 kb | 90.7% (90.0%) | -0.074 | 0.14 / 0.38 / 0.57 / 1.0 |
+| all12hffcoh_refres_drop | 10 kb | 84.7% (83.5%) | -0.054 | 0.09 / 0.25 / 0.40 / 1.0 |
+| all12hffcoh_refres_drop | 25 kb | 92.4% (90.8%) | -0.054 | 0.10 / 0.28 / 0.47 / 1.0 |
+
+Training on the auxin condition brings the predicted weakening to half of
+the measured one at 10 kb (-0.381 against -0.754 for the reference model,
+against -0.050 without degron training) and weakens 96 to 99% of the loops.
+For the no-reference degron model the predicted recovery is close to linear
+in the RAD21 fraction: the measured 20, 40 and 60 min states match f = 0.17,
+0.46 and 0.64, against measured recoveries of 0.18, 0.48 and 0.66. SMC1A as
+HFF's cohesin input moves the predictions much less (median change -0.054).
+
+Perturbation tests (`perturb_validate/perturb_summary.csv`, even
+chromosomes, never trained under auxin; change Pearson = correlation of the
+predicted with the measured auxin-minus-untreated difference per region,
+median over regions):
+
+| model | res | RAD21 degron, measured auxin ChIP: change Pearson / loops weaker / loop-change Spearman | RAD21 set absent: loops weaker | CTCF degron (held out, CTCF absent): change Pearson / loops weaker |
+|---|---|---|---|---|
+| all12refres_drop | 10 kb | 0.417 / 89.4% / 0.04 | 21.2% | 0.212 / 89.0% |
+| all12refres_drop | 25 kb | 0.351 / 85.0% / 0.21 | 10.0% | 0.010 / 60.5% |
+| all12deg_refres_drop | 10 kb | 0.803 / 98.4% / 0.57 | 20.8% | 0.396 / 94.6% |
+| all12deg_refres_drop | 25 kb | 0.842 / 95.8% / 0.62 | 33.1% | 0.517 / 82.9% |
+| all12deg_honest_drop | 10 kb | 0.475 / 95.3% / 0.36 | 34.1% | 0.351 / 91.2% |
+| all12deg_honest_drop | 25 kb | 0.419 / 83.5% / 0.46 | 30.0% | 0.403 / 77.6% |
+| all12hffcoh_refres_drop | 10 kb | 0.456 / 93.3% / -0.01 | 36.9% | 0.116 / 80.7% |
+| all12hffcoh_refres_drop | 25 kb | 0.503 / 90.0% / 0.24 | 8.9% | -0.176 / 18.8% |
+
+With the measured auxin ChIP the degron-trained reference model predicts the
+degron difference map at 0.80 to 0.84 on chromosomes it never saw under
+auxin, against 0.35 to 0.42 for the same model without degron training, and
+it generalises to the held-out CTCF degron (0.40 and 0.52 against 0.21 and
+0.01). Declaring RAD21 absent still strengthens most loops in every model
+(21 to 37% weaker at 10 kb), so the training condition (RAD21 reduced, ChIP
+measured) does not transfer to an absent track; on the U-937 STAG2 knockout
+with cohesin declared absent (`aml/perturb_summary.csv`) the loop-change
+Spearman stays negative at 10 kb (all12deg_refres_drop -0.44,
+all12deg_honest_drop -0.20, all12hffcoh_refres_drop -0.05, all12refres_drop
+-0.34). HFF with SMC1A in the cohesin slots leaves the absent-RAD21
+direction wrong (8.9 to 36.9% of loops weaker) and lowers the CTCF degron
+agreement at 25 kb (-0.176), so 1a does not fix the cohesin response; 1b
+fixes it for measured cohesin ChIP. 1c (cohesin-unknown indicator) remains
+the open option for samples without cohesin ChIP.
 
 ## 26. Gain beyond the consensus on new cells (PENDING)
 
