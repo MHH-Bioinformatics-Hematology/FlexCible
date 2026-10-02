@@ -170,3 +170,47 @@ def test_combined_score_handles_nan_pixels():
         t[:, :5] = np.nan
         pairs.append((t + 0.0, t))
     assert np.isfinite(hm.combined_score(pairs, 10000))
+
+
+def test_resample_band_identity_and_shift():
+    rng = np.random.default_rng(0)
+    n, D = 50, 8
+    R = rng.normal(size=(n, D + 1))
+    for d in range(D + 1):
+        R[n - d:, d] = np.nan
+    same = hm.resample_band(R, 25000, n, D, 25000)
+    ok = np.isfinite(R)
+    assert np.allclose(same[ok], R[ok])
+    # a smooth map sampled on a 24 kb grid reproduces the 25 kb values closely
+    f = lambda a, b: np.sin(a / 7e5) + np.cos(b / 9e5)
+    def band(res, n, D):
+        B = np.full((n, D + 1), np.nan)
+        for d in range(D + 1):
+            i = np.arange(n - d)
+            B[i, d] = f((i + 0.5) * res, (i + d + 0.5) * res)
+        return B
+    R24 = band(24000, 220, 12)
+    B25 = band(25000, 200, 10)
+    got = hm.resample_band(R24, 24000, 200, 10, 25000)
+    m = np.isfinite(got) & np.isfinite(B25)
+    assert m.sum() > 1500
+    assert np.abs(got[m] - B25[m]).max() < 0.02
+
+
+def test_rank_score_prefers_better_models():
+    rows = []
+    for k, m in enumerate(["all12honest", "all12refres", "all12refin"]):
+        q = 0.5 + 0.2 * k                   # all12refin best on every measure
+        r = dict(block="b", set="heldout", source=m, apa_ratio=q, saddle_ratio=q,
+                 **{"TAD Score MSE": 1 - q, "TAD Fraction": 1 + (1 - q)})
+        for lv, ms in hm.MMRS_LEVELS.items():
+            for x in ms:
+                r.setdefault(x, q)
+        rows.append(r)
+    rows.append(dict(block="b", set="heldout", source="consensus", oe_scc=0.99))
+    d = hm.add_rank_score(pd.DataFrame(rows))
+    s = d.set_index("source").mmrs
+    assert s["all12refin"] == 1.0 and s["all12honest"] == 0.0
+    assert np.isnan(s["consensus"])            # baselines are not ranked
+    o = hm.oriented(pd.DataFrame({"apa_ratio": [0.5, 2.0, np.nan]}), "apa_agreement")
+    assert np.allclose(o.values[:2], [0.5, 0.5]) and np.isnan(o.values[2])

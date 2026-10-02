@@ -1,4 +1,4 @@
-"""Multi-measure evaluation of predicted Hi-C maps (registry section 30).
+"""Multi-measure evaluation of predicted Hi-C maps (registry section 31).
 
 One prediction is compared with one measured map on whole chromosomes by many
 measures, so that no single number decides which model is best:
@@ -41,8 +41,9 @@ replicate, the target itself) is converted back with the target's own
 balanced expected and per-diagonal offset and scaled to the raw contact total
 of the measured chromosome band: counts = exp(v + offset(d)) * E(d) * s. All
 maps of a block share one curve, as in akita_counts_scoring.py; the measured
-raw map scored against the converted target ("measured map, raw counts") is
-the cost of the round trip.
+map itself (balanced counts at the same scale) scored against the converted
+target ("measured map, balanced counts") is the cost of the round trip
+through the clipped, smoothed O/E target.
 
 Whole chromosomes. Predictions are tiled over whole chromosomes by
 hicmultiome.predict (half-window stride, Hann-weighted averaging, test-time
@@ -53,19 +54,21 @@ built from contacts within the band (the compartment measures above).
 Evaluation sets (blocks):
   heldout     K562, HMEC deep, HUVEC deep (no model saw these cells): whole
               chr2, chr12, chr18
-  trainchrom  the 12 training cells on chr2, chr18 (chr17 for Epiphany): the
-              chromosome-held-out residual reference model (cascade fold
-              models cascfold_odd/even, the all12refres setup trained on the
-              odd or on the even chromosomes; its out-of-fold maps are the
-              level priors in crosscell_oe/cascade) is the clean entry; the
-              main models were trained on windows of these chromosomes (about
-              75% of the chromosome lies in training windows) and are marked
-              chrom_in_training
+  trainchrom  the 12 training cells on chr2, chr18: the chromosome-held-out
+              residual reference model (cascade fold models cascfold_odd/even,
+              the all12refres setup trained on the odd or on the even
+              chromosomes; its out-of-fold maps are the level priors in
+              crosscell_oe/cascade) against the baselines and the
+              competitors; all12refres, trained on windows of these
+              chromosomes (about 75% of each chromosome), is the in-training
+              counterpart (flag chrom_in_training)
   trainstretch the 12 training cells on chr2, chr18, pixels restricted to the
               Akita valid+test stretches (data.holdout_bed, never overlapped
               by a training window of any cell; 23 to 27% of the chromosome,
               stretches of 1 to 11 Mb): the clean evaluation of the main
               models on training cells
+ENT3C and the 3DChromatin measures run on a subset of the blocks (slow_tools:
+all held-out-cell blocks at 25 kb, chr18 otherwise; minutes per map).
 Competitors (predictions reused, never rerun; benchmark_blocks.sample_competitor
 samples their O/E maps at our bin centres, hg19 maps through the liftover):
 Hi-cGAN (GM12878, even chromosomes held out; GM12878 model on K562/HMEC/HUVEC;
@@ -191,6 +194,18 @@ EXTRA_BLOCKS = [
     ("hicreg", "gm12878", 25000, "chr18", 40, ["hicreg_gm12878_25kb"]),
     ("epiphany", "gm12878", 10000, "chr17", 99, ["epiphany_gm12878_10kb"]),
 ]
+
+
+def slow_tools(b: dict) -> bool:
+    """ENT3C and the 3DChromatin measures (GenomeDISCO, HiC-Spector,
+    QuASAR-Rep) cost 1 to 5 min per map on chr2 at 25 kb (3DChromatin works
+    through its pairs serially) and several times that at 10 kb. They run on
+    every held-out-cell block at 25 kb, on chr18 for the training-cell blocks
+    at 25 kb, and on chr18 of the held-out cells at 10 kb."""
+    if b["res"] == 25000:
+        return b["set"] == "heldout" or b["chrom"] == "chr18"
+    return b["set"] == "heldout" and b["chrom"] == "chr18"
+
 COMP_LABEL = {"hicgan": "Hi-cGAN", "corigami": "C.Origami", "hicreg": "HiC-Reg",
               "epiphany": "Epiphany"}
 
@@ -646,6 +661,11 @@ def block_sources(set_: str, cell: str, res: int, extra_comps: list[str] | None 
     """Ordered sources of a block: name, kind, path, flags."""
     out = []
     for m in MODELS:
+        # trainchrom: the main models saw these chromosomes (their clean
+        # training-cell evaluation is trainstretch); all12refres stays as the
+        # in-training counterpart of the chromosome-held-out cascade fold model
+        if set_ == "trainchrom" and m != "all12refres":
+            continue
         if model_available(m, res):
             fl = "clean"
             if set_ == "trainchrom":
@@ -693,7 +713,7 @@ def blocks() -> list[dict]:
 
 def block_source_list(b: dict) -> list[dict]:
     if b["set"] in ("hicreg", "epiphany"):
-        src = block_sources("trainchrom", b["cell"], b["res"], b["comps"])
+        src = block_sources("trainstretch", b["cell"], b["res"], b["comps"])
         for s in src:
             if s["kind"] == "model":
                 s["flag"] = "chrom_in_training"
@@ -716,7 +736,7 @@ def pred_chroms(cell: str) -> list[str]:
     return sorted(ch, key=lambda c: int(c[3:]) if c[3:].isdigit() else 99)
 
 
-def predict_one(model: str, res: int, cell: str, threads: int) -> None:
+def predict_one(model: str, res: int, cell: str, threads: int, gpu: str = "") -> None:
     out = pred_cool(model, res, cell)
     if out.exists() or not claim(out):
         return
@@ -731,7 +751,7 @@ def predict_one(model: str, res: int, cell: str, threads: int) -> None:
             cmd += ["--sample", cell]
         if model not in REFERENCE_FREE:
             cmd += ["--reference", str(consensus_cool(cell, res))]
-        env = dict(os.environ, CUDA_VISIBLE_DEVICES="", OMP_NUM_THREADS=str(threads),
+        env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu, OMP_NUM_THREADS=str(threads),
                    MKL_NUM_THREADS=str(threads), OPENBLAS_NUM_THREADS=str(threads))
         lf = out.with_suffix(".log")
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -753,7 +773,9 @@ def sample_cells_of(model: str, res: int) -> set[str]:
     return {s["name"] for s in cfg["data"]["samples"]}
 
 
-def stage_predict(threads: int, jobs: int) -> None:
+def stage_predict(threads: int, jobs: int, gpu: str = "") -> None:
+    """CPU workers (gpu "") or one GPU worker per call (gpu "0" or "1"; the
+    model forward on the GPU, under 1 GB). Several calls share the queue."""
     todo = []
     for res in RESOLUTIONS:
         for m in MODELS:
@@ -769,7 +791,7 @@ def stage_predict(threads: int, jobs: int) -> None:
     log(f"[predict] {len(todo)} predictions")
     per = max(1, threads // jobs)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        for f in [ex.submit(predict_one, m, r, c, per) for m, r, c in todo]:
+        for f in [ex.submit(predict_one, m, r, c, per, gpu) for m, r, c in todo]:
             f.result()
 
 
@@ -812,7 +834,7 @@ def compute_expected(cell: str, res: int, chrom: str, D: int = 200) -> Path:
     bal_total = float((v[good] * w[i[good]] * w[j[good]]).sum())
     f.parent.mkdir(parents=True, exist_ok=True)
     np.savez(f, expected=exp_b, offset=offset, scale=raw_total / bal_total, n=n,
-             mappable=mp, raw_i=i, raw_j=j, raw_v=v, uri=measured_uri(cell, res))
+             mappable=mp, weight=w, raw_i=i, raw_j=j, raw_v=v, uri=measured_uri(cell, res))
     return f
 
 
@@ -838,17 +860,61 @@ def stage_expected(jobs: int) -> None:
 # ===================================================================== #
 # stage: score
 # ===================================================================== #
-def load_band(path: Path, chrom: str, n: int, D: int) -> np.ndarray | None:
+def load_band(path: Path, chrom: str, n: int, D: int, res: int | None = None
+              ) -> np.ndarray | None:
     import cooler
     clr = cooler.Cooler(str(path))
     name = next((c for c in clr.chromnames if c == chrom or c == chrom.replace("chr", "")), None)
     if name is None or clr.binsize is None:
         return None
+    res = res or clr.binsize
     px = clr.matrix(balance=False, as_pixels=True).fetch(name)
     o = clr.offset(name)
-    B = band_from_pixels(px.bin1_id.values - o, px.bin2_id.values - o,
-                         px["count"].values, n, D)
-    return B
+    if clr.binsize == res:
+        return band_from_pixels(px.bin1_id.values - o, px.bin2_id.values - o,
+                                px["count"].values, n, D)
+    # another bin grid (the single-lane replicate maps at 25 kb are stored at
+    # 24 kb): bilinear sampling at our bin centres
+    rr = clr.binsize
+    nr = int(np.ceil(clr.chromsizes[name] / rr))
+    Dr = int(np.ceil((D + 2) * res / rr)) + 2
+    R = band_from_pixels(px.bin1_id.values - o, px.bin2_id.values - o,
+                         px["count"].values, nr, Dr)
+    R[R == 0] = np.nan
+    return resample_band(R, rr, n, D, res)
+
+
+def resample_band(R: np.ndarray, rr: int, n: int, D: int, res: int) -> np.ndarray:
+    """Band R on an rr grid -> band on a res grid, bilinear in (bin, bin)
+    space; a pixel is kept only when all four neighbours are measured."""
+    from scipy.ndimage import map_coordinates
+    nr = R.shape[0]
+    M = np.full((n, D + 1), np.nan)
+    i = np.arange(n)
+    for d in range(D + 1):
+        ui = (i + 0.5) * res / rr - 0.5
+        uj = (i + d + 0.5) * res / rr - 0.5
+        row, dist = np.minimum(ui, uj), np.abs(uj - ui)
+        ok = (i + d < n) & (row >= 0) & (row <= nr - 1) & (dist <= R.shape[1] - 1)
+        if not ok.any():
+            continue
+        # bilinear over the four (row, column) neighbours of (ui, uj)
+        a0, b0 = np.floor(ui[ok]).astype(int), np.floor(uj[ok]).astype(int)
+        fa, fb = ui[ok] - a0, uj[ok] - b0
+        acc = np.zeros(ok.sum()); good = np.ones(ok.sum(), bool)
+        for da, wa in ((0, 1 - fa), (1, fa)):
+            for db, wb in ((0, 1 - fb), (1, fb)):
+                ra, rb = np.clip(a0 + da, 0, nr - 1), np.clip(b0 + db, 0, nr - 1)
+                lo, dd = np.minimum(ra, rb), np.abs(rb - ra)
+                inside = dd < R.shape[1]
+                v = np.full(len(lo), np.nan)
+                v[inside] = R[lo[inside], dd[inside]]
+                w = wa * wb
+                good &= np.isfinite(v) | (w == 0)
+                acc += np.where(w > 0, np.nan_to_num(v) * w, 0.0)
+        out = np.where(good, acc, np.nan)
+        M[i[ok], d] = out
+    return M
 
 
 def competitor_band(comp: str, chrom: str, n: int, D: int, res: int) -> np.ndarray | None:
@@ -988,9 +1054,11 @@ def write_pixels_gz(C: np.ndarray, chrom: str, res: int, path: Path) -> None:
     k = jj < n
     ii, jj, dd = ii[k], jj[k], dd[k]
     v = np.rint(C[ii, dd]).astype(np.int64)
-    with gzip.open(path, "wt") as fh:
+    tmp = Path(str(path) + ".tmp")
+    with gzip.open(tmp, "wt") as fh:
         for a, b, c in zip(ii * res, jj * res, v):
             fh.write(f"{chrom}\t{a}\t{chrom}\t{b}\t{c}\n")
+    os.replace(tmp, path)
 
 
 def sh(cmd, logf: Path, env=None, cwd=None) -> int:
@@ -1002,7 +1070,8 @@ def sh(cmd, logf: Path, env=None, cwd=None) -> int:
 
 
 ONE_THREAD = dict(os.environ, OMP_NUM_THREADS="1", MKL_NUM_THREADS="1",
-                  OPENBLAS_NUM_THREADS="1", NUMEXPR_NUM_THREADS="1", CUDA_VISIBLE_DEVICES="")
+                  OPENBLAS_NUM_THREADS="1", NUMEXPR_NUM_THREADS="1", CUDA_VISIBLE_DEVICES="",
+                  MPLBACKEND="Agg")
 
 
 def run_findtads(cool: Path, outdir: Path, res: int, chrom: str) -> Path | None:
@@ -1123,8 +1192,10 @@ def run_ent3c(truth: Path, pred: Path, name: str, chrom: str, res: int, work: Pa
                "FILES": [pred.name, name, os.path.relpath(truth, pred.parent), "TARGET"],
                "OUT_DIR": str(od), "OUT_PREFIX": "PAIR"}
         (od / "config.json").write_text(json.dumps(cfg, indent=1))
+        env = {k: v for k, v in ONE_THREAD.items() if k != "DISPLAY"}
+        env["MPLBACKEND"] = "Agg"            # ENT3C plots; an X backend blocks
         sh(["bash", "-c", f"yes y | {ENT3C} run_all --config={od / 'config.json'}"],
-           od / "ent3c.log", ONE_THREAD)
+           od / "ent3c.log", env)
         hits = list(od.rglob("PAIR_ENT3C_similarity.csv"))
         if hits and hits[0] != sim:
             shutil.copyfile(hits[0], sim)
@@ -1135,10 +1206,11 @@ def run_ent3c(truth: Path, pred: Path, name: str, chrom: str, res: int, work: Pa
 
 
 def run_repqc(truth_px: Path, preds_px: dict[str, Path], chrom: str, res: int, n: int,
-              work: Path) -> pd.DataFrame:
+              work: Path, tag: str = "") -> pd.DataFrame:
     """GenomeDISCO, HiC-Spector, QuASAR-Rep of every prediction against the
-    target, one 3DChromatin_ReplicateQC run per block."""
-    od = work / "repqc"
+    target, one 3DChromatin_ReplicateQC run per chunk of predictions (the tool
+    works through its pairs one after the other, so chunks run in parallel)."""
+    od = work / "repqc" / tag if tag else work / "repqc"
     score = od / "out" / "scores" / f"reproducibility.{chrom}.txt"
     alt = od / "out" / "scores" / "reproducibility.genomewide.txt"
     if not (score.exists() or alt.exists()):
@@ -1202,7 +1274,7 @@ def score_block(b: dict, jobs: int) -> Path:
         elif s["path"] is None or not Path(s["path"]).exists():
             M = None
         else:
-            M = load_band(Path(s["path"]), chrom, n, D)
+            M = load_band(Path(s["path"]), chrom, n, D, res)
             if M is not None and s["kind"] == "cool":
                 M[M == 0] = np.nan
         if M is None:
@@ -1277,6 +1349,14 @@ def score_block(b: dict, jobs: int) -> Path:
         s = saddle_strength(P, e1, dmin_cp)
         r["saddle_strength"] = s
         r["saddle_ratio"] = s / sad_T if np.isfinite(sad_T) and sad_T else np.nan
+        # the window-level combined score (checkpoint selection) on the
+        # chromosome cut into non-overlapping model windows
+        wins = []
+        for s0 in range(0, n - W + 1, W):
+            Tw = band_to_dense(Tm, s0, W)
+            if np.isfinite(Tw).mean() > 0.3:
+                wins.append((band_to_dense(P, s0, W), Tw))
+        r["window_combined"] = combined_score(wins, res) if wins else np.nan
         le = coarse_track(local_e1(P, gc, min(W, D + 1), max(1, W // 8)), f100)
         r["local_e1_r"] = _corr(le_T100, le)
         okl = np.isfinite(le) & np.isfinite(le_T100)
@@ -1311,9 +1391,13 @@ def score_block(b: dict, jobs: int) -> Path:
     count_maps = {"target": Tc}
     for s in src:
         count_maps[s["name"]] = to_counts(Mm[s["name"]], exp_b, off, scale)
-    # the measured raw map on the same pixels: cost of the round trip
-    raw = band_from_pixels(E["raw_i"], E["raw_j"], E["raw_v"], n, D)
-    count_maps["measured_raw"] = np.where(mask, np.nan_to_num(raw), np.nan)
+    # the measured map itself (balanced counts at the raw scale) on the same
+    # pixels: what the round trip through the smoothed O/E target costs
+    w = E["weight"]
+    ri, rj = E["raw_i"], E["raw_j"]
+    bal = E["raw_v"] * w[ri] * w[rj] * scale
+    raw = band_from_pixels(ri, rj, bal, n, D)
+    count_maps["measured_balanced"] = np.where(mask, np.nan_to_num(raw), np.nan)
     for k, C in count_maps.items():
         p = cd / f"{k}.cool"
         if not p.exists():
@@ -1338,21 +1422,24 @@ def score_block(b: dict, jobs: int) -> Path:
     def ent(k):
         return k, run_ent3c(cd / "target.cool", cd / f"{k}.cool", k, chrom, res, bd)
 
+    slow = slow_tools(b)
     tasks = []
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        tasks.append(("repqc", ex.submit(run_repqc, cd / "target_pixels.txt.gz",
-                                         {k: cd / f"{k}_pixels.txt.gz" for k in preds},
-                                         chrom, res, n, bd)))
+        nch = max(1, min(jobs, len(preds))) if slow else 0
+        rq_f = [ex.submit(run_repqc, cd / "target_pixels.txt.gz",
+                          {k: cd / f"{k}_pixels.txt.gz" for k in preds[c::nch]},
+                          chrom, res, n, bd, f"part{c}") for c in range(nch)]
         tasks.append(("hicrep", ex.submit(run_hicrep, cd / "target.cool",
                                           {k: cd / f"{k}.cool" for k in preds}, chrom, bd)))
         tad_f = [ex.submit(tads, k) for k in ["target"] + preds]
         loop_f = [ex.submit(loops, k) for k in ["target"] + preds]
-        ent_f = [ex.submit(ent, k) for k in preds]
+        ent_f = [ex.submit(ent, k) for k in preds] if slow else []
         tad_res = dict(f.result() for f in tad_f)
         loop_res = dict(f.result() for f in loop_f)
         ent_res = dict(f.result() for f in ent_f)
-        rq = tasks[0][1].result()
-        hr = tasks[1][1].result()
+        rq = (pd.concat([f.result() for f in rq_f], ignore_index=True) if rq_f
+              else pd.DataFrame())
+        hr = tasks[0][1].result()
     for k in preds:
         cnt[k].update(tad_measures(tad_res.get(k), tad_res.get("target"), res))
         cnt[k]["ENT3C"] = ent_res.get(k, np.nan)
@@ -1377,7 +1464,7 @@ def score_block(b: dict, jobs: int) -> Path:
                 cnt[k]["n_loops_called"] = int(len(pl))
     cdf = pd.DataFrame(list(cnt.values()))
     df = nat.merge(cdf, on="source", how="outer")
-    df.loc[df.source == "measured_raw", ["kind", "flag"]] = ["measured", "roundtrip_ceiling"]
+    df.loc[df.source == "measured_balanced", ["kind", "flag"]] = ["measured", "roundtrip_ceiling"]
     for k, v in (("set", b["set"]), ("cell", cell), ("res", res), ("chrom", chrom),
                  ("band_bins", D), ("block", b["id"]), ("n_pixels", int(mask.sum()))):
         df[k] = v
@@ -1386,7 +1473,13 @@ def score_block(b: dict, jobs: int) -> Path:
     return outf
 
 
-def stage_score(jobs: int, only: list[str] | None = None) -> None:
+def block_ready(b: dict) -> bool:
+    """Every model prediction of the block exists (a block is scored once,
+    with all of its sources)."""
+    return all(Path(s["path"]).exists() for s in block_source_list(b) if s["kind"] == "model")
+
+
+def stage_score(jobs: int, only: list[str] | None = None, wait: bool = False) -> None:
     todo = [b for b in blocks() if not (OUT / "blocks" / b["id"] / "measures.csv").exists()]
     if only:
         todo = [b for b in todo if any(re.search(o, b["id"]) for o in only)]
@@ -1394,7 +1487,16 @@ def stage_score(jobs: int, only: list[str] | None = None) -> None:
     order = {"heldout": 0, "trainchrom": 1, "hicreg": 2, "epiphany": 2, "trainstretch": 3}
     todo.sort(key=lambda b: (order[b["set"]], -b["res"], b["cell"], b["chrom"]))
     log(f"[score] {len(todo)} blocks to score")
-    for b in todo:
+    while todo:
+        ready = [b for b in todo if block_ready(b)]
+        if not ready:
+            if not wait:
+                log(f"[score] {len(todo)} blocks wait for predictions")
+                return
+            time.sleep(60)
+            continue
+        b = ready[0]
+        todo.remove(b)
         f = OUT / "blocks" / b["id"] / "measures.csv"
         if f.exists() or not claim(f):
             continue
@@ -1498,12 +1600,12 @@ MEASURE_COLS = NINE + [
     "oe_pearson", "oe_pearson_tile_median", "oe_pearson_auc", "oe_scc", "insulation_r",
     "bnd_recall", "bnd_precision", "loop_recall_rank", "apa_ratio", "anchor_auroc",
     "loop_recall_call", "loop_precision_call", "loop_f1_call", "comp_pref_r",
-    "comp_sign_agree", "saddle_ratio", "local_e1_r", "local_e1_sign_agree",
+    "comp_sign_agree", "saddle_ratio", "local_e1_r", "local_e1_sign_agree", "window_combined",
     "oe_r_50kb", "oe_r_100kb", "oe_r_250kb", "oe_r_500kb", "oe_r_1000kb"]
 SOURCE_LABEL = {CASCFOLD: "all12refres setup, chromosome held out (cascade fold)",
                 "consensus": "consensus alone", "best_other_map": "best other measured map",
                 "replicate": "replicate map (ceiling)",
-                "measured_raw": "measured map, raw counts (round-trip ceiling)"}
+                "measured_balanced": "measured map, balanced counts (round-trip ceiling)"}
 
 
 def source_label(s: str) -> str:
@@ -1515,13 +1617,93 @@ def source_label(s: str) -> str:
     return s
 
 
-def registry_median_pearson() -> pd.DataFrame:
-    """Median Pearson over the 413 Akita regions per model / resolution /
-    cell set, from the section 15 summary table."""
-    f = REPO / "results/multicell_reference/reference_summary.csv"
-    if not f.exists():
-        return pd.DataFrame()
-    return pd.read_csv(f)
+def registry_pearson(res: int) -> pd.DataFrame:
+    """Median Pearson over the 413 Akita test regions per model and cell (the
+    registry metric; crosscell/predict_<cell>.csv of each run), and the same
+    for the consensus and the best other map from the baseline columns."""
+    rows = []
+    for m in MODELS:
+        for cell in HELDOUT + TRAIN12:
+            f = run_dir(m, res) / "crosscell" / f"predict_{cell}.csv"
+            if not f.exists():
+                continue
+            d = pd.read_csv(f)
+            rows.append(dict(source=m, cell=cell, res=res,
+                             pearson413=float(d["model"].median())))
+            if m == "all12refres":
+                cc = [c for c in d.columns if c.startswith("base_consensus")]
+                if cc:
+                    rows.append(dict(source="consensus", cell=cell, res=res,
+                                     pearson413=float(d[cc[0]].median())))
+                bo = BEST_OTHER[res].get(cell)
+                if bo and f"base_{bo}" in d.columns:
+                    rows.append(dict(source="best_other_map", cell=cell, res=res,
+                                     pearson413=float(d[f"base_{bo}"].median())))
+    return pd.DataFrame(rows)
+
+
+# multi-measure rank score: per block the rank of each model among the models
+# of the block per measure (0 worst .. 1 best), averaged within a structure
+# level, then over the four levels (equal weight per level)
+MMRS_LEVELS = {
+    "maps": ["oe_pearson_tile_median", "oe_scc", "HiCRep", "GenomeDISCO", "HiC-Spector",
+             "QuASAR-Rep", "ENT3C", "Pearson"],
+    "tads": ["insulation_r", "bnd_recall", "bnd_precision", "TAD Score MSE", "TAD Fraction",
+             "TAD Fraction Exact Match"],
+    "loops": ["loop_recall_rank", "apa_agreement", "anchor_auroc", "loop_f1_call"],
+    "compartments": ["comp_pref_r", "comp_sign_agree", "saddle_agreement", "local_e1_r"],
+}
+
+
+def oriented(d: pd.DataFrame, m: str) -> pd.Series:
+    """Measure turned into higher = better."""
+    if m == "TAD Score MSE":
+        return -d[m]
+    if m == "TAD Fraction":
+        return -np.abs(d[m] - 1)
+    if m == "apa_agreement":
+        r = d["apa_ratio"].astype(float)
+        with np.errstate(divide="ignore"):
+            v = np.where(r > 0, np.minimum(r, 1 / r), 0.0)
+        return pd.Series(np.where(r.notna(), v, np.nan), index=d.index)
+    if m == "saddle_agreement":
+        r = d["saddle_ratio"].astype(float)
+        with np.errstate(divide="ignore"):
+            v = np.where(r > 0, np.minimum(r, 1 / r), 0.0)
+        return pd.Series(np.where(r.notna(), v, np.nan), index=d.index)
+    return d[m]
+
+
+def model_sources(set_: str) -> list[str]:
+    return MODELS + ([CASCFOLD] if set_ == "trainchrom" else [])
+
+
+def add_rank_score(d: pd.DataFrame) -> pd.DataFrame:
+    d = d.copy()
+    d["mmrs"] = np.nan
+    for lv in MMRS_LEVELS:
+        d[f"mmrs_{lv}"] = np.nan
+    for blk, g in d.groupby("block"):
+        g = g[g.source.isin(model_sources(g.set.iloc[0]))]
+        if len(g) < 3:
+            continue
+        lvs = []
+        for lv, ms in MMRS_LEVELS.items():
+            rk = []
+            for m in ms:
+                if m not in g.columns and m not in ("apa_agreement", "saddle_agreement"):
+                    continue
+                v = pd.Series(np.asarray(oriented(g, m), float), index=g.index)
+                if v.notna().sum() < 3:
+                    continue
+                rk.append((v.rank(method="average") - 1) / (v.notna().sum() - 1))
+            if rk:
+                s = pd.concat(rk, axis=1).mean(1)
+                d.loc[g.index, f"mmrs_{lv}"] = s
+                lvs.append(s)
+        if lvs:
+            d.loc[g.index, "mmrs"] = pd.concat(lvs, axis=1).mean(1)
+    return d
 
 
 def stage_report() -> None:
@@ -1537,106 +1719,133 @@ def stage_report() -> None:
         d = d.merge(c[keyc + [x for x in c.columns if x.startswith(("combined_", "domain_",
                                                                     "n_measures"))]],
                     on=keyc, how="left")
+    d = add_rank_score(d)
     d.to_csv(TABLES / "measures_per_chromosome.csv", index=False)
     comb = [x for x in d.columns if x.startswith("combined_")]
-    cols = [c for c in MEASURE_COLS + comb if c in d.columns]
-    # per cell: mean over chromosomes; per set: median over cells
+    cols = [c for c in MEASURE_COLS + ["mmrs"] + [f"mmrs_{lv}" for lv in MMRS_LEVELS] + comb
+            if c in d.columns]
     per_cell = (d[d.source != "target"].groupby(["set", "res", "cell", "source"])[cols]
                 .mean().reset_index())
+    reg = pd.concat([registry_pearson(r) for r in RESOLUTIONS], ignore_index=True)
+    per_cell = per_cell.merge(reg, on=["source", "cell", "res"], how="left")
+    cols = cols + ["pearson413"]
     per_cell.to_csv(TABLES / "measures_per_cell.csv", index=False)
-    summ = per_cell.groupby(["set", "res", "source"])[cols].median().reset_index()
-    summ["n_cells"] = per_cell.groupby(["set", "res", "source"]).size().values
+    g = per_cell.groupby(["set", "res", "source"])
+    summ = g[cols].median().reset_index()
+    summ["n_cells"] = g.size().values
     summ["label"] = summ.source.map(source_label)
     summ.to_csv(TABLES / "summary.csv", index=False)
     rk = ranking_tables(per_cell, cols)
     rk.to_csv(TABLES / "ranking.csv", index=False)
-    figures(per_cell, summ, cols)
+    figures(per_cell, summ, cols, rk)
     write_status(d, summ, rk)
     log(f"[report] tables in {TABLES}")
 
 
-RANK_SETS = ("heldout", "trainstretch", "trainchrom")
-
-
 def ranking_tables(per_cell: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    """Per set and resolution: model ranks (median over cells) by every
-    measure; Kendall tau of each measure's ranking with the ranking by
-    median O/E Pearson (1 Mb tiles) and by the combined score."""
+    """Per set and resolution, over the models of the set (median over
+    cells): Kendall tau and Spearman rho of every measure's model ranking
+    against the ranking by the registry median Pearson (413 regions) and by
+    the median 1 Mb tile Pearson of this evaluation; best model by each."""
     from scipy.stats import kendalltau, spearmanr
     out = []
     for (set_, res), g in per_cell.groupby(["set", "res"]):
-        models = [m for m in MODELS + [CASCFOLD, "consensus", "best_other_map"]
-                  if m in set(g.source)]
+        models = [m for m in model_sources(set_) if m in set(g.source)]
         if len(models) < 3:
             continue
-        med = g[g.source.isin(models)].groupby("source")[cols].median().reindex(models)
-        base = med["oe_pearson_tile_median"]
-        for m in cols:
-            v = med[m]
-            ok = v.notna() & base.notna()
-            if ok.sum() < 3:
-                continue
-            sign = -1 if m in LOWER_BETTER else 1
-            vv = sign * (v[ok] if m != "TAD Fraction" else -np.abs(v[ok] - 1))
-            tau = kendalltau(base[ok], vv).statistic
-            rho = spearmanr(base[ok], vv).statistic
-            top = vv.idxmax()
-            out.append(dict(set=set_, res=res, measure=m, n_models=int(ok.sum()),
-                            kendall_vs_median_pearson=tau, spearman_vs_median_pearson=rho,
-                            best_by_measure=top, best_by_median_pearson=base[ok].idxmax(),
-                            ranking=" > ".join(vv.sort_values(ascending=False).index)))
+        gm = g[g.source.isin(models)]
+        med = gm.groupby("source")[cols].median().reindex(models)
+        for basis in ("pearson413", "oe_pearson_tile_median"):
+            base = med[basis]
+            for m in cols:
+                if m == basis:
+                    continue
+                key = {"apa_ratio": "apa_agreement", "saddle_ratio": "saddle_agreement"}.get(m, m)
+                v = pd.Series(np.asarray(oriented(med, key), float), index=med.index)
+                ok = v.notna() & base.notna()
+                if ok.sum() < 3:
+                    continue
+                vv, bb = v[ok], base[ok]
+                out.append(dict(set=set_, res=res, basis=basis, measure=m,
+                                n_models=int(ok.sum()),
+                                kendall=kendalltau(bb, vv).statistic,
+                                spearman=spearmanr(bb, vv).statistic,
+                                n_ties=int(len(vv) - vv.nunique()),
+                                best_by_measure=vv.idxmax(), best_by_basis=bb.idxmax(),
+                                ranking=" > ".join(vv.sort_values(ascending=False).index)))
     return pd.DataFrame(out)
 
 
-def figures(per_cell: pd.DataFrame, summ: pd.DataFrame, cols: list[str]) -> None:
+def figures(per_cell, summ, cols, rk) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    figd = TABLES
-    show = [c for c in ["oe_pearson_tile_median", "oe_scc", "insulation_r", "bnd_recall",
-                        "loop_recall_rank", "apa_ratio", "loop_f1_call", "comp_pref_r",
-                        "saddle_ratio", "local_e1_r"] + NINE
-            + [c for c in cols if c.startswith("combined_")] if c in summ.columns]
+    show = [c for c in ["pearson413", "oe_pearson_tile_median", "oe_scc", "insulation_r",
+                        "bnd_recall", "loop_recall_rank", "apa_ratio", "loop_f1_call",
+                        "comp_pref_r", "comp_sign_agree", "saddle_ratio", "local_e1_r"] + NINE
+            + ["window_combined", "mmrs"] + [c for c in cols if c.startswith("combined_")]
+            if c in summ.columns]
     for (set_, res), g in summ.groupby(["set", "res"]):
         g = g.set_index("source")
-        order = [m for m in MODELS + [CASCFOLD, "consensus", "best_other_map", "replicate",
-                                      "measured_raw"] if m in g.index]
+        order = [m for m in model_sources(set_) + ["consensus", "best_other_map", "replicate",
+                                                     "measured_balanced"] if m in g.index]
         order += [s for s in g.index if s not in order]
         M = g.loc[order, show].astype(float)
-        Z = (M - M.mean()) / M.std().replace(0, np.nan)
-        for c in show:
-            if c in LOWER_BETTER:
-                Z[c] = -Z[c]
-            if c == "TAD Fraction":
-                a = -np.abs(M[c] - 1)
-                Z[c] = (a - a.mean()) / (a.std() or np.nan)
-        fig, ax = plt.subplots(figsize=(0.55 * len(show) + 4, 0.38 * len(order) + 2))
-        ax.imshow(Z.values, cmap="RdBu_r", vmin=-2, vmax=2, aspect="auto")
+        O = pd.DataFrame({c: np.asarray(oriented(M, c) if c in ("TAD Score MSE", "TAD Fraction")
+                                         else M[c], float) for c in show}, index=order)
+        Z = (O - O.mean()) / O.std().replace(0, np.nan)
+        fig, ax = plt.subplots(figsize=(0.55 * len(show) + 4.5, 0.36 * len(order) + 2.2))
+        ax.imshow(Z.values, cmap="RdBu_r", vmin=-2.5, vmax=2.5, aspect="auto")
         for i in range(len(order)):
             for j in range(len(show)):
                 v = M.values[i, j]
                 if np.isfinite(v):
-                    ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=6)
+                    ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=5.5)
         ax.set_xticks(range(len(show)), show, rotation=60, ha="right", fontsize=7)
         ax.set_yticks(range(len(order)), [source_label(s) for s in order], fontsize=7)
-        ax.set_title(f"{set_}, {res // 1000} kb: median over cells (colour: z-score per "
-                     f"measure, red = better)", fontsize=8)
+        ax.set_title(f"{set_}, {res // 1000} kb: median over cells; colour = z-score per "
+                     f"column, red = better", fontsize=8)
         fig.tight_layout()
-        fig.savefig(figd / f"heatmap_{set_}_{res // 1000}kb.png", dpi=130)
+        fig.savefig(TABLES / f"heatmap_{set_}_{res // 1000}kb.png", dpi=140)
         plt.close(fig)
+    # agreement of every measure's model ranking with the median-Pearson ranking
+    r = rk[rk.basis == "pearson413"]
+    if r.empty:
+        return
+    keys = sorted(r[["set", "res"]].drop_duplicates().itertuples(index=False, name=None))
+    ms = [m for m in show if m != "pearson413" and m in set(r.measure)]
+    fig, ax = plt.subplots(figsize=(0.45 * len(ms) + 3, 0.45 * len(keys) + 2))
+    K = np.full((len(keys), len(ms)), np.nan)
+    for i, (s, rr) in enumerate(keys):
+        for j, m in enumerate(ms):
+            v = r[(r.set == s) & (r.res == rr) & (r.measure == m)].kendall
+            if len(v):
+                K[i, j] = v.iloc[0]
+    ax.imshow(K, cmap="RdBu_r", vmin=-1, vmax=1, aspect="auto")
+    for i in range(K.shape[0]):
+        for j in range(K.shape[1]):
+            if np.isfinite(K[i, j]):
+                ax.text(j, i, f"{K[i, j]:.2f}", ha="center", va="center", fontsize=6)
+    ax.set_xticks(range(len(ms)), ms, rotation=60, ha="right", fontsize=7)
+    ax.set_yticks(range(len(keys)), [f"{s}, {rr // 1000} kb" for s, rr in keys], fontsize=7)
+    ax.set_title("Kendall tau: model ranking by each measure vs by median Pearson "
+                 "(413 regions)", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(TABLES / "ranking_agreement.png", dpi=140)
+    plt.close(fig)
 
 
 def write_status(d: pd.DataFrame, summ: pd.DataFrame, rk: pd.DataFrame) -> None:
     nb = d.block.nunique()
     tot = len(blocks())
-    lines = [f"# hic_measures status", "",
+    lines = ["# hic_measures status", "",
              f"Updated {time.strftime('%Y-%m-%d %H:%M:%S')}. Blocks scored: {nb} of {tot}.", ""]
     for (set_, res), g in summ.groupby(["set", "res"]):
         lines.append(f"## {set_}, {res // 1000} kb (median over cells)")
         lines.append("")
-        show = [c for c in ["oe_pearson_tile_median", "oe_scc", "insulation_r", "bnd_recall",
-                            "loop_recall_rank", "comp_pref_r", "HiCRep", "GenomeDISCO",
-                            "TAD Fraction", "Pearson"]
+        show = [c for c in ["pearson413", "oe_pearson_tile_median", "oe_scc", "insulation_r",
+                            "bnd_recall", "loop_recall_rank", "comp_pref_r", "HiCRep",
+                            "GenomeDISCO", "TAD Fraction", "ENT3C", "window_combined", "mmrs"]
                 + [c for c in g.columns if c.startswith("combined_")] if c in g.columns]
         lines.append("| source | n | " + " | ".join(show) + " |")
         lines.append("|---" * (len(show) + 2) + "|")
@@ -1656,14 +1865,17 @@ def main():
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--only", nargs="*", default=None, help="regexes of block ids")
+    ap.add_argument("--gpu", default="", help="predict: GPU index for this worker (default CPU)")
+    ap.add_argument("--wait", action="store_true",
+                    help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
     for st in a.stage:
         if st == "predict":
-            stage_predict(a.threads, max(1, min(a.jobs, a.threads)))
+            stage_predict(a.threads, 1 if a.gpu else max(1, min(a.jobs, a.threads)), a.gpu)
         elif st == "expected":
             stage_expected(min(a.jobs, 4))
         elif st == "score":
-            stage_score(a.jobs, a.only)
+            stage_score(a.jobs, a.only, a.wait)
         elif st == "combine":
             stage_combine()
         elif st == "report":
