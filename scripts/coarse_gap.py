@@ -613,7 +613,11 @@ def status(agg, quiet=False):
                   "(all12refres_drop_cnv 10 kb; section 28), Track 1a HFF with "
                   "SMC1A as cohesin "
                   "(all12hffcoh_refres_drop 25/10 kb), each with the perturbation, "
-                  "AML and hard-region re-evaluations, then the washout test. "
+                  "AML and hard-region re-evaluations, then the washout test, "
+                  "then structure-aware learning (section 30): all12refin_drop "
+                  "with an insulation, donut or compartment loss term on a weight "
+                  "grid at 25 kb, the chosen weights at 10 kb, all three together, "
+                  "and checkpoint selection on the combined structure score. "
                   "2 kb trainings read memory-mapped windows on local disk "
                   "(~/scratch/hicmx_stage); no CPU job starts while one loads.", ""] + q
     tmp = OUT / "STATUS.md.part"

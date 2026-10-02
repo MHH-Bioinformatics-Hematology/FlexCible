@@ -2073,3 +2073,42 @@ loop-strength changes at 0.07 / 0.19 and insulation changes at 0.22 / 0.19.
 Figures: `per_patient.png`, `per_distance.png` (pooled per-distance Pearson),
 `showcase_{25,10,5}kb.png` (hardest regions, 80 bins per panel),
 `explain_features_loops.png`, `sv_junctions.png` (80 bins per panel).
+
+## 30. Structure-aware learning: TAD, loop and compartment terms (PENDING)
+
+Base: all12refin_drop (input reference, track dropout), the best model on
+new cells at 10 kb. Added to its L1+MSE loss (hicmultiome/losses.py), one at
+a time: insul (half L1, half 1 - correlation of the insulation profile,
+10-bin square; TADs), donut (L1 of the pixel minus its 2-to-5-bin ring;
+loops) and compart (1 - Pearson between the row-correlation matrices of
+prediction and target, pixels at least 2 bins off the diagonal). Windows
+are 1.9 to 2 Mb, so compart sees the compartment checkerboard inside 2 Mb
+only; it is a within-window proxy for A/B compartments, which span tens of
+Mb, and it matches the whole correlation matrix rather than its first
+eigenvector to avoid the sign ambiguity and the eigen-decomposition.
+Every term is logged per epoch.
+
+Weights: grid 0.1, 0.3 and 1.0 per term at 25 kb; per term the weight
+whose selected checkpoint has the highest combined validation score on the
+honest validation windows (mean over Pearson, stratified correlation,
+insulation correlation and APA agreement of the rank among the three grid
+runs) is used at 10 kb and in struct3 (all three terms, 25 and 10 kb)
+(scripts/structure_loss.py --stage choose, `results/structure_loss/
+weight_grid_val.csv`, `chosen_weights.json`).
+
+Checkpoint selection (train.select_metric): besides the median validation
+Pearson, "combined" keeps the checkpoint whose mean over Pearson, stratified
+correlation, insulation correlation and APA agreement min(r, 1/r) of the
+rank among all evaluations of the run so far is the highest (run
+all12refin_drop_selcomb, 25 and 10 kb, L1+MSE); "hic_measures" uses the
+nine-measure combined score of scripts/hic_measures.py once that script
+provides combined_score (all12refin_drop_selhm, queued behind it).
+
+Evaluation: the standard tables (crosscell eval of every run) and
+crosscell_predict --structure on K562, HMEC deep, HUVEC deep (held out) and
+GM12878, IMR-90, HepG2 (test regions) with the consensus reference scored
+alike: Pearson, stratified correlation, insulation correlation, boundary F1,
+loop enrichment correlation, APA ratio on the target's top 1 % enrichment
+pixels at least 50 kb off the diagonal, correlation-matrix agreement and
+first-eigenvector agreement (hicmultiome/structure.py;
+`results/structure_loss/structure_eval.csv`).
