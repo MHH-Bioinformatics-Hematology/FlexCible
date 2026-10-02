@@ -530,8 +530,8 @@ column: disjoint test windows, model / reference alone / all12honest:
 | cd14mono | 0.879 | 0.668 | 0.712 (gm12878) | 0.807 | 0.806 | 0.898 / 0.677 / 0.823 |
 | pc9 | 0.916 | 0.907 | 0.889 (a549) | 0.821 | 0.813 | 0.926 / 0.902 / 0.810 |
 | k562 | 0.906 | 0.897 | 0.866 (hct116) | 0.771 | 0.767 |  /  /  |
-| hmec | 0.873 |  |  | 0.691 | 0.677 |  /  /  |
-| huvec | 0.859 |  |  | 0.763 | 0.738 |  /  /  |
+| hmec | 0.880 | 0.898 | 0.883 (nhek) | 0.695 | 0.673 |  /  /  |
+| huvec | 0.864 | 0.887 | 0.872 (imr90) | 0.769 | 0.744 |  /  /  |
 | hmec_deep | 0.910 | 0.932 | 0.921 (nhek) | 0.735 | 0.698 |  /  /  |
 | huvec_deep | 0.894 | 0.916 | 0.882 (imr90) | 0.805 | 0.781 |  /  /  |
 
@@ -546,6 +546,16 @@ stays below it for HMEC (0.910 against 0.932) and HUVEC (0.894 against
 0.916); all12honest scores 0.771, 0.735 and 0.805 on them. With honest
 validation the no-reference 12-cell model scores 0.828 on the training
 cells, 0.013 above the section 13 all12 run (0.815).
+
+The single-lane HMEC and HUVEC rows are corrected (2026-10-02): their 25 kb
+targets were 24 kb maps (section 7), so the measured-map columns were empty
+(grid mismatch) and the model columns, resampled onto the 24 kb grid, read
+0.873, 0.691, 0.677 (HMEC) and 0.859, 0.763, 0.738 (HUVEC). On the 25 kb
+grid the model stays below consensus12 for both single-lane maps, as for
+the deep maps. The same re-scoring of every 25 kb and 5 kb model on these
+two targets changes the model medians by 0.000 to 0.012 at 25 kb and by
+0.012 to 0.016 at 5 kb
+(`*/crosscell/predict_{hmec,huvec}.grid24kb.csv` keep the old values).
 
 Results at 10 kb (all12refres stopped by patience at epoch 67, honest
 validation 0.9181; all12honest at epoch 31, 0.8146), same columns; for the

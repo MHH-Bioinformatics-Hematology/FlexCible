@@ -16,8 +16,8 @@ res_kb,run,cell,trained_on_cell,model_413,best_measured_map_413,model_test_windo
 2,all12,huvec,False,0.1529,0.2388,,0.332,,
 2,all12,hmec_deep,False,0.4607,0.5878,,,,
 2,all12,huvec_deep,False,0.5534,0.5708,,,,
-5,all12_5kb,gm12878,True,0.8166,0.7371,0.7803,0.564,0.697,3
-5,all12_5kb,imr90,True,0.827,0.8408,0.7822,0.689,,
+5,all12_5kb,gm12878,True,0.8166,0.7371,0.7803,0.589,0.697,3
+5,all12_5kb,imr90,True,0.827,0.8408,0.7822,0.712,,
 5,all12_5kb,hct116,True,0.8122,0.7795,0.7543,,,
 5,all12_5kb,hff,True,0.848,0.8624,0.7995,,,
 5,all12_5kb,h1,True,0.7844,0.7772,0.7304,,,
@@ -28,9 +28,9 @@ res_kb,run,cell,trained_on_cell,model_413,best_measured_map_413,model_test_windo
 5,all12_5kb,mcf7,True,0.7517,0.7226,0.7071,,,
 5,all12_5kb,cd14mono,True,0.7046,0.5733,0.6832,,,
 5,all12_5kb,pc9,True,0.7177,0.7213,0.6772,,,
-5,all12_5kb,k562,False,0.6531,0.7232,,0.5,0.762,2
-5,all12_5kb,hmec,False,0.4667,,,0.526,,
-5,all12_5kb,huvec,False,0.4136,,,0.429,,
+5,all12_5kb,k562,False,0.6531,0.7232,,0.525,0.762,2
+5,all12_5kb,hmec,False,0.4789,0.5571,,0.552,,
+5,all12_5kb,huvec,False,0.4263,0.4616,,0.455,,
 5,all12_5kb,hmec_deep,False,0.6887,0.7864,,,,
 5,all12_5kb,huvec_deep,False,0.6997,0.756,,,,
 10,all12_10kb,gm12878,True,0.8245,0.7993,0.8045,0.779,0.825,3
@@ -50,8 +50,8 @@ res_kb,run,cell,trained_on_cell,model_413,best_measured_map_413,model_test_windo
 10,all12_10kb,huvec,False,0.6483,0.7279,,0.697,,
 10,all12_10kb,hmec_deep,False,0.7132,0.8648,,,,
 10,all12_10kb,huvec_deep,False,0.77,0.8348,,,,
-25,all12_25kb,gm12878,True,0.8151,0.8443,0.809,0.933,0.939,3
-25,all12_25kb,imr90,True,0.8718,0.9315,0.8309,0.956,,
+25,all12_25kb,gm12878,True,0.8151,0.8443,0.809,0.938,0.939,3
+25,all12_25kb,imr90,True,0.8718,0.9315,0.8309,0.959,,
 25,all12_25kb,hct116,True,0.8227,0.9102,0.8145,,,
 25,all12_25kb,hff,True,0.8786,0.9404,0.8377,,,
 25,all12_25kb,h1,True,0.8251,0.899,0.7898,,,
@@ -62,8 +62,8 @@ res_kb,run,cell,trained_on_cell,model_413,best_measured_map_413,model_test_windo
 25,all12_25kb,mcf7,True,0.8091,0.8934,0.7488,,,
 25,all12_25kb,cd14mono,True,0.8057,0.7117,0.8085,,,
 25,all12_25kb,pc9,True,0.8129,0.889,0.769,,,
-25,all12_25kb,k562,False,0.7671,0.8663,,0.932,0.972,2
-25,all12_25kb,hmec,False,0.6766,,,0.936,,
-25,all12_25kb,huvec,False,0.7383,,,0.888,,
+25,all12_25kb,k562,False,0.7671,0.8663,,0.937,0.972,2
+25,all12_25kb,hmec,False,0.6735,0.8832,,0.941,,
+25,all12_25kb,huvec,False,0.7437,0.8716,,0.896,,
 25,all12_25kb,hmec_deep,False,0.6977,0.921,,,,
 25,all12_25kb,huvec_deep,False,0.7808,0.8821,,,,
