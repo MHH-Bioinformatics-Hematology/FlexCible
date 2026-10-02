@@ -863,7 +863,8 @@ def reference_summary():
     for res in (25000, 10000, 5000, 2000):
         base_name = run_name("all12", res)          # overlapping validation (section 13)
         honest_name = run_name("all12honest", res)  # the same, honest validation
-        for rb in list(REF_RUNS) + ["all12honest"]:
+        for rb in list(REF_RUNS) + ["all12honest", "all12honest_drop", "all12honest_drop_hard",
+                                    "all12deg_honest_drop", "all12cohunk_honest_drop"]:
             refres_name = run_name("all12refres", res)
             name = run_name(rb, res)
             run = REF_OUT / name

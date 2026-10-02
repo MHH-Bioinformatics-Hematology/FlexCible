@@ -228,7 +228,7 @@ def main():
         # fill any missing mark rows with the absent value
         for t in missing:
             sym_full[row_of[t]] = absent[row_of[t]]
-        sym_sets = {}
+        sym_sets, coh_report = {}, {}
         for k, drop in sets.items():
             sy = sym_full.copy() if (drop or coh_i is not None) else sym_full
             for t in drop:
@@ -240,7 +240,10 @@ def main():
                 unk = (mode == "1" if mode != "auto"
                        else all(t in gone for t in coh_tracks))
                 sy[coh_i] = coh_v[int(unk)]
+                coh_report[k] = int(unk)
             sym_sets[k] = sy[sel_rows] if sel_rows is not None else sy
+        if coh_i is not None and chrom == regions.chrom.iloc[0]:
+            print(f"[{a.cell}] cohesin_unknown indicator per keep set: {coh_report}", flush=True)
         print(f"  {chrom}: {len(grp)} regions", flush=True)
         for _, r in grp.iterrows():
             try:

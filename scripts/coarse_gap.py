@@ -619,7 +619,11 @@ def status(agg, quiet=False):
                   "grid at 25 kb, the chosen weights at 10 kb, all three together, "
                   "and checkpoint selection on the combined structure score. "
                   "2 kb trainings read memory-mapped windows on local disk "
-                  "(~/scratch/hicmx_stage); no CPU job starts while one loads.", ""] + q
+                  "(~/scratch/hicmx_stage); no CPU job starts while one loads.", ""]
+        qf = OUT / "QUEUE.md"          # hand-kept order and finish estimates of the additions
+        if qf.exists():
+            lines += [qf.read_text().rstrip(), ""]
+        lines += q
     tmp = OUT / "STATUS.md.part"
     tmp.write_text("\n".join(lines) + "\n")
     tmp.rename(OUT / "STATUS.md")

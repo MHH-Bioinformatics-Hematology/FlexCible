@@ -1814,8 +1814,8 @@ all12hffcoh_refres_drop (25 and 10 kb) gives HFF the two SMC1A replicates in
 the RAD21 and SMC3 slots (`aml_fetch.py --cells hffcoh`, rescaled to the
 training cells' genome-wide mean), so no training cell lacks cohesin.
 
-1c (cohesin-unknown indicator) is not run unless 1a and 1b leave the
-direction wrong.
+1c (cohesin-unknown indicator) is run after 1a and 1b left the absent-RAD21
+direction wrong; design and results in section 32.
 
 Washout (held-out test, `scripts/washout.py`): Rao 2017 measured Hi-C 20, 40,
 60 and 180 min after auxin withdrawal (4DN 4DNESCOJ3ADI, 4DNES7RDRS69,
@@ -2778,3 +2778,74 @@ GM12878, whole chr17, 990 kb band (Epiphany reach), 10 kb, count-space measures 
 | cascade fold model (all12refres setup, chromosome held out) | 0.935 | 0.946 | 0.113 | 0.938 | 0.456 |
 | Epiphany (held-out chr17) | 0.518 | 0.634 | 0.743 | 0.846 | 0.111 |
 
+## 32. Cohesin-unknown indicator (PENDING)
+
+Problem (section 25): a RAD21 track declared absent still strengthens most
+loops (9 to 37% of the loops weaker at 10 and 25 kb in every model), and the
+U-937 STAG2 knockout without knockout ChIP stays wrong. An absent track is
+encoded by its raw-zero value, which the models read as a low signal and not
+as missing information; five of the twelve training cells (HFF, NHEK,
+GM23248, PC-9, CD14+ monocyte) have no RAD21 and no SMC3 ChIP, so "no
+cohesin input" reads as the average of these cells.
+
+Implementation (`data.cohesin_unknown`, default off). One more constant
+conditioning row after the assay rows (`cohesin_unknown`, cond row
+`cohesin:unknown`): 1 where neither RAD21 nor SMC3 is measured (missing or
+zeroed for the sample), 0 where cohesin is measured; a sample with SMC3 and
+no RAD21 does not occur. During training with track dropout the SMC3 row
+follows the RAD21 dropout draw, so the cohesin group is dropped jointly, and
+the indicator row is set to 1 in every window that loses it (the RAD21 draw
+keeps its marginal; SMC3 is absent anyway in HCT116, H1 and MCF-7). At inference crosscell_predict sets the indicator
+to 1 for a cell without cohesin ChIP (HMEC, HUVEC, U-937 knockout input with
+RAD21 and SMC3 declared absent) and for keep sets that remove both tracks;
+`--cohesin-unknown 0` and keep sets named `*_ind0` force 0, which tests the
+same model with absent RAD21 and the indicator withheld. The degron recipe is
+the base (hct116 reads the untreated degron ChIP, hct116_auxin the 6 h auxin
+Hi-C and ChIP on odd chromosomes, uniform-count track dropout 0.5, honest
+validation): runs all12cohunk_refres_drop (residual on the leave-one-out
+consensus) and all12cohunk_honest_drop (no reference), 25 and 10 kb. Tests: tests/test_pipeline.py (cohesin_unknown row, training).
+
+Evaluation as sections 15 and 25: 413 regions, held-out K562, HMEC deep,
+HUVEC deep against the consensus; perturb_validate.py (RAD21 and CTCF
+degrons, even chromosomes), aml_eval.py (MOLM-13, U-937 and the knockout
+variants ko_ctcfonly, ko_half, ko_absent and ko_absent_ind0), the washout
+test, and the hard-region summary.
+
+Results: pending.
+
+## 33. Recipes at 5 kb (PENDING)
+
+The 25 and 10 kb recipes of sections 22, 25, 26, 30 and 32 at 5 kb (window
+384 bins, 1.92 Mb), in the order a, c, b, d, e, all with honest validation
+(val_exclude_overlap) and no training window overlapping a validation
+position: (a) track dropout, all12refres_drop_5kb and all12honest_drop_5kb;
+(c) the RAD21 degron in training, all12deg_refres_drop_5kb (Rao et al. 2017
+auxin Hi-C at 5 kb built with oe_proper.py from the 4DN mcool level 5000,
+with the auxin ChIP bigWigs of section 25, which are base-resolution fold
+changes); (b) all12refin_drop_5kb (input-only reference with track
+dropout); (d) all12cohunk_refres_drop_5kb (section 32); (e)
+all12refin_drop_struct3_5kb (insulation, donut and compartment loss terms at
+the weights chosen on the 25 kb grid, section 30; the terms keep their window
+sizes in bins, 10-bin insulation square and 2-to-5-bin ring, which cover
+half of the physical size at 5 kb that they cover at 10 kb). Evaluation: the
+standard 413-region table, AML (MOLM-13, U-937 and the knockout variants), the
+perturbation test for the dropout, degron and cohesin-unknown models, and
+the structure measures for (e). The hard split exists at 25 and 10 kb only,
+so hard-region metrics do not apply at 5 kb.
+
+Results: pending.
+
+## 34. Recipes at 2 kb (PENDING)
+
+The same recipes at 2 kb (window 512 bins, 1.02 Mb), after the 5 kb block:
+all12refres_drop, all12honest_drop, all12deg_refres_drop, all12refin_drop
+and all12refin_drop_struct3 (names without suffix), the cohesin-unknown model
+as the last, optional job. Training windows are read from memory-mapped
+files on local disk (train.stage_dir, ~/scratch/hicmx_stage) because
+the resident 2 kb data exceed the RAM of both ranks (earlyoom killed
+all12refres and all12casc on 2026-09-30). MOLM-13 and U-937 maps start at
+5 kb, so AML does not apply; the perturbation test covers the dropout and
+degron models. The 4DN mcool of the Rao 2017 auxin Hi-C has a 2 kb level, built
+with oe_proper.py.
+
+Results: pending.
