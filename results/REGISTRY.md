@@ -1488,13 +1488,15 @@ contrasts are IMR-90 / HCT116, IMR-90 / CD14+ monocytes and HFF / CD14+
 monocytes (0.83 to 0.84 at 25 kb) and the worst NHEK / MCF-7, NHEK /
 GM23248 and MCF-7 / PC-9 (0.42 to 0.50). Per cell (median over its pairs, 25 kb) CD14+ monocytes lead (0.783)
 and the held-out HMEC (0.462), HUVEC (0.446) and MOLM-13 (0.485) trail.
-Noise floor at 25 kb: single-lane replicate differences agree at 0.56 to
-0.81, deep intact GM12878 / K562 at 0.899, MOLM-13 / U-937 at 0.526 and the
+Noise floor at 25 kb: single-lane replicate differences agree at 0.58 to
+0.82, deep intact GM12878 / K562 at 0.899, MOLM-13 / U-937 at 0.526 and the
 U-937 knockout contrast at 0.293. all12refres reaches the replicate level
-for GM12878 / IMR-90 (0.831 against 0.806); the pairs with a held-out cell
-stay 0.05 to 0.32 below it (IMR-90 / K562 0.761 against 0.810, GM12878 /
-K562 0.582 against 0.899, K562 / HUVEC 0.474 against 0.632, HMEC / HUVEC
-0.432 against 0.622). At 10 kb the single-lane replicate differences agree
+for GM12878 / IMR-90 (0.831 against 0.813); the pairs with a held-out cell
+stay 0.06 to 0.32 below it (IMR-90 / K562 0.761 against 0.819, GM12878 /
+K562 0.582 against 0.899, K562 / HUVEC 0.474 against 0.645, HMEC / HUVEC
+0.432 against 0.635). Corrected 2026-10-02: the single-lane replicate maps
+were first read on their 24 kb grid (section 7), which gave 0.56 to 0.81
+and 0.806, 0.810, 0.632, 0.622 for the four pairs above. At 10 kb the single-lane replicate differences agree
 at 0.30 to 0.54, below the all12refres difference maps for every pair; one
 independent replicate difference against the deep target difference agrees
 at 0.38 to 0.78.
@@ -1534,10 +1536,16 @@ replicate pair reproduces (`cellspecific/features_direction.csv`):
 | boundaries | training / held-out | 2203 | 0.890 (0.886) | 0.916 (0.900) | 0.487 (0.400) | 0.96 to 0.99 |
 | boundaries | held-out / held-out | 174 | 0.844 (0.850) | 0.862 (0.862) | 0.492 (0.352) | 0.95 to 0.98 |
 | boundaries | with AML | 3796 | 0.689 to 0.752 (0.713 to 0.748) | 0.83 to 0.89 | 0.36 to 0.42 | 0.96 to 1.00 |
-| compartment flips | training / training | 1829 | 0.880 (0.861) | 0.884 (0.861) | 0.612 (0.537) | 0.92 to 0.95 |
-| compartment flips | training / held-out | 961 | 0.820 (0.827) | 0.839 (0.828) | 0.552 (0.488) | 0.93 |
-| compartment flips | held-out / held-out | 96 | 0.792 (0.845) | 0.719 (0.771) | 0.457 (0.426) | 0.81 to 0.89 |
+| compartment flips | training / training | 1829 | 0.880 (0.861) | 0.884 (0.861) | 0.612 (0.537) | 0.95 |
+| compartment flips | training / held-out | 961 | 0.820 (0.827) | 0.839 (0.828) | 0.552 (0.488) | 0.93 to 0.95 |
+| compartment flips | held-out / held-out | 96 | 0.792 (0.845) | 0.719 (0.771) | 0.457 (0.426) | 0.83 to 0.89 |
 | compartment flips | with AML | 1648 | 0.662 to 0.749 (0.678 to 0.726) | 0.57 to 0.69 | 0.42 to 0.51 | 0.53 to 0.90 |
+
+The replicate column of the compartment flips (25 kb) is corrected for the
+24 kb grid of the single-lane replicate maps (section 7); before, it read
+0.92 to 0.95, 0.93 and 0.81 to 0.89 for the first three rows; the
+compartment flip masks are on the 25 kb grid, so the old values compared
+misaligned bins.
 
 The consensus read gets 0.00 on training pairs (it predicts every
 difference inverted) and has no direction on pairs of cells that both read
@@ -1763,8 +1771,8 @@ maps). Reselected with the corrected values
 (`results/hard_split_regrid/25kb/split.json`), 4 training cells (IMR-90,
 HFF, NHEK, MCF-7) change one of their 23 hard windows each and the union
 holds 228 instead of 229 windows, 226 shared. The 25 kb hard-split models
-were trained on the original split; at 3 of 229 union windows we did not
-retrain them. The 10 kb split is unchanged.
+keep the original split, which differs in 3 of 229 union windows. The 10 kb
+split is unchanged.
 
 ## 25. Cohesin response (PENDING)
 
