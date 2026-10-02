@@ -125,12 +125,25 @@ def assay_classes(cfg: Config) -> list[str]:
     return ["intact", "microc"] if cfg.data.assay_indicator_mode == "three" else ["microc"]
 
 
+COHESIN_ROW = "cohesin_unknown"      # data.cohesin_unknown row (0 measured, 1 absent)
+COHESIN_TRACKS = ("RAD21", "SMC3")
+
+
+def cohesin_unknown_value(cfg: Config, dead) -> float:
+    """1.0 when none of the cohesin tracks the model has (RAD21, SMC3) is
+    measured (all in `dead`: missing or zeroed), else 0.0."""
+    tr = [t for t in COHESIN_TRACKS if t in cfg.track_names]
+    return float(bool(tr) and all(t in dead for t in tr))
+
+
 def seq_feature_names(cfg: Config) -> list[str]:
     """channels["seq_features"]: the rows between the ChIP tracks and the motif
     rows (consumers compute the motif offset as len(tracks) + len(this)). The
     assay indicator row, when enabled, sits at the end of this block."""
     names = list(cfg.sequence.features) if cfg.sequence.fasta else []
     names += [f"assay_{a}" for a in assay_classes(cfg)]
+    if cfg.data.cohesin_unknown:
+        names.append(COHESIN_ROW)
     return names
 
 
@@ -138,6 +151,8 @@ def sym_row_names(cfg: Config) -> list[str]:
     rows = list(cfg.track_names)
     rows += [f"seq:{f}" for f in cfg.sequence.features] if cfg.any_fasta else []
     rows += [f"assay:{a}" for a in assay_classes(cfg)]
+    if cfg.data.cohesin_unknown:
+        rows.append("cohesin:unknown")
     for mid in cfg.active_motif_ids:
         rows += [f"motif:{mid}:fwd", f"motif:{mid}:rev"]
     return rows
@@ -173,6 +188,8 @@ def assemble_chrom(
         )
     for a in assay_classes(cfg):
         parts.append(np.full((1, nb), float(sample.assay == a), dtype=np.float32))
+    if cfg.data.cohesin_unknown:
+        parts.append(np.full((1, nb), cohesin_unknown_value(cfg, dead), dtype=np.float32))
     if not fasta and cfg.any_fasta and cfg.active_motif_ids:
         parts.append(np.zeros((2 * len(cfg.active_motif_ids), nb), dtype=np.float32))
     if fasta:

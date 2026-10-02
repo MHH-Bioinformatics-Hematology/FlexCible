@@ -68,8 +68,9 @@ def models(res: int) -> list[str]:
     names = [mx.run_name("all12refin_drop", res)]
     if res == 25000:
         names += [n for v in grid_runs(res).values() for _, n in v]
-    else:
+    elif res == 10000:
         names += [mx.run_name(f"all12refin_drop_{t}", res) for t in mx.STRUCT_TERMS]
+    # 5 and 2 kb: the base model and the three-term combination only
     names += [mx.run_name(b, res) for b in ("all12refin_drop_struct3",
                                             "all12refin_drop_selcomb",
                                             "all12refin_drop_selhm")]
@@ -159,7 +160,7 @@ def stage_evaluate(res_list, jobs: int):
 
 def stage_summary():
     rows = []
-    for r in (25000, 10000):
+    for r in (25000, 10000, 5000, 2000):
         for n in models(r):
             for c in CELLS:
                 f = OUT / n / f"predict_{c}.csv"
@@ -184,7 +185,7 @@ def stage_summary():
         print(H.to_string(index=False))
     # validation curves of every trained structure run
     vrows = []
-    for r in (25000, 10000):
+    for r in (25000, 10000, 5000, 2000):
         for n in models(r)[1:]:
             s = selected_row(n)
             if s is not None:

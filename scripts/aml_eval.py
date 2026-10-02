@@ -311,13 +311,31 @@ for _k in (10, 25):
                      ("all12deg_refres_drop", "consensus12"), ("all12deg_honest_drop", None),
                      ("all12refin_drop", "consensus12"), ("all12refin_drop_ctcfac", "consensus12"),
                      ("all12refres_drop_varw", "consensus12"), ("all12refin", "consensus12"),
-                     ("all12hffcoh_refres_drop", "consensus12")):
+                     ("all12hffcoh_refres_drop", "consensus12"),
+                     # cohesin-unknown indicator (section 25, 1c)
+                     ("all12cohunk_refres_drop", "consensus12"),
+                     ("all12cohunk_honest_drop", None)):
         MODELS[f"{_b}_{_k}kb"] = (
             _k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
             RUNS / f"multicell_reference/{_b}_{_k}kb", _b, _ref)
+# 5 kb: the track-dropout recipes (AML maps exist from 5 kb; at 2 kb only the
+# training-cell and held-out ENCODE evaluation applies)
+for _b, _ref in (("all12refres_drop", "consensus12"), ("all12honest_drop", None),
+                 ("all12deg_refres_drop", "consensus12"), ("all12refin_drop", "consensus12"),
+                 ("all12cohunk_refres_drop", "consensus12"),
+                 ("all12refin_drop_struct3", "consensus12")):
+    MODELS[f"{_b}_5kb"] = (5000, RUNS / f"multicell_reference/{_b}_5kb.yaml",
+                           RUNS / f"multicell_reference/{_b}_5kb", _b, _ref)
+for _b in ("all12refin_drop_struct3",):          # chosen structure weights, 25 and 10 kb
+    for _k in (10, 25):
+        MODELS[f"{_b}_{_k}kb"] = (_k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
+                                  RUNS / f"multicell_reference/{_b}_{_k}kb", _b, "consensus12")
 _DROP = {"all12refres_drop", "all12honest_drop", "all12refres_refdrop",
          "all12refres_drop_hard", "all12honest_drop_hard",
-         "all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop"}
+         "all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop",
+         "all12cohunk_refres_drop", "all12cohunk_honest_drop", "all12refin_drop",
+         "all12refin_drop_struct3"}
+COHUNK_FAMILIES = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
 
 # input sets: ChIP folder and, for the perturbation, the keep sets
 INPUTS = {
@@ -423,6 +441,8 @@ def predict(models: list[str], jobs: int, threads: int) -> None:
             sets = None
             if inp == "u937":      # WT and the cohesin-absent KO variant in one pass
                 sets = [f"all={u937_all}", "ko_absent=" + ",".join(KO_ABSENT_KEEP)]
+                if MODELS[m][3] in COHUNK_FAMILIES:     # cohesin absent, indicator forced to 0
+                    sets.append("ko_absent_ind0=" + ",".join(KO_ABSENT_KEEP))
             todo.append((prio, m, inp, cell, sets))
     # inputs by priority, coarse resolutions first within a priority
     todo.sort(key=lambda t: (t[0], -MODELS[t[1]][0]))
@@ -520,7 +540,8 @@ BLOCKS = {
     "molm13": (["molm13"], ["molm13_xu"]),
     "molm13_xu": (["molm13"], ["molm13"]),
     "u937_wt_c1": (["u937"], ["u937_ko_c1", "u937_wt_c2", "u937_wt_c3"]),
-    "u937_ko_c1": (["u937", "u937_ko_absent", "u937_ko_ctcfonly", "u937_ko_half"],
+    "u937_ko_c1": (["u937", "u937_ko_absent", "u937_ko_ctcfonly", "u937_ko_half",
+                   "u937_ko_absent_ind0"],
                    ["u937_wt_c1", "u937_ko_c2"]),
     "k562": (["k562ca", "k562enc"], []),
 }
@@ -744,7 +765,7 @@ def grid(summ: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------- perturbation
-KO_VARIANTS = ["u937_ko_ctcfonly", "u937_ko_half", "u937_ko_absent"]
+KO_VARIANTS = ["u937_ko_ctcfonly", "u937_ko_half", "u937_ko_absent", "u937_ko_absent_ind0"]
 # measured change between independent clones: (KO clone - WT clone) pairs that
 # share no map, scored against each other (the ceiling of a change prediction)
 DELTA_REP = [(("u937_ko_c1", "u937_wt_c1"), ("u937_ko_c2", "u937_wt_c2")),
@@ -944,7 +965,9 @@ FAMILY_COLOR = {"all12refres": "#2a78d6", "all12honest": "#eb6834", "all12": "#1
                 "all12deg_refres_drop": "#008300", "all12deg_honest_drop": "#e34948",
                 "all12refin_drop": "#4a3aa7", "all12refin_drop_ctcfac": "#4a3aa7",
                 "all12refres_drop_varw": "#008300", "all12refin": "#4a3aa7",
-                "all12hffcoh_refres_drop": "#008300"}
+                "all12hffcoh_refres_drop": "#008300",
+                "all12cohunk_refres_drop": "#008300", "all12cohunk_honest_drop": "#e34948",
+                "all12refin_drop_struct3": "#4a3aa7"}
 MAP_STYLE = {"consensus12": ("#52514e", "--"), "best_train_map": ("#0b0b0b", ":"),
              "replicate": ("#4a3aa7", "-.")}
 

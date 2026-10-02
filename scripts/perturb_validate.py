@@ -81,9 +81,18 @@ MODELS = {  # name -> (run dir, res, reference run name or None)
     # trained with the RAD21 degron pair on the odd chromosomes (section 25)
     **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000,
                       None if "honest" in b else b)
-       for b in ("all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop")
+       for b in ("all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop",
+                 "all12cohunk_refres_drop", "all12cohunk_honest_drop")
        for k in (10, 25)},
 }
+# 5 and 2 kb track-dropout recipes (the cohesin-unknown model at 5 kb only)
+for _res, _bases in ((5000, ("all12refres_drop", "all12honest_drop", "all12deg_refres_drop",
+                             "all12refin_drop", "all12cohunk_refres_drop")),
+                     (2000, ("all12refres_drop", "all12honest_drop", "all12deg_refres_drop",
+                             "all12refin_drop"))):
+    for _b in _bases:
+        _n = mx.run_name(_b, _res)
+        MODELS[_n] = (mx.REF_OUT / _n, _res, None if "honest" in _b else _b)
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # measured ChIP of the degron cells (4DN GRCh38 fold change: RAD21 and CTCF from
 # Kim et al. 2024, eight histone marks from Rao et al. 2017, untreated and 6 h
@@ -149,9 +158,18 @@ def pred_file(model: str, pert: str) -> Path:
     return OUT / "pred" / model / f"{pert}.npz"
 
 
+def unfinished(model: str, run: Path, res: int) -> bool:
+    """A 5 or 2 kb or cohesin-unknown run still training (its `best` pointer
+    exists from the first checkpoint on): never predicted before it stopped."""
+    if res in (5000, 2000) or "cohunk" in model:
+        si = mx.stop_info(run.name, 10)
+        return not (si and si[2] == "patience")
+    return False
+
+
 def stage_predict():
     for model, (run, res, ref) in MODELS.items():
-        if not (run / "best").exists():          # not trained yet
+        if not (run / "best").exists() or unfinished(model, run, res):   # not trained yet
             continue
         ck = run / (run / "best").read_text().strip()
         _, bw, assay, _ = mx.CELLS["hct116"]
@@ -171,7 +189,7 @@ def stage_predict():
 
 def stage_predict_chip():
     for model, (run, res, ref) in MODELS.items():
-        if not (run / "best").exists():          # not trained yet
+        if not (run / "best").exists() or unfinished(model, run, res):   # not trained yet
             continue
         ck = run / (run / "best").read_text().strip()
         _, _, assay, _ = mx.CELLS["hct116"]
@@ -270,7 +288,7 @@ def stage_score():
                 for c in CHIP_DIRS:
                     Z[c] = np.load(pred_file(model, c))
                 pairs.append(("measured_chip", "chip_untreated", "chip_auxin6h"))
-            w = 5 if res == 10000 else 3
+            w = {10000: 5, 25000: 3}.get(res, 50000 // res)      # 50 kb at 5 and 2 kb
             for _, r in R.iterrows():
                 b0, b1 = r.start // res, -(-r.end // res)
                 n = b1 - b0

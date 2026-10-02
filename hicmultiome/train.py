@@ -795,6 +795,31 @@ def train(cfg: Config):
         tn = TrackNormalizer.load(cache_dir / "norm_tracks.json")
         absent_t = torch.from_numpy(tn.absent_values()[chip_rows]).to(device)
 
+    # cohesin-unknown indicator (data.cohesin_unknown): the SMC3 row follows
+    # the RAD21 dropout draw and the indicator row (normalised "1") is set in
+    # every window that loses the cohesin group
+    coh = None
+    if cfg.data.cohesin_unknown and absent_t is not None:
+        from .precompute import COHESIN_ROW, COHESIN_TRACKS
+
+        tracks_all = ds.channels["tracks"]
+        if COHESIN_ROW not in ds.channels["seq_features"]:
+            raise RuntimeError("data.cohesin_unknown but the cache has no cohesin_unknown "
+                               "row: re-run hicmultiome.precompute")
+        keep = [t for t in COHESIN_TRACKS if t in tracks_all]
+        pos = [chip_rows.index(tracks_all.index(t)) for t in keep
+               if tracks_all.index(t) in chip_rows]
+        if pos:
+            # row of the indicator in the (possibly reduced) cond: the last
+            # sequence-feature row, directly before the motif rows
+            r_ind = offset - 1
+            sym_i = ds.channels["sym_rows"].index("cohesin:unknown")
+            one = tn.apply(np.ones((len(tn.mean), 1), dtype=np.float32))[sym_i, 0]
+            coh = (pos[0], pos[1:], r_ind, float(one))
+            if is_main:
+                log.info("cohesin_unknown: group %s dropped jointly, indicator cond row %d "
+                         "set to %.3f", keep, r_ind, one)
+
     capin = bool(cfg.capture.use_as_input and ds.n_out == 2)
     cond_mode = cfg.model.cond_mode
     emb = cfg.sequence.embed_dim if use_seq else 0
@@ -1032,12 +1057,19 @@ def train(cfg: Config):
                 else:
                     drop = (torch.rand(bs, n_chip, device=device)
                             < cfg.train.track_dropout)
+                if coh is not None:
+                    for q in coh[1]:             # SMC3 follows the RAD21 draw
+                        drop[:, q] = drop[:, coh[0]]
                 if drop.any():
                     cond_b = cond_b.clone()
                     cond_b[:, :n_chip] = torch.where(
                         drop[:, :, None],
                         absent_t[None, :, None].expand(bs, n_chip, cond_b.shape[-1]),
                         cond_b[:, :n_chip])
+                    if coh is not None:
+                        cond_b[:, coh[2]] = torch.where(
+                            drop[:, coh[0], None],
+                            torch.full_like(cond_b[:, coh[2]], coh[3]), cond_b[:, coh[2]])
             sym, pairs = split_cond(cond_b, offset, n_motifs)
             planes = None
             dropped = None

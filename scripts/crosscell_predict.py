@@ -114,6 +114,11 @@ def main():
                     help="several keep sets in one pass, each name=TRACK,TRACK (name= for "
                          "none): one output folder <out-dir>/<name> per set; --save-pred "
                          "then needs a {set} placeholder")
+    ap.add_argument("--cohesin-unknown", choices=["auto", "0", "1"], default="auto",
+                    help="models trained with data.cohesin_unknown: 'auto' sets the "
+                         "indicator to 1 where no cohesin track (RAD21, SMC3) is given "
+                         "(absent in the cell or dropped by a keep set), '0'/'1' force it "
+                         "(0 with absent RAD21 tests the model without the indicator)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default="/mnt/processed/wolffjoa/hic-multiome/runs/crosscell")
     a = ap.parse_args()
@@ -162,6 +167,12 @@ def main():
         if a.save_pred and "{set}" not in a.save_pred:
             raise SystemExit("--keep-sets with --save-pred needs a {set} placeholder")
     sample.missing_tracks = list(missing)        # declared absent -> raw zero -> absent value
+    coh_i = None                                 # cohesin-unknown indicator row (full sym rows)
+    if "cohesin_unknown" in channels["seq_features"]:
+        coh_i = len(channels["tracks"]) + channels["seq_features"].index("cohesin_unknown")
+        coh_v = [float(track_norm.apply(np.full((len(track_norm.mean), 1), v, np.float32))[coh_i, 0])
+                 for v in (0.0, 1.0)]
+        coh_tracks = [t for t in ("RAD21", "SMC3") if t in row_of]
     track_files = sample_track_files(cfg, sample)
 
     ref_clr = None
@@ -219,9 +230,16 @@ def main():
             sym_full[row_of[t]] = absent[row_of[t]]
         sym_sets = {}
         for k, drop in sets.items():
-            sy = sym_full.copy() if drop else sym_full
+            sy = sym_full.copy() if (drop or coh_i is not None) else sym_full
             for t in drop:
                 sy[row_of[t]] = absent[row_of[t]]
+            if coh_i is not None:
+                gone = set(missing) | set(drop)
+                mode = ("0" if k.endswith("_ind0") else "1" if k.endswith("_ind1")
+                        else a.cohesin_unknown)       # a keep set named *_ind0/_ind1 forces it
+                unk = (mode == "1" if mode != "auto"
+                       else all(t in gone for t in coh_tracks))
+                sy[coh_i] = coh_v[int(unk)]
             sym_sets[k] = sy[sel_rows] if sel_rows is not None else sy
         print(f"  {chrom}: {len(grp)} regions", flush=True)
         for _, r in grp.iterrows():

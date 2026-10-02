@@ -114,7 +114,8 @@ def stage_oe():
 F_GRID = [0.0, 0.25, 0.5, 0.75, 1.0]
 CHIP = Path.home() / "data/hic-multiome/perturb_chip"
 FAMILIES = ["all12refres_drop", "all12honest_drop", "all12deg_refres_drop",
-            "all12deg_honest_drop", "all12hffcoh_refres_drop", "all12refres", "all12honest"]
+            "all12deg_honest_drop", "all12hffcoh_refres_drop", "all12refres", "all12honest",
+            "all12cohunk_refres_drop", "all12cohunk_honest_drop"]
 
 
 def _trained(fam, res):

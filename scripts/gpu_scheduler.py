@@ -375,7 +375,102 @@ def jobs():
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())
+    add_cohunk_and_fine(J, train12, prep_cache, chosen_ok)
     return J
+
+
+def locked(name, cmd):
+    """Serialise jobs that rewrite shared result tables (flock on a per-table lock)."""
+    return f"flock {MR / ('.lock_' + name)} bash -c {cmd!r}"
+
+
+def add_cohunk_and_fine(J, train12, prep_cache, chosen_ok):
+    """Registry section 25 (1c) cohesin-unknown models at 25/10 kb, then the
+    track-dropout, degron, input-only reference, cohesin-unknown and structure
+    recipes at 5 kb and 2 kb (section 32). Appended after every earlier job."""
+    import perturb_validate as pv
+    # 5 and 2 kb need the auxin Hi-C of the degron pair at that resolution
+    def aux_ok(res):
+        lg = pv.OUT / "oe" / f"rad21_treated_{res // 1000}kb.log"
+        return (pv.oe_path("rad21", "treated", res).exists() and lg.exists()
+                and "range" in lg.read_text(errors="replace"))
+
+    def block(run, res, cache, needs=lambda: True, own_cache=False, cache_needs=None):
+        if own_cache:
+            prep_cache(run, res, cache, cache_needs or needs)
+        n0 = len(J)
+        train12(run, res, cache)
+        tr = next(j for j in J[n0:] if j.gpu)
+        base = tr.ready
+        tr.ready = (lambda b=base, nd=needs: b() and nd())
+
+    def post(names, tag, aml=True, perturb=True, hard=False):
+        ready = lambda ns=names: all(trained(*mx.split_name(n)) for n in ns)
+        if perturb:
+            J.append(Job(f"{tag}_perturb", locked("perturb",
+                         f"{PY} scripts/perturb_validate.py --stage predict predict_chip score figures"),
+                         ready, lambda: is_marked(f"{tag}_perturb")))
+        if aml:
+            ms = " ".join(names)
+            J.append(Job(f"{tag}_aml", locked("aml",
+                         f"{PY} scripts/aml_eval.py --stage predict --models {ms} --jobs 2 "
+                         f"--threads 3 && {PY} scripts/aml_eval.py --stage score perturb figures"),
+                         ready, lambda: is_marked(f"{tag}_aml")))
+
+    # --- 1c: cohesin-unknown indicator on the degron recipe, 25 and 10 kb
+    coh = [("all12cohunk_refres_drop", 25000), ("all12cohunk_honest_drop", 25000),
+           ("all12cohunk_refres_drop", 10000), ("all12cohunk_honest_drop", 10000)]
+    for run, res in coh:
+        block(run, res, f"mc_{run}_{res // 1000}kb", own_cache=True)
+    coh_names = [mx.run_name(r, k) for r, k in coh]
+    post(coh_names, "cohunk")
+    cready = lambda: all(trained(r, k) for r, k in coh)
+    J.append(Job("cohunk_washout", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/washout.py "
+                                   "--stage predict score", cready,
+                 lambda: is_marked("cohunk_washout")))
+    J.append(Job("cohunk_hardregions", locked("hard",
+                 f"{PY} scripts/hard_split.py --stage quick --jobs 4 --families "
+                 "all12refres_drop all12deg_refres_drop all12deg_honest_drop all12honest_drop "
+                 "all12cohunk_refres_drop all12cohunk_honest_drop --tag cohunk"),
+                 cready, lambda: is_marked("cohunk_hardregions")))
+
+    # --- section 32: 5 kb, then 2 kb; per resolution a, c, b, d, e
+    for res in (5000, 2000):
+        k = res // 1000
+        sfx = f"_{k}kb"
+        ref_cache = f"mc_all12ref_{k}kb"
+        hon_cache = f"mc_all12_{k}kb" if res == 5000 else "mc_all12"
+        # (a) track dropout
+        block("all12refres_drop", res, ref_cache)
+        block("all12honest_drop", res, hon_cache)
+        # (c) RAD21 degron in training
+        block("all12deg_refres_drop", res, f"mc_all12deg_refres_drop{sfx}",
+              lambda r=res: aux_ok(r), own_cache=True)
+        # (b) input-only reference with track dropout
+        block("all12refin_drop", res, ref_cache)
+        # (d) cohesin-unknown (5 kb; 2 kb last, optional)
+        if res == 5000:
+            block("all12cohunk_refres_drop", res, f"mc_all12cohunk_refres_drop{sfx}",
+                  lambda r=res: aux_ok(r), own_cache=True)
+        # (e) structure losses (insulation + donut + compartment, chosen weights)
+        block("all12refin_drop_struct3", res, ref_cache, chosen_ok)
+        names = [mx.run_name(b, res) for b in (
+            "all12refres_drop", "all12honest_drop", "all12deg_refres_drop", "all12refin_drop")]
+        if res == 5000:
+            names.append(mx.run_name("all12cohunk_refres_drop", res))
+        names.append(mx.run_name("all12refin_drop_struct3", res))
+        for n in names:
+            post([n], f"f_{n}", aml=(res == 5000),
+                 perturb=("deg" in n or "cohunk" in n or "refres_drop" in n))
+        sready = lambda r=res: all(trained(b, r) for b in
+                                   ("all12refin_drop", "all12refin_drop_struct3"))
+        J.append(Job(f"struct_eval_{k}kb", locked("struct",
+                     f"{PY} scripts/structure_loss.py --stage evaluate summary --res {res}"),
+                     sready, lambda r=res: is_marked(f"struct_eval_{r // 1000}kb")))
+    # optional last job: the cohesin-unknown model at 2 kb
+    block("all12cohunk_refres_drop", 2000, "mc_all12cohunk_refres_drop_2kb",
+          lambda: aux_ok(2000), own_cache=True,
+          cache_needs=lambda: aux_ok(2000) and trained("all12deg_refres_drop", 2000))
 
 
 def launch(job: Job):

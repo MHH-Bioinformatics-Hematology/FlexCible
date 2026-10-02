@@ -164,6 +164,14 @@ class DataConfig:
     # Hi-C (0, 0), intact Hi-C (1, 0) and Micro-C (0, 1) are three classes.
     # Only read when assay_indicator is on.
     assay_indicator_mode: str = "binary"
+    # Cohesin-unknown indicator (registry section 25, 1c): one more constant
+    # conditioning row after the assay rows, 1 where the sample has no cohesin
+    # ChIP (RAD21 and SMC3 both absent: missing or zeroed), 0 where cohesin is
+    # measured. With train.track_dropout the SMC3 row follows the RAD21 draw
+    # (the cohesin group is dropped jointly) and the indicator is set to 1 in
+    # every window that loses it, so "no cohesin track" means "unknown" and
+    # not "HFF-like". Off = no row (previous behaviour, previous caches).
+    cohesin_unknown: bool = False
     # Reference contact map: an O/E cool on the same bin grid as the samples
     # (e.g. the mean of other cells' maps, scripts/consensus_oe.py). When set,
     # precompute caches each window's reference block as `ref`, encoded with

@@ -1304,6 +1304,76 @@ def test_assay_indicator_three_class(workdir, cfg):
         dataclasses.replace(off.data, assay_indicator_mode="four")
 
 
+def _cohesin_raw(workdir, name):
+    d = workdir / "coh_bw"
+    d.mkdir(exist_ok=True)
+    for t, pos in (("CTCF", [5, 12, 20, 30]), ("RAD21", [5, 12, 20]), ("SMC3", [12, 30]),
+                   ("H3K27ac", [10, 11, 12])):
+        if not (d / f"{t}.bigwig").exists():
+            _write_bigwig(d / f"{t}.bigwig", {"chr1": pos, "chr2": pos[:2]})
+    raw = _ref_raw(workdir, name, ref_cool=False)
+    smp = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [
+        dict(smp, name="withcoh", bigwig_dir=str(d)),
+        dict(smp, name="nocoh", bigwig_dir=str(d), missing_tracks=["RAD21", "SMC3"])]
+    raw["data"]["tracks"] = [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                             {"name": "RAD21", "type": "cofactor", "motif": MOTIF},
+                             {"name": "SMC3", "type": "cofactor", "motif": MOTIF},
+                             {"name": "H3K27ac", "type": "histone"}]
+    raw["data"]["cohesin_unknown"] = True
+    raw["train"]["cache_dir"] = str(workdir / f"cache_{name}")
+    return raw
+
+
+def test_cohesin_unknown_row(workdir):
+    """data.cohesin_unknown adds one constant row after the sequence features:
+    1 where neither RAD21 nor SMC3 is measured (missing or zeroed), else 0;
+    off, the layout is unchanged."""
+    import dataclasses
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        seq_feature_names, sym_row_names)
+
+    on = Config.from_dict(_cohesin_raw(workdir, "cohrow"))
+    raw_off = _cohesin_raw(workdir, "cohrow")
+    raw_off["data"]["cohesin_unknown"] = False
+    off = Config.from_dict(raw_off)
+    r_on, r_off = sym_row_names(on), sym_row_names(off)
+    assert len(r_on) == len(r_off) + 1
+    k = r_on.index("cohesin:unknown")
+    assert k == len(on.track_names) + len(seq_feature_names(on)) - 1
+    assert seq_feature_names(on)[-1] == "cohesin_unknown"
+    nb = CHROMS["chr1"] // BINSIZE
+    with_, no_ = on.data.samples
+    zeroed = dataclasses.replace(with_, zeroed_tracks=["RAD21", "SMC3"])
+    half = dataclasses.replace(with_, zeroed_tracks=["RAD21"])
+    for s, v in ((with_, 0.0), (no_, 1.0), (zeroed, 1.0), (half, 0.0)):
+        a_on = assemble_chrom(on, s, sample_track_files(on, s), "chr1", nb)
+        a_off = assemble_chrom(off, s, sample_track_files(off, s), "chr1", nb)
+        assert np.all(a_on[k] == v), s.name
+        np.testing.assert_array_equal(np.delete(a_on, k, axis=0), a_off)
+
+
+def test_cohesin_unknown_training(workdir, caplog):
+    """Track dropout with the cohesin-unknown indicator trains; the SMC3 row
+    follows the RAD21 draw and the indicator row is set where it is dropped."""
+    import logging
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    raw = _cohesin_raw(workdir, "cohtrain")
+    raw["train"].update(track_dropout=0.5, track_dropout_mode="uniform_count", max_steps=6,
+                        eval_every=3)
+    c = Config.from_dict(raw)
+    hprep.build(c)
+    with caplog.at_level(logging.INFO):
+        htrain.train(c)
+    assert (Path(c.train.output_dir) / "best").exists()
+    assert any("cohesin_unknown: group ['RAD21', 'SMC3']" in r.getMessage()
+               for r in caplog.records)
+
+
 def test_precompute_workers_identical_cache(workdir):
     """precompute.build(workers=2) writes the same manifest, normalisers and
     shards as the serial default, with two samples, capture and a train filter."""

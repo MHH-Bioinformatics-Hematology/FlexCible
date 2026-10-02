@@ -166,6 +166,10 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # hct116_auxin the 6 h auxin Hi-C and ChIP, on odd chromosomes only
     "all12deg_refres_drop": (TRAIN12, None),
     "all12deg_honest_drop": (TRAIN12, None),
+    # the degron recipe plus the cohesin-unknown indicator (registry section 25,
+    # 1c; data.cohesin_unknown): absent cohesin is "unknown", not "HFF-like"
+    "all12cohunk_refres_drop": (TRAIN12, None),
+    "all12cohunk_honest_drop": (TRAIN12, None),
     # gain beyond the consensus on new cells (registry section 26): input-only
     # reference with track dropout, the same on CTCF + H3K27ac only, and the
     # residual dropout model with between-cell-variance loss weighting
@@ -220,7 +224,8 @@ def struct_loss(base: str) -> str | None:
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
 DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
-DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop": (0.5, 0.0)})
+DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop": (0.5, 0.0),
+                     "all12cohunk_refres_drop": (0.5, 0.0), "all12cohunk_honest_drop": (0.5, 0.0)})
 DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0.5, 0.0),
                      "all12refres_drop_varw": (0.5, 0.0)})
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
@@ -229,7 +234,8 @@ DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
 METH_RUNS = {"all12refres_drop_meth"}
 CNV_RUNS = {"all12refres_drop_cnv"}
-DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
+COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
+DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS
 HFF_COHESIN_DIR = HM / "hg38_hff_cohesin"
 
 
@@ -263,7 +269,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12multires": "residual", "all12casc": "residual",
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",
             "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
-            "all12deg_refres_drop": "residual",
+            "all12deg_refres_drop": "residual", "all12cohunk_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
             "all12refres_drop_meth": "residual", "all12refres_drop_cnv": "residual",
@@ -272,7 +278,7 @@ CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
 HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop", "all12honest_drop_hard",
-                               "all12deg_honest_drop"}
+                               "all12deg_honest_drop", "all12cohunk_honest_drop"}
 REF_OUT = HM / "runs/multicell_reference"
 
 
@@ -387,6 +393,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
             "missing_tracks": missing_marks(PERTURB_CHIP / "auxin6h"), "assay": "hic",
             "train_chroms": list(DEGRON_TRAIN_CHROMS)})
         cells = cells + ["hct116_auxin"]
+    if base in COHUNK_RUNS:
+        cfg["data"]["cohesin_unknown"] = True
     cfg["data"]["resolution"] = res
     cfg["window"]["size"], cfg["window"]["stride"] = WINDOW[res]
     cfg["data"]["train_regions_bed"] = str(TRAIN_BED)
