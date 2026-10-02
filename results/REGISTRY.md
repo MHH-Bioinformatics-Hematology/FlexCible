@@ -2126,3 +2126,554 @@ loop enrichment correlation, APA ratio on the target's top 1 % enrichment
 pixels at least 50 kb off the diagonal, correlation-matrix agreement and
 first-eigenvector agreement (hicmultiome/structure.py;
 `results/structure_loss/structure_eval.csv`).
+
+## 31. Multi-measure evaluation (FINAL)
+
+Question: does the model ranking by the median per-region Pearson hold when
+A/B compartments, TADs and loops are scored, and with the combined measures
+of the hyperparameter-scoring work (J. Wolff, "A novel metric for
+hyperparameter optimization in Hi-C matrix prediction", Zenodo
+10.5281/zenodo.17296001), whose trained regressors imitate an expert ranking
+from ENT3C, HiCRep, GenomeDISCO, HiC-Spector, QuASAR-Rep, Pearson AUC, TAD
+score MSE, TAD fraction and TAD fraction exact match (FEM)?
+
+Script `scripts/hic_measures.py` (stages predict, expected, score, ceilings,
+combine, report, tables; tests `tests/test_hic_measures.py`), outputs
+`runs/hic_measures/`, tables `results/hic_measures/`.
+
+Whole-chromosome maps. `hicmultiome.predict` tiles each model's windows over
+whole chromosomes (half-window stride, Hann-weighted averaging, test-time
+reverse averaging; 360 maps, 12 models x 15 cells x 2 resolutions). Every map
+reaches only as far as the model window: 2.0 Mb at 25 kb, 1.92 Mb at 10 kb
+(the proper O/E targets are banded to 2 Mb as well). Evaluation sets:
+
+- heldout: K562, HMEC deep and HUVEC deep, cells no model was trained on;
+  whole chr2, chr12 and chr18. The loci lie in training windows of other
+  cells, as the consensus reference does.
+- trainstretch: the 12 training cells, chr2 and chr18, pixels restricted to
+  the Akita valid+test stretches (`data.holdout_bed`; no training window of
+  any cell overlaps them, registry section 15; 23% of chr2, 27% of chr18,
+  stretches of 1 to 11 Mb): the clean evaluation of the main models on
+  training cells.
+- trainchrom: the 12 training cells, whole chr2 and chr18. Clean entry: the
+  cascade fold models (`cascfold_odd/even_<k>kb`, the all12refres setup
+  trained on the odd or on the even chromosomes; their out-of-fold maps are
+  `crosscell_oe/cascade/prior_<cell>_<k>kb.cool`; chr2 and chr18 come from the
+  model trained on the odd chromosomes). all12refres, which trained on
+  windows covering about 75% of these chromosomes, is listed as its
+  in-training counterpart.
+- hicreg and epiphany: GM12878 with the band cut to the competitor's reach
+  (1 Mb on chr2 and chr18 at 25 kb; 990 kb on chr17 at 10 kb); our models
+  trained on these chromosomes there.
+
+Sources per block: every model, the consensus the model reads (leave-one-out
+for training cells, consensus12 for held-out cells), the best single other
+measured map (section 15), an independent replicate map where one exists
+(intact GM12878 ENCSR965OVH r75, intact K562 ENCSR676BEP r5, single-lane in
+situ IMR-90, HMEC and HUVEC rep1; for HMEC and HUVEC the independence of the
+single-lane map from the ENCODE deep map is not established), and the
+competitor predictions of section 18 (reused, none rerun): Hi-cGAN
+(GM12878, even chromosomes held out; its GM12878 model on the held-out
+cells), C.Origami (IMR-90, chr2 = its test chromosome, 10 kb), HiC-Reg
+(within-chromosome CV maps), Epiphany (chr17 held out). Akita exists only as
+1 Mb Akita-space predictions and has no whole-chromosome map. Every measure of
+a block uses the pixels finite in the target and in every source of the block.
+The single-lane replicate maps at 25 kb are stored on a 24 kb grid
+(`*_rep1_ice_25kb.cool`, bin size 24000); they are sampled bilinearly at the
+25 kb bin centres (`resample_band`). `multicell_expanded.target("hmec" |
+"huvec", 25000)` points to these 24 kb files as well.
+
+Measures. Count space, with the tools and settings of the hyperparameter
+work: ENT3C (`ENT3C run_all` per pair, SUB_M_SIZE_FIX 500, phi 1, PHI_MAX
+1e3, no weights), HiCRep (python hicrep, h 5, dBPMax 1 Mb, no
+down-sampling), GenomeDISCO, HiC-Spector and QuASAR-Rep
+(3DChromatin_ReplicateQC with that work's parameter file), Pearson AUC
+(Hi-cGAN computePearsonCorrelation reimplemented, identical to the pandas
+original in the unit test), TAD score MSE, TAD fraction and TAD FEM
+(hicFindTADs 3.7.6, depth 3 to 10 bins, step 1 bin, minimum boundary
+distance 100 kb, FDR, threshold 0.5). Each map, the target included, is
+converted back to counts with the target's own balanced expected and
+per-diagonal offset (exactly the curves of `oe_proper.py`) and scaled to the
+raw contact total of the chromosome band; the measured map itself (balanced
+counts, same scale) scored against the converted target is the cost of the
+round trip through the clipped, smoothed target. ENT3C and the 3DChromatin
+measures take 1 to 5 min per map and chromosome (HiC-Spector is the slow
+part) and run on every held-out-cell block at 25 kb, on chr18 for the other
+25 kb blocks and on chr18 of the held-out cells at 10 kb (`slow_tools`).
+Structure, on log O/E: Pearson over all band pixels and its median over 1 Mb
+tiles, per-distance Pearson and its AUC, SCC, insulation-profile Pearson
+(diamond 75 kb at 25 kb, 50 kb at 10 kb), boundary recall and precision
+(hicFindTADs boundaries of the prediction against those of the target,
+1 bin), loops against the hicDetectLoops 3.7.6 calls of the measured 10 kb
+map (rank-matched donut recall, APA ratio and anchor AUROC as section 18; at
+10 kb outside trainstretch also hicDetectLoops 3.7.6 run on the converted
+prediction: recall, precision, F1, 1 bin tolerance), compartments (see
+below), the window-level combined score `combined_score` (next paragraph) on
+the chromosome cut into model windows, and the rank score: per block the
+rank of each model among the models (0 worst, 1 best) per measure, averaged
+within four levels (maps: tile Pearson, SCC, HiCRep, GenomeDISCO,
+HiC-Spector, QuASAR-Rep, ENT3C, Pearson AUC; TADs: insulation r, boundary
+recall and precision, TAD score MSE, |TAD fraction - 1|, TAD FEM; loops:
+loop recall, APA agreement min(r, 1/r), anchor AUROC, called-loop F1;
+compartments: compartment preference r, A/B sign agreement, saddle agreement
+min(r, 1/r), local E1 r) and then over the levels.
+
+Compartments on whole chromosomes. A chromosome-wide E1 needs contacts over
+tens of Mb; the maps hold 2 Mb. Applied to the band of the measured target,
+the leading eigenvectors of the banded matrix localize (correlation with the
+genome-wide 100 kb E1 of the full measured map, `runs/cellspecific/e1`,
+0.07 to 0.35 for K562, GM12878 and HMEC), and an E1 of 2 Mb windows phased
+by GC and averaged ("local E1") correlates with it at 0.26 to 0.32 (target,
+median per set). The measures therefore use the measured E1 as the
+compartment label of each bin and ask whether a map reproduces the
+compartment-specific contacts within 2 Mb: compartment preference per bin
+(mean log O/E with A partners minus with B partners, partners 200 kb to 2 Mb
+away), its correlation with the target's preference at 100 kb (compartment
+preference r), the share of 100 kb bins whose preference has the sign of the
+measured E1 (A/B sign agreement; target 0.80 to 0.85), and the saddle
+strength (AA + BB) / 2 AB over the top and bottom 20% of the E1 within the
+band (saddle ratio = map / target; target strength 3.0 to 3.8). The local E1
+of a map against the target's local E1 is reported as well (local E1 r).
+
+Window-level combined score for checkpoint selection
+(`train.select_metric: hic_measures`, section 30). `combined_score(maps,
+res)` takes the validation windows (prediction, target) and returns the
+mean of four levels, each the mean of its terms: pixels (median window
+Pearson, median stratified correlation, Pearson AUC of the per-distance
+Pearson pooled over windows), TADs (median insulation correlation, median
+boundary F1, agreement min(r, 1/r) of the pooled boundary counts), loops
+(median donut-enrichment correlation, median APA agreement) and
+compartments (median correlation of the row-correlation matrices, median
+|r| of their first eigenvectors); hicmultiome.structure supplies the window
+measures. It costs 0.011 s per 80-bin and 0.020 s per 192-bin window (13
+and 25 s for 1200 validation windows). The nine count-space measures and
+their regressors are not used there: they need whole chromosomes and
+external tools.
+
+Regressors and their training domain (stage combine; joblib pipelines of
+`Revision_1/regression_model_results_revision_no_gpu`, env hyperparameter_gpu):
+TabPFN with 8 measures (lowest error of the original selection) and with
+the 6 measures the nested cross-validation chose most often, gradient
+boosting with 7 and 4 measures, random forest with 4 measures. On their own
+361 training rows they reproduce the ELO ranking at r = 0.85 to 0.94. The
+training rows are Hi-cGAN hyperparameter-search predictions of GM12878 chr2
+at 25 kb in count space. Our maps lie outside that domain on seven of the
+nine measures: Pearson AUC 0.49 to 1.00 (training maximum 0.41), HiCRep
+median 0.92 (maximum 0.52), GenomeDISCO 0.76 to 0.98 (maximum 0.68),
+QuASAR-Rep 0.89 to 1.00 (maximum 0.79), TAD score MSE median 0.12 (minimum
+0.77) and TAD FEM median 0.55 (maximum 0.14); only TAD fraction (100% of
+the scored maps), ENT3C (80%) and HiC-Spector (71%) fall inside the
+training range, and no scored map has all inputs of any pipeline in range
+(`regressor_domain.csv`). The regressor scores are reported for completeness
+and are not valid for these maps; the 10 kb rows are additionally outside
+the training resolution.
+
+Results, held-out cells (median over K562, HMEC deep and HUVEC deep of the
+per-cell mean over chr2, chr12, chr18) and the clean training-cell sets;
+full tables below and in `summary.csv`, `measures_per_cell.csv`,
+`measures_per_chromosome.csv`, `combined_scores.csv`, heat maps
+`heatmap_<set>_<k>kb.png`.
+
+At 25 kb on the held-out cells the dropout models lead every structure
+level: all12refin_drop has the highest 413-region Pearson (0.924) and tile
+Pearson (0.939), all12refin_drop_ctcfac the highest compartment preference
+correlation (0.939), boundary recall is 0.78 to 0.82 for every reference
+model, and all12refres_drop_varw has the highest rank score (0.708, then
+all12refin_drop 0.679 and all12refres_refdrop 0.658). The models without a
+reference trail on every level (rank score 0.11). The consensus alone is level
+with the models on insulation (0.846, highest of all non-replicate sources)
+and below them on compartment preference (0.885 against 0.90 to 0.94) and
+SCC; the Hi-cGAN GM12878 model reaches 0.39 tile Pearson and 0.25 boundary
+recall. At 10 kb all12deg_refres_drop has the highest 413-region Pearson
+(0.908), tile Pearson, window score and rank score (0.760), followed by
+all12refres_drop_varw (0.715). Loop recall (rank-matched) is 0.29 to 0.34 for
+every reference model against 0.30 to 0.41 for the target's own donut peaks
+(`loop_recall_ceiling.csv`); hicDetectLoops on the reference-model predictions recovers
+0.31 to 0.38 of the measured loops at precision 0.30 to 0.35 (F1 0.32 to
+0.35), the consensus 0.35 at 0.29 (F1 0.33), the replicate map 0.36 at 0.13
+(F1 0.19), and the measured map itself in count space 0.69 at 0.86 (the
+caller's own agreement after the round trip).
+
+On the clean training-cell stretches all12multires leads at both
+resolutions (413-region Pearson 0.944 and 0.938, rank score 0.806 and
+0.841), then all12refin and all12refres. The chromosome-held-out cascade
+fold model scores 0.948 against 0.953 tile Pearson for all12refres on whole
+chr2 and chr18 at 25 kb (0.919 against 0.929 at 10 kb), with equal boundary
+recall (0.816 and 0.815) and loop recall (0.333 and 0.339): the in-training
+advantage on whole chromosomes is 0.005 to 0.010. HiC-Reg's within-chromosome
+CV maps reach a tile Pearson of 0.946 in the 1 Mb band (all12multires 0.951)
+but an insulation correlation of 0.562 against 0.86 to 0.93 for the
+reference models; C.Origami (IMR-90 chr2, 10 kb) reaches 0.904 tile Pearson
+and 0.466 boundary recall against 0.633 for the cascade fold model; Epiphany
+0.511 and 0.226.
+
+Model ranking: Kendall tau of each measure's model ranking (median over
+cells) with the ranking by the 413-region median Pearson
+(`ranking.csv`, figure `ranking_agreement.png`; models only, 12 per set):
+
+| set | best by median Pearson | tile Pearson | window combined | rank score | TabPFN 8m | TabPFN 6m | GB 7m | GB 4m | RF 4m | lowest-agreement measures |
+|---|---|---|---|---|---|---|---|---|---|---|
+| held-out, 25 kb | all12refin_drop | 0.79 (all12refin_drop) | 0.15 (all12refres_drop) | 0.76 (all12refres_drop_varw) | -0.42 (all12honest_drop) | -0.48 (all12honest) | -0.27 (all12multires) | -0.26 (all12refin) | -0.18 (all12multires) | ENT3C -0.12, TAD fraction -0.12, HiC-Spector -0.03, APA ratio 0.15, anchor AUROC 0.15 |
+| held-out, 10 kb | all12deg_refres_drop | 0.82 (all12deg_refres_drop) | 0.82 (all12deg_refres_drop) | 0.79 (all12deg_refres_drop) | -0.45 (all12honest) | -0.12 | -0.03 | 0.11 | -0.03 | HiC-Spector 0.03, ENT3C 0.21, anchor AUROC 0.21, TAD fraction 0.30, loop recall 0.30 |
+| training stretches, 25 kb | all12multires | 0.82 (all12multires) | 0.79 (all12multires) | 0.91 (all12multires) | -0.70 (all12honest_drop) | -0.73 (all12honest_drop) | 0.08 | -0.15 | 0.50 | A/B sign agreement 0.36, saddle ratio 0.36, boundary recall 0.39, anchor AUROC 0.39, TAD fraction 0.42, ENT3C 0.42 |
+| training stretches, 10 kb | all12multires | 0.76 (all12refres) | 0.61 (all12multires) | 0.88 (all12multires) | | | | | | TAD fraction 0.27, APA ratio 0.36, saddle ratio 0.39, loop recall 0.55 |
+
+Ranking by the multi-measure rank score agrees with ranking by median
+Pearson (tau 0.76 to 0.91) and picks the same best model in three of four
+cases; on held-out cells at 25 kb it puts all12refres_drop_varw (0.708)
+ahead of all12refin_drop (0.679), which leads on median Pearson (0.924
+against 0.922) and on the compartment and map levels, because
+all12refres_drop_varw ranks higher on the TAD and loop levels. The measures
+that order the models differently from Pearson are the loop measures (APA
+ratio, anchor AUROC, rank-matched recall: tau 0.15 to 0.55), TAD fraction,
+ENT3C and HiC-Spector (tau -0.12 to 0.45) and the compartment sign and
+saddle measures on training cells (0.36); the compartment preference
+correlation, SCC, HiCRep, GenomeDISCO, QuASAR-Rep, Pearson AUC and TAD score
+MSE follow the Pearson ranking (tau 0.6 to 0.9). The trained regressors
+reverse it: both TabPFN pipelines rank a model without a reference first on
+every set (tau -0.42 to -0.73) and score the GM12878 Hi-cGAN model on the
+held-out cells (3.7) above every one of our models (1.6 to 2.3) and the
+measured map itself lowest (0.8), and the tree pipelines assign tied values
+to up to 5 of 12 models (tau -0.27 to 0.50). This follows from the domain
+check: these maps are better than every map the experts ranked on seven
+measures, so the regressors extrapolate; TabPFN's flattening near the
+optimum and the trees' constant leaves beyond their last split (both
+described in that manuscript) decide the order.
+
+Loop and compartment ceilings (median target value per set): rank-matched
+loop recall of the target's own donut peaks 0.41 / 0.30 (held-out 25 / 10
+kb) and 0.40 / 0.31 (training stretches); A/B sign agreement of the
+target's compartment preference 0.81 / 0.80 and 0.85 / 0.85; correlation of
+the target's preference with the measured E1 0.74 / 0.71 and 0.78 / 0.78,
+against 0.62 to 0.76 for all12refres and all12refin_drop and 0.53 to 0.63
+for the consensus. Local E1 of the 2 Mb band against the genome-wide E1: 0.26 to
+0.32 for the target and every map alike.
+
+Full tables (`runs/hic_measures/registry_tables.md`, generated by `--stage
+tables`): median over cells of the per-cell mean over chromosomes. Pearson
+413 regions = section 15/22/26 crosscell tables (the registry metric);
+rank score among the models of the block; regressor columns are outside
+their training domain (see above).
+
+held-out cells K562, HMEC deep, HUVEC deep; chr2, chr12, chr18, 25 kb, log O/E structure measures (median over 3 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined | rank score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.906 | 0.919 | 0.878 | 0.809 | 0.796 | 0.780 | 0.287 | 0.767 | 0.912 | 0.745 | 0.827 | 0.843 | 0.900 | 0.406 |
+| all12honest | 0.771 | 0.794 | 0.752 | 0.656 | 0.603 | 0.634 | 0.181 | 0.384 | 0.836 | 0.762 | 0.713 | 0.741 | 0.737 | 0.112 |
+| all12refin | 0.901 | 0.916 | 0.871 | 0.779 | 0.783 | 0.778 | 0.301 | 0.801 | 0.902 | 0.734 | 0.694 | 0.832 | 0.890 | 0.357 |
+| all12refres_drop | 0.915 | 0.933 | 0.892 | 0.787 | 0.791 | 0.808 | 0.291 | 0.798 | 0.928 | 0.778 | 0.926 | 0.846 | 0.908 | 0.602 |
+| all12honest_drop | 0.799 | 0.826 | 0.767 | 0.679 | 0.614 | 0.641 | 0.157 | 0.261 | 0.866 | 0.784 | 0.656 | 0.749 | 0.734 | 0.114 |
+| all12refres_refdrop | 0.919 | 0.934 | 0.891 | 0.832 | 0.816 | 0.817 | 0.293 | 0.786 | 0.930 | 0.771 | 0.921 | 0.849 | 0.907 | 0.658 |
+| all12refres_drop_hard | 0.916 | 0.931 | 0.889 | 0.797 | 0.785 | 0.806 | 0.293 | 0.773 | 0.927 | 0.775 | 0.826 | 0.846 | 0.907 | 0.500 |
+| all12refres_drop_varw | 0.922 | 0.932 | 0.897 | 0.838 | 0.791 | 0.803 | 0.288 | 0.817 | 0.929 | 0.776 | 0.841 | 0.848 | 0.906 | 0.708 |
+| all12refin_drop | 0.924 | 0.939 | 0.897 | 0.840 | 0.795 | 0.826 | 0.310 | 0.744 | 0.928 | 0.769 | 0.772 | 0.865 | 0.900 | 0.679 |
+| all12refin_drop_ctcfac | 0.920 | 0.931 | 0.902 | 0.843 | 0.806 | 0.830 | 0.297 | 0.834 | 0.939 | 0.763 | 0.705 | 0.859 | 0.906 | 0.646 |
+| all12deg_refres_drop | 0.922 | 0.938 | 0.892 | 0.826 | 0.795 | 0.825 | 0.299 | 0.775 | 0.923 | 0.776 | 0.842 | 0.855 | 0.901 | 0.608 |
+| all12multires | 0.902 | 0.919 | 0.880 | 0.832 | 0.793 | 0.788 | 0.292 | 0.827 | 0.911 | 0.757 | 0.760 | 0.833 | 0.907 | 0.501 |
+| consensus alone | 0.916 | 0.917 | 0.874 | 0.846 | 0.775 | 0.784 | 0.289 | 0.825 | 0.885 | 0.724 | 0.736 | 0.798 | 0.871 |  |
+| best other measured map | 0.882 | 0.893 | 0.832 | 0.798 | 0.733 | 0.769 | 0.269 | 0.805 | 0.845 | 0.702 | 0.862 | 0.790 | 0.855 |  |
+| replicate map |  | 0.961 | 0.927 | 0.916 | 0.827 | 0.803 | 0.275 | 1.121 | 0.969 | 0.774 | 0.943 | 0.926 | 0.937 |  |
+| measured map, balanced counts |  |  |  |  | 0.957 | 0.869 |  |  |  |  |  |  |  |  |
+| Hi-cGAN, GM12878 model |  | 0.392 | 0.184 | 0.276 | 0.249 | 0.338 | 0.049 | 0.153 | 0.603 | 0.684 | 0.686 | 0.593 | 0.389 |  |
+
+held-out cells K562, HMEC deep, HUVEC deep; chr2, chr12, chr18, 25 kb, count-space measures and regressor scores (median over 3 cells of the per-cell mean over chromosomes):
+
+| source | ENT3C | HiCRep | GenomeDISCO | HiC-Spector | QuASAR-Rep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM | TabPFN 8m | TabPFN 6m | GB 7m | GB 4m | RF 4m |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.444 | 0.864 | 0.916 | 0.554 | 0.983 | 0.951 | 0.155 | 1.021 | 0.481 | 1.64 | -1.64 | 9.53 | 0.32 | 8.79 |
+| all12honest | 0.567 | 0.736 | 0.869 | 0.634 | 0.966 | 0.893 | 0.278 | 0.979 | 0.291 | 2.24 | -0.97 | 8.74 | 0.04 | 7.85 |
+| all12refin | 0.600 | 0.857 | 0.914 | 0.627 | 0.983 | 0.949 | 0.190 | 1.007 | 0.473 | 1.74 | -1.31 | 9.57 | 0.62 | 8.78 |
+| all12refres_drop | 0.495 | 0.864 | 0.927 | 0.493 | 0.985 | 0.955 | 0.183 | 0.978 | 0.494 | 1.71 | -1.94 | 7.83 | 0.24 | 7.80 |
+| all12honest_drop | 0.602 | 0.750 | 0.873 | 0.651 | 0.965 | 0.902 | 0.271 | 0.931 | 0.320 | 2.28 | -1.26 | 7.49 | -0.70 | 7.14 |
+| all12refres_refdrop | 0.446 | 0.878 | 0.922 | 0.487 | 0.986 | 0.952 | 0.143 | 0.998 | 0.503 | 1.62 | -2.04 | 8.32 | 0.32 | 8.78 |
+| all12refres_drop_hard | 0.508 | 0.870 | 0.925 | 0.517 | 0.986 | 0.956 | 0.172 | 0.974 | 0.488 | 1.72 | -1.94 | 8.61 | 0.46 | 8.48 |
+| all12refres_drop_varw | 0.564 | 0.885 | 0.928 | 0.671 | 0.987 | 0.958 | 0.132 | 0.986 | 0.486 | 1.57 | -1.78 | 8.70 | 0.31 | 8.76 |
+| all12refin_drop | 0.544 | 0.886 | 0.927 | 0.703 | 0.987 | 0.960 | 0.139 | 0.962 | 0.489 | 1.63 | -1.75 | 7.87 | -0.12 | 7.51 |
+| all12refin_drop_ctcfac | 0.547 | 0.907 | 0.921 | 0.660 | 0.985 | 0.955 | 0.127 | 0.985 | 0.510 | 1.63 | -1.80 | 8.42 | 0.10 | 7.86 |
+| all12deg_refres_drop | 0.498 | 0.875 | 0.928 | 0.511 | 0.986 | 0.960 | 0.142 | 0.964 | 0.486 | 1.70 | -2.30 | 7.95 | -0.11 | 7.56 |
+| all12multires | 0.484 | 0.889 | 0.921 | 0.625 | 0.984 | 0.958 | 0.135 | 1.007 | 0.485 | 1.57 | -1.86 | 9.73 | 0.43 | 8.81 |
+| consensus alone | 0.477 | 0.879 | 0.902 | 0.472 | 0.979 | 0.940 | 0.158 | 1.011 | 0.467 | 1.69 | -2.01 | 8.64 | 0.21 | 7.86 |
+| best other measured map | 0.529 | 0.846 | 0.888 | 0.644 | 0.971 | 0.917 | 0.191 | 0.965 | 0.452 | 1.87 | -1.70 | 7.86 | 0.13 | 7.12 |
+| replicate map | 0.694 | 0.960 | 0.943 | 0.771 | 0.991 | 0.968 | 0.075 | 1.030 | 0.614 | 1.30 | -1.95 | 9.42 | -0.31 | 8.83 |
+| measured map, balanced counts | 0.564 | 0.988 | 0.960 | 0.632 | 0.992 | 0.945 | 0.026 | 1.103 | 0.663 | 0.77 | -2.45 | 6.32 | -0.56 | 8.52 |
+| Hi-cGAN, GM12878 model | 0.128 | 0.275 | 0.821 | 0.448 | 0.920 | 0.594 | 0.821 | 0.739 | 0.080 | 3.69 | -0.38 | 3.99 | -4.15 | 5.15 |
+
+held-out cells K562, HMEC deep, HUVEC deep; chr2, chr12, chr18, 10 kb, log O/E structure measures (median over 3 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | loop F1 (called) | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined | rank score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.885 | 0.888 | 0.850 | 0.857 | 0.627 | 0.634 | 0.335 | 0.764 | 0.319 | 0.915 | 0.750 | 0.795 | 0.803 | 0.810 | 0.468 |
+| all12honest | 0.750 | 0.745 | 0.707 | 0.668 | 0.442 | 0.496 | 0.168 | 0.348 | 0.152 | 0.820 | 0.757 | 0.816 | 0.731 | 0.658 | 0.089 |
+| all12refin | 0.895 | 0.900 | 0.862 | 0.835 | 0.603 | 0.615 | 0.334 | 0.694 | 0.340 | 0.930 | 0.765 | 0.743 | 0.840 | 0.823 | 0.479 |
+| all12refres_drop | 0.905 | 0.907 | 0.873 | 0.833 | 0.639 | 0.643 | 0.334 | 0.838 | 0.344 | 0.934 | 0.790 | 0.880 | 0.826 | 0.839 | 0.686 |
+| all12honest_drop | 0.765 | 0.772 | 0.729 | 0.672 | 0.465 | 0.479 | 0.167 | 0.225 | 0.118 | 0.866 | 0.763 | 0.775 | 0.720 | 0.667 | 0.095 |
+| all12refres_refdrop | 0.900 | 0.905 | 0.865 | 0.805 | 0.625 | 0.636 | 0.331 | 0.685 | 0.326 | 0.927 | 0.792 | 0.902 | 0.835 | 0.819 | 0.489 |
+| all12refres_drop_hard | 0.894 | 0.901 | 0.863 | 0.796 | 0.611 | 0.617 | 0.333 | 0.737 | 0.330 | 0.929 | 0.784 | 0.792 | 0.822 | 0.825 | 0.463 |
+| all12refres_drop_varw | 0.899 | 0.910 | 0.875 | 0.839 | 0.646 | 0.652 | 0.336 | 0.831 | 0.348 | 0.938 | 0.789 | 0.878 | 0.835 | 0.832 | 0.715 |
+| all12refin_drop | 0.905 | 0.911 | 0.875 | 0.835 | 0.639 | 0.649 | 0.327 | 0.660 | 0.330 | 0.937 | 0.792 | 0.916 | 0.841 | 0.838 | 0.689 |
+| all12refin_drop_ctcfac | 0.903 | 0.910 | 0.876 | 0.825 | 0.638 | 0.648 | 0.329 | 0.855 | 0.332 | 0.946 | 0.780 | 0.794 | 0.830 | 0.843 | 0.535 |
+| all12deg_refres_drop | 0.908 | 0.917 | 0.879 | 0.850 | 0.654 | 0.669 | 0.335 | 0.809 | 0.339 | 0.933 | 0.791 | 0.894 | 0.838 | 0.844 | 0.760 |
+| all12multires | 0.888 | 0.890 | 0.853 | 0.825 | 0.624 | 0.625 | 0.326 | 0.779 | 0.336 | 0.919 | 0.771 | 0.803 | 0.804 | 0.818 | 0.415 |
+| consensus alone | 0.884 | 0.878 | 0.842 | 0.827 | 0.634 | 0.638 | 0.331 | 0.801 | 0.330 | 0.897 | 0.734 | 0.782 | 0.800 | 0.792 |  |
+| best other measured map | 0.835 | 0.836 | 0.794 | 0.778 | 0.571 | 0.565 | 0.209 | 0.655 | 0.235 | 0.858 | 0.718 | 0.976 | 0.758 | 0.748 |  |
+| replicate map |  | 0.886 | 0.848 | 0.830 | 0.609 | 0.601 | 0.025 | 0.961 | 0.185 | 0.954 | 0.789 | 0.705 | 0.903 | 0.852 |  |
+| measured map, balanced counts |  |  |  |  | 0.848 | 0.821 |  |  | 0.768 |  |  |  |  |  |  |
+| Hi-cGAN, GM12878 model |  | 0.385 | 0.266 | 0.357 | 0.109 | 0.146 | 0.019 | 0.106 | 0.027 | 0.602 | 0.611 | 0.570 | 0.526 | 0.326 |  |
+
+held-out cells K562, HMEC deep, HUVEC deep; chr2, chr12, chr18, 10 kb, count-space measures and regressor scores (median over 3 cells of the per-cell mean over chromosomes):
+
+| source | ENT3C | HiCRep | GenomeDISCO | HiC-Spector | QuASAR-Rep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM | TabPFN 8m | TabPFN 6m | GB 7m | GB 4m | RF 4m |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.765 | 0.879 | 0.915 | 0.762 | 0.925 | 0.940 | 0.116 | 0.974 | 0.330 | 2.21 | -1.81 | 8.61 | -0.23 | 8.68 |
+| all12honest | 0.698 | 0.737 | 0.862 | 0.575 | 0.845 | 0.873 | 0.244 | 0.924 | 0.210 | 4.18 | -1.94 | 7.24 | -0.90 | 6.22 |
+| all12refin | 0.805 | 0.880 | 0.919 | 0.710 | 0.929 | 0.943 | 0.128 | 0.958 | 0.313 | 2.44 | -1.86 | 8.40 | -0.59 | 7.79 |
+| all12refres_drop | 0.734 | 0.892 | 0.919 | 0.688 | 0.938 | 0.945 | 0.124 | 0.992 | 0.335 | 2.28 | -1.94 | 8.61 | 0.14 | 7.85 |
+| all12honest_drop | 0.716 | 0.732 | 0.877 | 0.519 | 0.876 | 0.878 | 0.243 | 0.959 | 0.202 | 4.06 | -1.82 | 7.24 | 0.16 | 6.08 |
+| all12refres_refdrop | 0.743 | 0.877 | 0.918 | 0.720 | 0.935 | 0.942 | 0.164 | 0.981 | 0.318 | 2.15 | -1.75 | 7.29 | -0.59 | 8.74 |
+| all12refres_drop_hard | 0.764 | 0.872 | 0.919 | 0.725 | 0.935 | 0.941 | 0.157 | 0.992 | 0.321 | 2.15 | -1.73 | 8.55 | 0.58 | 8.75 |
+| all12refres_drop_varw | 0.745 | 0.893 | 0.923 | 0.681 | 0.938 | 0.947 | 0.128 | 0.990 | 0.320 | 2.32 | -1.87 | 9.25 | -0.19 | 8.79 |
+| all12refin_drop | 0.756 | 0.887 | 0.920 | 0.709 | 0.937 | 0.945 | 0.129 | 0.984 | 0.341 | 2.21 | -1.84 | 7.29 | -0.24 | 8.74 |
+| all12refin_drop_ctcfac | 0.790 | 0.904 | 0.909 | 0.694 | 0.934 | 0.944 | 0.148 | 0.956 | 0.332 | 2.12 | -1.76 | 6.61 | -0.59 | 6.08 |
+| all12deg_refres_drop | 0.747 | 0.896 | 0.920 | 0.743 | 0.936 | 0.947 | 0.114 | 0.977 | 0.349 | 2.07 | -1.95 | 6.61 | 0.14 | 6.05 |
+| all12multires | 0.724 | 0.885 | 0.917 | 0.733 | 0.927 | 0.941 | 0.132 | 0.984 | 0.326 | 2.27 | -1.91 | 7.29 | -0.19 | 8.74 |
+| consensus alone | 0.811 | 0.868 | 0.891 | 0.696 | 0.913 | 0.921 | 0.153 | 0.994 | 0.350 | 2.26 | -1.82 | 8.61 | 0.58 | 8.82 |
+| best other measured map | 0.688 | 0.840 | 0.859 | 0.621 | 0.894 | 0.897 | 0.188 | 1.012 | 0.297 | 2.48 | -1.61 | 9.65 | 0.36 | 8.74 |
+| replicate map | 0.789 | 0.905 | 0.932 | 0.591 | 0.951 | 0.934 | 0.151 | 1.043 | 0.357 | 2.04 | -1.58 | 9.06 | 0.34 | 8.82 |
+| measured map, balanced counts | 0.797 | 0.984 | 0.923 | 0.816 | 0.904 | 0.826 | 0.037 | 1.033 | 0.529 | 1.29 | -2.01 | 10.05 | -0.09 | 8.78 |
+| Hi-cGAN, GM12878 model | -0.172 | 0.344 | 0.772 | 0.276 | 0.731 | 0.613 | 0.795 | 0.751 | 0.040 | 4.27 | -4.94 | 2.43 | -5.14 | 1.70 |
+
+12 training cells, Akita valid+test stretches of chr2 and chr18, 25 kb, log O/E structure measures (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined | rank score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.939 | 0.953 | 0.941 | 0.927 | 0.847 | 0.847 | 0.336 | 0.821 | 0.960 | 0.833 | 0.858 | 0.835 | 0.933 | 0.678 |
+| all12honest | 0.828 | 0.842 | 0.820 | 0.788 | 0.698 | 0.713 | 0.215 | 0.323 | 0.881 | 0.821 | 0.808 | 0.770 | 0.773 | 0.162 |
+| all12refin | 0.940 | 0.957 | 0.945 | 0.929 | 0.866 | 0.859 | 0.353 | 0.779 | 0.965 | 0.829 | 0.837 | 0.844 | 0.923 | 0.700 |
+| all12refres_drop | 0.936 | 0.952 | 0.935 | 0.907 | 0.849 | 0.839 | 0.321 | 0.794 | 0.961 | 0.829 | 0.945 | 0.823 | 0.928 | 0.564 |
+| all12honest_drop | 0.809 | 0.819 | 0.785 | 0.734 | 0.649 | 0.685 | 0.204 | 0.246 | 0.867 | 0.826 | 0.716 | 0.744 | 0.734 | 0.067 |
+| all12refres_refdrop | 0.930 | 0.947 | 0.926 | 0.897 | 0.864 | 0.834 | 0.358 | 0.752 | 0.953 | 0.834 | 0.981 | 0.831 | 0.918 | 0.471 |
+| all12refres_drop_hard | 0.929 | 0.945 | 0.928 | 0.896 | 0.848 | 0.835 | 0.329 | 0.735 | 0.956 | 0.820 | 0.860 | 0.826 | 0.918 | 0.440 |
+| all12refres_drop_varw | 0.934 | 0.946 | 0.931 | 0.908 | 0.858 | 0.836 | 0.332 | 0.813 | 0.961 | 0.832 | 0.846 | 0.849 | 0.923 | 0.490 |
+| all12refin_drop | 0.936 | 0.952 | 0.936 | 0.913 | 0.857 | 0.854 | 0.347 | 0.786 | 0.959 | 0.828 | 0.831 | 0.825 | 0.922 | 0.583 |
+| all12refin_drop_ctcfac | 0.929 | 0.946 | 0.929 | 0.909 | 0.857 | 0.847 | 0.336 | 0.842 | 0.955 | 0.819 | 0.829 | 0.831 | 0.915 | 0.453 |
+| all12deg_refres_drop | 0.936 | 0.955 | 0.939 | 0.922 | 0.847 | 0.852 | 0.339 | 0.780 | 0.964 | 0.819 | 0.866 | 0.831 | 0.928 | 0.604 |
+| all12multires | 0.944 | 0.961 | 0.949 | 0.939 | 0.861 | 0.864 | 0.351 | 0.833 | 0.972 | 0.838 | 0.872 | 0.856 | 0.939 | 0.806 |
+| consensus alone | 0.922 | 0.913 | 0.868 | 0.836 | 0.837 | 0.795 | 0.334 | 0.728 | 0.896 | 0.748 | 0.624 | 0.791 | 0.869 |  |
+| best other measured map | 0.905 | 0.900 | 0.834 | 0.791 | 0.788 | 0.804 | 0.341 | 0.776 | 0.891 | 0.756 | 0.728 | 0.758 | 0.858 |  |
+| replicate map |  | 0.972 | 0.961 | 0.951 | 0.918 | 0.893 | 0.367 | 1.078 | 0.982 | 0.831 | 0.980 | 0.935 | 0.953 |  |
+| measured map, balanced counts |  |  |  |  | 0.973 | 0.884 |  |  |  |  |  |  |  |  |
+| cascade fold model (all12refres setup, chromosome held out) |  | 0.950 | 0.935 | 0.919 | 0.855 | 0.843 | 0.339 | 0.749 | 0.960 | 0.831 | 0.822 | 0.849 | 0.915 |  |
+
+12 training cells, Akita valid+test stretches of chr2 and chr18, 25 kb, count-space measures and regressor scores (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | ENT3C | HiCRep | GenomeDISCO | HiC-Spector | QuASAR-Rep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM | TabPFN 8m | TabPFN 6m | GB 7m | GB 4m | RF 4m |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.919 | 0.957 | 0.932 | 0.629 | 0.991 | 0.988 | 0.092 | 1.016 | 0.609 | 1.26 | -1.79 | 9.74 | -0.19 | 8.78 |
+| all12honest | 0.826 | 0.847 | 0.888 | 0.472 | 0.979 | 0.955 | 0.219 | 0.959 | 0.382 | 1.89 | -1.43 | 9.18 | 0.52 | 8.46 |
+| all12refin | 0.946 | 0.959 | 0.933 | 0.575 | 0.991 | 0.988 | 0.084 | 0.996 | 0.613 | 1.26 | -1.86 | 9.18 | -0.02 | 8.76 |
+| all12refres_drop | 0.906 | 0.950 | 0.927 | 0.557 | 0.991 | 0.986 | 0.111 | 1.015 | 0.596 | 1.30 | -1.81 | 8.91 | 0.36 | 8.76 |
+| all12honest_drop | 0.856 | 0.826 | 0.874 | 0.534 | 0.976 | 0.950 | 0.294 | 0.963 | 0.332 | 2.25 | -1.08 | 7.65 | -0.31 | 6.39 |
+| all12refres_refdrop | 0.895 | 0.940 | 0.924 | 0.492 | 0.989 | 0.983 | 0.132 | 1.006 | 0.593 | 1.40 | -1.68 | 9.74 | 0.36 | 8.75 |
+| all12refres_drop_hard | 0.927 | 0.943 | 0.926 | 0.559 | 0.990 | 0.984 | 0.124 | 1.018 | 0.578 | 1.40 | -1.67 | 9.70 | 0.58 | 8.74 |
+| all12refres_drop_varw | 0.933 | 0.944 | 0.929 | 0.573 | 0.990 | 0.985 | 0.113 | 1.025 | 0.609 | 1.18 | -1.74 | 9.32 | 0.22 | 8.70 |
+| all12refin_drop | 0.924 | 0.951 | 0.929 | 0.552 | 0.991 | 0.986 | 0.102 | 1.015 | 0.608 | 1.33 | -1.82 | 9.41 | -0.44 | 8.70 |
+| all12refin_drop_ctcfac | 0.930 | 0.945 | 0.927 | 0.595 | 0.990 | 0.984 | 0.115 | 1.013 | 0.584 | 1.35 | -1.75 | 9.79 | -0.24 | 8.79 |
+| all12deg_refres_drop | 0.908 | 0.953 | 0.933 | 0.602 | 0.991 | 0.986 | 0.096 | 1.004 | 0.616 | 1.30 | -1.88 | 8.97 | -0.24 | 8.75 |
+| all12multires | 0.941 | 0.964 | 0.940 | 0.668 | 0.993 | 0.989 | 0.070 | 1.004 | 0.624 | 1.15 | -1.90 | 9.59 | -0.19 | 8.79 |
+| consensus alone | 0.914 | 0.888 | 0.890 | 0.486 | 0.980 | 0.970 | 0.221 | 1.060 | 0.550 | 1.45 | -0.93 | 7.65 | 0.52 | 8.79 |
+| best other measured map | 0.902 | 0.851 | 0.890 | 0.484 | 0.978 | 0.964 | 0.260 | 0.997 | 0.513 | 1.71 | -1.11 | 8.84 | -0.32 | 8.40 |
+| replicate map | 0.888 | 0.978 | 0.952 | 0.770 | 0.994 | 0.992 | 0.056 | 1.028 | 0.703 | 1.07 | -1.95 | 10.05 | -1.27 | 8.83 |
+| measured map, balanced counts | 0.901 | 0.995 | 0.967 | 0.794 | 0.993 | 0.975 | 0.031 | 1.088 | 0.671 | 0.82 | -2.03 | 9.43 | -0.02 | 8.77 |
+| cascade fold model (all12refres setup, chromosome held out) | 0.954 | 0.954 | 0.931 | 0.575 | 0.990 | 0.985 | 0.092 | 1.013 | 0.605 | 1.33 | -1.83 | 10.12 | -0.02 | 8.78 |
+
+12 training cells, Akita valid+test stretches of chr2 and chr18, 10 kb, log O/E structure measures (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined | rank score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres | 0.935 | 0.941 | 0.923 | 0.919 | 0.713 | 0.718 | 0.393 | 0.771 | 0.971 | 0.832 | 0.864 | 0.869 | 0.865 | 0.740 |
+| all12honest | 0.830 | 0.820 | 0.802 | 0.792 | 0.539 | 0.574 | 0.217 | 0.381 | 0.898 | 0.799 | 0.764 | 0.753 | 0.708 | 0.111 |
+| all12refin | 0.934 | 0.935 | 0.924 | 0.919 | 0.691 | 0.705 | 0.424 | 0.715 | 0.971 | 0.827 | 0.843 | 0.864 | 0.864 | 0.693 |
+| all12refres_drop | 0.927 | 0.927 | 0.911 | 0.897 | 0.691 | 0.693 | 0.388 | 0.845 | 0.963 | 0.828 | 0.866 | 0.862 | 0.868 | 0.576 |
+| all12honest_drop | 0.819 | 0.813 | 0.787 | 0.748 | 0.530 | 0.544 | 0.218 | 0.271 | 0.887 | 0.810 | 0.780 | 0.753 | 0.683 | 0.065 |
+| all12refres_refdrop | 0.924 | 0.922 | 0.907 | 0.885 | 0.678 | 0.685 | 0.408 | 0.714 | 0.961 | 0.822 | 0.867 | 0.842 | 0.859 | 0.446 |
+| all12refres_drop_hard | 0.915 | 0.912 | 0.896 | 0.871 | 0.680 | 0.673 | 0.371 | 0.749 | 0.951 | 0.821 | 0.809 | 0.819 | 0.845 | 0.357 |
+| all12refres_drop_varw | 0.927 | 0.928 | 0.917 | 0.901 | 0.691 | 0.709 | 0.410 | 0.827 | 0.968 | 0.820 | 0.827 | 0.851 | 0.865 | 0.617 |
+| all12refin_drop | 0.927 | 0.930 | 0.915 | 0.901 | 0.684 | 0.711 | 0.369 | 0.730 | 0.965 | 0.818 | 0.903 | 0.856 | 0.866 | 0.527 |
+| all12refin_drop_ctcfac | 0.922 | 0.920 | 0.909 | 0.895 | 0.676 | 0.692 | 0.387 | 0.826 | 0.962 | 0.826 | 0.884 | 0.866 | 0.865 | 0.481 |
+| all12deg_refres_drop | 0.924 | 0.931 | 0.913 | 0.901 | 0.686 | 0.700 | 0.369 | 0.826 | 0.964 | 0.830 | 0.856 | 0.841 | 0.859 | 0.568 |
+| all12multires | 0.938 | 0.940 | 0.930 | 0.929 | 0.717 | 0.716 | 0.392 | 0.795 | 0.973 | 0.836 | 0.902 | 0.873 | 0.879 | 0.841 |
+| consensus alone | 0.887 | 0.886 | 0.850 | 0.810 | 0.656 | 0.645 | 0.385 | 0.739 | 0.903 | 0.745 | 0.641 | 0.790 | 0.793 |  |
+| best other measured map | 0.860 | 0.836 | 0.776 | 0.738 | 0.568 | 0.599 | 0.275 | 0.601 | 0.880 | 0.757 | 0.778 | 0.742 | 0.744 |  |
+| replicate map |  | 0.919 | 0.895 | 0.930 | 0.660 | 0.626 | 0.123 | 1.225 | 0.976 | 0.825 | 0.790 | 0.921 | 0.878 |  |
+| measured map, balanced counts |  |  |  |  | 0.879 | 0.862 |  |  |  |  |  |  |  |  |
+| cascade fold model (all12refres setup, chromosome held out) |  | 0.923 | 0.910 | 0.900 | 0.697 | 0.703 | 0.405 | 0.791 | 0.964 | 0.823 | 0.825 | 0.855 | 0.868 |  |
+
+12 training cells, Akita valid+test stretches of chr2 and chr18, 10 kb, count-space measures and regressor scores (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | HiCRep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM |
+|---|---|---|---|---|---|
+| all12refres | 0.948 | 0.984 | 0.120 | 0.967 | 0.426 |
+| all12honest | 0.813 | 0.946 | 0.274 | 0.922 | 0.258 |
+| all12refin | 0.947 | 0.983 | 0.125 | 0.965 | 0.421 |
+| all12refres_drop | 0.933 | 0.981 | 0.168 | 0.965 | 0.424 |
+| all12honest_drop | 0.798 | 0.940 | 0.351 | 0.954 | 0.263 |
+| all12refres_refdrop | 0.931 | 0.980 | 0.184 | 0.973 | 0.408 |
+| all12refres_drop_hard | 0.911 | 0.977 | 0.205 | 0.986 | 0.402 |
+| all12refres_drop_varw | 0.934 | 0.981 | 0.160 | 0.976 | 0.407 |
+| all12refin_drop | 0.938 | 0.981 | 0.164 | 0.963 | 0.395 |
+| all12refin_drop_ctcfac | 0.932 | 0.980 | 0.169 | 0.965 | 0.396 |
+| all12deg_refres_drop | 0.934 | 0.981 | 0.159 | 0.974 | 0.378 |
+| all12multires | 0.953 | 0.985 | 0.107 | 0.978 | 0.419 |
+| consensus alone | 0.870 | 0.959 | 0.307 | 1.008 | 0.372 |
+| best other measured map | 0.805 | 0.948 | 0.429 | 0.997 | 0.311 |
+| replicate map | 0.961 | 0.975 | 0.112 | 1.056 | 0.412 |
+| measured map, balanced counts | 0.991 | 0.937 | 0.043 | 1.015 | 0.550 |
+| cascade fold model (all12refres setup, chromosome held out) | 0.933 | 0.980 | 0.149 | 0.976 | 0.397 |
+
+12 training cells, whole chr2 and chr18, 25 kb, log O/E structure measures (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.939 | 0.953 | 0.939 | 0.922 | 0.815 | 0.815 | 0.339 | 0.855 | 0.959 | 0.822 | 0.853 | 0.870 | 0.940 |
+| cascade fold model (all12refres setup, chromosome held out) |  | 0.948 | 0.931 | 0.921 | 0.816 | 0.811 | 0.333 | 0.806 | 0.951 | 0.820 | 0.803 | 0.861 | 0.928 |
+| consensus alone | 0.922 | 0.917 | 0.863 | 0.829 | 0.796 | 0.792 | 0.336 | 0.762 | 0.888 | 0.765 | 0.671 | 0.794 | 0.875 |
+| best other measured map | 0.905 | 0.884 | 0.817 | 0.778 | 0.733 | 0.747 | 0.307 | 0.798 | 0.867 | 0.760 | 0.755 | 0.757 | 0.865 |
+| replicate map |  | 0.970 | 0.954 | 0.946 | 0.878 | 0.829 | 0.351 | 1.114 | 0.977 | 0.838 | 0.976 | 0.953 | 0.951 |
+| measured map, balanced counts |  |  |  |  | 0.951 | 0.869 |  |  |  |  |  |  |  |
+| Hi-cGAN (GM12878, held-out chromosome) |  | 0.452 | 0.215 | 0.161 | 0.209 | 0.268 | 0.045 | -0.047 | 0.608 | 0.700 | 0.751 | 0.611 | 0.420 |
+
+12 training cells, whole chr2 and chr18, 25 kb, count-space measures and regressor scores (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | ENT3C | HiCRep | GenomeDISCO | HiC-Spector | QuASAR-Rep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM | TabPFN 8m | TabPFN 6m | GB 7m | GB 4m | RF 4m |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.818 | 0.949 | 0.932 | 0.833 | 0.990 | 0.959 | 0.104 | 1.000 | 0.563 | 1.31 | -1.78 | 9.90 | -0.44 | 8.78 |
+| cascade fold model (all12refres setup, chromosome held out) | 0.858 | 0.942 | 0.926 | 0.833 | 0.988 | 0.954 | 0.110 | 1.003 | 0.558 | 1.33 | -1.74 | 8.68 | 0.14 | 8.79 |
+| consensus alone | 0.759 | 0.862 | 0.891 | 0.766 | 0.977 | 0.907 | 0.213 | 1.039 | 0.502 | 1.27 | -1.04 | 8.58 | 0.21 | 8.74 |
+| best other measured map | 0.784 | 0.820 | 0.880 | 0.738 | 0.972 | 0.882 | 0.300 | 1.000 | 0.456 | 1.70 | -0.80 | 9.00 | -0.22 | 8.69 |
+| replicate map | 0.902 | 0.968 | 0.949 | 0.743 | 0.993 | 0.980 | 0.045 | 1.061 | 0.652 | 0.85 | -1.94 | 7.53 | -1.11 | 8.37 |
+| measured map, balanced counts | 0.878 | 0.983 | 0.949 | 0.865 | 0.993 | 0.901 | 0.045 | 1.093 | 0.639 | 0.74 | -1.96 | 8.26 | 0.05 | 8.56 |
+| Hi-cGAN (GM12878, held-out chromosome) | 0.392 | 0.281 | 0.834 | 0.455 | 0.935 | 0.646 | 0.972 | 0.779 | 0.071 | 3.13 | 4.06 | 5.23 | -2.90 | 7.16 |
+
+12 training cells, whole chr2 and chr18, 10 kb, log O/E structure measures (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | loop F1 (called) | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.935 | 0.929 | 0.925 | 0.917 | 0.649 | 0.682 | 0.375 | 0.802 | 0.396 | 0.969 | 0.825 | 0.860 | 0.893 | 0.870 |
+| cascade fold model (all12refres setup, chromosome held out) |  | 0.919 | 0.906 | 0.900 | 0.633 | 0.667 | 0.373 | 0.818 | 0.406 | 0.958 | 0.821 | 0.811 | 0.872 | 0.858 |
+| consensus alone | 0.887 | 0.879 | 0.843 | 0.801 | 0.624 | 0.622 | 0.345 | 0.744 | 0.331 | 0.888 | 0.775 | 0.684 | 0.793 | 0.804 |
+| best other measured map | 0.860 | 0.823 | 0.750 | 0.720 | 0.542 | 0.550 | 0.236 | 0.608 | 0.264 | 0.837 | 0.770 | 0.775 | 0.725 | 0.728 |
+| replicate map |  | 0.910 | 0.879 | 0.925 | 0.650 | 0.608 | 0.084 | 1.160 | 0.275 | 0.969 | 0.841 | 0.776 | 0.908 | 0.877 |
+| measured map, balanced counts |  |  |  |  | 0.866 | 0.838 |  |  | 0.904 |  |  |  |  |  |
+| C.Origami (IMR-90, chr2) |  | 0.904 | 0.914 | 0.870 | 0.466 | 0.519 | 0.145 | 0.733 | 0.196 | 0.971 | 0.802 | 1.155 | 0.931 | 0.797 |
+| Hi-cGAN (GM12878, held-out chromosome) |  | 0.500 | 0.300 | 0.184 | 0.117 | 0.168 | 0.028 | 0.139 | 0.027 | 0.664 | 0.718 | 0.832 | 0.594 | 0.427 |
+| Hi-cGAN, GM12878 model on IMR-90 (chr2) |  | 0.493 | 0.314 | 0.564 | 0.137 | 0.174 | 0.040 | 0.202 | 0.050 | 0.717 | 0.655 | 0.583 | 0.498 | 0.393 |
+| Hi-cGAN, IMR-90 model (chr2) |  | 0.590 | 0.567 | 0.584 | 0.105 | 0.120 | 0.014 | 0.120 | 0.036 | 0.734 | 0.757 | 0.661 | 0.639 | 0.480 |
+
+12 training cells, whole chr2 and chr18, 10 kb, count-space measures and regressor scores (median over 12 cells of the per-cell mean over chromosomes):
+
+| source | HiCRep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM |
+|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.946 | 0.949 | 0.131 | 0.957 | 0.403 |
+| cascade fold model (all12refres setup, chromosome held out) | 0.929 | 0.939 | 0.157 | 0.972 | 0.379 |
+| consensus alone | 0.862 | 0.891 | 0.272 | 1.014 | 0.353 |
+| best other measured map | 0.800 | 0.836 | 0.433 | 1.003 | 0.295 |
+| replicate map | 0.952 | 0.949 | 0.071 | 1.071 | 0.395 |
+| measured map, balanced counts | 0.985 | 0.832 | 0.058 | 1.022 | 0.552 |
+| C.Origami (IMR-90, chr2) | 0.935 | 0.944 | 0.152 | 0.897 | 0.198 |
+| Hi-cGAN (GM12878, held-out chromosome) | 0.372 | 0.672 | 1.031 | 0.714 | 0.044 |
+| Hi-cGAN, GM12878 model on IMR-90 (chr2) | 0.463 | 0.636 | 0.554 | 0.786 | 0.064 |
+| Hi-cGAN, IMR-90 model (chr2) | 0.646 | 0.744 | 0.519 | 0.873 | 0.044 |
+
+GM12878, whole chr2 and chr18, 1 Mb band (HiC-Reg reach), 25 kb, log O/E structure measures (median over 1 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined | rank score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.938 | 0.943 | 0.927 | 0.912 | 0.821 | 0.822 | 0.398 | 0.789 | 0.947 | 0.802 | 0.893 | 0.830 | 0.935 | 0.657 |
+| all12honest (chromosome in training) | 0.822 | 0.822 | 0.803 | 0.787 | 0.670 | 0.656 | 0.223 | 0.443 | 0.874 | 0.833 | 0.876 | 0.724 | 0.791 | 0.194 |
+| all12refin (chromosome in training) | 0.939 | 0.944 | 0.926 | 0.910 | 0.858 | 0.841 | 0.423 | 0.797 | 0.949 | 0.799 | 0.858 | 0.850 | 0.928 | 0.748 |
+| all12refres_drop (chromosome in training) | 0.931 | 0.935 | 0.912 | 0.887 | 0.847 | 0.822 | 0.399 | 0.817 | 0.937 | 0.810 | 0.958 | 0.832 | 0.929 | 0.556 |
+| all12honest_drop (chromosome in training) | 0.810 | 0.794 | 0.765 | 0.706 | 0.659 | 0.644 | 0.225 | 0.271 | 0.846 | 0.800 | 0.785 | 0.694 | 0.748 | 0.056 |
+| all12refres_refdrop (chromosome in training) | 0.926 | 0.928 | 0.902 | 0.857 | 0.818 | 0.807 | 0.409 | 0.787 | 0.935 | 0.801 | 0.956 | 0.817 | 0.922 | 0.452 |
+| all12refres_drop_hard (chromosome in training) | 0.924 | 0.922 | 0.898 | 0.857 | 0.799 | 0.801 | 0.402 | 0.744 | 0.928 | 0.813 | 0.904 | 0.820 | 0.922 | 0.375 |
+| all12refres_drop_varw (chromosome in training) | 0.927 | 0.929 | 0.909 | 0.876 | 0.831 | 0.820 | 0.401 | 0.862 | 0.935 | 0.790 | 0.919 | 0.828 | 0.931 | 0.504 |
+| all12refin_drop (chromosome in training) | 0.936 | 0.936 | 0.916 | 0.893 | 0.845 | 0.831 | 0.420 | 0.753 | 0.942 | 0.798 | 0.831 | 0.822 | 0.929 | 0.601 |
+| all12refin_drop_ctcfac (chromosome in training) | 0.927 | 0.923 | 0.901 | 0.879 | 0.815 | 0.821 | 0.407 | 0.853 | 0.926 | 0.775 | 0.828 | 0.825 | 0.917 | 0.384 |
+| all12deg_refres_drop (chromosome in training) | 0.934 | 0.937 | 0.924 | 0.903 | 0.829 | 0.832 | 0.402 | 0.819 | 0.943 | 0.785 | 0.854 | 0.845 | 0.931 | 0.618 |
+| all12multires (chromosome in training) | 0.942 | 0.951 | 0.945 | 0.931 | 0.842 | 0.859 | 0.434 | 0.829 | 0.962 | 0.799 | 0.876 | 0.862 | 0.948 | 0.856 |
+| consensus alone | 0.882 | 0.865 | 0.796 | 0.753 | 0.804 | 0.762 | 0.400 | 0.758 | 0.831 | 0.727 | 0.756 | 0.765 | 0.856 |  |
+| best other measured map | 0.844 | 0.812 | 0.734 | 0.659 | 0.718 | 0.686 | 0.348 | 0.718 | 0.796 | 0.726 | 0.805 | 0.723 | 0.800 |  |
+| replicate map |  | 0.954 | 0.933 | 0.901 | 0.879 | 0.814 | 0.397 | 1.122 | 0.971 | 0.826 | 1.204 | 0.886 | 0.930 |  |
+| measured map, balanced counts |  |  |  |  | 0.961 | 0.859 |  |  |  |  |  |  |  |  |
+| cascade fold model (all12refres setup, chromosome held out) |  | 0.928 | 0.912 | 0.894 | 0.826 | 0.817 | 0.384 | 0.771 | 0.934 | 0.799 | 0.894 | 0.817 | 0.921 |  |
+| HiC-Reg (within-chromosome CV) |  | 0.946 | 0.843 | 0.562 | 0.689 | 0.782 | 0.259 | 0.346 | 0.980 | 0.796 | 0.613 | 0.890 | 0.836 |  |
+
+GM12878, whole chr2 and chr18, 1 Mb band (HiC-Reg reach), 25 kb, count-space measures and regressor scores (median over 1 cells of the per-cell mean over chromosomes):
+
+| source | ENT3C | HiCRep | GenomeDISCO | HiC-Spector | QuASAR-Rep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM | TabPFN 8m | TabPFN 6m | GB 7m | GB 4m | RF 4m |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.584 | 0.940 | 0.944 | 0.862 | 0.994 | 0.969 | 0.068 | 0.998 | 0.549 | 1.23 | -1.93 | 10.36 | 0.14 | 8.79 |
+| all12honest (chromosome in training) | 0.250 | 0.836 | 0.909 | 0.907 | 0.985 | 0.911 | 0.162 | 1.021 | 0.305 | 1.38 | -1.51 | 9.74 | 0.36 | 8.78 |
+| all12refin (chromosome in training) | 0.781 | 0.937 | 0.944 | 0.848 | 0.994 | 0.968 | 0.072 | 1.020 | 0.547 | 1.07 | -1.88 | 10.05 | 0.14 | 8.78 |
+| all12refres_drop (chromosome in training) | 0.628 | 0.922 | 0.938 | 0.810 | 0.993 | 0.963 | 0.089 | 1.030 | 0.506 | 1.21 | -1.81 | 9.74 | -0.19 | 8.78 |
+| all12honest_drop (chromosome in training) | 0.206 | 0.799 | 0.903 | 0.842 | 0.983 | 0.897 | 0.225 | 1.024 | 0.283 | 1.53 | -1.21 | 10.05 | 1.03 | 8.85 |
+| all12refres_refdrop (chromosome in training) | 0.538 | 0.910 | 0.934 | 0.872 | 0.992 | 0.959 | 0.118 | 1.013 | 0.496 | 1.38 | -1.78 | 10.36 | -0.59 | 8.79 |
+| all12refres_drop_hard (chromosome in training) | 0.509 | 0.907 | 0.936 | 0.880 | 0.993 | 0.958 | 0.114 | 0.997 | 0.497 | 1.37 | -1.80 | 10.36 | -0.28 | 8.79 |
+| all12refres_drop_varw (chromosome in training) | 0.489 | 0.920 | 0.937 | 0.840 | 0.993 | 0.962 | 0.097 | 1.013 | 0.536 | 1.28 | -1.84 | 10.36 | -0.19 | 9.03 |
+| all12refin_drop (chromosome in training) | 0.660 | 0.929 | 0.941 | 0.859 | 0.994 | 0.964 | 0.081 | 1.017 | 0.548 | 1.19 | -1.86 | 10.36 | -0.19 | 9.03 |
+| all12refin_drop_ctcfac (chromosome in training) | 0.667 | 0.913 | 0.936 | 0.821 | 0.992 | 0.958 | 0.098 | 0.994 | 0.513 | 1.44 | -1.89 | 8.61 | -0.19 | 8.46 |
+| all12deg_refres_drop (chromosome in training) | 0.513 | 0.936 | 0.943 | 0.819 | 0.994 | 0.968 | 0.074 | 0.997 | 0.554 | 1.29 | -1.90 | 10.36 | 0.14 | 8.79 |
+| all12multires (chromosome in training) | 0.687 | 0.955 | 0.952 | 0.843 | 0.996 | 0.976 | 0.053 | 0.981 | 0.563 | 1.29 | -2.00 | 8.61 | 0.14 | 8.82 |
+| consensus alone | 0.758 | 0.808 | 0.890 | 0.765 | 0.982 | 0.910 | 0.221 | 1.055 | 0.423 | 1.11 | -1.01 | 9.43 | 0.98 | 9.08 |
+| best other measured map | 0.778 | 0.748 | 0.896 | 0.735 | 0.982 | 0.887 | 0.300 | 1.046 | 0.349 | 1.60 | -0.28 | 10.05 | -0.22 | 8.85 |
+| replicate map | 0.675 | 0.941 | 0.933 | 0.793 | 0.995 | 0.967 | 0.091 | 1.079 | 0.623 | 0.94 | -1.68 | 9.43 | -0.59 | 9.23 |
+| measured map, balanced counts | 0.818 | 0.995 | 0.977 | 0.901 | 0.998 | 0.966 | 0.024 | 1.120 | 0.619 | 0.62 | -2.07 | 5.32 | -0.18 | 7.96 |
+| cascade fold model (all12refres setup, chromosome held out) | 0.852 | 0.925 | 0.938 | 0.857 | 0.993 | 0.963 | 0.083 | 1.010 | 0.516 | 1.18 | -1.85 | 10.36 | -0.19 | 9.03 |
+| HiC-Reg (within-chromosome CV) | 0.379 | 0.870 | 0.906 | 0.790 | 0.986 | 0.908 | 0.275 | 0.881 | 0.381 | 2.04 | -1.63 | 6.61 | -0.96 | 6.50 |
+
+GM12878, whole chr17, 990 kb band (Epiphany reach), 10 kb, log O/E structure measures (median over 1 cells of the per-cell mean over chromosomes):
+
+| source | Pearson 413 regions | Pearson 1 Mb tiles | SCC | insulation r | boundary recall | boundary precision | loop recall | APA ratio | loop F1 (called) | compartment preference r | A/B sign agreement | saddle ratio | local E1 r | window combined | rank score |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.938 | 0.934 | 0.928 | 0.916 | 0.748 | 0.757 | 0.475 | 0.863 | 0.483 | 0.966 | 0.733 | 0.830 | 0.874 | 0.903 | 0.778 |
+| all12honest (chromosome in training) | 0.835 | 0.796 | 0.788 | 0.785 | 0.544 | 0.561 | 0.239 | 0.382 | 0.141 | 0.873 | 0.780 | 0.605 | 0.699 | 0.700 | 0.140 |
+| all12refin (chromosome in training) | 0.941 | 0.936 | 0.926 | 0.929 | 0.728 | 0.747 | 0.471 | 0.779 | 0.476 | 0.956 | 0.724 | 0.750 | 0.876 | 0.901 | 0.657 |
+| all12refres_drop (chromosome in training) | 0.930 | 0.923 | 0.916 | 0.904 | 0.738 | 0.765 | 0.496 | 0.922 | 0.500 | 0.949 | 0.743 | 0.778 | 0.839 | 0.895 | 0.574 |
+| all12honest_drop (chromosome in training) | 0.815 | 0.761 | 0.760 | 0.715 | 0.495 | 0.479 | 0.257 | 0.275 | 0.127 | 0.857 | 0.758 | 0.532 | 0.717 | 0.663 | 0.078 |
+| all12refres_refdrop (chromosome in training) | 0.928 | 0.926 | 0.912 | 0.896 | 0.682 | 0.698 | 0.486 | 0.807 | 0.469 | 0.948 | 0.748 | 0.790 | 0.841 | 0.884 | 0.464 |
+| all12refres_drop_hard (chromosome in training) | 0.920 | 0.919 | 0.901 | 0.856 | 0.711 | 0.711 | 0.467 | 0.835 | 0.452 | 0.935 | 0.719 | 0.697 | 0.833 | 0.885 | 0.326 |
+| all12refres_drop_varw (chromosome in training) | 0.936 | 0.927 | 0.921 | 0.916 | 0.695 | 0.709 | 0.478 | 0.860 | 0.486 | 0.952 | 0.743 | 0.801 | 0.831 | 0.893 | 0.632 |
+| all12refin_drop (chromosome in training) | 0.933 | 0.930 | 0.918 | 0.914 | 0.682 | 0.705 | 0.431 | 0.709 | 0.425 | 0.955 | 0.738 | 0.782 | 0.865 | 0.877 | 0.432 |
+| all12refin_drop_ctcfac (chromosome in training) | 0.923 | 0.915 | 0.896 | 0.873 | 0.675 | 0.696 | 0.504 | 0.985 | 0.520 | 0.928 | 0.726 | 0.829 | 0.844 | 0.885 | 0.456 |
+| all12deg_refres_drop (chromosome in training) | 0.934 | 0.929 | 0.920 | 0.910 | 0.675 | 0.694 | 0.478 | 0.906 | 0.497 | 0.950 | 0.751 | 0.752 | 0.872 | 0.898 | 0.594 |
+| all12multires (chromosome in training) | 0.943 | 0.942 | 0.933 | 0.927 | 0.721 | 0.717 | 0.514 | 0.864 | 0.483 | 0.965 | 0.743 | 0.809 | 0.876 | 0.905 | 0.869 |
+| consensus alone | 0.858 | 0.877 | 0.832 | 0.803 | 0.725 | 0.674 | 0.453 | 0.900 | 0.499 | 0.863 | 0.689 | 0.907 | 0.786 | 0.846 |  |
+| best other measured map | 0.799 | 0.824 | 0.782 | 0.808 | 0.689 | 0.650 | 0.297 | 0.906 | 0.445 | 0.828 | 0.682 | 0.802 | 0.702 | 0.801 |  |
+| replicate map |  | 0.869 | 0.855 | 0.896 | 0.751 | 0.682 | 0.109 | 1.366 | 0.491 | 0.951 | 0.746 | 0.846 | 0.868 | 0.811 |  |
+| measured map, balanced counts |  |  |  |  | 0.859 | 0.853 |  |  | 0.944 |  |  |  |  |  |  |
+| cascade fold model (all12refres setup, chromosome held out) |  | 0.921 | 0.915 | 0.915 | 0.711 | 0.759 | 0.453 | 0.862 | 0.476 | 0.954 | 0.748 | 0.863 | 0.870 | 0.889 |  |
+| Epiphany (held-out chr17) |  | 0.511 | 0.341 | 0.248 | 0.226 | 0.267 | 0.047 | 0.220 | 0.058 | 0.603 | 0.782 | 0.432 | 0.652 | 0.480 |  |
+
+GM12878, whole chr17, 990 kb band (Epiphany reach), 10 kb, count-space measures and regressor scores (median over 1 cells of the per-cell mean over chromosomes):
+
+| source | HiCRep | Pearson AUC | TAD score MSE | TAD fraction | TAD FEM |
+|---|---|---|---|---|---|
+| all12refres (chromosome in training) | 0.946 | 0.957 | 0.112 | 0.987 | 0.462 |
+| all12honest (chromosome in training) | 0.817 | 0.858 | 0.225 | 0.970 | 0.252 |
+| all12refin (chromosome in training) | 0.947 | 0.955 | 0.091 | 0.974 | 0.472 |
+| all12refres_drop (chromosome in training) | 0.936 | 0.948 | 0.124 | 0.964 | 0.469 |
+| all12honest_drop (chromosome in training) | 0.793 | 0.845 | 0.303 | 1.033 | 0.249 |
+| all12refres_refdrop (chromosome in training) | 0.937 | 0.949 | 0.136 | 0.977 | 0.443 |
+| all12refres_drop_hard (chromosome in training) | 0.926 | 0.942 | 0.182 | 1.000 | 0.443 |
+| all12refres_drop_varw (chromosome in training) | 0.943 | 0.953 | 0.108 | 0.980 | 0.452 |
+| all12refin_drop (chromosome in training) | 0.937 | 0.947 | 0.114 | 0.967 | 0.436 |
+| all12refin_drop_ctcfac (chromosome in training) | 0.920 | 0.937 | 0.156 | 0.970 | 0.413 |
+| all12deg_refres_drop (chromosome in training) | 0.942 | 0.952 | 0.116 | 0.974 | 0.452 |
+| all12multires (chromosome in training) | 0.950 | 0.959 | 0.097 | 1.007 | 0.469 |
+| consensus alone | 0.870 | 0.900 | 0.250 | 1.075 | 0.420 |
+| best other measured map | 0.846 | 0.874 | 0.222 | 1.059 | 0.377 |
+| replicate map | 0.935 | 0.909 | 0.125 | 1.102 | 0.485 |
+| measured map, balanced counts | 0.995 | 0.935 | 0.017 | 1.007 | 0.538 |
+| cascade fold model (all12refres setup, chromosome held out) | 0.935 | 0.946 | 0.113 | 0.938 | 0.456 |
+| Epiphany (held-out chr17) | 0.518 | 0.634 | 0.743 | 0.846 | 0.111 |
+

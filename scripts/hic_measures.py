@@ -28,8 +28,9 @@ measures, so that no single number decides which model is best:
     SCC, insulation-profile Pearson, boundary recall and precision (hicFindTADs
     boundaries of the prediction against those of the target, 1 bin
     tolerance), loops against the hicDetectLoops 3.7.6 calls of the measured
-    map (rank-matched donut recall, APA ratio, anchor AUROC; at 10 kb also
-    hicDetectLoops 3.7.6 on the prediction: recall, precision, F1),
+    map (rank-matched donut recall, APA ratio, anchor AUROC; at 10 kb, outside
+    the trainstretch set, also hicDetectLoops 3.7.6 on the prediction:
+    recall, precision, F1),
     compartments (local E1 of 2 Mb windows against the target's, compartment
     contact preference per bin against the target's, sign agreement with the
     measured genome-wide E1, saddle strength).
@@ -1415,7 +1416,9 @@ def score_block(b: dict, jobs: int) -> Path:
         return k, run_findtads(cd / f"{k}.cool", bd / "tads" / k, res, chrom)
 
     def loops(k):
-        if res != 10000:
+        # hicDetectLoops on every map at 10 kb, except the masked
+        # trainstretch blocks (rank-matched loop measures only there)
+        if res != 10000 or b["set"] == "trainstretch":
             return k, None
         return k, run_detectloops(cd / f"{k}.cool", bd / "loops" / f"{k}.bedgraph", chrom)
 
@@ -1509,6 +1512,33 @@ def stage_score(jobs: int, only: list[str] | None = None, wait: bool = False) ->
             release(f)
 
 
+def stage_ceilings() -> None:
+    """Rank-matched loop recall of the target against itself per block (the
+    ceiling of that measure: the target's own strongest donut peaks against
+    the hicDetectLoops calls of the measured map)."""
+    rows = []
+    for b in blocks():
+        if not (OUT / "blocks" / b["id"] / "measures.csv").exists():
+            continue
+        cell, res, chrom, D = b["cell"], b["res"], b["chrom"], b["D"]
+        E = np.load(expected_file(cell, res, chrom))
+        n = int(E["n"])
+        T = load_band(target_cool(cell, res), chrom, n, D)
+        T[T == 0] = np.nan
+        if b["set"] == "trainstretch":
+            T = masked(T, holdout_stretch_mask(chrom, n, D, res))
+        ref = ref_loops(cell, chrom, res, n, D)
+        if b["set"] == "trainstretch" and len(ref):
+            m = holdout_stretch_mask(chrom, n, D, res)
+            ref = ref[m[ref[:, 0], np.minimum(ref[:, 1] - ref[:, 0], D)]]
+        lm = rank_loop_metrics(T, T, ref, res) if len(ref) else {}
+        rows.append(dict(block=b["id"], set=b["set"], cell=cell, res=res, chrom=chrom,
+                         n_ref_loops=len(ref), loop_recall_rank_target=lm.get("loop_recall")))
+    TABLES.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(TABLES / "loop_recall_ceiling.csv", index=False)
+    log(f"[ceilings] {len(rows)} blocks")
+
+
 def collect() -> pd.DataFrame:
     fs = sorted((OUT / "blocks").glob("*/measures.csv"))
     if not fs:
@@ -1587,8 +1617,10 @@ def stage_combine() -> None:
                         "here_median_25kb": [rows[rows.res == 25000][m].median() for m in NINE],
                         "here_min_25kb": [rows[rows.res == 25000][m].min() for m in NINE],
                         "here_max_25kb": [rows[rows.res == 25000][m].max() for m in NINE],
-                        "share_in_range_25kb": [rows[rows.res == 25000][f"in_domain_{m}"].mean()
-                                                for m in NINE]})
+                        "n_scored_25kb": [int(rows[rows.res == 25000][m].notna().sum())
+                                          for m in NINE],
+                        "share_in_range_25kb": [rows[(rows.res == 25000) & rows[m].notna()]
+                                                [f"in_domain_{m}"].mean() for m in NINE]})
     dom.to_csv(TABLES / "regressor_domain.csv", index=False)
     log(f"[combine] wrote {TABLES / 'combined_scores.csv'}")
 
@@ -1603,6 +1635,7 @@ MEASURE_COLS = NINE + [
     "comp_sign_agree", "saddle_ratio", "local_e1_r", "local_e1_sign_agree", "window_combined",
     "oe_r_50kb", "oe_r_100kb", "oe_r_250kb", "oe_r_500kb", "oe_r_1000kb"]
 SOURCE_LABEL = {CASCFOLD: "all12refres setup, chromosome held out (cascade fold)",
+                "hicgan_gm12878_model_on_cell": "Hi-cGAN, GM12878 model on the cell's ChIP",
                 "consensus": "consensus alone", "best_other_map": "best other measured map",
                 "replicate": "replicate map (ceiling)",
                 "measured_balanced": "measured map, balanced counts (round-trip ceiling)"}
@@ -1720,6 +1753,10 @@ def stage_report() -> None:
                                                                     "n_measures"))]],
                     on=keyc, how="left")
     d = add_rank_score(d)
+    # one row label for the Hi-cGAN GM12878 model on the three held-out cells
+    d["competitor"] = np.where(d.kind == "competitor", d.source, "")
+    d["source"] = d.source.str.replace(r"^hicgan_gm12878_on_(k562|hmec|huvec)_\d+kb$",
+                                       "hicgan_gm12878_model_on_cell", regex=True)
     d.to_csv(TABLES / "measures_per_chromosome.csv", index=False)
     comb = [x for x in d.columns if x.startswith("combined_")]
     cols = [c for c in MEASURE_COLS + ["mmrs"] + [f"mmrs_{lv}" for lv in MMRS_LEVELS] + comb
@@ -1835,6 +1872,79 @@ def figures(per_cell, summ, cols, rk) -> None:
     plt.close(fig)
 
 
+REG_A = [("pearson413", "Pearson 413 regions"), ("oe_pearson_tile_median", "Pearson 1 Mb tiles"),
+         ("oe_scc", "SCC"), ("insulation_r", "insulation r"), ("bnd_recall", "boundary recall"),
+         ("bnd_precision", "boundary precision"), ("loop_recall_rank", "loop recall"),
+         ("apa_ratio", "APA ratio"), ("loop_f1_call", "loop F1 (called)"),
+         ("comp_pref_r", "compartment preference r"), ("comp_sign_agree", "A/B sign agreement"),
+         ("saddle_ratio", "saddle ratio"), ("local_e1_r", "local E1 r"),
+         ("window_combined", "window combined"), ("mmrs", "rank score")]
+REG_B = [("ENT3C", "ENT3C"), ("HiCRep", "HiCRep"), ("GenomeDISCO", "GenomeDISCO"),
+         ("HiC-Spector", "HiC-Spector"), ("QuASAR-Rep", "QuASAR-Rep"), ("Pearson", "Pearson AUC"),
+         ("TAD Score MSE", "TAD score MSE"), ("TAD Fraction", "TAD fraction"),
+         ("TAD Fraction Exact Match", "TAD FEM"), ("combined_TabPFN_8m", "TabPFN 8m"),
+         ("combined_TabPFN_6m", "TabPFN 6m"), ("combined_GB_7m", "GB 7m"),
+         ("combined_GB_4m", "GB 4m"), ("combined_RF_4m", "RF 4m")]
+REG_SET = {"heldout": "held-out cells K562, HMEC deep, HUVEC deep; chr2, chr12, chr18",
+           "trainstretch": "12 training cells, Akita valid+test stretches of chr2 and chr18",
+           "trainchrom": "12 training cells, whole chr2 and chr18",
+           "hicreg": "GM12878, whole chr2 and chr18, 1 Mb band (HiC-Reg reach)",
+           "epiphany": "GM12878, whole chr17, 990 kb band (Epiphany reach)"}
+
+
+def reg_label(s: str, set_: str, res: int) -> str:
+    lab = {CASCFOLD: "cascade fold model (all12refres setup, chromosome held out)",
+           "consensus": "consensus alone", "best_other_map": "best other measured map",
+           "replicate": "replicate map", "measured_balanced": "measured map, balanced counts",
+           "hicgan_gm12878_model_on_cell": "Hi-cGAN, GM12878 model",
+           "hicgan_gm12878_25kb": "Hi-cGAN (GM12878, held-out chromosome)",
+           "hicgan_gm12878_10kb": "Hi-cGAN (GM12878, held-out chromosome)",
+           "hicgan_gm12878_on_imr90_10kb": "Hi-cGAN, GM12878 model on IMR-90 (chr2)",
+           "hicgan_imr90_on_imr90_10kb": "Hi-cGAN, IMR-90 model (chr2)",
+           "corigami_imr90_8kb": "C.Origami (IMR-90, chr2)",
+           "hicreg_gm12878_25kb": "HiC-Reg (within-chromosome CV)",
+           "epiphany_gm12878_10kb": "Epiphany (held-out chr17)"}.get(s, s)
+    if s == "all12refres" and set_ in ("trainchrom", "hicreg", "epiphany"):
+        lab += " (chromosome in training)"
+    elif s in MODELS and set_ in ("hicreg", "epiphany"):
+        lab += " (chromosome in training)"
+    return lab
+
+
+def stage_tables() -> None:
+    """Markdown tables of summary.csv for the registry
+    (runs/hic_measures/registry_tables.md)."""
+    summ = pd.read_csv(TABLES / "summary.csv")
+    out = []
+    for set_ in ("heldout", "trainstretch", "trainchrom", "hicreg", "epiphany"):
+        for res in RESOLUTIONS:
+            g = summ[(summ.set == set_) & (summ.res == res)].set_index("source")
+            if g.empty:
+                continue
+            order = [m for m in model_sources(set_) + ["consensus", "best_other_map",
+                                                         "replicate", "measured_balanced"]
+                     if m in g.index]
+            order += sorted(s for s in g.index if s not in order)
+            for cols, what in ((REG_A, "log O/E structure measures"),
+                               (REG_B, "count-space measures and regressor scores")):
+                cols = [(c, h) for c, h in cols if c in g.columns and g[c].notna().any()]
+                out.append(f"{REG_SET[set_]}, {res // 1000} kb, {what} (median over "
+                           f"{int(g.n_cells.max())} cells of the per-cell mean over "
+                           "chromosomes):")
+                out.append("")
+                out.append("| source | " + " | ".join(h for _, h in cols) + " |")
+                out.append("|---" * (len(cols) + 1) + "|")
+                for src in order:
+                    r = g.loc[src]
+                    vals = " | ".join("" if pd.isna(r[c]) else
+                                      (f"{r[c]:.2f}" if c.startswith("combined_") else f"{r[c]:.3f}")
+                                      for c, _ in cols)
+                    out.append(f"| {reg_label(src, set_, res)} | {vals} |")
+                out.append("")
+    (OUT / "registry_tables.md").write_text("\n".join(out) + "\n")
+    log(f"[tables] {OUT / 'registry_tables.md'}")
+
+
 def write_status(d: pd.DataFrame, summ: pd.DataFrame, rk: pd.DataFrame) -> None:
     nb = d.block.nunique()
     tot = len(blocks())
@@ -1861,7 +1971,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True,
-                    choices=["predict", "expected", "score", "combine", "report"])
+                    choices=["predict", "expected", "score", "ceilings", "combine", "report",
+                             "tables"])
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--only", nargs="*", default=None, help="regexes of block ids")
@@ -1876,10 +1987,14 @@ def main():
             stage_expected(min(a.jobs, 4))
         elif st == "score":
             stage_score(a.jobs, a.only, a.wait)
+        elif st == "ceilings":
+            stage_ceilings()
         elif st == "combine":
             stage_combine()
         elif st == "report":
             stage_report()
+        elif st == "tables":
+            stage_tables()
 
 
 if __name__ == "__main__":
