@@ -300,9 +300,15 @@ def jobs():
     # --- copy number as two tracks + structural-variant loss mask (registry
     # section 28; inputs from scripts/cnv_sv.py)
     import cnv_sv as cv
+    # the training mask needs the five cancer training lines only; K562 (held
+    # out) refreshes breakpoints.json for the analysis once its calls exist
+    sv_train = [c for c in cv.SV_CELLS if c in mx.TRAIN12]
     J.append(Job("sv_breakpoints", f"{PY} scripts/cnv_sv.py --stage breakpoints summary",
-                 lambda: cv.eaglec_finished() and (cv.RES_OUT / "cnv_segments.csv").exists(),
+                 lambda: cv.eaglec_finished(sv_train) and (cv.RES_OUT / "cnv_segments.csv").exists(),
                  lambda: (cv.SV / "breakpoints.json").exists()))
+    J.append(Job("sv_breakpoints_all", f"{PY} scripts/cnv_sv.py --stage breakpoints summary",
+                 lambda: cv.eaglec_finished() and (cv.SV / "breakpoints.json").exists(),
+                 lambda: is_marked("sv_breakpoints_all")))
     cnv_ok = lambda: (cv.SV / "breakpoints.json").exists() and all(
         cv.has_cnv(c) for c in mx.TRAIN12)
     prep_cache("all12refres_drop_cnv", 10000, "mc_all12refres_drop_cnv_10kb", cnv_ok)

@@ -340,10 +340,11 @@ def run_eaglec(cell: str, nproc: int) -> int:
     return rc
 
 
-def eaglec_finished() -> bool:
-    """Every SV cell has its calls or a failure marker (fallback: CNV change points)."""
+def eaglec_finished(cells=None) -> bool:
+    """Every SV cell (or every one of `cells`) has its calls or a failure
+    marker (fallback: CNV change points)."""
     return all(eaglec_out(c).exists() or (SV / "eaglec" / f"{c}.failed").exists()
-               for c in SV_CELLS)
+               for c in (cells or SV_CELLS))
 
 
 def stage_eaglec(nproc: int):
