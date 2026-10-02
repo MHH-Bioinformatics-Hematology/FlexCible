@@ -742,12 +742,61 @@ def hard_summary():
     print(pd.DataFrame(agg).T.to_string(), flush=True)
 
 
+def repfill(res: int, subdir: str = "quick"):
+    """Replicate columns (replicate_pearson, replicate_resid_corr, as in
+    quick_task) of quick-stage or hard-test tables that lack them: until
+    2026-10-02 the single-lane replicate maps at 25 kb were on a 24 kb grid
+    (scripts/regrid_replicates.py), so quick_task skipped them for IMR-90,
+    HMEC and HUVEC. Merges the values computed on the regridded maps into
+    the existing table; the original is kept in <subdir>_grid24kb/."""
+    import cooler
+    sys.path.insert(0, str(REPO / "scripts"))
+    import benchmark_metrics as bm
+    qd = OUT / subdir
+    for cell in CELLS:
+        f = qd / f"{cell}_{res // 1000}kb.csv"
+        rp = rep_pair(cell, res)
+        if not f.exists() or rp is None:
+            continue
+        d = pd.read_csv(f)
+        if "replicate_pearson" in d and d["replicate_pearson"].notna().any():
+            continue
+        tgt = cooler.Cooler(str(mx.target(cell, res)))
+        cons = cooler.Cooler(str(consensus_of(cell, res)))
+        raw = cooler.Cooler(raw_uri(cell, res))
+        reps = [cooler.Cooler(str(q)) for q in rp]
+        rows = []
+        for reg in d["region"]:
+            chrom, se = reg.split(":")
+            s, e = (int(x) for x in se.split("-"))
+            T, C = fetch(tgt, chrom, s, e), fetch(cons, chrom, s, e)
+            R = [fetch(x, chrom, s, e) for x in reps]
+            if C.shape != T.shape or any(x.shape != T.shape for x in R):
+                continue
+            mb = masked_bins(raw, chrom, s, e)
+            if len(mb) != T.shape[0]:
+                mb = np.resize(mb, T.shape[0])
+            rec, mask = region_stats(T, C, None, mb, None)
+            if "score" not in rec:
+                continue
+            ok = mask & np.isfinite(R[0]) & np.isfinite(R[1])
+            rows.append({"region": reg, "replicate_pearson": bm.pearson(R[0], R[1], mask),
+                         "replicate_resid_corr": corr((R[0] - C)[ok], (R[1] - C)[ok])})
+        bk = OUT / f"{subdir}_grid24kb"                 # outside the summary glob
+        bk.mkdir(exist_ok=True)
+        f.rename(bk / f.name)
+        d = d.drop(columns=[c for c in ("replicate_pearson", "replicate_resid_corr")
+                            if c in d]).merge(pd.DataFrame(rows), on="region", how="left")
+        d.to_csv(f, index=False)
+        print(f"{subdir}/{f.name}: replicate columns for {len(rows)} regions", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stage", required=True,
                     choices=["quick", "quick_task", "quick_summary", "score", "score_task",
                              "select", "hardeval", "hardeval_task", "hard_summary",
-                             "shrink_summary"])
+                             "shrink_summary", "repfill"])
     ap.add_argument("--cell")
     ap.add_argument("--res", type=int)
     ap.add_argument("--jobs", type=int, default=4)
@@ -792,6 +841,9 @@ def main():
         hard_summary()
     elif a.stage == "hard_summary":
         hard_summary()
+    elif a.stage == "repfill":
+        for sub in ("quick", "hardtest"):
+            repfill(a.res or 25000, sub)
     else:
         quick_summary(a.tag)
 

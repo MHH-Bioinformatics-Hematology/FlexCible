@@ -159,11 +159,22 @@ rep1 vs rep2 on the 413 regions. Table `replicates/replicate_corr.csv`
 
 | cell | contacts rep1 / rep2 (M) | 2 kb | 5 kb | 10 kb | 25 kb |
 |---|---|---|---|---|---|
-| GM12878 | 138 / 230 | 0.386 | 0.564 | 0.779 | 0.933 |
-| IMR90 | 166 / 199 | 0.501 | 0.689 | 0.867 | 0.956 |
-| K562 | 144 / 210 | 0.359 | 0.500 | 0.764 | 0.932 |
-| HMEC | 171 / 167 | 0.317 | 0.526 | 0.780 | 0.936 |
-| HUVEC | 112 / 117 | 0.332 | 0.429 | 0.697 | 0.888 |
+| GM12878 | 138 / 230 | 0.386 | 0.589 | 0.779 | 0.938 |
+| IMR90 | 166 / 199 | 0.501 | 0.712 | 0.867 | 0.959 |
+| K562 | 144 / 210 | 0.359 | 0.525 | 0.764 | 0.937 |
+| HMEC | 171 / 167 | 0.317 | 0.552 | 0.780 | 0.941 |
+| HUVEC | 112 / 117 | 0.332 | 0.455 | 0.697 | 0.896 |
+
+Correction (2026-10-02): the mcool levels named 5000 and 25000 that
+hicBuildMatrix wrote from the 2 kb base hold 4 kb and 24 kb bins (the base
+bin times floor(res / 2000)). The 5 and 25 kb columns first reported here
+(GM12878 0.564 and 0.933, IMR90 0.689 and 0.956, K562 0.500 and 0.932, HMEC
+0.526 and 0.936, HUVEC 0.429 and 0.888) were rep1 against rep2 at 4 and
+24 kb. The maps now sit on the 5 and 25 kb grid by base-pair-overlap
+averaging of the 4 and 24 kb pixels (`scripts/regrid_replicates.py`; the
+originals are kept as `*_ice_4kb.cool` and `*_ice_24kb.cool`), which raises
+the agreement by 0.023 to 0.026 at 5 kb and 0.003 to 0.008 at 25 kb; part of
+that rise is the smoothing of the averaging.
 
 At one sequencing lane per replicate (110 to 230 M contacts), replicate
 agreement at 2 kb is 0.32 to 0.50 and rises to 0.89 to 0.96 at 25 kb. The maps
@@ -443,7 +454,8 @@ reference alone on the same regions. Paired over the 413 regions the
 residual model exceeds consensus11 in 82% of the regions at 25 kb (median
 difference 0.045) and in 94 to 95% at 10 kb (0.065). Input and residual
 variants differ by at most 0.007. GM12878 single-lane replicates agree at
-0.779 (10 kb) and 0.933 (25 kb), deep intact replicate pairs at 0.90 to 0.97
+0.779 (10 kb) and 0.938 (25 kb; 0.933 before the 24 kb grid correction of
+section 7), deep intact replicate pairs at 0.90 to 0.97
 (25 kb, section 12).
 
 Held-out cells, GM12878-trained models, 413 regions, reference consensus11
@@ -1708,7 +1720,7 @@ Hard-test windows, 25 kb, median over cells, training cells / held-out cells (Pe
 | no reference, track dropout (trained on these loci) | 0.760 / 0.682 | 0.708 / 0.687 | 0.797 / 0.766 |
 | consensus alone | 0.538 / 0.543 | 0.567 / 0.560 | 0 |
 | best single other map | 0.668 / 0.565 | | |
-| replicate maps (GM12878, IMR90; K562, HMEC, HUVEC) | 0.874 / 0.978 | | 0.868 / 0.982 |
+| replicate maps (GM12878, IMR90; K562, HMEC, HUVEC) | 0.884 / 0.861 | | 0.865 / 0.842 |
 
 Hard-test windows, 10 kb, median over cells, training cells / held-out cells (Pearson; SCC; residual correlation):
 
@@ -1736,6 +1748,23 @@ the hard-split model scores 0.661 and 0.633 with residual correlations of
 0.710 and 0.701 (residual correlation 0.66 and 0.65), 0.04 to 0.05 below the
 dropout model trained on these loci for other cells (0.747 and 0.755),
 which quantifies what seeing a locus in other cells contributes there.
+
+Correction (2026-10-02, single-lane replicate maps on a 24 kb grid, section
+7): at 25 kb the region-level replicate columns skipped IMR-90, HMEC and
+HUVEC (grid mismatch), so the replicate row of the 25 kb hard-test table
+stood for GM12878 (training) and K562 (held out) alone (0.874 / 0.978,
+residual 0.868 / 0.982); with the regridded maps
+(`scripts/hard_split.py --stage repfill`) it is 0.884 / 0.861 (residual
+0.865 / 0.842). The window-level replicate filter of the selection
+(rep_dev_r of IMR-90, HMEC deep and HUVEC deep at 25 kb) compared the 24 kb
+replicate band with the 25 kb target band bin by bin, which inflated the
+agreement (median 0.96, 0.95 and 0.92; 0.79, 0.68 and 0.57 on the regridded
+maps). Reselected with the corrected values
+(`results/hard_split_regrid/25kb/split.json`), 4 training cells (IMR-90,
+HFF, NHEK, MCF-7) change one of their 23 hard windows each and the union
+holds 228 instead of 229 windows, 226 shared. The 25 kb hard-split models
+were trained on the original split; at 3 of 229 union windows we did not
+retrain them. The 10 kb split is unchanged.
 
 ## 25. Cohesin response (PENDING)
 
@@ -2114,9 +2143,11 @@ Checkpoint selection (train.select_metric): besides the median validation
 Pearson, "combined" keeps the checkpoint whose mean over Pearson, stratified
 correlation, insulation correlation and APA agreement min(r, 1/r) of the
 rank among all evaluations of the run so far is the highest (run
-all12refin_drop_selcomb, 25 and 10 kb, L1+MSE); "hic_measures" uses the
-nine-measure combined score of scripts/hic_measures.py once that script
-provides combined_score (all12refin_drop_selhm, queued behind it).
+all12refin_drop_selcomb, 25 and 10 kb, L1+MSE); "hic_measures" uses
+scripts/hic_measures.py combined_score, the window-level proxy of the
+multi-measure evaluation (pixel, TAD, loop and within-window compartment
+levels, each the mean of its terms, averaged over the levels; run
+all12refin_drop_selhm, 25 and 10 kb).
 
 Evaluation: the standard tables (crosscell eval of every run) and
 crosscell_predict --structure on K562, HMEC deep, HUVEC deep (held out) and
