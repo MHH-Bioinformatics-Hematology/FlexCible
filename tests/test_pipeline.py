@@ -2147,3 +2147,32 @@ def test_sv_mask_trains(workdir):
     precompute.build(cfg)
     train.train(cfg)
     assert (workdir / "run_sv" / "latest").exists() or (workdir / "run_sv" / "best").exists()
+
+
+def test_structure_loss_and_combined_selection(workdir):
+    """Structure loss terms and select_metric=combined run end to end and
+    write val_structure.csv."""
+    from hicmultiome import precompute, train
+    from hicmultiome.config import Config
+    raw = {
+        "data": {"cool_path": str(workdir / "target.cool"), "bigwig_dir": str(workdir),
+                 "tracks": [{"name": "CTCF", "type": "tf", "motif": MOTIF},
+                            {"name": "H3K27ac", "type": "histone"}],
+                 "resolution": BINSIZE},
+        "sequence": {"fasta": str(workdir / "genome.fa"), "cache_dir": str(workdir / "gcache")},
+        "motifs": {"dir": str(workdir), "score_frac": 0.8},
+        "window": {"size": 32, "stride": 8, "max_zero_fraction": 0.99},
+        "model": {"base_channels": 16, "depth": 2},
+        "train": {"output_dir": str(workdir / "run_struct"),
+                  "cache_dir": str(workdir / "cache_sv"),
+                  "batch_size": 4, "max_steps": 30, "eval_every": 10, "val_regions": 2,
+                  "lr": 1e-3, "loss": "l1+mse+0.1*insul+0.1*donut+0.1*compart",
+                  "select_metric": "combined"},
+    }
+    cfg = Config.from_dict(raw)
+    if not (workdir / "cache_sv" / "manifest.json").exists():
+        precompute.build(cfg)
+    train.train(cfg)
+    out = workdir / "run_struct"
+    assert (out / "best").exists()
+    assert (out / "val_structure.csv").exists()

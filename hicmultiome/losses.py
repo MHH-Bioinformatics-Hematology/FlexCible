@@ -208,7 +208,7 @@ def build_loss(spec: str, max_dist: int | None = None, stride: int = 1):
         w, _, name = part.rpartition("*")
         terms.append((float(w) if w else 1.0, name.strip().lower()))
     known = {"l1", "mse", "scc", "dcorr", "ssim", "grad", "hf",
-             "insul", "donut"}
+             "insul", "donut", "compart"}
     for _, n in terms:
         if n not in known:
             raise ValueError(f"unknown loss term {n!r} (of {sorted(known)})")
@@ -218,6 +218,7 @@ def build_loss(spec: str, max_dist: int | None = None, stride: int = 1):
         """pixel_weight (B, W, W), mean 1 over the batch: weights the l1 and
         mse terms per pixel (other terms ignore it)."""
         total = pred.new_zeros(())
+        parts = {}
         for weight, name in terms:
             if name == "l1":
                 v = (F.l1_loss(pred, target) if pixel_weight is None
@@ -237,10 +238,17 @@ def build_loss(spec: str, max_dist: int | None = None, stride: int = 1):
                 v = insulation_loss(pred, target)
             elif name == "donut":
                 v = donut_loss(pred, target)
+            elif name == "compart":
+                v = compartment_loss(pred, target)
             else:
                 v = ssim_loss(pred, target)
+            parts[name] = v.detach()
             total = total + weight * v
+        loss_fn.last_terms = parts          # unweighted value of every term
         return total
+
+    loss_fn.last_terms = {}
+    loss_fn.term_names = [n for _, n in terms]
 
     return loss_fn
 
@@ -314,3 +322,32 @@ def donut_loss(pred: torch.Tensor, target: torch.Tensor,
     ep = p - F.conv2d(p, k, padding=pad)
     et = t - F.conv2d(t, k, padding=pad)
     return F.l1_loss(ep, et)
+
+
+def corr_matrix_t(m: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """Pearson correlation between the rows of each window: (B, W, W)."""
+    x = m - m.mean(dim=2, keepdim=True)
+    x = x / (x.pow(2).mean(dim=2, keepdim=True) + eps).sqrt()
+    return x @ x.transpose(1, 2) / m.shape[-1]
+
+
+def compartment_loss(pred: torch.Tensor, target: torch.Tensor,
+                     min_d: int = 2) -> torch.Tensor:
+    """1 - Pearson between the row-correlation matrices of prediction and
+    target, per window, averaged over the batch.
+
+    The row-correlation matrix of an O/E map is what compartment calling
+    takes its first eigenvector from; matching the whole matrix instead of
+    its eigenvector avoids the sign ambiguity and the eigen-decomposition.
+    Windows are about 2 Mb, so this sees the compartment checkerboard inside
+    2 Mb only (a within-window proxy for A/B compartments). Pixels within
+    min_d bins of the diagonal are left out."""
+    cp, ct = corr_matrix_t(pred), corr_matrix_t(target)
+    w = pred.shape[-1]
+    i, j = torch.triu_indices(w, w, offset=min_d, device=pred.device)
+    a, b = cp[:, i, j], ct[:, i, j]
+    a = a - a.mean(dim=1, keepdim=True)
+    b = b - b.mean(dim=1, keepdim=True)
+    r = (a * b).mean(dim=1) / ((a.pow(2).mean(dim=1) + 1e-8).sqrt()
+                               * (b.pow(2).mean(dim=1) + 1e-8).sqrt())
+    return 1.0 - r.mean()

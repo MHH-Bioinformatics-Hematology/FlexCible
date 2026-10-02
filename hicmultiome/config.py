@@ -406,6 +406,18 @@ class TrainConfig:
     # reference-coordinate contacts there. Validation and test are unmasked.
     # None = off.
     sv_mask: str | None = None
+    # Checkpoint selection on the validation windows (needs val_regions).
+    # "dist_pearson": median per-window Pearson (previous behaviour).
+    # "combined": per measure (Pearson, distance-stratified correlation,
+    # insulation-profile correlation, loop APA agreement; hicmultiome.
+    # structure) the rank of this evaluation among all evaluations of the run
+    # so far, scaled to [0, 1], averaged; a checkpoint is kept when its
+    # combined score is the highest so far. "hic_measures": the combined
+    # score of scripts/hic_measures.py (combined_score(maps, res)).
+    select_metric: str = "dist_pearson"
+    # log the hicmultiome.structure medians on the validation windows at
+    # every validation (always on with select_metric other than dist_pearson)
+    log_structure: bool = False
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
     # Used for a fast proxy input-search: far fewer windows -> quick candidates,
     # to check whether the track ranking is stable without all chromosomes.

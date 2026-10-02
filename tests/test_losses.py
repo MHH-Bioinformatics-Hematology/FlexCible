@@ -249,3 +249,39 @@ def test_structure_terms_compose_and_backprop():
     loss = build_loss("l1+mse+0.3*insul+0.3*donut")(p, t)
     loss.backward()
     assert torch.isfinite(p.grad).all() and p.grad.abs().sum() > 0
+
+
+def test_compartment_loss_and_structure_measures():
+    import numpy as np
+    import torch
+
+    from hicmultiome.losses import build_loss, compartment_loss
+    from hicmultiome.structure import rank_combined, selection_values, structure_metrics
+    g = torch.Generator().manual_seed(0)
+    n = 48
+    sign = torch.tensor([1.0 if (i // 8) % 2 == 0 else -1.0 for i in range(n)])
+    base = 0.5 * sign[:, None] * sign[None, :]           # a checkerboard
+    t = (base + 0.2 * torch.randn(2, n, n, generator=g))
+    t = 0.5 * (t + t.transpose(1, 2))
+    assert compartment_loss(t, t).item() < 1e-4
+    p = torch.randn(2, n, n, generator=g, requires_grad=True)
+    v = compartment_loss(p, t)
+    v.backward()
+    assert 0.5 < v.item() < 1.5 and torch.isfinite(p.grad).all()
+    fn = build_loss("l1+mse+0.1*compart+0.1*insul+0.1*donut")
+    fn(t, t + 0.01)
+    assert set(fn.last_terms) == {"l1", "mse", "compart", "insul", "donut"}
+
+    T = t[0].numpy().astype(float)
+    m = structure_metrics(T, T, 25000)
+    for k in ("pearson", "scc", "insulation_corr", "loop_enrich_corr",
+              "compartment_corr", "eigenvector_abs_corr"):
+        assert abs(m[k] - 1) < 1e-6, k
+    assert abs(m["loop_apa_ratio"] - 1) < 1e-6
+    noisy = structure_metrics(T + np.random.default_rng(0).normal(0, 1, T.shape), T, 25000)
+    assert noisy["pearson"] < m["pearson"]
+    s = selection_values(m)
+    assert set(s) == {"pearson", "scc", "insulation_corr", "loop_apa"}
+    sc = rank_combined([{"pearson": .5, "scc": .5, "insulation_corr": .5, "loop_apa": .5},
+                        {"pearson": .6, "scc": .4, "insulation_corr": .6, "loop_apa": .6}])
+    assert sc[1] == 0.75 and sc[0] == 0.25

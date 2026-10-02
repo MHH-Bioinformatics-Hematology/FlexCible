@@ -19,6 +19,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -504,10 +505,50 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
     encoded space the model outputs equals comparing decoded O/E.
     With capin (capture-input model) the capture planes are fed as absent, the
     same tracks-only mode as val_distance_pearson."""
-    if data is None or data["target"].shape[0] == 0:
-        return float("nan")
-    model.eval()
     rs = []
+    for pk_full, tk_full in val_maps(model, data, device, batch, offset, n_motifs,
+                                     cond_mode, seq_fn, capin, use_ref):
+        iu = np.triu_indices(pk_full.shape[-1], 1)
+        pk, tk = pk_full[iu], tk_full[iu]
+        m = np.isfinite(pk) & np.isfinite(tk)
+        if m.sum() > 100 and pk[m].std() > 1e-8 and tk[m].std() > 1e-8:
+            rs.append(np.corrcoef(pk[m], tk[m])[0, 1])
+    return float(np.median(rs)) if rs else float("nan")
+
+
+@torch.no_grad()
+def val_structure(model, data, device, batch, offset, n_motifs, res: int,
+                  cond_mode="full", seq_fn=None, capin=False, use_ref=False,
+                  hic_measures=None) -> dict:
+    """Median over the validation windows of every hicmultiome.structure
+    measure, plus the per-window maps' selection values; with hic_measures
+    (a callable on the list of (pred, target) maps and res) also its
+    combined score as 'hic_measures'."""
+    from .structure import selection_values, structure_metrics
+    rows, maps = [], []
+    for pk, tk in val_maps(model, data, device, batch, offset, n_motifs,
+                           cond_mode, seq_fn, capin, use_ref):
+        m = structure_metrics(pk, tk, res)
+        m.update({f"sel_{k}": v for k, v in selection_values(m).items()})
+        rows.append(m)
+        if hic_measures is not None:
+            maps.append((pk, tk))
+    out = {}
+    for k in (rows[0] if rows else {}):
+        v = np.array([r[k] for r in rows], float)
+        out[k] = float(np.nanmedian(v)) if np.isfinite(v).any() else float("nan")
+    if hic_measures is not None and maps:
+        out["hic_measures"] = float(hic_measures(maps, res))
+    return out
+
+
+@torch.no_grad()
+def val_maps(model, data, device, batch, offset, n_motifs, cond_mode="full",
+             seq_fn=None, capin=False, use_ref=False):
+    """(prediction, target) per validation window, encoded space, numpy."""
+    if data is None or data["target"].shape[0] == 0:
+        return
+    model.eval()
     N = data["target"].shape[0]
     for i in range(0, N, batch):
         tgt = data["target"][i : i + batch].to(device).float()
@@ -524,14 +565,9 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
                   prior=_ref_batch(data, i, tgt.shape[0], device, True,
                                    "prior"))[:, 0].float().cpu().numpy()
         t = tgt[:, 0].float().cpu().numpy()
-        iu = np.triu_indices(p.shape[-1], 1)
         for k in range(p.shape[0]):
-            pk, tk = p[k][iu], t[k][iu]
-            m = np.isfinite(pk) & np.isfinite(tk)
-            if m.sum() > 100 and pk[m].std() > 1e-8 and tk[m].std() > 1e-8:
-                rs.append(np.corrcoef(pk[m], tk[m])[0, 1])
+            yield p[k], t[k]
     model.train()
-    return float(np.median(rs)) if rs else float("nan")
 
 
 def _plot_curve(rows, out_png):
@@ -847,6 +883,23 @@ def train(cfg: Config):
         cfg.save(ck / "config.yaml")
         (out_dir / ptr).write_text(name)
 
+    struct_rows: list[dict] = []
+    sel_hist: list = []
+    hic_measures_fn = None
+    if cfg.train.select_metric not in ("dist_pearson", "combined", "hic_measures"):
+        raise ValueError(f"unknown train.select_metric {cfg.train.select_metric!r}")
+    if cfg.train.select_metric != "dist_pearson":
+        if not cfg.train.val_regions:
+            raise ValueError("train.select_metric other than dist_pearson needs "
+                             "train.val_regions")
+        if hdata is not None:
+            raise ValueError("train.select_metric with train.hard_split is not supported")
+    if cfg.train.select_metric == "hic_measures":
+        import importlib
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        hic_measures_fn = importlib.import_module("hic_measures").combined_score
+    from .structure import rank_combined
+
     def validate(cur_loss):
         nonlocal best, last_eval
         last_eval = step
@@ -861,6 +914,36 @@ def train(cfg: Config):
                     val_coords, list(range(i, i + n)), [False] * n, W, binsize,
                     fasta_map, device)
             vb = max(1, min(batch, vdata_d["target"].shape[0]))
+            sel = cfg.train.select_metric
+            if cfg.train.val_regions and (sel != "dist_pearson" or cfg.train.log_structure):
+                sm = val_structure(model, vdata_d, device, vb, offset, n_motifs,
+                                   int(cfg.data.resolution), cond_mode=cond_mode,
+                                   seq_fn=seq_fn, capin=capin, use_ref=use_ref,
+                                   hic_measures=hic_measures_fn)
+                log.info("  [val-structure] epoch %d %s", epoch,
+                         " ".join(f"{k}={v:.4f}" for k, v in sm.items()))
+                struct_rows.append({"step": step, "epoch": epoch, **sm})
+                if sel != "dist_pearson":
+                    if sel == "combined":
+                        sel_hist.append({k[4:]: v for k, v in sm.items()
+                                         if k.startswith("sel_")})
+                        sc = rank_combined(sel_hist)
+                        cur = sc[-1]
+                        imp_c = len(sc) == 1 or cur > max(sc[:-1])
+                    else:
+                        cur = sm["hic_measures"]
+                        imp_c = not sel_hist or cur > max(sel_hist)
+                        sel_hist.append(cur)
+                    log.info("  [val] epoch %d step %d  %s=%.4f%s (pearson %.4f)",
+                             epoch, step, sel, cur, "  <- best" if imp_c else "",
+                             sm["pearson"])
+                    if imp_c:
+                        # `best` counts the selected checkpoints, so early
+                        # stopping still sees an increase at every new best
+                        best = best + 1 if best > float("-inf") else 1.0
+                        save("checkpoint-best", "best")
+                    curve.append({"step": step, "loss": cur_loss, "val_pearson": sm["pearson"]})
+                    return
             if cfg.train.val_regions:
                 r = val_akita_median(model, vdata_d, device, vb, offset, n_motifs,
                                      cond_mode=cond_mode, seq_fn=seq_fn, capin=capin,
@@ -913,6 +996,7 @@ def train(cfg: Config):
         epoch += 1
         bs = min(batch, N)
         ep_loss = nb = 0
+        ep_terms: dict = {}
         b = 0
         while b + bs <= N:
             idx = perm[b : b + bs]
@@ -1011,6 +1095,9 @@ def train(cfg: Config):
             loss_val = loss.item()
             ep_loss += loss_val
             nb += 1
+            if len(getattr(hic_loss, "term_names", ())) > 1:
+                for tn, tv in hic_loss.last_terms.items():
+                    ep_terms[tn] = ep_terms.get(tn, 0.0) + tv
             now = time.time()
             timed_out = bool(
                 cfg.train.max_minutes and (now - t0) / 60.0 >= cfg.train.max_minutes
@@ -1023,7 +1110,8 @@ def train(cfg: Config):
                          epoch, step, loss_val, seen / (now - t0), (now - t0) / 60.0)
                 last_log = now
         if is_main and nb:
-            log.info("epoch %d done  avg_loss=%.4f (step %d)", epoch, ep_loss / nb, step)
+            log.info("epoch %d done  avg_loss=%.4f (step %d)%s", epoch, ep_loss / nb, step,
+                     "".join(f"  {k}={float(v) / nb:.4f}" for k, v in ep_terms.items()))
         if step - last_eval >= cfg.train.eval_every or stop:
             validate(loss_val)
         # epoch-based early stopping: max_epochs cap, or no val improvement for
@@ -1058,6 +1146,11 @@ def train(cfg: Config):
                 wtr.writerows(curve)
             _plot_curve(curve, out_dir / "learning_curve.png")
             log.info("wrote %s", out_dir / "learning_curve.png")
+        if struct_rows:
+            with open(out_dir / "val_structure.csv", "w", newline="") as f:
+                wtr = csv.DictWriter(f, fieldnames=list(struct_rows[0]))
+                wtr.writeheader()
+                wtr.writerows(struct_rows)
     if is_ddp:
         dist.destroy_process_group()
 
@@ -1187,6 +1280,23 @@ def train_stream(cfg: Config):
         t = torch.tensor([1.0 if val else 0.0], device=device)
         dist.all_reduce(t, op=dist.ReduceOp.MAX)
         return bool(t.item() > 0)
+
+    struct_rows: list[dict] = []
+    sel_hist: list = []
+    hic_measures_fn = None
+    if cfg.train.select_metric not in ("dist_pearson", "combined", "hic_measures"):
+        raise ValueError(f"unknown train.select_metric {cfg.train.select_metric!r}")
+    if cfg.train.select_metric != "dist_pearson":
+        if not cfg.train.val_regions:
+            raise ValueError("train.select_metric other than dist_pearson needs "
+                             "train.val_regions")
+        if hdata is not None:
+            raise ValueError("train.select_metric with train.hard_split is not supported")
+    if cfg.train.select_metric == "hic_measures":
+        import importlib
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        hic_measures_fn = importlib.import_module("hic_measures").combined_score
+    from .structure import rank_combined
 
     def validate(cur_loss):
         nonlocal best, last_eval
