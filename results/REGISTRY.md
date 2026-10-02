@@ -1873,6 +1873,20 @@ all12refres_drop_10kb with full inputs and with only CTCF, H3K27ac and
 H3K27me3 present, the marks of the Xu 2022 primary AML samples, each with
 and without Meth; cells K562, HMEC deep, GM12878 and IMR-90.
 
+First training excluded (run renamed all12refres_drop_meth_selbug_10kb,
+`results/methylation/meth_eval_summary_selbug.csv`): the base configuration
+carries train.select_tracks with the 13 ChIP tracks, which dropped the Meth
+row from the model input although the cache holds it (7 cells with WGBS,
+normaliser mean 0.957, sd 0.105 on log1p values). The run log shows 23 sym
+rows, the same as without Meth, and predictions with Meth present and set
+absent are identical (maximum absolute difference 0.0 over 9 K562 test
+regions), hence identical medians for full and full_nometh (K562 0.9045)
+and for patient and patient_nometh (K562 0.8912). That run is in effect a
+second training of all12refres_drop_10kb. Fixed in
+scripts/multicell_expanded.py (tracks added to the 13 are appended to
+select_tracks, also for all12refres_drop_cnv, which had not started);
+all12refres_drop_meth_10kb is retrained.
+
 ## 28. Copy number as an input and a structural-variant loss mask (PENDING)
 
 Model all12refres_drop_cnv (10 kb): all12refres_drop with two more tracks,

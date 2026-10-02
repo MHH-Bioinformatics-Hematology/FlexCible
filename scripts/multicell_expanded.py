@@ -369,6 +369,13 @@ def run_config(name, val_per_cell, patience, max_epochs):
         for smp in cfg["data"]["samples"]:        # written by cnv_sv.py --stage cnv
             smp["extra_bigwig_dirs"] = [str(cs_.cnv_dir(smp["name"]))]
         cfg["train"]["sv_mask"] = str(cs_.SV / "breakpoints.json")
+    # tracks added on top of the base config's 13 ChIP tracks must also be in
+    # its train.select_tracks, which otherwise drops their rows from the model
+    # input (all12refres_drop_meth_10kb was first trained that way, 2026-10-02)
+    added = [t["name"] for t in cfg["data"]["tracks"] if t["name"] not in ALL13]
+    if added and cfg["train"].get("select_tracks") is not None:
+        cfg["train"]["select_tracks"] = list(cfg["train"]["select_tracks"]) + [
+            t for t in added if t not in cfg["train"]["select_tracks"]]
     if base in DEGRON_RUNS:
         import perturb_validate as pv
         hct = next(s for s in cfg["data"]["samples"] if s["name"] == "hct116")
