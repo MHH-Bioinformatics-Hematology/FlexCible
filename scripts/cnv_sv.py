@@ -332,9 +332,9 @@ def run_eaglec(cell: str, nproc: int) -> int:
     found = sorted(SV.glob(f"eaglec/{cell}*.txt"))
     calls = [f for f in found if f != out and "SV" in f.name.upper()] or \
             [f for f in found if f != out]
-    if rc == 0 and calls:
+    if rc == 0 and not out.exists() and calls:
         calls[0].rename(out)
-    else:
+    if not (rc == 0 and out.exists()):
         (SV / "eaglec" / f"{cell}.failed").write_text(f"rc={rc}\n")
     log(f"[eaglec] {cell} rc={rc} {time.time() - t0:.0f} s -> {[f.name for f in calls]}")
     return rc
@@ -374,6 +374,10 @@ def cnv_change_points(cell: str, S: pd.DataFrame) -> list[list]:
 
 
 def stage_breakpoints():
+    for cell in SV_CELLS:          # stale failure markers next to real calls
+        fm = SV / "eaglec" / f"{cell}.failed"
+        if eaglec_out(cell).exists() and fm.exists():
+            fm.unlink()
     S = pd.read_csv(RES_OUT / "cnv_segments.csv")
     bp, src, rows = {}, {}, []
     for cell in SV_CELLS:
