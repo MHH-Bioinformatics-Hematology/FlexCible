@@ -335,6 +335,37 @@ def jobs():
         wo.oe_path(t, r).exists() for t in wo.TIMES for r in wo.RES)
     J.append(Job("washout", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/washout.py --stage predict score",
                  wo_ready, lambda: is_marked("washout")))
+    # --- structure-aware learning (registry section 30): weight grid at 25 kb,
+    # weights chosen on honest validation, then the chosen-weight runs
+    chosen_ok = lambda: mx.STRUCT_CHOSEN.exists()
+    hm = mx.REPO / "scripts/hic_measures.py"
+    hm_ok = lambda: hm.exists() and "def combined_score" in hm.read_text()
+    grid = [(f"all12refin_drop_{t}_{mx.wtag(w)}", 25000)
+            for t in mx.STRUCT_TERMS for w in mx.STRUCT_GRID]
+    for run, res in grid:
+        train12(run, res, "mc_all12ref_25kb")
+    J.append(Job("struct_choose", f"{PY} scripts/structure_loss.py --stage choose",
+                 lambda: all(trained(r, k) for r, k in grid), chosen_ok))
+    later = [("all12refin_drop_struct3", 25000, chosen_ok),
+             ("all12refin_drop_selcomb", 25000, lambda: True)]
+    later += [(f"all12refin_drop_{t}", 10000, chosen_ok) for t in mx.STRUCT_TERMS]
+    later += [("all12refin_drop_struct3", 10000, chosen_ok),
+              ("all12refin_drop_selcomb", 10000, lambda: True),
+              ("all12refin_drop_selhm", 25000, hm_ok),
+              ("all12refin_drop_selhm", 10000, hm_ok)]
+    for run, res, gate in later:
+        n0 = len(J)
+        train12(run, res, f"mc_all12ref_{res // 1000}kb")
+        base_ready = J[n0].ready
+        J[n0].ready = (lambda b=base_ready, g=gate: b() and g())
+    for res in (25000, 10000):
+        done_set = [(r, k) for r, k, _ in later if k == res and not r.endswith("selhm")]
+        if res == 25000:
+            done_set += grid
+        J.append(Job(f"struct_eval_{res // 1000}kb",
+                     f"{PY} scripts/structure_loss.py --stage evaluate summary --res {res}",
+                     (lambda ds=done_set: all(trained(r, k) for r, k in ds)),
+                     (lambda r=res: is_marked(f"struct_eval_{r // 1000}kb"))))
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())

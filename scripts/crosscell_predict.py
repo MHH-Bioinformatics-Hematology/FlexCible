@@ -100,6 +100,10 @@ def main():
     ap.add_argument("--prior", default=None,
                     help="cascade models (model.prior): the coarser model's prediction "
                          "for this cell (default: the cell's own samples[].prior_cool)")
+    ap.add_argument("--structure", action="store_true",
+                    help="also score TAD, loop and compartment measures per region "
+                         "(hicmultiome.structure), for the model (struct_*) and for "
+                         "every --others map named consensus* (struct_<name>_*)")
     ap.add_argument("--save-pred", default=None,
                     help="also write every region's prediction (target grid) to this npz")
     ap.add_argument("--keep-tracks", default=None,
@@ -252,6 +256,11 @@ def main():
                         f"{onm}:{int(r.start)}-{int(r.end)}"), float)
                 except Exception:
                     continue
+                if O.shape == T.shape and a.structure and oc.startswith("consensus"):
+                    from hicmultiome.structure import structure_metrics
+                    sm_o = structure_metrics(np.where(O == 0, np.nan, O),
+                                             np.where(T == 0, np.nan, T), tgt.binsize)
+                    base_rec.update({f"struct_{oc}_{k}": v for k, v in sm_o.items()})
                 if O.shape == T.shape:
                     x, y = O[iu], T[iu]
                     m2 = np.isfinite(x) & np.isfinite(y) & (x != 0) & (y != 0)
@@ -289,6 +298,10 @@ def main():
                 rec = {"region": f"{chrom}:{int(r.start)}-{int(r.end)}"}
                 if ok.sum() > 100 and M[ok].std() > 0 and Tm[ok].std() > 0:
                     rec["model"] = float(pearsonr(M[ok], Tm[ok]).statistic)
+                if a.structure:
+                    from hicmultiome.structure import structure_metrics
+                    rec.update({f"struct_{k}": v for k, v in
+                                structure_metrics(M, Tm, tgt.binsize).items()})
                 # the same prediction averaged onto coarser grids, scored there; only
                 # bins inside the model window count (resample extends the edges of
                 # a window shorter than the region by nearest-value copies)

@@ -182,6 +182,41 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # two more tracks and the structural-variant loss mask (registry section 28)
     "all12refres_drop_cnv": (TRAIN12, None),
 }
+# structure-aware learning (registry section 30): all12refin_drop plus one
+# structure loss term (insulation = TADs, donut = loops, compart = within-
+# window compartment proxy) on a weight grid at 25 kb, the chosen weight per
+# term (scripts/structure_loss.py --stage choose) at 10 kb, all three
+# together, and checkpoint selection on the combined structure score
+STRUCT_TERMS = ["insul", "donut", "compart"]
+STRUCT_GRID = [0.1, 0.3, 1.0]
+STRUCT_CHOSEN = REPO / "results/structure_loss/chosen_weights.json"
+
+
+def wtag(w: float) -> str:
+    return "w" + f"{w:g}".replace(".", "p")
+
+
+STRUCT_RUNS = ([f"all12refin_drop_{t}_{wtag(w)}" for t in STRUCT_TERMS for w in STRUCT_GRID]
+               + [f"all12refin_drop_{t}" for t in STRUCT_TERMS]
+               + ["all12refin_drop_struct3", "all12refin_drop_selcomb",
+                  "all12refin_drop_selhm"])
+for _r in STRUCT_RUNS:
+    RUNS[_r] = (TRAIN12, None)
+
+
+def struct_loss(base: str) -> str | None:
+    """train.loss of a structure run (None: the default l1+mse)."""
+    m = re.fullmatch(r"all12refin_drop_(insul|donut|compart)_w([0-9p]+)", base)
+    if m:
+        return f"l1+mse+{float(m.group(2).replace('p', '.')):g}*{m.group(1)}"
+    chosen = (json.loads(STRUCT_CHOSEN.read_text()) if STRUCT_CHOSEN.exists()
+              else {t: 0.3 for t in STRUCT_TERMS})      # placeholder until chosen
+    m = re.fullmatch(r"all12refin_drop_(insul|donut|compart)", base)
+    if m:
+        return f"l1+mse+{chosen[m.group(1)]:g}*{m.group(1)}"
+    if base == "all12refin_drop_struct3":
+        return "l1+mse+" + "+".join(f"{chosen[t]:g}*{t}" for t in STRUCT_TERMS)
+    return None
 DROPOUT_RUNS = {"all12refres_drop": (0.5, 0.0), "all12honest_drop": (0.5, 0.0),
                 "all12refres_refdrop": (0.5, 0.3)}   # (track_dropout, reference_dropout)
 DROPOUT_RUNS.update({f"{k}_hard": v for k, v in list(DROPOUT_RUNS.items())})
@@ -191,6 +226,7 @@ DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
+DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
 METH_RUNS = {"all12refres_drop_meth"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"}
@@ -230,7 +266,8 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12deg_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
-            "all12refres_drop_meth": "residual", "all12refres_drop_cnv": "residual"}
+            "all12refres_drop_meth": "residual", "all12refres_drop_cnv": "residual",
+            **{r: "input" for r in STRUCT_RUNS}}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
@@ -392,6 +429,14 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cfg["train"]["select_tracks"] = ["CTCF", "H3K27ac"]
     if base == "all12refres_drop_varw":
         cfg["train"].update({"loss_weighting": "between_cell_var", "loss_weight_alpha": 1.0})
+    if base in STRUCT_RUNS:
+        cfg["train"]["log_structure"] = True
+        if struct_loss(base):
+            cfg["train"]["loss"] = struct_loss(base)
+        if base == "all12refin_drop_selcomb":
+            cfg["train"]["select_metric"] = "combined"
+        if base == "all12refin_drop_selhm":
+            cfg["train"]["select_metric"] = "hic_measures"
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg
