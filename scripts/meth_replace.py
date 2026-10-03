@@ -202,6 +202,35 @@ def replacement(S: pd.DataFrame, model: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def pooled(R: pd.DataFrame, n_boot=500, seed=0) -> pd.DataFrame:
+    """Pooled replacement fraction over cells: mean gain from Meth / mean loss
+    without the group, for the training cells with WGBS, the held-out cells and
+    all, with a percentile bootstrap over cells; undefined (NaN) where the mean
+    loss is below the seed noise."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for (st, m), g in R.groupby(["set", "metric"]):
+        for lab, sel in (("training", g[~g.held_out]), ("held_out", g[g.held_out]), ("all", g)):
+            if sel.empty:
+                continue
+            gain, loss = sel.gain_from_meth.values, sel.loss_without_group.values
+            den = loss.mean()
+            rf = gain.mean() / den if abs(den) >= NOISE else np.nan
+            bs = []
+            if len(sel) >= 3:
+                for _ in range(n_boot):
+                    i = rng.integers(0, len(sel), len(sel))
+                    d = loss[i].mean()
+                    if abs(d) >= NOISE:
+                        bs.append(gain[i].mean() / d)
+            rows.append({"set": st, "metric": m, "cells": lab, "n_cells": len(sel),
+                         "mean_loss_without_group": den, "mean_gain_from_meth": gain.mean(),
+                         "replacement_fraction": rf,
+                         "ci_low": np.percentile(bs, 2.5) if len(bs) > 50 else np.nan,
+                         "ci_high": np.percentile(bs, 97.5) if len(bs) > 50 else np.nan})
+    return pd.DataFrame(rows)
+
+
 def bootstrap_pearson_rf(model: str, st: str, cell: str, n=300, seed=0):
     """Paired bootstrap over regions of the Pearson replacement fraction."""
     def col(s):
@@ -249,6 +278,9 @@ def stage_summary(models):
                     n_cells=("replacement_fraction", "size")).reset_index())
         agg.to_csv(RES_OUT / f"meth_replacement_fraction_{model}_median.csv", index=False,
                    float_format="%.3f")
+        P = pooled(R)
+        P.to_csv(RES_OUT / f"meth_replacement_fraction_{model}_pooled.csv", index=False,
+                 float_format="%.3f")
         print(model)
         print(agg[agg.metric == "pearson"].to_string(index=False))
     return S

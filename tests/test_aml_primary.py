@@ -46,3 +46,24 @@ def test_aml_consensus_leakage_guard(tmp_path):
     with pytest.raises(ValueError):
         assert_reference_excludes(ref, ap.guard_name("xu_673"))      # contained: rejected
     assert ap.guard_name("xu_10") != ap.guard_name("xu_103")
+
+
+def test_xu_methylation_channel_follows_the_encode_convention(tmp_path, monkeypatch):
+    pyBigWig = pytest.importorskip("pyBigWig")
+    import aml_primary_meth as am
+    f = tmp_path / "GSM1_allc_5.CGN.10bp.bw"
+    bw = pyBigWig.open(str(f), "w")
+    bw.addHeader([("chr1", 5000)])
+    # kb 0: five covered 10 bp bins at 0.5; kb 1: two covered bins (below MIN_BINS)
+    bw.addEntries(["chr1"] * 7, [0, 100, 200, 300, 400, 1000, 1100],
+                  ends=[10, 110, 210, 310, 410, 1010, 1110], values=[0.5] * 5 + [1.0, 1.0])
+    bw.close()
+    monkeypatch.setattr(am.me, "chrom_sizes", lambda: {"chr1": 5000})
+    monkeypatch.setattr(am, "MD", tmp_path / "meth")
+    assert am.build_one(("xu_005", f)) == "xu_005"
+    out = pyBigWig.open(str(tmp_path / "meth" / "xu_005" / "Meth.bigwig"))
+    v = out.values("chr1", 0, 3000)
+    assert v[0] == pytest.approx(1.5)           # 1 + mean of the covered bins
+    assert v[1500] == pytest.approx(1.5)        # too few bins: 1 + genome mean (0.5)
+    assert min(v) >= 1.0                        # a raw zero stays "no data"
+    assert am.wgbs_files.__doc__

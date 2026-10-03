@@ -2187,6 +2187,76 @@ Figures: `per_patient.png`, `per_distance.png` (pooled per-distance Pearson),
 `showcase_{25,10,5}kb.png` (hardest regions, 80 bins per panel),
 `explain_features_loops.png`, `sv_junctions.png` (80 bins per panel).
 
+### 29b. Methylation in place of ChIP for the patients
+
+`scripts/aml_primary_meth.py` (stages build, predict, score, checks); tables
+`meth_patients.csv`, `meth_summary.csv`, `meth_compartment.csv`,
+`meth_features.csv` in `results/aml_primary/`. Xu et al. deposited WGBS of 20
+AML patients (GSE152099; hg38, bismark and methylpy; processed bigWigs of the
+CG methylation level per 10 bp bin, no read coverage; no raw reads; the 2
+PBMC are not deposited). Ten patients have WGBS and CUT&Tag (103, 673, 629,
+270, 773, 018, 546, 472, 168, 027; 673 without CTCF), ten have WGBS only
+(566, 260, 1071, 1324, 424, 496, 504, 798, 838, 933), 1916 and 1360 have
+CUT&Tag without WGBS. The channel follows `scripts/methylation.py` (1 kb
+bins, 1 + methylated fraction, thin bins at 1 + the patient's genome mean,
+raw zero = no data); since the files carry no coverage, a bin is the
+unweighted mean of its covered 10 bp bins and needs 3 of them (the ENCODE
+build weights by reads and needs 5). Genome means 0.69 to 0.86 (ENCODE cells
+0.22 to 0.85), 78% to 79% of the 1 kb bins with data. Model: the refreshed
+all12refres_drop_meth_10kb (retrained after the select_tracks fix; no later
+version existed), keep sets of the patient's tracks, TTA, 413 regions, two
+references: consensus12 and the patient's leave-one-patient-out AML consensus
+(whose mean over the other patients is the other-patient mean, identical
+scores).
+
+Median Pearson over patients (SCC in `meth_patients.csv`), 10 kb, patients
+with both data types (10):
+
+| input | consensus12 reference | AML-consensus reference |
+|---|---|---|
+| CTCF, H3K27ac, H3K27me3 (the patient's own marks) | 0.690 | 0.769 |
+| the same plus Meth | 0.696 | 0.768 |
+| CTCF, H3K27ac, Meth (Meth for H3K27me3) | 0.701 | 0.771 |
+| H3K27ac, H3K27me3, Meth (Meth for CTCF) | 0.716 | 0.771 |
+| H3K27ac, Meth | 0.717 | 0.757 |
+| Meth only | 0.660 | 0.760 |
+| all12refres_drop_10kb without the channel, same marks | 0.687 | 0.771 |
+| reference alone (consensus12 / AML consensus) | 0.669 | 0.784 |
+
+Meth added to the three marks raises the score in 8 of 10 patients with
+consensus12 (median +0.004) and in 3 of 10 with the AML reference (median
+-0.005). Meth in place of H3K27me3 or CTCF costs nothing (+0.006 and +0.008
+over the three marks, and CTCF-less patient 673 0.569 against 0.561); Meth
+alone scores below consensus12 (0.660 against 0.669) and, with the AML
+reference, below the reference alone (0.760 against 0.784). Patients with
+WGBS only (10; no marks, 14 tracks absent): with consensus12 the model with
+no input beyond sequence and motifs scores 0.679 and with Meth 0.690
+(consensus12 0.688; higher with Meth in 10 of 10 patients, median +0.005, at most +0.016),
+with the AML reference 0.788 without and 0.782 with Meth (AML consensus
+0.796). Methylation therefore replaces H3K27me3 or CTCF in the patient
+set to within the seed noise of the other inputs and gives a small gain over
+a bare sequence model, and no gain over a disease-matched reference. On the
+ENCODE evaluation of section 27 the same channel raises GM12878 from 0.898 to
+0.922 with the three marks (a training cell with WGBS) and K562 from 0.897 to
+0.898.
+
+AML-specific checks. Local compartment signal (first eigenvector of the
+correlation matrix of each 1 to 2 Mb region, sign fixed on consensus12; the
+paper's switch calls hold no coordinates and chromosome-wide A/B compartments
+are not accessible from the test windows; 82 candidate regions per patient,
+the lowest-agreement 20% against the HSPC consensus): the eigenvector change
+from HSPC is reproduced at 0.60 (consensus12 reference) and 0.60 (AML
+reference) without methylation and at 0.58 and 0.60 with it
+(`meth_compartment.csv`). Xu et al.'s AML-specific loops and stripes
+(`meth_features.csv`, 8 patients with CUT&Tag and WGBS and features,
+10 kb): the correlation of the predicted gain over the HSPC consensus with
+the measured gain is 0.35 / 0.31 / 0.27 (P-E-like, P-S-like, other loops)
+and 0.39 (stripes) without methylation, 0.41 / 0.31 / 0.27 and 0.40 with it;
+over consensus12 0.14 / 0.10 / 0.05 and 0.27 without, 0.30 / 0.09 / 0.10 and
+0.22 with it. The paper's DNA-methylation-linked compartment changes and the
+CTCF sites lost to hypermethylation are therefore not recovered through the
+channel.
+
 ## 30. Structure-aware learning: TAD, loop and compartment terms (PENDING)
 
 Base: all12refin_drop (input reference, track dropout), the best model on
