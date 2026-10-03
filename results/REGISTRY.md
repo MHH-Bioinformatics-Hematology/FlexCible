@@ -2919,3 +2919,203 @@ degron models. The 4DN mcool of the Rao 2017 auxin Hi-C has a 2 kb level, built
 with oe_proper.py.
 
 Results: pending.
+
+## 35. How far DNA methylation replaces ChIP-seq signal (A, B FINAL; C PENDING)
+
+Model of parts A: all12refres_drop_meth_10kb (13 ChIP tracks + Meth, residual
+on the leave-one-out consensus, track dropout 0.5, honest validation, retrained
+after the select_tracks fix so that Meth reaches the network; section 27), next
+to all12refres_drop_10kb (same recipe without the channel). Meth is the ENCODE
+WGBS methylated fraction per 1 kb (value - 1), available for seven of the 12
+training cells (GM12878, IMR-90, H1, HepG2, A549, GM23248, CD14+ monocyte)
+and for the held-out K562 and HMEC.
+
+**Part A, inference only** (`scripts/meth_replace.py`, 413 Akita test regions,
+TTA, `crosscell_predict --structure`; tables `results/methylation/
+meth_replace_scores.csv`, `meth_replacement_fraction_*.csv`). ChIP groups:
+CTCF; cohesin = RAD21 + SMC3; active = H3K27ac, H3K4me1, H3K4me2, H3K4me3,
+H3K9ac; gene body = H3K36me3, H3K79me2, H4K20me1; repressive = H3K27me3,
+H3K9me3. Sets: each single group removed; cumulative removal in the order
+cohesin (cum1), + repressive (cum2), + gene body (cum3), + active (CTCF only),
++ CTCF (sequence and motifs only); the ChIP-light sets CTCF + H3K27ac,
+CTCF + H3K27ac + H3K27me3. Every set was predicted without and with Meth, the
+other tracks at their absent value (track dropout makes this a trained state).
+Replacement fraction RF = (score with Meth - score without) / (score with all
+13 ChIP tracks - score without), per cell and metric, and pooled over cells
+(mean gain / mean loss, percentile bootstrap over cells for the interval). A
+fraction is given only where the loss without the group exceeds the seed noise
+of the median Pearson (0.013, section 15); smaller losses are marked n/d.
+The seed noise was measured for Pearson only, so the other metrics carry the
+same threshold without a separate noise estimate. Seven cells: the five
+training cells with WGBS in the pooled "training" rows and K562 (held out)
+and HMEC deep (held out) separately. The model saw Meth for the training
+cells during training; K562 and HMEC are unseen.
+
+Median Pearson with all 13 ChIP tracks, and the consensus the model reads:
+
+| cell | full | consensus alone |
+|---|---|---|
+| GM12878 | 0.930 | 0.858 |
+| IMR-90 | 0.945 | 0.903 |
+| HepG2 | 0.917 | 0.874 |
+| A549 | 0.928 | 0.913 |
+| H1 | 0.920 | 0.886 |
+| K562 (held out) | 0.904 | 0.859 |
+| HMEC deep (held out) | 0.902 | 0.906 |
+
+Removing ChIP groups costs little because the reference map carries most of
+the signal: removing any single group changes the median Pearson by at most
+0.04 (GM12878, cohesin), and removing all ChIP (sequence and motifs only)
+costs 0.045 on average over the five training cells (0.076 GM12878, 0.049
+K562, 0.002 HMEC, which lacks RAD21 and SMC3 and sits at the consensus level).
+Pooled over the five training cells, mean loss without the group / mean gain
+from Meth / RF:
+
+| set removed or kept | Pearson | SCC | insulation corr. | loop enrichment corr. | compartment corr. | first eigenvector |
+|---|---|---|---|---|---|---|
+| minus cohesin | 0.017 / 0.016 / 0.93 | 0.021 / 0.019 / 0.93 | 0.009 / 0.008 / n/d | 0.014 / 0.009 / 0.65 | 0.013 / 0.012 / n/d | 0.007 / 0.007 / n/d |
+| minus active | 0.012 / 0.003 / n/d | 0.012 / 0.004 / n/d | 0.006 / 0.001 / n/d | 0.021 / 0.003 / 0.13 | 0.008 / 0.001 / n/d | 0.003 / 0.001 / n/d |
+| cum3 (CTCF + active kept) | 0.018 / 0.014 / 0.76 | 0.021 / 0.016 / 0.77 | 0.010 / 0.008 / n/d | 0.016 / 0.009 / 0.56 | 0.014 / 0.011 / 0.79 | 0.007 / 0.006 / n/d |
+| CTCF + H3K27ac + H3K27me3 | 0.018 / 0.009 / 0.51 | 0.019 / 0.011 / 0.55 | 0.012 / 0.008 / n/d | 0.016 / 0.005 / 0.35 | 0.013 / 0.007 / n/d | 0.006 / 0.002 / n/d |
+| CTCF + H3K27ac | 0.019 / 0.009 / 0.51 | 0.021 / 0.011 / 0.51 | 0.013 / 0.007 / n/d | 0.017 / 0.006 / 0.33 | 0.014 / 0.008 / 0.56 | 0.007 / 0.003 / n/d |
+| CTCF only | 0.044 / 0.017 / 0.39 | 0.048 / 0.018 / 0.38 | 0.026 / 0.010 / 0.39 | 0.044 / 0.007 / 0.15 | 0.039 / 0.015 / 0.39 | 0.022 / 0.008 / 0.37 |
+| sequence and motifs only | 0.045 / 0.015 / 0.32 | 0.047 / 0.015 / 0.31 | 0.031 / 0.012 / 0.39 | 0.044 / 0.007 / 0.16 | 0.039 / 0.014 / 0.35 | 0.024 / 0.011 / 0.45 |
+
+The single groups CTCF, gene body and repressive cost at most 0.002 (Pearson)
+and have no defined fraction. Bootstrap intervals over cells for the Pearson
+fraction: minus cohesin 0.85 to 1.06, cum3 0.59 to 0.91, CTCF + H3K27ac 0.29
+to 0.68, CTCF only 0.19 to 0.51, sequence only 0.13 to 0.46. Per cell, the
+Pearson fraction without CTCF and cohesin and active marks (CTCF only) is
+0.55 (GM12878), 0.49 (HepG2), 0.31 (IMR-90), 0.17 (A549), 0.04 (H1) and 0.32
+on the held-out K562 (loss 0.038, gain 0.012); with sequence and motifs only
+0.43, 0.48, 0.20, 0.44, -0.07 and 0.30 (K562, loss 0.049, gain 0.015). On
+HMEC deep the loss is 0.002 or less in every set and Meth changes the score
+by -0.005 to +0.004. The loop APA ratio and the boundary F1 are not
+reported as fractions: the APA ratio changes sign with the set (mean loss
+-0.043 to +0.046) and the boundary F1 is a median of per-region values on a
+coarse grid (0, 0.33, 0.67, 1). The model without the channel scores
+0.003 higher on average than the methylation model run without Meth
+(mean difference over 91 cell-set pairs 0.0025, range -0.012 to +0.023), the
+size of the seed noise.
+
+Reading of part A. With the consensus reference in the input, methylation
+gives back about 0.9 of what is lost when the cohesin ChIP is removed (loss
+0.017 Pearson, 0.021 SCC) and about 0.5 of what is lost when only CTCF,
+H3K27ac and H3K27me3 remain; it gives back about 0.3 to 0.4 of the loss when
+CTCF alone or no ChIP at all remains (Pearson, SCC, insulation, compartment,
+eigenvector agreement). For loop enrichment the fractions are lower (0.65
+for cohesin removal, 0.15 for CTCF only), so loop strength is the structure
+measure methylation replaces least. The active marks are not replaced where
+the loss is measurable only in loop enrichment (RF 0.13). The replacement is
+largest in training cells that the model saw with Meth and does not show on
+the held-out cells at the noise level except for K562 with CTCF or sequence
+only (RF 0.32 and 0.30, one cell), and the gains stay below 0.02 in every
+set, so the effect is real but small in absolute terms. A 25 kb methylation
+model was not trained: no such model exists and a training with its
+evaluation costs about two GPU hours for a table that would show the same
+small absolute effects.
+
+**Part B, signal level** (`scripts/meth_track_prediction.py`, CPU; tables
+`meth_track_prediction.csv`, `meth_track_residual.csv`,
+`meth_track_importance.csv`). Targets: each ChIP track at 10 kb, log1p and
+z-scored as the model sees it. Features from the 1 kb Meth track and the
+genome: mean, minimum, maximum and standard deviation of the ten 1 kb values
+in the bin (the minimum is the methylation dip of promoters, islands and
+enhancers), mean of +-50 kb and +-500 kb, standard deviation of the 1 kb
+values in +-50 kb, fraction of low-methylated (< 0.3) 1 kb bins in +-50 kb
+and in the bin, fraction of high-methylated (> 0.8) bins in +-50 kb (the
+partially methylated domain proxies), GC, CpG density and CTCF motif
+strength; histogram gradient boosting, 500,000 training rows. Training on
+the odd chromosomes only, testing on the even chromosomes of nine cells (the
+seven training cells, K562, HMEC). Two schemes: seen_cell (trained on the
+odd chromosomes of all seven training cells) and unseen_cell (leave one cell
+out, K562 and HMEC never in a training set). The sequence-only model (GC,
+CpG, motif) is the baseline. Median over the nine cells, unseen_cell:
+
+| mark | R2 sequence only | R2 + methylation | Pearson sequence only | Pearson + methylation | R2 seen_cell + methylation |
+|---|---|---|---|---|---|
+| H3K9ac | 0.19 | 0.54 | 0.48 | 0.76 | 0.66 |
+| H3K4me2 | 0.22 | 0.53 | 0.48 | 0.76 | 0.60 |
+| H3K4me3 | 0.19 | 0.47 | 0.49 | 0.71 | 0.58 |
+| H3K79me2 | 0.07 | 0.43 | 0.31 | 0.67 | 0.45 |
+| H3K36me3 | 0.00 | 0.40 | 0.25 | 0.68 | 0.53 |
+| H3K27ac | 0.03 | 0.27 | 0.33 | 0.65 | 0.46 |
+| RAD21 | 0.15 | 0.19 | 0.43 | 0.48 | 0.40 |
+| CTCF | 0.15 | 0.18 | 0.42 | 0.52 | 0.35 |
+| SMC3 | 0.16 | 0.18 | 0.45 | 0.55 | 0.31 |
+| H3K27me3 | 0.12 | 0.20 | 0.39 | 0.52 | 0.43 |
+| H3K4me1 | 0.05 | 0.16 | 0.34 | 0.59 | 0.44 |
+| H4K20me1 | 0.07 | 0.15 | 0.37 | 0.44 | 0.29 |
+| H3K9me3 | 0.02 | 0.01 | 0.30 | 0.33 | 0.24 |
+
+R2 on a new cell is lower than on a seen cell and varies between cells (H1 and
+IMR-90 reach negative R2 for H3K27ac and H3K4me1, which reflects cell-specific
+track scales and not a loss of rank agreement, since the Pearson correlation
+stays at 0.27 to 0.61); the Pearson column is the scale-free measure.
+Held-out K562 and HMEC (median of the two): R2 0.19 (H3K27ac), 0.53 (H3K36me3),
+0.59 (H3K4me2), 0.49 (H3K9ac), 0.38 (H3K79me2), 0.15 (CTCF), -0.42 (RAD21),
+-0.25 (H3K4me3), -0.35 (H3K4me1).
+
+Permutation importance of the feature groups on the unseen fits (median drop
+of R2 when the group is shuffled; local = bin mean, minimum, maximum and
+standard deviation; context = +-50 kb and +-500 kb statistics and low/high
+fractions): H3K4me2 local 0.75, context 0.41; H3K4me3 local 0.69, context
+0.36; H3K9ac local 0.60, context 0.43; H3K36me3 local 0.54, context 0.15;
+H3K27ac local 0.46, context 0.33; H3K79me2 context 0.43, local 0.17; H3K27me3
+local 0.31, sequence 0.29, context 0.11; CTCF sequence 0.24, context 0.23,
+local 0.14; RAD21 context 0.28, sequence 0.21, local 0.13; SMC3 context 0.38,
+sequence 0.19; H3K9me3 sequence 0.13, local 0.05, context -0.02.
+
+Residual: the out-of-fold residual of the unseen fit regressed on the other
+12 tracks of the same cell (ridge, five folds over the even chromosomes)
+has R2 of 0.30 (H3K9me3), 0.30 (H3K27me3), 0.37 (H3K9ac), 0.39 (H3K4me3 and
+H3K36me3), 0.46 to 0.55 for CTCF, RAD21, SMC3, H3K27ac, H3K4me1, H3K79me2,
+H3K4me2 and H4K20me1; adding the other tracks raises the median R2 of the
+tracks that methylation predicts worst (CTCF 0.18 to 0.62, RAD21 0.19 to
+0.64, H3K4me1 0.16 to 0.66, H4K20me1 0.15 to 0.61, H3K27me3 0.20 to 0.53),
+whereas H3K9me3 stays at 0.27.
+
+Expectations tested. (1) Promoter and enhancer methylation dips track
+H3K27ac, H3K4me3, H3K4me2 and H3K9ac: confirmed, Pearson 0.65 to 0.76 and
+R2 0.27 to 0.54, the bin minimum and mean being the dominant features.
+(2) Partially methylated domains track H3K9me3 and H3K27me3: not confirmed
+for H3K9me3 (R2 0.01, Pearson 0.33, the context group carries no
+importance) and weak for H3K27me3 (R2 0.20, Pearson 0.52, the local group
+and sequence dominate). (3) Gene-body methylation tracks H3K36me3 and
+H3K79me2: confirmed (R2 0.40 and 0.43, Pearson 0.68 and 0.67; H3K36me3
+depends on the local group, H3K79me2 on the +-50 kb to +-500 kb context).
+(4) CTCF and cohesin are recoverable only through methylation dips at motifs:
+partly; the methylation model improves Pearson from 0.42 to 0.52 (CTCF), 0.43
+to 0.48 (RAD21) and 0.45 to 0.55 (SMC3), with R2 gains of 0.04 or less
+beyond the sequence baseline, so the cohesin and CTCF ChIP signal is not
+recovered from methylation at the signal level. At the Hi-C level part A
+shows nevertheless that Meth returns most of the loss from removing cohesin
+(RF 0.93); the information is about where open chromatin (dips and
+context) lies and not about the cohesin signal itself.
+
+**Part C, dedicated 10 kb trainings with Meth** (PENDING). Methylation
+coverage was extended to the cells with hg19 RRBS only: ENCODE RRBS of
+HCT116 (ENCSR000DFS), MCF-7 (ENCSR939RXT) and HFF (ENCSR000DFG, newborn
+foreskin fibroblast, a different sample of the tissue HFFc6 comes from),
+replicates 1 and 2 summed, lifted to hg38 CpG by CpG with the UCSC
+hg19ToHg38 chain (2.27 to 2.44 million CpG records per cell, 99.99 percent
+lifted; lifted HFF values correlate with IMR-90 WGBS at 0.82 on the 4.6
+percent of 1 kb bins the RRBS covers, HCT116 0.66, MCF-7 0.65), binned as
+the WGBS cells. RRBS covers CpG-dense regions only (4 to 5 percent of the 1 kb
+bins reach 5 reads; the other bins hold the cell mean), so the channel of
+these three cells is sparser than that of the WGBS cells. With them 10 of
+the 12 training cells carry Meth (7 before); NHEK and PC-9 have no ENCODE
+methylation data. The v2 cache (mc_all12refres_drop_meth_v2_10kb) and the
+runs min_meth_only (Meth + motifs and sequence), min_ctcf_meth,
+min_ctcf_h3k27ac_meth (10 kb, residual on the 12-cell consensus, track
+dropout 0.5 over the kept tracks, honest validation) and
+all12refres_drop_meth_v2_10kb are queued after the structure-loss jobs and
+before the cohesin-unknown block (about 7 GPU hours). They are scored
+(`scripts/meth_replace.py --stage dedicated`, GM12878, IMR-90, K562, HMEC
+deep, with the structure measures) next to min_ctcf_h3k27ac_refres_10kb,
+min_ctcf_rad21_refres_10kb, min_one_per_group_refres_10kb and
+min_motifs_only_refres_10kb. The new runs use track dropout 0.5 and the
+older ones none; the comparison therefore also contains that difference.
+
+Results of part C: pending.
+

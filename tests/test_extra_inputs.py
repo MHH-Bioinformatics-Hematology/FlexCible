@@ -101,3 +101,32 @@ def test_binary_segmentation_finds_step():
     assert abs(bounds[0] - 60) <= 1 and abs(bounds[1] - 100) <= 1
     flat = cnv_sv.binary_segment(rng.normal(0, 0.1, 150), 0.1)
     assert flat == [(0, 150)]
+
+
+def test_hg19_vectorised_lift_matches_liftover(tmp_path):
+    """scripts/methylation.lift_positions agrees with LiftOver.convert, on a
+    chain with a forward and a reverse-strand block and unmapped gaps."""
+    import gzip
+    import sys
+
+    import numpy as np
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import methylation as me
+    from hicmultiome.liftover import LiftOver
+
+    chain = tmp_path / "t.chain.gz"
+    with gzip.open(chain, "wt") as fh:
+        fh.write("chain 1000 chrA 1000 + 0 300 chrB 800 + 100 400 1\n"
+                 "100 50 50\n150\n\n"
+                 "chain 900 chrA 1000 + 500 700 chrC 600 - 50 250 2\n200\n\n")
+    lo = LiftOver(chain)
+    arr = me.chain_arrays(chain)
+    pos = np.array([0, 50, 99, 100, 149, 150, 199, 200, 299, 300, 499, 500, 600, 699, 700])
+    dchr, npos, ok = me.lift_positions(arr, "chrA", pos)
+    for i, p in enumerate(pos):
+        want = lo.convert("chrA", int(p))
+        if want is None:
+            assert not ok[i], p
+        else:
+            assert ok[i] and (dchr[i], int(npos[i])) == want, p
