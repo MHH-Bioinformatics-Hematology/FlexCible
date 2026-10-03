@@ -182,6 +182,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # mean DNA methylation (ENCODE WGBS, scripts/methylation.py) as a 14th
     # track, a proxy for marks primary samples lack (registry section 27)
     "all12refres_drop_meth": (TRAIN12, None),
+    # the same with the larger cell set: the hg19 RRBS of HCT116, MCF-7 and HFF
+    # lifted to hg38 (scripts/methylation.py, registry section 35)
+    "all12refres_drop_meth_v2": (TRAIN12, None),
     # copy number (CNVgain, CNVloss from Hi-C coverage, scripts/cnv_sv.py) as
     # two more tracks and the structural-variant loss mask (registry section 28)
     "all12refres_drop_cnv": (TRAIN12, None),
@@ -230,9 +233,10 @@ DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0
                      "all12refres_drop_varw": (0.5, 0.0)})
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
+DROPOUT_RUNS["all12refres_drop_meth_v2"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
-METH_RUNS = {"all12refres_drop_meth"}
+METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS
@@ -272,7 +276,8 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12deg_refres_drop": "residual", "all12cohunk_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
-            "all12refres_drop_meth": "residual", "all12refres_drop_cnv": "residual",
+            "all12refres_drop_meth": "residual",
+            "all12refres_drop_meth_v2": "residual", "all12refres_drop_cnv": "residual",
             **{r: "input" for r in STRUCT_RUNS}}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
@@ -364,8 +369,9 @@ def run_config(name, val_per_cell, patience, max_epochs):
         import methylation as me
         cfg["data"]["tracks"].append({"name": me.TRACK, "type": "methylation"})
         for smp in cfg["data"]["samples"]:
-            if me.has_meth(smp["name"]):
-                smp["extra_bigwig_dirs"] = [str(me.meth_dir(smp["name"]))]
+            v2 = base.endswith("_v2")
+            if me.has_meth(smp["name"], v2):
+                smp["extra_bigwig_dirs"] = [str(me.meth_dir(smp["name"], v2))]
             else:
                 smp["missing_tracks"] = smp["missing_tracks"] + [me.TRACK]
     if base in CNV_RUNS:
@@ -516,8 +522,9 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
                 extra += ["--prior", cascade_prior(cell, CASCADE_FROM[res])]
         if ref_run is not None and split_name(ref_run)[0] in METH_RUNS:
             import methylation as me
-            if me.has_meth(cell):
-                extra += ["--extra-bigwig-dir", me.meth_dir(cell)]
+            v2 = split_name(ref_run)[0].endswith("_v2")
+            if me.has_meth(cell, v2):
+                extra += ["--extra-bigwig-dir", me.meth_dir(cell, v2)]
         if ref_run is not None and split_name(ref_run)[0] in CNV_RUNS:
             import cnv_sv as cs_
             if cs_.has_cnv(cell):

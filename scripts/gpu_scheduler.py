@@ -375,8 +375,42 @@ def jobs():
     for j in J[gate_from:]:
         if j.gpu:
             j.ready = (lambda b=j.ready: b() and split_ok[25000]() and split_ok[10000]())
+    add_meth_replacement(J, train12, prep_cache)
     add_cohunk_and_fine(J, train12, prep_cache, chosen_ok)
     return J
+
+
+def add_meth_replacement(J, train12, prep_cache):
+    """Registry section 35, part C: how far methylation replaces ChIP. The hg19
+    RRBS cells (HCT116, MCF-7, HFF) are added to the methylation channel
+    (scripts/methylation.py), the cache of all12refres_drop_meth_v2 is built,
+    then the dedicated 10 kb runs with Meth and the v2 model train. Queued
+    after the earlier jobs and before the cohesin-unknown block."""
+    import methylation as me
+    import minimal_inputs as mi
+    v2_ok = lambda: all(me.has_meth(c, True) for c in list(me.FILES) + list(me.HG19))
+    cache = "mc_all12refres_drop_meth_v2_10kb"
+    prep_cache("all12refres_drop_meth_v2", 10000, cache, v2_ok)
+    runs = [mi.run_name(s, "refres_10kb") for s in mi.METH_SETS]
+
+    def mdone(run):
+        f = mi.OUT / f"{run}.train.log"
+        return "done." in (f.read_text(errors="replace") if f.exists() else "")
+    MI = f"{PY} scripts/minimal_inputs.py"
+    for r in runs:
+        J.append(Job("train_" + r, f"{MI} --stage configs_meth && {MI} --stage train --run {r} "
+                                   "--gpus 0,1",
+                     lambda: cache_ok(cache), (lambda r=r: mdone(r)), gpu=True))
+    train12("all12refres_drop_meth_v2", 10000, cache)
+    J.append(Job("meth_dedicated_eval", locked("methded",
+                 f"{PY} scripts/meth_replace.py --stage dedicated dedicated_summary"),
+                 lambda: all(mdone(r) for r in runs), lambda: is_marked("meth_dedicated_eval")))
+    v2n = mx.run_name("all12refres_drop_meth_v2", 10000)
+    J.append(Job("meth_replace_v2", locked("methrep",
+                 f"{PY} scripts/meth_replace.py --stage predict summary --models {v2n} "
+                 "all12refres_drop_meth_10kb all12refres_drop_10kb"),
+                 lambda: trained("all12refres_drop_meth_v2", 10000),
+                 lambda: is_marked("meth_replace_v2")))
 
 
 def locked(name, cmd):
