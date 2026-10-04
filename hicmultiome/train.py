@@ -830,7 +830,8 @@ def train(cfg: Config):
         if pos:
             # row of the indicator in the (possibly reduced) cond: the last
             # sequence-feature row, directly before the motif rows
-            r_ind = offset - 1
+            seqf = ds.channels["seq_features"]
+            r_ind = offset - len(seqf) + seqf.index(COHESIN_ROW)
             sym_i = ds.channels["sym_rows"].index("cohesin:unknown")
             one = tn.apply(np.ones((len(tn.mean), 1), dtype=np.float32))[sym_i, 0]
             coh = (pos[0], pos[1:], r_ind, float(one))

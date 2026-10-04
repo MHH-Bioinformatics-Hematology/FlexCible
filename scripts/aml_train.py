@@ -17,6 +17,21 @@ assigned to patients in the paper's tables (Supplementary Table 3 lists
 subtype-specific loops with gene:count labels only), so no stratification by
 subtype is possible. Written to ``results/aml_train/split.json``.
 
+Healthy controls. The four CD34+ HSPC donors of the same study (same lab and
+protocol; Hi-C only, no donor ChIP) are samples too: donors 050 and 213 train,
+donors 341 and 822 are held out in every fold. They carry the marks of one
+public CD34+ ChIP experiment per mark (ChIP-Atlas, aml/picks_hspc_cd34.tsv:
+H3K27ac SRX1761289, H3K27me3 SRX1761288, CTCF SRX037935), quantile-matched
+like the patients' tracks; the donor of those experiments is not one of the
+Hi-C donors. Their reference is the mean of the training donors (leave-one-
+out for a training donor), never the AML reference.
+
+Laboratory indicator (``data.lab_classes: [xu]``, ``samples[].lab``): one
+constant row, 1 for the Xu et al. Hi-C (patients and HSPC donors), 0 for every
+other cell, MOLM-13 and U-937 included. The healthy HSPC separate the lab and
+protocol component of a patient map from the AML component. The ablation run
+``all12aml_refin_drop_nolab`` has the same data without the row.
+
 Reference map of an AML sample (``samples[].reference_cool``): the mean proper
 O/E of the training patients of the fold, leave-one-out for a training patient
 and the mean of all eight for MOLM-13; the same mean serves the test patients
@@ -59,6 +74,9 @@ N_FOLDS = 3
 ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1", "H3K4me2",
          "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"]
 OVERSAMPLE = 3
+HSPC_TRAIN = ["050", "213"]
+HSPC_TEST = ["341", "822"]
+HSPC_MARKS = INP / "hspc_cd34"
 
 
 def guard(p: str) -> str:
@@ -68,6 +86,21 @@ def guard(p: str) -> str:
 
 def label(p: str) -> str:
     return f"xu_{p}"
+
+
+def hspc_label(d: str) -> str:
+    return f"xu_HSPC-{d}"
+
+
+def hspc_guard(d: str) -> str:
+    return "amlxuhspc" + d
+
+
+def hspc_ref_path(res: int, donor: str | None) -> Path:
+    """Reference of a training HSPC donor (the other training donor) or, donor
+    None, the mean of the training donors (test donors)."""
+    tag = f"lo_{donor}" if donor else "all"
+    return CONS_DIR / f"hspctrain_{tag}_{res // 1000}kb.cool"
 
 
 def make_split() -> dict:
@@ -91,6 +124,7 @@ def make_split() -> dict:
     df["fold"] = df.patient.map(fold)
     folds = {str(f): sorted(df[df.fold == f].patient) for f in range(N_FOLDS)}
     return {"patients": rows, "folds": folds,
+            "hspc_train": HSPC_TRAIN, "hspc_test": HSPC_TEST,
             "note": "fold f is the test set of the run suffixed _f<f> (fold 0: no suffix); "
                     "the other folds train; MOLM-13 trains in every fold, U-937 WT is "
                     "held out in every fold"}
@@ -134,6 +168,14 @@ def build_refs(fold: int, res: int) -> None:
     for p in [None] + tr:
         labs = [label(x) for x in tr if x != p]
         ap.build_aml_consensus(res, None, labs=labs, out=ref_path(fold, res, p))
+    for d in [None] + HSPC_TRAIN:
+        labs = [hspc_label(x) for x in HSPC_TRAIN if x != d]
+        ap.build_aml_consensus(res, None, labs=labs, out=hspc_ref_path(res, d))
+
+
+def refs_done(fold: int, res: int) -> bool:
+    return (all(ref_path(fold, res, p).exists() for p in [None] + train_patients(fold))
+            and all(hspc_ref_path(res, d).exists() for d in [None] + HSPC_TRAIN))
 
 
 def aml_samples(fold: int, res: int, with_ref: bool) -> list[dict]:
@@ -145,9 +187,18 @@ def aml_samples(fold: int, res: int, with_ref: bool) -> list[dict]:
         have = {b.stem for b in (INP / label(p)).glob("*.bigwig")}
         s = {"name": guard(p), "cool_path": str(OE_DIR / f"xu_{p}_proper_{res // 1000}kb.cool"),
              "bigwig_dir": str(INP / label(p)), "missing_tracks": [t for t in ALL13 if t not in have],
-             "assay": "hic"}
+             "assay": "hic", "lab": "xu"}
         if with_ref:
             s["reference_cool"] = str(ref_path(fold, res, p))
+        out.append(s)
+    have = {b.stem for b in HSPC_MARKS.glob("*.bigwig")}
+    for dn in HSPC_TRAIN:
+        s = {"name": hspc_guard(dn),
+             "cool_path": str(OE_DIR / f"{hspc_label(dn)}_proper_{res // 1000}kb.cool"),
+             "bigwig_dir": str(HSPC_MARKS), "missing_tracks": [t for t in ALL13 if t not in have],
+             "assay": "hic", "lab": "xu"}
+        if with_ref:
+            s["reference_cool"] = str(hspc_ref_path(res, dn))
         out.append(s)
     d = AML / "hg38_molm13"
     s = {"name": "molm13", "cool_path": str(OE_DIR / f"molm13_proper_{res // 1000}kb.cool"),
@@ -159,7 +210,8 @@ def aml_samples(fold: int, res: int, with_ref: bool) -> list[dict]:
 
 
 def aml_names(fold: int) -> list[str]:
-    return [guard(p) for p in train_patients(fold)] + ["molm13"]
+    return [guard(p) for p in train_patients(fold)] + [hspc_guard(d) for d in HSPC_TRAIN] + \
+        ["molm13"]
 
 
 def hard_split_path(fold: int, res: int) -> Path:

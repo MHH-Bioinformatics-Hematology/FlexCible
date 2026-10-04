@@ -204,7 +204,7 @@ def slow_tools(b: dict) -> bool:
     every held-out-cell block at 25 kb, on chr18 for the training-cell blocks
     at 25 kb, and on chr18 of the held-out cells at 10 kb."""
     if b["res"] == 25000:
-        return b["set"] == "heldout" or b["chrom"] == "chr18"
+        return b["set"] == "heldout" or b["chrom"] == "chr18" or b["set"].startswith("chrho")
     return b["set"] == "heldout" and b["chrom"] == "chr18"
 
 COMP_LABEL = {"hicgan": "Hi-cGAN", "corigami": "C.Origami", "hicreg": "HiC-Reg",
@@ -657,11 +657,11 @@ def cascfold_cool(cell: str, res: int) -> Path:
     return OE / "cascade" / f"prior_{cell}_{res // 1000}kb.cool"
 
 
-def block_sources(set_: str, cell: str, res: int, extra_comps: list[str] | None = None
-                  ) -> list[dict]:
+def block_sources(set_: str, cell: str, res: int, extra_comps: list[str] | None = None,
+                  models: list[str] | None = None) -> list[dict]:
     """Ordered sources of a block: name, kind, path, flags."""
     out = []
-    for m in MODELS:
+    for m in (MODELS if models is None else models):
         # trainchrom: the main models saw these chromosomes (their clean
         # training-cell evaluation is trainstretch); all12refres stays as the
         # in-training counterpart of the chromosome-held-out cascade fold model
@@ -713,6 +713,8 @@ def blocks() -> list[dict]:
 
 
 def block_source_list(b: dict) -> list[dict]:
+    if b["set"].startswith("chrho"):
+        return block_sources(b["set"], b["cell"], b["res"], b["comps"], models=CHRHO_MODELS)
     if b["set"] in ("hicreg", "epiphany"):
         src = block_sources("trainstretch", b["cell"], b["res"], b["comps"])
         for s in src:
@@ -1488,7 +1490,7 @@ def stage_score(jobs: int, only: list[str] | None = None, wait: bool = False) ->
         todo = [b for b in todo if any(re.search(o, b["id"]) for o in only)]
     # held-out cells first, then the clean training-cell sets
     order = {"heldout": 0, "trainchrom": 1, "hicreg": 2, "epiphany": 2, "trainstretch": 3}
-    todo.sort(key=lambda b: (order[b["set"]], -b["res"], b["cell"], b["chrom"]))
+    todo.sort(key=lambda b: (order.get(b["set"], 4), -b["res"], b["cell"], b["chrom"]))
     log(f"[score] {len(todo)} blocks to score")
     while todo:
         ready = [b for b in todo if block_ready(b)]
@@ -1967,12 +1969,154 @@ def write_status(d: pd.DataFrame, summ: pd.DataFrame, rk: pd.DataFrame) -> None:
 
 
 # ===================================================================== #
+# chromosome-held-out final models (registry section 37)
+# ===================================================================== #
+CHRHO_ROOT = HM / "runs/hic_measures_chrho"
+CHRHO_TABLES = REPO / "results/hic_measures_chrho"
+CHRHO_MODELS = ["all12refin_drop_chrho", "all12honest_drop_chrho", "all12refres_drop_chrho"]
+CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
+REFERENCE_FREE |= {"all12honest_drop_chrho"}
+CHRHO_CELLS = ["gm12878", "imr90", "k562"]
+
+
+def chrho_blocks() -> list[dict]:
+    """(set, cell, res, chrom, band bins or None for the model window, competitors).
+    Every block holds the chromosomes the competitor left out of its training;
+    the band is cut to the competitor's reach where it is shorter than our
+    window (Epiphany 990 kb, HiC-Reg 1 Mb)."""
+    rows = [("chrho_corigami", "imr90", 10000, "chr2", None,
+             ["corigami_imr90_8kb", "hicgan_imr90_on_imr90_10kb", "hicgan_gm12878_on_imr90_10kb"]),
+            ("chrho_corigami", "imr90", 10000, "chr3", None, ["corigami_imr90_8kb"])]
+    for c in ("chr3", "chr11", "chr17"):
+        rows.append(("chrho_epiphany", "gm12878", 10000, c, 99, ["epiphany_gm12878_10kb"]))
+    for cell in ("gm12878", "k562"):
+        for c in ("chr14", "chr17"):
+            rows.append(("chrho_hicreg", cell, 25000, c, 40,
+                         [f"hicregwindowcrosschrom_{cell}_25kb",
+                          f"hicregmulticellcrosschrom_{cell}_25kb",
+                          f"hicregwindowcv_{cell}_25kb"]))
+    for res in (25000, 10000):
+        k = res // 1000
+        for c in ("chr2", "chr14"):                     # Hi-cGAN held out the even chromosomes
+            rows.append(("chrho_hicgan", "gm12878", res, c, None, [f"hicgan_gm12878_{k}kb"]))
+            rows.append(("chrho_hicgan", "k562", res, c, None, [f"hicgan_gm12878_on_k562_{k}kb"]))
+    out = []
+    for set_, cell, res, ch, D, comps in rows:
+        b = dict(set=set_, cell=cell, res=res, chrom=ch, D=D if D else WINDOW[res] - 1,
+                 comps=comps)
+        b["id"] = f"{set_}_{cell}_{res // 1000}kb_{ch}"
+        out.append(b)
+    return out
+
+
+def chrho_use_root() -> None:
+    global OUT, TABLES
+    OUT, TABLES = CHRHO_ROOT, CHRHO_TABLES
+
+
+def chrho_available(res: int) -> list[str]:
+    return [m for m in CHRHO_MODELS if model_available(m, res)]
+
+
+def chrho_predict_one(model: str, res: int, cell: str, threads: int, gpu: str = "") -> None:
+    out = pred_cool(model, res, cell)
+    if out.exists() or not claim(out):
+        return
+    try:
+        cfg = MR / f"{model}_{res // 1000}kb.yaml"
+        ck = run_dir(model, res) / "checkpoint-best"
+        cmd = [PY, "-m", "hicmultiome.predict", "--config", str(cfg), "--checkpoint", str(ck),
+               "--chroms", ",".join(CHRHO_HELD), "--tta", "--out", str(out) + ".tmp"]
+        if cell in HELDOUT:
+            cmd += ["--sample", "gm12878", "--bigwig-dir", str(BIGWIG[cell]), "--cell", cell]
+        else:
+            cmd += ["--sample", cell]
+        if model not in REFERENCE_FREE:
+            cmd += ["--reference", str(consensus_cool(cell, res))]
+        env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu, OMP_NUM_THREADS=str(threads),
+                   MKL_NUM_THREADS=str(threads), OPENBLAS_NUM_THREADS=str(threads))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out.with_suffix(".log"), "w") as fh:
+            fh.write(" ".join(cmd) + "\n")
+            fh.flush()
+            rc = subprocess.call(cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=REPO, env=env)
+        if rc == 0 and Path(str(out) + ".tmp").exists():
+            os.replace(str(out) + ".tmp", out)
+            log(f"[chrho predict] {model} {res // 1000}kb {cell} ok")
+        else:
+            log(f"[chrho predict] FAILED {model} {res // 1000}kb {cell} rc={rc}")
+    finally:
+        release(out)
+
+
+def chrho_predict(threads: int, jobs: int, gpu: str = "") -> None:
+    chrho_use_root()
+    # the cells k562 is not a training cell; its sample is gm12878 with k562 tracks
+    BIGWIG.setdefault("k562", HM / "hg38_k562")
+    todo = [(m, res, c) for res in RESOLUTIONS for m in chrho_available(res)
+            for c in CHRHO_CELLS if not pred_cool(m, res, c).exists()]
+    log(f"[chrho predict] {len(todo)} predictions")
+    per = max(1, threads // jobs)
+    with ThreadPoolExecutor(max_workers=jobs) as ex:
+        for f in [ex.submit(chrho_predict_one, m, r, c, per, gpu) for m, r, c in todo]:
+            f.result()
+
+
+def chrho_score(jobs: int) -> None:
+    chrho_use_root()
+    import hicreg_audit
+    hicreg_audit.register()
+    todo = [b for b in chrho_blocks() if not (OUT / "blocks" / b["id"] / "measures.csv").exists()]
+    for b in todo:
+        if not any(m in chrho_available(b["res"]) for m in CHRHO_MODELS):
+            continue
+        if not all(Path(s["path"]).exists() for s in block_source_list(b) if s["kind"] == "model"):
+            log(f"[chrho score] {b['id']}: predictions missing")
+            continue
+        f = OUT / "blocks" / b["id"] / "measures.csv"
+        if not claim(f):
+            continue
+        try:
+            score_block(b, jobs)
+        except Exception as e:                       # noqa: BLE001
+            import traceback
+            log(f"[chrho score] FAILED {b['id']}: {e!r}\n{traceback.format_exc()}")
+        finally:
+            release(f)
+
+
+CHRHO_COLS = ["oe_pearson", "oe_pearson_tile_median", "oe_scc", "insulation_r", "bnd_recall",
+              "loop_recall_rank", "apa_ratio", "anchor_auroc", "comp_pref_r", "HiCRep",
+              "GenomeDISCO", "HiC-Spector", "QuASAR-Rep", "ENT3C", "Pearson", "TAD Fraction",
+              "window_combined"]
+
+
+def chrho_report() -> None:
+    chrho_use_root()
+    fs = sorted((OUT / "blocks").glob("chrho_*/measures.csv"))
+    if not fs:
+        return
+    D = pd.concat([pd.read_csv(f) for f in fs], ignore_index=True)
+    D = D[D.kind.isin(["model", "cool", "competitor", "measured"])]
+    cols = [c for c in CHRHO_COLS if c in D.columns]
+    CHRHO_TABLES.mkdir(parents=True, exist_ok=True)
+    D.to_csv(CHRHO_TABLES / "chrho_per_block.csv", index=False, float_format="%.4f")
+    g = (D.groupby(["set", "cell", "res", "source", "flag"], dropna=False)[cols].mean()
+         .reset_index())
+    n = D.groupby(["set", "cell", "res", "source", "flag"], dropna=False).chrom.nunique() \
+        .reset_index(name="n_chromosomes")
+    g = g.merge(n, on=["set", "cell", "res", "source", "flag"])
+    g.to_csv(CHRHO_TABLES / "chrho_summary.csv", index=False, float_format="%.4f")
+    log(f"[chrho report] {len(fs)} blocks")
+
+
+# ===================================================================== #
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True,
                     choices=["predict", "expected", "score", "ceilings", "combine", "report",
-                             "tables"])
+                             "tables", "chrho_predict", "chrho_score", "chrho_report"])
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--only", nargs="*", default=None, help="regexes of block ids")
@@ -1995,6 +2139,12 @@ def main():
             stage_report()
         elif st == "tables":
             stage_tables()
+        elif st == "chrho_predict":
+            chrho_predict(a.threads, 1 if a.gpu else max(1, min(a.jobs, a.threads)), a.gpu)
+        elif st == "chrho_score":
+            chrho_score(a.jobs)
+        elif st == "chrho_report":
+            chrho_report()
 
 
 if __name__ == "__main__":

@@ -125,6 +125,10 @@ class SampleSpec:
     # per-cell methylation or copy-number folder kept apart from the ChIP);
     # the first folder holding a track wins. Empty = bigwig_dir only.
     extra_bigwig_dirs: list[str] = field(default_factory=list)
+    # laboratory / protocol class of the sample's Hi-C, read when
+    # data.lab_classes lists it (a constant indicator row per class, like the
+    # assay indicator); "" = none of them
+    lab: str = ""
 
     def __post_init__(self):
         if self.assay not in ASSAYS:
@@ -172,6 +176,12 @@ class DataConfig:
     # every window that loses it, so "no cohesin track" means "unknown" and
     # not "HFF-like". Off = no row (previous behaviour, previous caches).
     cohesin_unknown: bool = False
+    # Laboratory / protocol indicator (registry section 36): one constant row
+    # per listed class after the assay and cohesin rows, 1 for samples whose
+    # SampleSpec.lab equals the class. Separates the lab and protocol component
+    # of a map (e.g. all Hi-C of one lab: AML patients and healthy HSPC) from
+    # the biology that the other inputs carry. Empty = no rows.
+    lab_classes: list[str] = field(default_factory=list)
     # Reference contact map: an O/E cool on the same bin grid as the samples
     # (e.g. the mean of other cells' maps, scripts/consensus_oe.py). When set,
     # precompute caches each window's reference block as `ref`, encoded with

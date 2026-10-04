@@ -421,8 +421,7 @@ def add_aml_and_chrho(J, train12, prep_cache):
     final models."""
     import aml_train as at
 
-    def refs_done(f, k):
-        return all(at.ref_path(f, k, p).exists() for p in [None] + at.train_patients(f))
+    refs_done = at.refs_done
 
     def aml_block(fold, flag=None):
         sfx = f"_f{fold}" if fold else ""
@@ -453,10 +452,19 @@ def add_aml_and_chrho(J, train12, prep_cache):
             train12(r, res, cache)
             tr = next(j for j in J[n0:] if j.gpu)
             tr.ready = (lambda b=tr.ready, f=fold, rr=res: b() and at.hard_split_path(f, rr).exists())
+        if fold == 0:                    # ablation without the lab indicator, 25 kb
+            prep_cache("all12aml_refin_drop_nolab", 25000, "mc_all12aml_ref_25kb_nolab",
+                       lambda: refs_done(0, 25000))
+            n0 = len(J)
+            train12("all12aml_refin_drop_nolab", 25000, "mc_all12aml_ref_25kb_nolab")
+            tr = next(j for j in J[n0:] if j.gpu)
+            tr.ready = (lambda b=tr.ready: b() and at.hard_split_path(0, 25000).exists())
         names = [mx.run_name(f"{b}{sfx}", r) for b in ("all12aml_refin_drop", "all12aml_honest_drop")
                  for r in (25000, 10000)]
+        if fold == 0:
+            names.append("all12aml_refin_drop_nolab_25kb")
         J.append(Job(f"aml_eval_f{fold}",
-                     locked("amleval", f"{PY} scripts/aml_train.py --stage eval --fold {fold}"),
+                     locked("amleval", f"{PY} scripts/aml_train_eval.py --fold {fold}"),
                      lambda ns=names: all(trained(*mx.split_name(n)) for n in ns),
                      lambda f=fold: is_marked(f"aml_eval_f{f}")))
     aml_block(0)
@@ -477,12 +485,12 @@ def add_aml_and_chrho(J, train12, prep_cache):
         train12(run, res, cache)
     chr_names = [(r, k) for r, k, _ in chr_order]
     J.append(Job("chrho_predict_score",
-                 locked("chrho", f"{PY} scripts/hic_measures.py --stage chrho_predict chrho_score "
+                 locked("chrho", f"{PY} scripts/hic_measures.py --stage chrho_predict chrho_score chrho_report "
                                  "--threads 8 --jobs 4"),
                  lambda: all(trained(r, k) for r, k in chr_names[:4]),
                  lambda: is_marked("chrho_predict_score")))
     J.append(Job("chrho_predict_score_refres",
-                 locked("chrho", f"{PY} scripts/hic_measures.py --stage chrho_predict chrho_score "
+                 locked("chrho", f"{PY} scripts/hic_measures.py --stage chrho_predict chrho_score chrho_report "
                                  "--threads 8 --jobs 4"),
                  lambda: all(trained(r, k) for r, k in chr_names),
                  lambda: is_marked("chrho_predict_score_refres")))
@@ -588,12 +596,18 @@ def add_cohunk_and_fine(J, train12, prep_cache, chosen_ok):
           cache_needs=lambda: aux_ok(2000) and trained("all12deg_refres_drop", 2000))
 
 
+def pidfile(name) -> Path:
+    return MR / f".run_{name}.pid"
+
+
 def launch(job: Job):
     note(f"start {job.name}")
     wrapped = (f"cd {REPO} && ( {job.cmd} ) >> {OUTLOG} 2>&1; rc=$?; "
                f"[ $rc -eq 0 ] && touch {mark(job.name)}; "
                f"({STATUS}) > /dev/null 2>&1; exit $rc")
-    return subprocess.Popen(["bash", "-c", wrapped], start_new_session=True)
+    p = subprocess.Popen(["bash", "-c", wrapped], start_new_session=True)
+    pidfile(job.name).write_text(str(p.pid))      # a restarted scheduler finds the running job
+    return p
 
 
 def main():
@@ -612,10 +626,27 @@ def main():
     all_jobs = jobs()
     running: dict[str, subprocess.Popen] = {}
     failed: set[str] = set()
+    # jobs an earlier scheduler started and that still run (pid files written
+    # by launch): never started again; a running GPU job holds the GPUs
+    for j in all_jobs:
+        pf = pidfile(j.name)
+        if pf.exists():
+            try:
+                pid = int(pf.read_text())
+            except ValueError:
+                pid = 0
+            if pid and _alive(pid):
+                a.external.append(j.name)
+                if j.gpu:
+                    a.wait_pid.append(pid)
+                note(f"found running {j.name} (pid {pid}), not started again")
+            else:
+                pf.unlink(missing_ok=True)
     while True:
         for n, p in list(running.items()):
             if p.poll() is not None:
                 note(f"{'done' if p.returncode == 0 else 'FAILED'} {n}")
+                pidfile(n).unlink(missing_ok=True)
                 if p.returncode != 0:
                     failed.add(n)
                 del running[n]

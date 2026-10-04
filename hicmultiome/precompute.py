@@ -144,6 +144,7 @@ def seq_feature_names(cfg: Config) -> list[str]:
     names += [f"assay_{a}" for a in assay_classes(cfg)]
     if cfg.data.cohesin_unknown:
         names.append(COHESIN_ROW)
+    names += [f"lab_{c}" for c in cfg.data.lab_classes]
     return names
 
 
@@ -153,6 +154,7 @@ def sym_row_names(cfg: Config) -> list[str]:
     rows += [f"assay:{a}" for a in assay_classes(cfg)]
     if cfg.data.cohesin_unknown:
         rows.append("cohesin:unknown")
+    rows += [f"lab:{c}" for c in cfg.data.lab_classes]
     for mid in cfg.active_motif_ids:
         rows += [f"motif:{mid}:fwd", f"motif:{mid}:rev"]
     return rows
@@ -190,6 +192,8 @@ def assemble_chrom(
         parts.append(np.full((1, nb), float(sample.assay == a), dtype=np.float32))
     if cfg.data.cohesin_unknown:
         parts.append(np.full((1, nb), cohesin_unknown_value(cfg, dead), dtype=np.float32))
+    for c in cfg.data.lab_classes:
+        parts.append(np.full((1, nb), float(sample.lab == c), dtype=np.float32))
     if not fasta and cfg.any_fasta and cfg.active_motif_ids:
         parts.append(np.zeros((2 * len(cfg.active_motif_ids), nb), dtype=np.float32))
     if fasta:

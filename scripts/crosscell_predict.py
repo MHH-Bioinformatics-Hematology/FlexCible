@@ -85,6 +85,9 @@ def main():
     ap.add_argument("--assay", choices=["hic", "intact", "microc"], default=None,
                     help="contact assay of this cell's map, for models trained "
                          "with data.assay_indicator (default: keep the config's)")
+    ap.add_argument("--lab", default=None,
+                    help="models trained with data.lab_classes: the laboratory / protocol "
+                         "class of this cell's map (default: the config sample's, i.e. none)")
     ap.add_argument("--coarse", nargs="*", default=[],
                     help="res=cool: also block-average the native prediction onto "
                          "that coarser grid and score it against that target")
@@ -149,6 +152,8 @@ def main():
     sample.extra_bigwig_dirs = list(a.extra_bigwig_dir)    # this cell's, never the config's
     if a.assay is not None:
         sample.assay = a.assay
+    if a.lab is not None:
+        sample.lab = a.lab
     have = {p.stem.upper(): p for d in [*reversed(a.extra_bigwig_dir), a.bigwig_dir]
             for p in Path(d).glob("*.bigwig")}
     missing = [t for t in channels["tracks"] if t.upper() not in have]

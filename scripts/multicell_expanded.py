@@ -176,6 +176,7 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # hard validation
     **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("refin_drop", "honest_drop")
        for f in ("", "_f1", "_f2")},
+    "all12aml_refin_drop_nolab": (TRAIN12, None),      # the same without the lab indicator
     # gain beyond the consensus on new cells (registry section 26): input-only
     # reference with track dropout, the same on CTCF + H3K27ac only, and the
     # residual dropout model with between-cell-variance loss weighting
@@ -429,6 +430,11 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cfg["data"]["samples"] += at.aml_samples(fold, res, with_ref=base in REF_RUNS)
         aml_set = set(at.aml_names(fold))
         cells = cells + at.aml_names(fold)
+        if not base.endswith("_nolab"):
+            cfg["data"]["lab_classes"] = ["xu"]
+        else:                                         # same data, no lab row
+            for smp in cfg["data"]["samples"]:
+                smp.pop("lab", None)
     if base in CHRHO_RUNS:
         cfg["data"]["chroms"] = list(CHRHO_CHROMS)
     cfg["data"]["resolution"] = res
@@ -451,7 +457,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
     cache_name = (f"mc_all12aml_{'ref_' if base in REF_RUNS else ''}{res // 1000}kb"
-                  f"{'_f' + str(fold) if fold else ''}" if base in AML_RUNS
+                  f"{'_f' + str(fold) if fold else ''}{'_nolab' if base.endswith('_nolab') else ''}"
+                  if base in AML_RUNS
                   else f"mc_all12ref_chrho_{res // 1000}kb" if base in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
                   else f"mc_all12chrho_{res // 1000}kb" if base == "all12honest_drop_chrho"
                   else f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS

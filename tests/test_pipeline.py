@@ -2277,3 +2277,32 @@ def test_oversample_samples_training(workdir, caplog):
                         oversample_samples=["zz"], oversample_factor=2)
     with pytest.raises(ValueError, match="no training window"):
         htrain.train(Config.from_dict(bad))
+
+
+def test_lab_indicator_rows(workdir):
+    """data.lab_classes adds one constant row per class after the sequence
+    features (and the assay and cohesin rows): 1 for samples of that lab; off,
+    the layout is unchanged."""
+    import dataclasses
+
+    from hicmultiome.precompute import (assemble_chrom, sample_track_files,
+                                        seq_feature_names, sym_row_names)
+
+    raw = _cohesin_raw(workdir, "labrow")
+    raw["data"]["samples"][0]["lab"] = "xu"
+    on = Config.from_dict(raw)
+    raw_off = _cohesin_raw(workdir, "labrow")
+    raw_off["data"]["samples"][0]["lab"] = "xu"
+    off = Config.from_dict(raw_off)
+    on = dataclasses.replace(on, data=dataclasses.replace(on.data, lab_classes=["xu"]))
+    r_on, r_off = sym_row_names(on), sym_row_names(off)
+    assert len(r_on) == len(r_off) + 1
+    k = r_on.index("lab:xu")
+    assert k == len(on.track_names) + len(seq_feature_names(on)) - 1
+    assert r_on.index("cohesin:unknown") == k - 1
+    nb = CHROMS["chr1"] // BINSIZE
+    for s, v in zip(on.data.samples, (1.0, 0.0)):
+        a_on = assemble_chrom(on, s, sample_track_files(on, s), "chr1", nb)
+        a_off = assemble_chrom(off, s, sample_track_files(off, s), "chr1", nb)
+        assert np.all(a_on[k] == v)
+        np.testing.assert_array_equal(np.delete(a_on, k, axis=0), a_off)
