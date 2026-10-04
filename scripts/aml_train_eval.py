@@ -120,6 +120,12 @@ def ref_of(m: dict, s: dict, fold: int, res: int):
     return r
 
 
+def ready(run: str) -> bool:
+    """Training finished (stopped by patience); `best` exists from the first checkpoint on."""
+    si = mx.stop_info(run, 10)
+    return bool(si and si[2] == "patience") and (mx.REF_OUT / run / "best").exists()
+
+
 def ckpt(run: str) -> Path:
     return mx.best_ckpt(mx.REF_OUT / run)
 
@@ -164,7 +170,7 @@ def predict(fold: int, res: int, m: dict, s: dict, gpu: str) -> int:
 def stage_predict(fold: int):
     tasks = [(res, m, s) for res in RES for m in models(fold, res)
              for s in samples(fold, res)
-             if (mx.REF_OUT / m["run"] / "best").exists()]
+             if ready(m["run"])]
     lanes = [tasks[i::len(GPUS)] for i in range(len(GPUS))]
 
     def lane(i):
@@ -294,7 +300,7 @@ def stage_features(fold: int):
         g[["chrom", "start", "end"]].drop_duplicates().to_csv(regs, sep="\t", header=False, index=False)
         s = next(x for x in samples(fold, res) if x["patient"] == pp and x["group"] == "patient")
         for m in models(fold, res):
-            if (mx.REF_OUT / m["run"] / "best").exists():
+            if ready(m["run"]):
                 jobs.append((p, s, m, regs))
 
     def run(i_job):

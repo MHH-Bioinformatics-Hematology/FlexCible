@@ -3339,7 +3339,83 @@ same output folder, no checkpoint written by the duplicate). The scheduler
 now writes a pid file per started job and finds running jobs on restart
 (`.run_<job>.pid`).
 
-Results: pending.
+Results, fold 0, 25 kb (`results/aml_train/eval_f0_*.csv`; 10 kb, the
+lab-indicator ablation, the Xu loop and stripe test and the fold-1/2 cross-
+validation are pending).
+
+Training. all12aml_refin_drop_25kb stopped at epoch 33 (best hard-validation
+Pearson 0.733; honest-validation Pearson 0.916 at epoch 14), all12aml_honest_
+drop_25kb at epoch 12 (best hard-validation 0.408, reached at epoch 2: the
+patient-specific windows select an early checkpoint of the model without a
+reference). Normal accuracy on the 413 Akita test regions (median over the
+cells; section 15 evaluation): all12aml_refin_drop 0.929 on the 12 training
+cells and 0.906 on the five held-out cells, against 0.936 and 0.914 for
+all12refin_drop (-0.007 and -0.008, about half the seed noise); all12aml_honest_
+drop 0.781 and 0.736 against 0.809 and 0.775 for all12honest_drop (-0.028
+and -0.039, the early checkpoint).
+
+Held-out patients (027, 270, 773, 1916; median over patients of the per-
+patient median Pearson on the 413 regions, identical pixels):
+
+| source | with the patient's marks | no ChIP |
+|---|---|---|
+| AML reference alone (mean of the 8 training patients) | 0.912 | |
+| mean of the 11 other patients | 0.922 | |
+| HSPC consensus (4 donors) / consensus12 | 0.887 / 0.844 | |
+| all12aml_refin_drop (AML reference) | 0.900 | 0.898 |
+| all12aml_refin_drop (HSPC reference) | 0.873 | 0.865 |
+| all12refin_drop (AML reference, no AML data in training) | 0.886 | 0.896 |
+| all12refin_drop (consensus12 reference) | 0.842 | 0.816 |
+| all12aml_honest_drop (no reference) | 0.623 | 0.456 |
+| all12honest_drop | 0.607 | 0.469 |
+
+No test patient is above the AML reference (model against reference: 027
+0.917 / 0.930, 1916 0.907 / 0.926, 270 0.876 / 0.881, 773 0.893 / 0.897), and
+the mean of all eleven other patients, the section 29 baseline, stays 0.022
+above the model. Training on AML data raises the input-reference model by
+0.014 with marks (0.886 to 0.900) and 0.002 without ChIP (0.896 to 0.898),
+and the reference-free model by 0.016 and -0.013 (0.607 to 0.623, 0.469 to
+0.456). The patient's CUT&Tag adds 0.002 to the AML-trained model (0.900 and
+0.898), 0.008 with the HSPC reference, and -0.010 to the model trained
+without AML data (0.886 against 0.896). On the patient-specific regions of
+section 29 (30 to 43 per patient) the AML-trained model with marks reaches
+0.755 against 0.751 for the AML reference and 0.730 without ChIP: the
+ChIP adds 0.025 there, and the model does not exceed its reference. Residual
+correlation corr(P - AML reference, T - AML reference): 0.167 with marks and
+0.023 without ChIP on all regions, 0.274 and 0.104 on the patient-specific
+regions (non-AML-trained model with the AML reference: 0.152 / 0.049 and 0.218 /
+0.074). Against the HSPC consensus the AML-trained model has residual
+correlation 0.464 (marks) and 0.434 (no ChIP), the non-AML-trained model with
+the AML reference 0.423 and 0.350, with consensus12 as reference 0.345 and
+0.202; against consensus12 the AML-trained model reaches 0.711, mostly
+because its reference already differs from consensus12 by the AML component.
+
+Held-out healthy HSPC donors (341, 822; Pearson, reference the training-
+donor mean): all12aml_refin_drop 0.926 with the CD34+ marks and 0.929 without,
+all12refin_drop with the HSPC reference 0.907 and 0.919, consensus12 as
+reference 0.845 and 0.820; the reference alone scores 0.938 and the mean of
+the other three donors 0.949, so the model does not exceed its reference for
+healthy cells either, and AML training changes the HSPC score by +0.019 with
+marks and +0.010 without. U-937 WT (other lab and protocol, Micro-C):
+all12aml_refin_drop 0.857 with marks and 0.863 without, the AML reference
+alone 0.834, consensus12 0.866, all12refin_drop with consensus12 0.886 and
+0.850: the AML reference lifts the model over the reference but the
+non-AML consensus reference remains better on marks (0.886), as expected for
+a cell from another lab.
+
+Xu et al.'s AML-specific loops and stripes (10 kb, four test patients, 592
+loops and 481 stripes), models trained without AML data only (the 10 kb
+AML models are pending): the measured loop enrichment lies 0.31 log2 units
+above the AML reference at the loop pixel (stripes 0.21), the predictions
+0.01 above it (stripes 0.03 to 0.07) and correlate with the measured gain
+at 0.10 to 0.24 (loops) and 0.25 to 0.42 (stripes).
+
+Reading so far. At 25 kb the AML-inclusive input-reference model gains a
+little over the same model without AML data and exceeds neither the AML
+reference nor the mean of the other patients; the patient's own ChIP adds
+0.002 Pearson overall and 0.025 on the patient-specific regions, and the
+same holds for healthy donors: no gain beyond the reference map for either
+kind of cell. This is the negative result so far.
 
 ## 37. Chromosome-held-out final models (PENDING)
 
@@ -3372,5 +3448,50 @@ for comparison (GM12878 and K562, chr14, chr17, 1 Mb band), Hi-cGAN
 (GM12878 and its K562 predictions, chr2, chr14), the consensus the model reads,
 the best other measured map and the replicate map; measures as section 31.
 
-Results: pending.
+Results, 25 kb models (all12refin_drop_chrho and all12honest_drop_chrho; 10
+kb, all12refres_drop_chrho and C.Origami and Epiphany blocks are pending;
+`results/hic_measures_chrho/chrho_summary.csv`). The training stopped at epoch
+72 (best honest-validation 0.939) and epoch 25 (0.799); normal accuracy on
+the 413 Akita regions, 12 training cells / five held-out cells: 0.933 / 0.910
+for refin_drop_chrho (0.936 / 0.914 without the held-out chromosomes) and
+the ChIP-only honest model is in `reference_summary.csv`. Whole held-out
+chromosomes, mean over the chromosomes of a block, identical pixels (Pearson
+over all band pixels; median Pearson over 1 Mb tiles; SCC; insulation r;
+boundary recall; rank-matched loop recall; HiCRep):
 
+| block | source | Pearson | tile median | SCC | insulation r | boundary recall | loop recall | HiCRep |
+|---|---|---|---|---|---|---|---|---|
+| HiC-Reg, GM12878 chr14, chr17 (1 Mb band) | all12refin_drop_chrho | 0.931 | 0.950 | 0.926 | 0.905 | 0.833 | 0.396 | 0.935 |
+| | all12honest_drop_chrho (ChIP only) | 0.782 | 0.798 | 0.763 | 0.674 | 0.608 | 0.191 | 0.792 |
+| | consensus of the other cells | 0.868 | 0.901 | 0.853 | 0.804 | 0.805 | 0.396 | 0.857 |
+| | HiC-Reg cross-chromosome WINDOW | 0.579 | 0.620 | 0.538 | 0.447 | 0.322 | 0.032 | 0.668 |
+| | HiC-Reg cross-chromosome MULTICELL | 0.615 | 0.634 | 0.567 | 0.455 | 0.346 | 0.038 | 0.692 |
+| | HiC-Reg CV (published, within-chromosome) | 0.908 | 0.964 | 0.870 | 0.678 | 0.723 | 0.323 | 0.915 |
+| HiC-Reg, K562 chr14, chr17 | all12refin_drop_chrho | 0.897 | 0.928 | 0.889 | 0.856 | 0.738 | 0.347 | 0.904 |
+| | all12honest_drop_chrho | 0.730 | 0.777 | 0.711 | 0.622 | 0.568 | 0.125 | 0.748 |
+| | consensus | 0.857 | 0.905 | 0.853 | 0.839 | 0.769 | 0.332 | 0.868 |
+| | HiC-Reg cross-chromosome WINDOW | 0.736 | 0.820 | 0.696 | 0.484 | 0.523 | 0.038 | 0.797 |
+| | HiC-Reg cross-chromosome MULTICELL | 0.740 | 0.819 | 0.700 | 0.500 | 0.519 | 0.030 | 0.800 |
+| | HiC-Reg CV | 0.888 | 0.950 | 0.864 | 0.670 | 0.688 | 0.178 | 0.923 |
+| Hi-cGAN, GM12878 chr2, chr14 (6.4 Mb reach, our 2 Mb band) | all12refin_drop_chrho | 0.934 | 0.949 | 0.929 | 0.901 | 0.808 | 0.405 | 0.933 |
+| | all12honest_drop_chrho | 0.796 | 0.824 | 0.778 | 0.698 | 0.616 | 0.200 | 0.773 |
+| | consensus | 0.860 | 0.899 | 0.848 | 0.784 | 0.777 | 0.389 | 0.835 |
+| | Hi-cGAN (submitted) | 0.221 | 0.485 | 0.225 | 0.238 | 0.218 | 0.048 | 0.322 |
+| Hi-cGAN, K562 chr2, chr14 (GM12878 model) | all12refin_drop_chrho | 0.904 | 0.935 | 0.896 | 0.842 | 0.726 | 0.356 | 0.892 |
+| | all12honest_drop_chrho | 0.765 | 0.826 | 0.742 | 0.657 | 0.550 | 0.141 | 0.721 |
+| | consensus | 0.853 | 0.909 | 0.849 | 0.816 | 0.718 | 0.350 | 0.850 |
+| | Hi-cGAN GM12878 model | 0.143 | 0.479 | 0.147 | 0.218 | 0.213 | 0.050 | 0.220 |
+
+On held-out chromosomes the reference-map model exceeds the consensus and
+every competitor on every structure measure listed except the HiC-Reg CV maps'
+tile median (0.964 against 0.950, GM12878) and its HiCRep on K562 (0.923
+against 0.904): the CV maps interpolate within the chromosome (section 18,
+"HiC-Reg training split") and are not a held-out score. The ChIP-only model,
+which gets no consensus, scores 0.782 and 0.730 Pearson against 0.579 to
+0.615 and 0.736 to 0.740 for HiC-Reg's cross-chromosome predictions
+(GM12878, K562): ahead by 0.17 to 0.20 on GM12878 and level on K562, where
+the HiC-Reg tile median (0.820) exceeds the ChIP-only model's (0.777); its
+SCC is 0.763 and 0.711 against 0.538 to 0.567 and 0.696 to 0.700, its
+insulation correlation 0.674 and 0.622 against 0.447 to 0.455 and 0.484 to
+0.500. Against Hi-cGAN (even chromosomes held out) the ChIP-only model
+leads by 0.57 to 0.62 Pearson.
