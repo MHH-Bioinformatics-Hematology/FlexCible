@@ -2257,6 +2257,103 @@ over consensus12 0.14 / 0.10 / 0.05 and 0.27 without, 0.30 / 0.09 / 0.10 and
 CTCF sites lost to hypermethylation are therefore not recovered through the
 channel.
 
+### 29c. Controls: noise ceiling, non-AML cells with the patient marks, marks at loop anchors
+
+Question: do histone marks and CTCF/cohesin behave differently in AML, or
+is the patient-specific deviation just noisy, or is it the information in
+three marks? `scripts/aml_primary_noise.py`, `scripts/aml_primary_controls.py`;
+tables `noise_ceiling.csv`, `noise_ceiling_patients.csv`,
+`control_nonaml_cells.csv`, `control_nonaml_summary.csv`,
+`control_loops_marks.csv` in `results/aml_primary/`.
+
+Control 1, noise ceiling. Each patient's pairs file (12 with CUT&Tag) was
+split into two halves by the parity of the last character of the read name
+(a deterministic function of the read name; headers to both), each half
+built like the full map (5 kb cooler, 10 and 25 kb, ICE, oe_proper; half
+depth 0.05 to 0.2 B contacts). On the patient-specific regions of section
+29 (top 20% of the deviation score against both consensus12 and the HSPC
+consensus, noise filters, SV/CNV excluded; 38 to 46 regions per patient) the
+deviation of half 1 from the reference is correlated with that of half 2
+(medians over patients; Spearman-Brown r_full = 2 r_half/(1 + r_half); a
+predictor that knows the true signal correlates at most at sqrt(r_full)):
+
+| deviation from | res | r_half | r_full | ceiling of a predictor | model (all12refres_drop) | other-patient mean |
+|---|---|---|---|---|---|---|
+| consensus12 | 25 kb | 0.810 | 0.895 | 0.946 | 0.379 | 0.732 |
+| consensus12 | 10 kb | 0.596 | 0.746 | 0.864 | 0.270 | 0.648 |
+| HSPC consensus | 25 kb | 0.674 | 0.805 | 0.897 | 0.251 | 0.483 |
+| HSPC consensus | 10 kb | 0.419 | 0.590 | 0.768 | 0.227 | 0.433 |
+
+On each patient's hardest 20% against consensus12 alone r_full is 0.910 (25
+kb) and 0.776 (10 kb). Per patient r_full against HSPC at 25 kb ranges from
+0.67 (546) to 0.91 (168). The ceiling is therefore far above the 0.25 to 0.38
+of the model; data depth does not explain the shortfall. The halves share the
+library, so the reliability also contains any library-specific systematic
+component (restriction-fragment and GC biases), and the ceiling is an upper
+bound for the biological part.
+
+Control 2, the same task on non-AML cells with only the patient marks.
+all12refres_drop (10 and 25 kb) predicts the 413 test regions of K562, HMEC
+deep and HUVEC deep (held out; reference consensus12) and GM12878, IMR-90,
+HepG2, A549 and H1 (training cells; leave-one-out consensus) from CTCF +
+H3K27ac + H3K27me3 (p3) and H3K27ac + H3K27me3 (p2, the patients without
+CTCF), the tracks quantile-matched as for the patients, and from all tracks
+of the cell. Residual correlation corr(P - C, T - C) on the hardest 20% of
+the passing regions by the deviation score from the reference (hard-split
+filters; no HSPC analogue exists, so only the consensus-based definition is
+used, and the patients are compared on that definition: all12refres_drop,
+patients' hardest 20% against consensus12):
+
+| set | res | held-out cells (3) | training cells (5) | patients (12) |
+|---|---|---|---|---|
+| CTCF, H3K27ac, H3K27me3 | 25 kb | 0.671 | 0.622 | 0.428 |
+| CTCF, H3K27ac, H3K27me3 | 10 kb | 0.688 | 0.651 | 0.308 |
+| H3K27ac, H3K27me3 | 25 kb | 0.693 | 0.597 | |
+| H3K27ac, H3K27me3 | 10 kb | 0.635 | 0.599 | |
+| all tracks of the cell | 25 kb | 0.641 | 0.762 | |
+| all tracks of the cell | 10 kb | 0.585 | 0.766 | |
+
+(per cell in `control_nonaml_cells.csv`; the dedicated three-mark model
+reaches 0.486 / 0.467 on the patients.) Non-AML cells recover 0.6 to 0.7 of
+their deviation from three marks, 1.5 to 2 times the patients, and the held-out
+cells gain nothing from the remaining tracks (0.64 / 0.59 with all tracks
+against 0.67 / 0.69 with three), as expected for a model with a reference
+map. The median deviation score of these hardest regions is 0.36 against 0.66
+(25 kb) and 0.87 (10 kb) for the patients: the patients deviate more from
+consensus12, and on the patient-specific regions the HSPC consensus alone
+reproduces 0.55 to 0.65 of the deviation from consensus12 (section 29),
+i.e. the deviation is mostly shared by healthy cells of the same lab and
+protocol.
+
+Control 3, marks at the AML-specific loop anchors (Suppl. Table 1 loops of
+the 10 patients with CUT&Tag, 1479 loops, upper against lower tercile (498 each) of the
+anchor signal within patients; AUROC):
+
+| mark | measured gain over HSPC separates high from low anchor signal | predicted gain (all12refres_drop) | anchor signal separates high from low measured gain |
+|---|---|---|---|
+| H3K27ac | 0.413 | 0.543 | 0.415 |
+| H3K27me3 | 0.572 | 0.513 | 0.575 |
+| CTCF | 0.536 | 0.575 | 0.523 |
+
+At the loops Xu et al. call AML-specific, the patient's own anchor H3K27ac,
+H3K27me3 and CTCF are not related to the measured gain (0.41 to 0.58; H3K27ac
+is on the wrong side of 0.5); the model's predicted gain moves with H3K27ac
+and CTCF at 0.54 to 0.58. The marks are not informative about the loop gain
+in these data, and the model uses them only weakly.
+
+Reading. The three numbers side by side at 25 kb: patient-specific
+deviation from HSPC is reproducible to 0.81 (ceiling of a predictor 0.90),
+non-AML cells with the same three marks recover 0.62 to 0.67, patients
+recover 0.25 (HSPC definition) to 0.43 (consensus12 definition). Neither
+data depth nor the information in three marks plus a reference limits the
+patients: it is the part of the patient maps that lab, protocol and lineage
+share (reproduced by the HSPC and the other patients' maps at 0.5 to 0.8) and
+a loop gain that does not follow the patient's own marks. The behaviour of
+the marks learned on the 12 cells does not carry over to the Xu et al.
+patients at the AML-specific loops, and the evidence cannot separate
+domain shift of the CUT&Tag p-value tracks from a real difference of AML
+chromatin, since no patient has a replicate CUT&Tag.
+
 ## 30. Structure-aware learning: TAD, loop and compartment terms (PENDING)
 
 Base: all12refin_drop (input reference, track dropout), the best model on

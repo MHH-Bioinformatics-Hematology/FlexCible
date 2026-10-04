@@ -1,0 +1,25 @@
+mark,n_high,n_low,score,auroc
+H3K27ac,498,498,measured gain over HSPC,0.4133401074176223
+H3K27ac,498,498,predicted gain over HSPC (all12refres_drop_10kb),0.5432654312027225
+H3K27ac,498,498,predicted gain over HSPC (all12honest_drop_10kb),0.5639747746004097
+H3K27ac,498,498,predicted gain over HSPC (min_ctcf_h3k27ac_refres_10kb),0.559245012177223
+H3K27ac,498,498,anchor signal separates high from low measured gain,0.4151908840179997
+H3K27ac,498,498,anchor signal separates high from low predicted gain (all12refres_drop_10kb),0.5409751455621683
+H3K27ac,498,498,anchor signal separates high from low predicted gain (all12honest_drop_10kb),0.5479871292398509
+H3K27ac,498,498,anchor signal separates high from low predicted gain (min_ctcf_h3k27ac_refres_10kb),0.558632118836793
+H3K27me3,498,498,measured gain over HSPC,0.5719302914469121
+H3K27me3,498,498,predicted gain over HSPC (all12refres_drop_10kb),0.5125925388300189
+H3K27me3,498,498,predicted gain over HSPC (all12honest_drop_10kb),0.46794003322527056
+H3K27me3,498,498,predicted gain over HSPC (min_ctcf_h3k27ac_refres_10kb),0.49902824147997615
+H3K27me3,498,498,anchor signal separates high from low measured gain,0.5750834663957033
+H3K27me3,498,498,anchor signal separates high from low predicted gain (all12refres_drop_10kb),0.5191569490814665
+H3K27me3,498,498,anchor signal separates high from low predicted gain (all12honest_drop_10kb),0.47120207738584863
+H3K27me3,498,498,anchor signal separates high from low predicted gain (min_ctcf_h3k27ac_refres_10kb),0.4912944952500766
+CTCF,398,398,measured gain over HSPC,0.5362301457033913
+CTCF,398,398,predicted gain over HSPC (all12refres_drop_10kb),0.5749854801646423
+CTCF,398,398,predicted gain over HSPC (all12honest_drop_10kb),0.5438246508926542
+CTCF,398,398,predicted gain over HSPC (min_ctcf_h3k27ac_refres_10kb),0.559499760107068
+CTCF,398,398,anchor signal separates high from low measured gain,0.5233832478977803
+CTCF,398,398,anchor signal separates high from low predicted gain (all12refres_drop_10kb),0.5781735309714401
+CTCF,398,398,anchor signal separates high from low predicted gain (all12honest_drop_10kb),0.5523976667255878
+CTCF,398,398,anchor signal separates high from low predicted gain (min_ctcf_h3k27ac_refres_10kb),0.5609833085023106
