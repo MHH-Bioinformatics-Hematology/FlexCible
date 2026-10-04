@@ -170,6 +170,12 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # 1c; data.cohesin_unknown): absent cohesin is "unknown", not "HFF-like"
     "all12cohunk_refres_drop": (TRAIN12, None),
     "all12cohunk_honest_drop": (TRAIN12, None),
+    # AML-inclusive training (registry section 36; scripts/aml_train.py): the 12
+    # cells plus MOLM-13 and eight Xu 2022 patients (fold 0; _f1, _f2 the other
+    # test folds), AML windows oversampled, AML reference map, patient-specific
+    # hard validation
+    **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("refin_drop", "honest_drop")
+       for f in ("", "_f1", "_f2")},
     # gain beyond the consensus on new cells (registry section 26): input-only
     # reference with track dropout, the same on CTCF + H3K27ac only, and the
     # residual dropout model with between-cell-variance loss weighting
@@ -236,6 +242,19 @@ DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth_v2"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
+# chromosome-held-out final models (registry section 37): the union of the
+# chromosomes the competitors hold out (C.Origami chr2 test and chr3
+# validation, Epiphany chr3, 11, 17, HiC-Reg chr14 and chr17), absent from the
+# data of every cell (data.chroms), so no training window and no normaliser
+# statistic sees them; the Akita valid+test regions stay excluded as before
+CHRHO_RUNS = ["all12refin_drop_chrho", "all12honest_drop_chrho", "all12refres_drop_chrho"]
+for _r in CHRHO_RUNS:
+    RUNS[_r] = (TRAIN12, None)
+    DROPOUT_RUNS[_r] = (0.5, 0.0)
+CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
+CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
+AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
+DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
 METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
@@ -278,12 +297,14 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
             "all12refres_drop_meth": "residual",
             "all12refres_drop_meth_v2": "residual", "all12refres_drop_cnv": "residual",
-            **{r: "input" for r in STRUCT_RUNS}}
+            **{r: "input" for r in STRUCT_RUNS},
+            **{k: "input" for k in AML_RUNS if "refin" in k},
+            "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
 HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop", "all12honest_drop_hard",
-                               "all12deg_honest_drop", "all12cohunk_honest_drop"}
+                               "all12deg_honest_drop", "all12cohunk_honest_drop"} | AML_RUNS | {"all12honest_drop_chrho"}
 REF_OUT = HM / "runs/multicell_reference"
 
 
@@ -401,6 +422,15 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cells = cells + ["hct116_auxin"]
     if base in COHUNK_RUNS:
         cfg["data"]["cohesin_unknown"] = True
+    aml_set = set()
+    if base in AML_RUNS:
+        import aml_train as at
+        fold = at.fold_of(base)
+        cfg["data"]["samples"] += at.aml_samples(fold, res, with_ref=base in REF_RUNS)
+        aml_set = set(at.aml_names(fold))
+        cells = cells + at.aml_names(fold)
+    if base in CHRHO_RUNS:
+        cfg["data"]["chroms"] = list(CHRHO_CHROMS)
     cfg["data"]["resolution"] = res
     cfg["window"]["size"], cfg["window"]["stride"] = WINDOW[res]
     cfg["data"]["train_regions_bed"] = str(TRAIN_BED)
@@ -409,7 +439,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cfg["data"]["assay_indicator_mode"] = mode
     if base in REF_RUNS:
         for smp in cfg["data"]["samples"]:
-            smp["reference_cool"] = str(reference_of(name, smp["name"]))
+            if smp["name"] not in aml_set:       # AML samples read the AML reference
+                smp["reference_cool"] = str(reference_of(name, smp["name"]))
         cfg.setdefault("model", {})["reference"] = REF_RUNS[base]
         if base == "all12casc":
             for smp in cfg["data"]["samples"]:
@@ -419,7 +450,11 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS
+    cache_name = (f"mc_all12aml_{'ref_' if base in REF_RUNS else ''}{res // 1000}kb"
+                  f"{'_f' + str(fold) if fold else ''}" if base in AML_RUNS
+                  else f"mc_all12ref_chrho_{res // 1000}kb" if base in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
+                  else f"mc_all12chrho_{res // 1000}kb" if base == "all12honest_drop_chrho"
+                  else f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS
                   | {"all12hffcoh_refres_drop"}
                   else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
                   else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
@@ -458,6 +493,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["train"]["select_metric"] = "combined"
         if base == "all12refin_drop_selhm":
             cfg["train"]["select_metric"] = "hic_measures"
+    if base in AML_RUNS:
+        cfg["train"].update({"oversample_samples": at.aml_names(fold),
+                             "oversample_factor": at.OVERSAMPLE,
+                             "hard_split": str(at.hard_split_path(fold, res))})
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg
@@ -871,7 +910,8 @@ def reference_summary():
         base_name = run_name("all12", res)          # overlapping validation (section 13)
         honest_name = run_name("all12honest", res)  # the same, honest validation
         for rb in list(REF_RUNS) + ["all12honest", "all12honest_drop", "all12honest_drop_hard",
-                                    "all12deg_honest_drop", "all12cohunk_honest_drop"]:
+                                    "all12deg_honest_drop", "all12cohunk_honest_drop",
+                                    "all12aml_honest_drop"]:
             refres_name = run_name("all12refres", res)
             name = run_name(rb, res)
             run = REF_OUT / name

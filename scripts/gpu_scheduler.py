@@ -413,6 +413,85 @@ def add_meth_replacement(J, train12, prep_cache):
                  lambda: is_marked("meth_replace_v2")))
 
 
+def add_aml_and_chrho(J, train12, prep_cache):
+    """Registry sections 36 and 37, queued after the cohesin-unknown block and
+    before the 5 and 2 kb blocks: (A) AML-inclusive training, test patients of
+    fold 0 (the other two folds wait for the flag file runs/multicell_reference/
+    AML_CV, written when the fold-0 result is promising); (B) chromosome-held-out
+    final models."""
+    import aml_train as at
+
+    def refs_done(f, k):
+        return all(at.ref_path(f, k, p).exists() for p in [None] + at.train_patients(f))
+
+    def aml_block(fold, flag=None):
+        sfx = f"_f{fold}" if fold else ""
+        gate = (lambda: flag is None or (MR / flag).exists())
+        for res in (25000, 10000):
+            k = res // 1000
+            J.append(Job(f"aml_refs_f{fold}_{k}kb",
+                         f"{PY} scripts/aml_train.py --stage split refs --fold {fold} --res {res}",
+                         gate, lambda f=fold, k=k: refs_done(f, k * 1000)))
+        order = [("all12aml_refin_drop", 25000), ("all12aml_honest_drop", 25000),
+                 ("all12aml_refin_drop", 10000), ("all12aml_honest_drop", 10000)]
+        for res in (25000, 10000):
+            k = res // 1000
+            rbase = f"all12aml_refin_drop{sfx}"
+            cache = f"mc_all12aml_ref_{k}kb{sfx}"
+            prep_cache(rbase, res, cache, lambda f=fold, r=res: gate() and refs_done(f, r))
+            prep_cache(f"all12aml_honest_drop{sfx}", res, f"mc_all12aml_{k}kb{sfx}",
+                       lambda f=fold, r=res: gate() and refs_done(f, r))
+            J.append(Job(f"aml_hard_f{fold}_{k}kb",
+                         f"{PY} scripts/aml_train.py --stage hard --fold {fold} --res {res}",
+                         lambda c=cache: cache_ok(c),
+                         lambda f=fold, r=res: at.hard_split_path(f, r).exists()))
+        for run, res in order:
+            k = res // 1000
+            r = f"{run}{sfx}"
+            cache = f"mc_all12aml_{'ref_' if 'refin' in run else ''}{k}kb{sfx}"
+            n0 = len(J)
+            train12(r, res, cache)
+            tr = next(j for j in J[n0:] if j.gpu)
+            tr.ready = (lambda b=tr.ready, f=fold, rr=res: b() and at.hard_split_path(f, rr).exists())
+        names = [mx.run_name(f"{b}{sfx}", r) for b in ("all12aml_refin_drop", "all12aml_honest_drop")
+                 for r in (25000, 10000)]
+        J.append(Job(f"aml_eval_f{fold}",
+                     locked("amleval", f"{PY} scripts/aml_train.py --stage eval --fold {fold}"),
+                     lambda ns=names: all(trained(*mx.split_name(n)) for n in ns),
+                     lambda f=fold: is_marked(f"aml_eval_f{f}")))
+    aml_block(0)
+
+    # --- (B) chromosome-held-out final models
+    chr_order = [("all12refin_drop_chrho", 25000, "mc_all12ref_chrho_25kb"),
+                 ("all12honest_drop_chrho", 25000, "mc_all12chrho_25kb"),
+                 ("all12refin_drop_chrho", 10000, "mc_all12ref_chrho_10kb"),
+                 ("all12honest_drop_chrho", 10000, "mc_all12chrho_10kb"),
+                 ("all12refres_drop_chrho", 25000, "mc_all12ref_chrho_25kb"),
+                 ("all12refres_drop_chrho", 10000, "mc_all12ref_chrho_10kb")]
+    seen = set()
+    for run, res, cache in chr_order:
+        if cache not in seen:
+            prep_cache(run, res, cache)
+            seen.add(cache)
+    for run, res, cache in chr_order:
+        train12(run, res, cache)
+    chr_names = [(r, k) for r, k, _ in chr_order]
+    J.append(Job("chrho_predict_score",
+                 locked("chrho", f"{PY} scripts/hic_measures.py --stage chrho_predict chrho_score "
+                                 "--threads 8 --jobs 4"),
+                 lambda: all(trained(r, k) for r, k in chr_names[:4]),
+                 lambda: is_marked("chrho_predict_score")))
+    J.append(Job("chrho_predict_score_refres",
+                 locked("chrho", f"{PY} scripts/hic_measures.py --stage chrho_predict chrho_score "
+                                 "--threads 8 --jobs 4"),
+                 lambda: all(trained(r, k) for r, k in chr_names),
+                 lambda: is_marked("chrho_predict_score_refres")))
+    # 3-fold patient cross-validation, after the chromosome-held-out models and
+    # only once runs/multicell_reference/AML_CV exists
+    aml_block(1, "AML_CV")
+    aml_block(2, "AML_CV")
+
+
 def locked(name, cmd):
     """Serialise jobs that rewrite shared result tables (flock on a per-table lock)."""
     return f"flock {MR / ('.lock_' + name)} bash -c {cmd!r}"
@@ -467,6 +546,8 @@ def add_cohunk_and_fine(J, train12, prep_cache, chosen_ok):
                  "all12refres_drop all12deg_refres_drop all12deg_honest_drop all12honest_drop "
                  "all12cohunk_refres_drop all12cohunk_honest_drop --tag cohunk"),
                  cready, lambda: is_marked("cohunk_hardregions")))
+
+    add_aml_and_chrho(J, train12, prep_cache)
 
     # --- section 32: 5 kb, then 2 kb; per resolution a, c, b, d, e
     for res in (5000, 2000):

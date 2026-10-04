@@ -386,6 +386,14 @@ class TrainConfig:
     # i.e. "no reference"), so the model also learns to predict from its
     # inputs alone. Validation always sees the reference. 0 = off.
     reference_dropout: float = 0.0
+    # Oversampling: the training windows of the samples listed in
+    # oversample_samples enter every epoch oversample_factor times (the other
+    # samples once), so a few cells of interest (AML patients) are not drowned
+    # by the many windows of the others. Needs val_regions (the rows are
+    # matched to their samples through the window coordinates) and no
+    # loss_weighting, sv_mask or sequence encoder. 1 = off.
+    oversample_samples: list[str] = field(default_factory=list)
+    oversample_factor: int = 1
     # Hard split (scripts/hard_split.py select): JSON with, per cell, the
     # hard-validation and hard-test windows (where the cell's map deviates
     # most from its consensus) and the union of all cells' hard positions.

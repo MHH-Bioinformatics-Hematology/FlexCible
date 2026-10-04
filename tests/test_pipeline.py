@@ -2246,3 +2246,34 @@ def test_structure_loss_and_combined_selection(workdir):
     out = workdir / "run_struct"
     assert (out / "best").exists()
     assert (out / "val_structure.csv").exists()
+
+
+def test_oversample_samples_training(workdir, caplog):
+    """train.oversample_samples / oversample_factor repeat the listed samples'
+    training windows; the other sample's windows enter once."""
+    import logging
+
+    from hicmultiome import precompute as hprep
+    from hicmultiome import train as htrain
+
+    raw = _ref_raw(workdir, "over", ref_cool=False)
+    s0 = raw["data"]["samples"][0]
+    raw["data"]["samples"] = [dict(s0, name="a"), dict(s0, name="b")]
+    raw["train"].update(cache_dir=str(workdir / "cache_over"), max_steps=6, eval_every=3, val_regions=1,
+                        oversample_samples=["b"], oversample_factor=3)
+    c = Config.from_dict(raw)
+    hprep.build(c)
+    with caplog.at_level(logging.INFO):
+        htrain.train(c)
+    msgs = [r.getMessage() for r in caplog.records if "oversample x3" in r.getMessage()]
+    assert msgs, "no oversample log line"
+    import re
+    m = re.search(r"(\d+) windows of 1 samples; training windows (\d+) -> (\d+)", msgs[0])
+    n_over, n0, n1 = (int(x) for x in m.groups())
+    assert n1 == n0 + 2 * n_over and 0 < n_over < n0
+    bad = _ref_raw(workdir, "over_bad", ref_cool=False)
+    bad["data"]["samples"] = [dict(s0, name="a"), dict(s0, name="b")]
+    bad["train"].update(cache_dir=str(workdir / "cache_over"), max_steps=2, eval_every=2, val_regions=1,
+                        oversample_samples=["zz"], oversample_factor=2)
+    with pytest.raises(ValueError, match="no training window"):
+        htrain.train(Config.from_dict(bad))

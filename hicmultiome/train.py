@@ -729,6 +729,24 @@ def train(cfg: Config):
         if is_main:
             log.info("window_subsample=%d: %d training windows (effective "
                      "stride %d bins)", k, len(keep), cfg.window.stride * k)
+    if cfg.train.oversample_factor > 1 and cfg.train.oversample_samples:
+        if (ti is None or cfg.train.loss_weighting != "none" or cfg.train.sv_mask or use_seq
+                or cfg.train.window_subsample > 1):
+            raise ValueError("train.oversample_* needs val_regions and no loss_weighting, "
+                             "sv_mask or sequence encoder")
+        names_all = _coords(ds)[2]
+        names = [names_all[i] for i in ti]
+        want = set(cfg.train.oversample_samples)
+        over = np.array([i for i, n in enumerate(names) if n in want], dtype=np.int64)
+        if len(over) == 0:
+            raise ValueError(f"train.oversample_samples {cfg.train.oversample_samples}: "
+                             f"no training window of these samples (training samples: {sorted(set(names))})")
+        idx = np.concatenate([np.arange(len(names))] + [over] * (cfg.train.oversample_factor - 1))
+        data = {kk: v[idx] for kk, v in data.items()}
+        if is_main:
+            log.info("oversample x%d: %d windows of %d samples; training windows %d -> %d",
+                     cfg.train.oversample_factor, len(over),
+                     len({names[i] for i in over}), len(names), len(idx))
     N_total = data["target"].shape[0]
 
     # Each rank keeps its stripe of the windows resident on its GPU. Stripes are
