@@ -3407,7 +3407,8 @@ Xu et al.'s AML-specific loops and stripes (10 kb, four test patients, 592
 loops and 481 stripes), models trained without AML data only (the 10 kb
 AML models are pending): the measured loop enrichment lies 0.31 log2 units
 above the AML reference at the loop pixel (stripes 0.21), the predictions
-0.01 above it (stripes 0.03 to 0.07) and correlate with the measured gain
+0.01 to 0.02 above it for the input-reference models (stripes 0.03 to 0.07;
+the reference-free model lies below it) and correlate with the measured gain
 at 0.10 to 0.24 (loops) and 0.25 to 0.42 (stripes).
 
 Reading so far. At 25 kb the AML-inclusive input-reference model gains a
@@ -3482,11 +3483,14 @@ boundary recall; rank-matched loop recall; HiCRep):
 | | consensus | 0.853 | 0.909 | 0.849 | 0.816 | 0.718 | 0.350 | 0.850 |
 | | Hi-cGAN GM12878 model | 0.143 | 0.479 | 0.147 | 0.218 | 0.213 | 0.050 | 0.220 |
 
-On held-out chromosomes the reference-map model exceeds the consensus and
-every competitor on every structure measure listed except the HiC-Reg CV maps'
-tile median (0.964 against 0.950, GM12878) and its HiCRep on K562 (0.923
-against 0.904): the CV maps interpolate within the chromosome (section 18,
-"HiC-Reg training split") and are not a held-out score. The ChIP-only model,
+On held-out chromosomes the reference-map model exceeds every cross-chromosome
+or cross-cell competitor prediction on every listed measure, and the
+consensus it reads on all of them except boundary recall on K562 (0.738
+against 0.769) and loop recall in the GM12878 HiC-Reg block (tie, 0.396).
+The published HiC-Reg CV maps exceed it on the 1 Mb tile median (0.964 and
+0.950 against 0.950 and 0.928) and on K562 HiCRep (0.923 against 0.904): they
+interpolate within the chromosome (section 18, "HiC-Reg training split") and
+are not a held-out score. The ChIP-only model,
 which gets no consensus, scores 0.782 and 0.730 Pearson against 0.579 to
 0.615 and 0.736 to 0.740 for HiC-Reg's cross-chromosome predictions
 (GM12878, K562): ahead by 0.17 to 0.20 on GM12878 and level on K562, where
