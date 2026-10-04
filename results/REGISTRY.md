@@ -3267,3 +3267,110 @@ signal (Pearson 0.48 to 0.55, R2 0.18 to 0.19), H3K9me3 or H3K4me1 beyond a
 Pearson of 0.33 to 0.59. The practical result is that Meth with two ChIP
 marks (CTCF, H3K27ac) outperforms five ChIP marks on held-out cells at 10 kb.
 
+## 36. AML-inclusive training (PENDING)
+
+Question: does a model that learns from AML Hi-C reproduce what is specific
+to a patient, which the models trained on the 12 non-AML cells do not
+(section 29: other-patient mean 0.906 against 0.82 to 0.89 for the models
+at 25 kb; AML-specific loop gain beyond the consensus about zero), and is
+what a patient map deviates by mostly the lab, protocol and lineage
+component that healthy CD34+ cells of the same lab share (section 29c:
+noise-ceiling reliability of the patient deviation 0.81 at 25 kb, 0.59 at
+10 kb; non-AML cells recover 0.67 against 0.43 of it from the same three
+marks)?
+
+Design (`scripts/aml_train.py`, `scripts/aml_train_eval.py`; runs
+all12aml_refin_drop and all12aml_honest_drop at 25 and 10 kb, input reference
+with track dropout 0.5 and the no-reference counterpart, honest validation).
+Training cells: the 12 non-AML cells, MOLM-13 (all its public tracks), the
+Xu et al. 2022 patients of the training folds and two of the four CD34+
+HSPC donors of the same study. Patient split (`results/aml_train/split.json`):
+the 12 patients with CUT&Tag form three folds of four; stratified by CTCF
+CUT&Tag (9 of 12) and by the presence of a copy-number segment called from
+Hi-C coverage, ordered within a stratum by depth; fold 0 (test 027, 270,
+773, 1916; train 018, 103, 168, 472, 546, 629, 673, 1360) is run first, folds
+1 (103, 168, 472, 673) and 2 (018, 546, 629, 1360) wait for the flag file
+runs/multicell_reference/AML_CV. Subtype labels are not assigned to patients
+in the paper's tables, so no stratification by subtype is possible.
+U-937 WT is a further held-out AML line; HSPC donors 341 and 822 are held
+out, 050 and 213 train. Inputs: the marks each sample has (patients H3K27ac
+and H3K27me3, CTCF for 9; quantile-matched p-value tracks), the others absent
+under track dropout. HSPC donors have Hi-C only; their marks are one public
+CD34+ ChIP-Atlas experiment per mark (H3K27ac SRX1761289, H3K27me3
+SRX1761288, CTCF SRX037935, `aml/picks_hspc_cd34.tsv`), quantile-matched like
+the patients' tracks; the ChIP donor is not a Hi-C donor of the study.
+Reference: the AML reference of a sample is the mean proper O/E of the
+training patients (leave-one-out for a training patient, all eight for
+MOLM-13 and for the test patients and U-937); the reference of an HSPC donor
+is the mean of the training donors (the other donor for a training donor);
+the non-AML cells keep consensus_loo. The cell list in each reference json
+(`amlxu<patient>`, `amlxuhspc<donor>`) is checked by the leakage guard, so a
+test patient or donor never is in its own reference. AML windows (patients,
+HSPC donors, MOLM-13) enter every epoch three times (`train.oversample_*`);
+the 413 Akita test regions stay out of every cell's training windows. Lab
+indicator (`data.lab_classes: [xu]`, `samples[].lab`): one constant input row,
+1 for the Xu et al. Hi-C (patients and HSPC), 0 for everything else, so the
+healthy HSPC separate the lab and protocol component from the AML component;
+the ablation all12aml_refin_drop_nolab (25 kb) has the same data without the
+row. Validation: honest (no training window of any cell at a validation
+position) and checkpoint selection on patient-specific hard-validation
+windows (25 per training patient where the patient deviates most from both
+consensus12 and the HSPC consensus, the deviation score of `hard_split.py`,
+both scores in the top 20% of the windows that pass the mask and copy-number
+filters), held out from training for every sample (200 windows).
+
+Evaluation on the 413 Akita test regions of the test patients, the held-out
+HSPC donors and U-937: Pearson, SCC and structure measures; baselines on the
+same pixels (AML reference, mean of the other eleven patients, HSPC
+consensus, consensus12); residual correlation corr(P - C, T - C) against the
+AML reference, consensus12 and the HSPC-matched baseline, on all regions and
+on the patient-specific regions of section 29 (explain_learn_regions); at
+10 kb Xu et al.'s AML-specific loops and stripes (Suppl. Tables 1 and 4);
+the gain of the patient's own ChIP beyond the reference from the pair with
+and without ChIP; the same for the models trained without AML data.
+
+Incident. At 2026-10-04 15:55 a scheduler restart with an incomplete list of
+running jobs started a second all12aml_refin_drop_25kb training and two
+duplicate evaluations next to the originals (started 15:15, 14:58 and
+15:05); the duplicates were stopped within two minutes by PID. The
+duplicate truncated the original's log file (the first 40 minutes of its
+log are lost; the training itself was not affected: same configuration,
+same output folder, no checkpoint written by the duplicate). The scheduler
+now writes a pid file per started job and finds running jobs on restart
+(`.run_<job>.pid`).
+
+Results: pending.
+
+## 37. Chromosome-held-out final models (PENDING)
+
+Question: how do the headline recipes compare with the published predictors
+when no training window of any cell lies on the chromosomes the competitors
+held out? The earlier comparisons (section 18, 31) used chromosomes our models
+trained on, or the Akita test regions only.
+
+Held-out chromosomes, from the competitors' own splits: C.Origami chr2 (test)
+and chr3 (validation) (section 18 and its released IMR-90 model), Epiphany
+chr3, chr11, chr17 (its released GM12878 weights), HiC-Reg chr14 and chr17
+(the released cross-chromosome predictions, section 18 "Leak-free HiC-Reg");
+Akita's test regions were excluded from every run already. Union: chr2,
+chr3, chr11, chr14, chr17 (26% of the autosomal genome). Hi-cGAN held out the
+even chromosomes; the comparison with it uses chr2 and chr14, the two held
+out by both.
+
+Runs (`data.chroms` without the five chromosomes, so neither a training
+window nor a normaliser statistic of any cell sees them; separate caches
+mc_all12ref_chrho_<k>kb and mc_all12chrho_<k>kb): all12refin_drop_chrho,
+all12honest_drop_chrho (the ChIP-only model without the consensus, the fair
+comparison with competitors that get none) at 25 and 10 kb, and
+all12refres_drop_chrho. Scoring (`scripts/hic_measures.py --stage
+chrho_predict chrho_score chrho_report`, `results/hic_measures_chrho/`):
+whole-chromosome tiling, identical pixels (pixels finite in the target and in
+every source of the block, band cut to the shortest reach), against
+C.Origami (IMR-90 chr2, chr3), Epiphany (GM12878 chr3, 11, 17, 990 kb
+band), HiC-Reg cross-chromosome WINDOW and MULTICELL and the leaky CV maps
+for comparison (GM12878 and K562, chr14, chr17, 1 Mb band), Hi-cGAN
+(GM12878 and its K562 predictions, chr2, chr14), the consensus the model reads,
+the best other measured map and the replicate map; measures as section 31.
+
+Results: pending.
+
