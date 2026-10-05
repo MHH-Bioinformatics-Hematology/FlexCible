@@ -72,17 +72,18 @@ def samples(fold: int, res: int) -> list[dict]:
         d = at.INP / at.label(p)
         marks = sorted(b.stem for b in d.glob("*.bigwig"))
         out.append({"cell": at.guard(p), "patient": p, "group": "patient", "dir": d, "marks": marks,
+                    "meth": at.patient_meth_dir(at.guard(p)),
                     "assay": "hic", "lab": "xu",
                     "target": at.OE_DIR / f"xu_{p}_proper_{res // 1000}kb.cool",
                     "lopo": at.CONS_DIR / f"amlcons_lopo_xu_{p}_{res // 1000}kb.cool"})
     for dn in at.HSPC_TEST:
         marks = sorted(b.stem for b in at.HSPC_MARKS.glob("*.bigwig"))
-        out.append({"cell": at.hspc_guard(dn), "patient": f"HSPC-{dn}", "group": "hspc",
+        out.append({"cell": at.hspc_guard(dn), "patient": f"HSPC-{dn}", "group": "hspc", "meth": None,
                     "dir": at.HSPC_MARKS, "marks": marks, "assay": "hic", "lab": "xu",
                     "target": at.OE_DIR / f"{at.hspc_label(dn)}_proper_{res // 1000}kb.cool",
                     "lopo": hspc_lopo(dn, res)})
     d = at.AML / "hg38_u937"
-    out.append({"cell": "u937", "patient": "u937", "group": "u937", "dir": d,
+    out.append({"cell": "u937", "patient": "u937", "group": "u937", "meth": None, "dir": d,
                 "marks": sorted(b.stem for b in d.glob("*.bigwig")), "assay": "microc", "lab": "",
                 "target": at.OE_DIR / f"u937_wt_c1_proper_{res // 1000}kb.cool",
                 "lopo": at.CONS_DIR / f"amlcons_all_{res // 1000}kb.cool"})
@@ -104,10 +105,26 @@ def models(fold: int, res: int) -> list[dict]:
         {"label": "base_refin@c12", "run": f"all12refin_drop_{k}kb", "ref": c12, "lab": False},
         {"label": "base_honest", "run": f"all12honest_drop_{k}kb", "ref": None, "lab": False},
     ]
+    if fold == 0:                     # the same recipe with the Meth channel (section 38)
+        ms.append({"label": "aml_meth_refin", "run": f"all12aml_meth_refin_drop_{k}kb",
+                   "ref": "aml", "lab": True, "meth": True})
     if fold == 0 and res == 25000:
         ms.append({"label": "aml_refin_nolab", "run": "all12aml_refin_drop_nolab_25kb",
                    "ref": "aml", "lab": False})
     return ms
+
+
+def conds_of(m: dict) -> tuple:
+    """Input conditions: the sample's own ChIP marks, none, and for a model
+    with the Meth channel also the marks plus Meth and Meth alone."""
+    return ("marks", "marks_meth", "meth_only", "none") if m.get("meth") else ("marks", "none")
+
+
+def keep_sets_of(m: dict, s: dict) -> list[str]:
+    ks = [f"marks={','.join(s['marks'])}"]
+    if m.get("meth"):
+        ks += [f"marks_meth={','.join(s['marks'] + ['Meth'])}", "meth_only=Meth"]
+    return ks + ["none="]
 
 
 def ref_of(m: dict, s: dict, fold: int, res: int):
@@ -151,8 +168,10 @@ def predict(fold: int, res: int, m: dict, s: dict, gpu: str) -> int:
            "--cell", s["cell"], "--bigwig-dir", s["dir"], "--target", s["target"], "--tta",
            "--assay", s["assay"], "--binsize", res, "--device", "cuda", "--structure",
            "--out-dir", out, "--save-pred", str(out / "{set}.npz"),
-           "--keep-sets", f"marks={','.join(s['marks'])}", "none=",
+           "--keep-sets", *keep_sets_of(m, s),
            "--others", *common_others(s, fold, res)]
+    if m.get("meth") and s["meth"] is not None:
+        cmd += ["--extra-bigwig-dir", s["meth"]]
     if m["lab"]:
         cmd += ["--lab", s["lab"]]
     ref = ref_of(m, s, fold, res)
@@ -221,13 +240,14 @@ def stage_score(fold: int):
             cache: dict = {}
             for m in models(fold, res):
                 d = OUTD / f"f{fold}" / f"{res // 1000}kb" / m["label"] / s["cell"]
-                for cond in ("marks", "none"):
+                for cond in conds_of(m):
                     f = d / cond / f"predict_{s['cell']}.csv"
                     if not f.exists():
                         continue
                     df = pd.read_csv(f)
                     rec = {"fold": fold, "res_kb": res // 1000, "model": m["label"],
-                           "cell": s["cell"], "group": s["group"], "condition": cond, "n_regions": int(df.model.notna().sum()),
+                           "cell": s["cell"], "group": s["group"], "condition": cond,
+                           "has_meth": s["meth"] is not None, "n_regions": int(df.model.notna().sum()),
                            "pearson": df.model.median()}
                     for c in ("struct_scc", "struct_insulation_corr", "struct_boundary_f1",
                               "struct_loop_enrich_corr", "struct_compartment_corr",
@@ -290,7 +310,6 @@ def stage_features(fold: int):
     ref = cooler.Cooler(str(at.ref_path(fold, res, None)))
     c12 = cooler.Cooler(str(mx.consensus12(res)))
     rows = []
-    conds = ("marks", "none")
     # predictions on the feature windows
     jobs = []
     for p, g in W.groupby("patient"):
@@ -314,7 +333,9 @@ def stage_features(fold: int):
                "--cell", s["cell"], "--bigwig-dir", s["dir"], "--target", s["target"], "--tta",
                "--assay", s["assay"], "--binsize", res, "--device", "cuda", "--regions", regs,
                "--out-dir", out, "--save-pred", str(out / "{set}.npz"),
-               "--keep-sets", f"marks={','.join(s['marks'])}", "none="]
+               "--keep-sets", *keep_sets_of(m, s)]
+        if m.get("meth") and s["meth"] is not None:
+            cmd += ["--extra-bigwig-dir", s["meth"]]
         if m["lab"]:
             cmd += ["--lab", s["lab"]]
         if ref_of(m, s, fold, res) is not None:
@@ -330,7 +351,7 @@ def stage_features(fold: int):
         T = cooler.Cooler(str(at.OE_DIR / f"{p}_proper_10kb.cool"))
         preds = {}
         for m in models(fold, res):
-            for cond in conds:
+            for cond in conds_of(m):
                 f = OUTD / f"f{fold}" / "features" / f"{m['label']}__{p}" / f"{cond}.npz"
                 if f.exists():
                     preds[(m["label"], cond)] = dict(np.load(f))
@@ -397,9 +418,12 @@ def summary(R: pd.DataFrame, fold: int):
             "base_hspc_train_mean", "base_aml_train_mean_specific", "base_hspc_specific"]
     cols = [c for c in cols if c in R.columns]
     parts = []
-    for g, lab in (("patient", "test patients (median)"), ("hspc", "held-out HSPC donors (median)"),
-                   ("u937", "U-937 WT")):
-        A = R[R.group == g].groupby(["res_kb", "model", "condition"])[cols].median().reset_index()
+    R = R.copy()
+    R.loc[(R.group == "patient") & R.has_meth, "group_wgbs"] = "patient_wgbs"
+    for g, lab in (("patient", "test patients (median)"),
+                   ("patient_wgbs", "test patients with WGBS (027, 270, 773; median)"),
+                   ("hspc", "held-out HSPC donors (median)"), ("u937", "U-937 WT")):
+        A = R[(R.group == g) | (R.group_wgbs == g)].groupby(["res_kb", "model", "condition"])[cols].median().reset_index()
         A["cells"] = lab
         parts.append(A)
     S = pd.concat(parts, ignore_index=True)

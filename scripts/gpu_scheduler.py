@@ -500,6 +500,26 @@ def add_aml_and_chrho(J, train12, prep_cache):
     aml_block(2, "AML_CV")
 
 
+def add_aml_meth(J, train12, prep_cache):
+    """Registry section 38: the AML-inclusive recipe (fold 0) with the Meth
+    channel, 10 kb then 25 kb; evaluated like section 36 with and without Meth."""
+    import aml_train as at
+    names = []
+    for res in (10000, 25000):
+        k = res // 1000
+        cache = f"mc_all12aml_meth_ref_{k}kb"
+        prep_cache("all12aml_meth_refin_drop", res, cache, lambda r=res: at.refs_done(0, r))
+        n0 = len(J)
+        train12("all12aml_meth_refin_drop", res, cache)
+        tr = next(j for j in J[n0:] if j.gpu)
+        tr.ready = (lambda b=tr.ready, r=res: b() and at.hard_split_path(0, r).exists())
+        names.append(mx.run_name("all12aml_meth_refin_drop", res))
+    J.append(Job("aml_meth_eval_f0",
+                 locked("amleval", f"{PY} scripts/aml_train_eval.py --fold 0"),
+                 lambda ns=names: all(trained(*mx.split_name(n)) for n in ns),
+                 lambda: is_marked("aml_meth_eval_f0")))
+
+
 def locked(name, cmd):
     """Serialise jobs that rewrite shared result tables (flock on a per-table lock)."""
     return f"flock {MR / ('.lock_' + name)} bash -c {cmd!r}"
@@ -559,6 +579,8 @@ def add_cohunk_and_fine(J, train12, prep_cache, chosen_ok):
 
     # --- section 32: 5 kb, then 2 kb; per resolution a, c, b, d, e
     for res in (5000, 2000):
+        if res == 2000:           # after the 5 kb block, before the 2 kb block
+            add_aml_meth(J, train12, prep_cache)
         k = res // 1000
         sfx = f"_{k}kb"
         ref_cache = f"mc_all12ref_{k}kb"

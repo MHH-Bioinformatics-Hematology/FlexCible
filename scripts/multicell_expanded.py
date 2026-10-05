@@ -177,6 +177,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("refin_drop", "honest_drop")
        for f in ("", "_f1", "_f2")},
     "all12aml_refin_drop_nolab": (TRAIN12, None),      # the same without the lab indicator
+    # the AML-inclusive recipe with the 14th track Meth (v2 cell set for the
+    # non-AML cells; the Xu WGBS of the patients that have it; registry section 38)
+    "all12aml_meth_refin_drop": (TRAIN12, None),
     # gain beyond the consensus on new cells (registry section 26): input-only
     # reference with track dropout, the same on CTCF + H3K27ac only, and the
     # residual dropout model with between-cell-variance loss weighting
@@ -256,7 +259,8 @@ CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
-METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2"}
+METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop"}
+METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS
@@ -391,7 +395,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
         import methylation as me
         cfg["data"]["tracks"].append({"name": me.TRACK, "type": "methylation"})
         for smp in cfg["data"]["samples"]:
-            v2 = base.endswith("_v2")
+            v2 = base in METH_V2
             if me.has_meth(smp["name"], v2):
                 smp["extra_bigwig_dirs"] = [str(me.meth_dir(smp["name"], v2))]
             else:
@@ -428,6 +432,15 @@ def run_config(name, val_per_cell, patience, max_epochs):
         import aml_train as at
         fold = at.fold_of(base)
         cfg["data"]["samples"] += at.aml_samples(fold, res, with_ref=base in REF_RUNS)
+        if base in METH_RUNS:
+            import methylation as me_
+            for smp in cfg["data"]["samples"]:
+                if smp["name"] in set(at.aml_names(fold)):
+                    d = at.patient_meth_dir(smp["name"])       # None: no WGBS (HSPC, MOLM-13, 1360)
+                    if d is not None:
+                        smp["extra_bigwig_dirs"] = [str(d)]
+                    elif me_.TRACK not in smp["missing_tracks"]:
+                        smp["missing_tracks"] = smp["missing_tracks"] + [me_.TRACK]
         aml_set = set(at.aml_names(fold))
         cells = cells + at.aml_names(fold)
         if not base.endswith("_nolab"):
@@ -456,7 +469,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_all12aml_{'ref_' if base in REF_RUNS else ''}{res // 1000}kb"
+    cache_name = (f"mc_all12aml_{'meth_' if base in METH_RUNS else ''}{'ref_' if base in REF_RUNS else ''}{res // 1000}kb"
                   f"{'_f' + str(fold) if fold else ''}{'_nolab' if base.endswith('_nolab') else ''}"
                   if base in AML_RUNS
                   else f"mc_all12ref_chrho_{res // 1000}kb" if base in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
@@ -568,7 +581,7 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
                 extra += ["--prior", cascade_prior(cell, CASCADE_FROM[res])]
         if ref_run is not None and split_name(ref_run)[0] in METH_RUNS:
             import methylation as me
-            v2 = split_name(ref_run)[0].endswith("_v2")
+            v2 = split_name(ref_run)[0] in METH_V2
             if me.has_meth(cell, v2):
                 extra += ["--extra-bigwig-dir", me.meth_dir(cell, v2)]
         if ref_run is not None and split_name(ref_run)[0] in CNV_RUNS:

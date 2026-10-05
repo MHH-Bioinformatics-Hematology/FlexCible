@@ -209,6 +209,15 @@ def aml_samples(fold: int, res: int, with_ref: bool) -> list[dict]:
     return out
 
 
+def patient_meth_dir(name: str) -> Path | None:
+    """Folder of the Meth.bigwig of an AML sample (Xu WGBS built by
+    scripts/aml_primary_meth.py), None when the sample has none."""
+    if not name.startswith("amlxu") or name.startswith("amlxuhspc"):
+        return None
+    d = PRIM / "meth" / label(name[5:])
+    return d if (d / "Meth.bigwig").exists() else None
+
+
 def aml_names(fold: int) -> list[str]:
     return [guard(p) for p in train_patients(fold)] + [hspc_guard(d) for d in HSPC_TRAIN] + \
         ["molm13"]
