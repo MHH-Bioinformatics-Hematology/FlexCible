@@ -3475,7 +3475,7 @@ reference by 0.049 at 10 kb, below at 25 kb), and the lab and protocol row
 changes nothing, so the improvement is not a lab effect that the row could
 absorb. The three-fold cross-validation (flag file AML_CV) was not run.
 
-## 37. Chromosome-held-out final models (PENDING)
+## 37. Chromosome-held-out final models (FINAL for refin_drop and honest_drop; refres_drop rescoring running)
 
 Question: how do the headline recipes compare with the published predictors
 when no training window of any cell lies on the chromosomes the competitors
@@ -3506,8 +3506,7 @@ for comparison (GM12878 and K562, chr14, chr17, 1 Mb band), Hi-cGAN
 (GM12878 and its K562 predictions, chr2, chr14), the consensus the model reads,
 the best other measured map and the replicate map; measures as section 31.
 
-Results, 25 kb models (all12refin_drop_chrho and all12honest_drop_chrho; 10
-kb, all12refres_drop_chrho and C.Origami and Epiphany blocks are pending;
+Results, 25 kb models (all12refin_drop_chrho and all12honest_drop_chrho;
 `results/hic_measures_chrho/chrho_summary.csv`). The training stopped at epoch
 72 (best honest-validation 0.939) and epoch 25 (0.799); normal accuracy on
 the 413 Akita regions, 12 training cells / five held-out cells: 0.933 / 0.910
@@ -3556,6 +3555,48 @@ SCC is 0.763 and 0.711 against 0.538 to 0.567 and 0.696 to 0.700, its
 insulation correlation 0.674 and 0.622 against 0.447 to 0.455 and 0.484 to
 0.500. Against Hi-cGAN (even chromosomes held out) the ChIP-only model
 leads by 0.57 to 0.62 Pearson.
+
+10 kb (all12refin_drop_chrho stopped at epoch 55, best honest-validation
+0.906; all12honest_drop_chrho at epoch 29, 0.767; all12refres_drop_chrho at
+epoch 85, 0.907; normal accuracy on the 413 regions, 12 training / five
+held-out cells: 0.923 / 0.887 for refin_drop_chrho, 0.924 / 0.893 for
+refres_drop_chrho, 0.927 / 0.903 for the model that saw the five
+chromosomes). Whole held-out chromosomes, mean over the chromosomes of a
+block (Pearson over band pixels / tile median / SCC / insulation r / boundary
+recall / loop recall):
+
+| block | source | Pearson | tile median | SCC | insulation r | boundary recall | loop recall |
+|---|---|---|---|---|---|---|---|
+| C.Origami, IMR-90 chr2, chr3 (2 Mb band) | all12refin_drop_chrho | 0.926 | 0.944 | 0.927 | 0.924 | 0.654 | 0.355 |
+| | all12honest_drop_chrho | 0.808 | 0.855 | 0.812 | 0.822 | 0.497 | 0.192 |
+| | consensus of the other cells | 0.866 | 0.906 | 0.862 | 0.796 | 0.641 | 0.383 |
+| | C.Origami | 0.920 | 0.905 | 0.913 | 0.866 | 0.474 | 0.162 |
+| | Hi-cGAN IMR-90 model (chr2) | 0.567 | 0.590 | 0.567 | 0.584 | 0.105 | 0.014 |
+| Epiphany, GM12878 chr3, 11, 17 (990 kb band) | all12refin_drop_chrho | 0.914 | 0.934 | 0.908 | 0.875 | 0.655 | 0.495 |
+| | all12honest_drop_chrho | 0.760 | 0.775 | 0.751 | 0.715 | 0.497 | 0.220 |
+| | consensus | 0.826 | 0.868 | 0.818 | 0.778 | 0.660 | 0.452 |
+| | Epiphany | 0.512 | 0.642 | 0.501 | 0.318 | 0.208 | 0.052 |
+| Hi-cGAN, GM12878 chr2, chr14 | all12refin_drop_chrho | 0.921 | 0.934 | 0.917 | 0.875 | 0.620 | 0.400 |
+| | all12honest_drop_chrho | 0.797 | 0.810 | 0.787 | 0.726 | 0.497 | 0.164 |
+| | Hi-cGAN | 0.328 | 0.530 | 0.330 | 0.260 | 0.113 | 0.031 |
+| Hi-cGAN, K562 chr2, chr14 | all12refin_drop_chrho | 0.844 | 0.884 | 0.844 | 0.825 | 0.559 | 0.364 |
+| | all12honest_drop_chrho | 0.731 | 0.746 | 0.728 | 0.732 | 0.438 | 0.160 |
+| | Hi-cGAN, GM12878 model | 0.125 | 0.259 | 0.141 | 0.339 | 0.108 | 0.008 |
+
+The reference-map model is level with C.Origami on Pearson over the band
+(0.926 against 0.920) and above it on the 1 Mb tile median (0.944 against
+0.905), SCC, insulation correlation (0.924 against 0.866), boundary recall and
+loop recall (0.355 against 0.162); it exceeds Epiphany by 0.40 Pearson. The
+ChIP-only model, which has no consensus, is below C.Origami in Pearson
+(0.808 against 0.920) and SCC (0.812 against 0.913) and level on the tile
+median (0.855 against 0.905, below) and the insulation correlation (0.822
+against 0.866, below); it exceeds Epiphany by 0.25 (0.760 against 0.512), the
+Hi-cGAN IMR-90 model by 0.24 and Hi-cGAN on GM12878 and K562 by 0.47 and 0.61.
+C.Origami's boundary recall (0.474) and loop recall (0.162) lie below the
+ChIP-only model's (0.497, 0.192). The Hi-cGAN IMR-90 model scores on chr2
+only; C.Origami and the other predictions on chr2 and chr3. Rescoring with
+all12refres_drop_chrho in every block runs (`runs/hic_measures_chrho`,
+earlier blocks kept in `blocks_norefres`); its rows follow when it finishes.
 
 ## 38. AML-inclusive training with the methylation channel (PENDING)
 
