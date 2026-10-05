@@ -3475,6 +3475,74 @@ reference by 0.049 at 10 kb, below at 25 kb), and the lab and protocol row
 changes nothing, so the improvement is not a lab effect that the row could
 absorb. The three-fold cross-validation (flag file AML_CV) was not run.
 
+### 36b. Eight AML-specific sites against GM12878, measured and predicted
+
+`scripts/aml_sites_figures.py` (stages select, predict, figures); figures
+and per-locus npz in `/mnt/processed/wolffjoa/hic-multiome/runs/aml_sites/figures/`
+(copied to `results/aml_primary/figures/`; the repository ignores `*.png`,
+so the copies are untracked), numbers in `results/aml_primary/sites_loci.csv`
+and `sites_sv_locus.csv`, candidate table in `runs/aml_sites/candidates.csv`.
+Loci come from Xu et al.'s Supplementary Tables 1 and 4 (10 kb) for the 10
+patients with CUT&Tag (2148 loops, 484 stripes with intra-chromosomal
+anchors); a locus qualifies when the patient's strength (log2 donut
+enrichment at the loop pixel; mean log O/E in the stripe band) exceeds that
+of the HSPC consensus and of measured GM12878 by at least 0.8, both half-depth
+maps of the patient (section 29c) exceed the HSPC level by at least 0.4, and
+no anchor lies within 1 Mb of an SV breakpoint or on a copy-number segment:
+77 of 2632 qualify. Types by the patient's own CUT&Tag at the anchors
+(promoter-enhancer: H3K27ac at both anchors; promoter-silencer: H3K27me3 at
+one; stripes by the 40 kb anchor at the 75th percentile of the training
+distribution). Genes are the refGene TSS inside an anchor. Of the named loci
+IKZF2 (6 loops), RTTN (4) and RUNX1 (1) exist in the tables but none passes
+the criteria (gains of 0.0 to 0.6), KLF4 (patient 629) passes with weaker
+evidence on GM12878 (gain 0.65); MYCN, MEIS1, ERG and WT1 do not occur among
+the loops of these patients. The enhancer stripe passes only a looser tier
+(gains of at least 0.5; marked in the table). Panels per locus: GM12878
+measured, HSPC consensus, patient measured, patient predicted by
+all12aml_refin_drop_10kb (the patient's marks, lab indicator xu, AML
+reference of fold 0), by all12refres_drop_10kb (no AML data, same reference
+map), the AML reference both read, GM12878 predicted by the AML-trained
+model from its ChIP (a training cell: its windows may be in training), and
+the patient minus GM12878 difference, measured and predicted; 80 bins per
+panel (800 kb), one colour scale per locus from the 98th percentile of
+|patient measured|, r (upper triangle, offset >= 2 bins) under each panel,
+CUT&Tag and GM12878 track strips, a per-distance Pearson strip. The Meth
+variant (all12aml_meth_refin_drop_10kb) had no checkpoint when the figures
+were made, so its column is absent.
+
+| locus | patient | held out | measured gain over HSPC | predicted gain, AML-trained | predicted gain, no AML data | AML-trained minus reference | r patient AML-trained / no AML data / reference |
+|---|---|---|---|---|---|---|---|
+| P-E loop CIP2A | 773 | yes | 1.03 | 0.56 | 0.58 | 0.11 | 0.88 / 0.86 / 0.87 |
+| P-E loop CLEC4O | 773 | yes | 0.80 | 0.02 | -0.05 | 0.02 | 0.79 / 0.79 / 0.77 |
+| P-E loop CLECL1 | 168 | no | 1.21 | 0.29 | 0.34 | 0.05 | 0.76 / 0.80 / 0.76 |
+| P-S loop KLF4 | 629 | no | 0.90 | 0.35 | 0.38 | 0.09 | 0.94 / 0.92 / 0.89 |
+| P-S loop LNX2 | 546 | no | 1.02 | 0.17 | 0.16 | 0.00 | 0.91 / 0.90 / 0.89 |
+| repressive stripe chr13 31.44 Mb | 270 | yes | 0.89 | 0.17 | 0.19 | 0.10 | 0.87 / 0.87 / 0.86 |
+| enhancer stripe chr11 75.88 Mb (looser tier) | 270 | yes | 0.61 | 0.09 | 0.07 | -0.04 | 0.85 / 0.84 / 0.84 |
+| SV, inv(16) HSF4 | 629 | no | neo-loop enrichment -0.16 | -0.24 (no AML data) | | | derivative allele r 0.61, junction block -0.06 |
+
+Reading. All seven sites are absent from GM12878 and HSPC in the measured
+maps (strength -0.34 to 0.83 against 0.68 to 1.44 in the patient) and the
+patient-minus-GM12878 difference is predicted at r 0.25 to 0.74. The
+predicted gain is 0.02 to 0.58 against a measured 0.61 to 1.21: median
+fraction 0.19 (AML-trained) and 0.21 (no AML data); the correlation of
+predicted with measured gain over the seven sites is 0.55 and 0.61. Most of
+the predicted gain is already in the AML reference both models read (the
+AML-trained model adds 0.00 to 0.11 beyond it, the model without AML data
+adds -0.06 to 0.12): sites are partly predicted when the other patients
+share them (CIP2A, KLF4, CLECL1: gains 0.3 to 0.6, loops with H3K27ac at
+both anchors or H3K27me3 at the silencer anchor) and not when only the
+patient has them (CLEC4O, the enhancer stripe, stripes in general: 0.1 to
+0.2). Training the model on AML Hi-C makes no difference at these sites.
+The SV locus fails as expected: the derivative-allele prediction reproduces
+the cis blocks on both sides of the inversion (r 0.61 over the window) but
+not the junction block (r -0.06) and the HSF4 enhancer-promoter contact
+(predicted -0.24, measured -0.16, log2 donut enrichment over the 60 listed
+neo-loop pairs; the AML-trained model was not run on derivative alleles).
+Three of the seven sites are in held-out patients (773, 270) and four in
+training patients (168, 629, 546); GM12878 predictions come from a training
+cell.
+
 ## 37. Chromosome-held-out final models (FINAL for refin_drop and honest_drop; refres_drop rescoring running)
 
 Question: how do the headline recipes compare with the published predictors
