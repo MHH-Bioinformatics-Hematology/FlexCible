@@ -3267,7 +3267,7 @@ signal (Pearson 0.48 to 0.55, R2 0.18 to 0.19), H3K9me3 or H3K4me1 beyond a
 Pearson of 0.33 to 0.59. The practical result is that Meth with two ChIP
 marks (CTCF, H3K27ac) outperforms five ChIP marks on held-out cells at 10 kb.
 
-## 36. AML-inclusive training (PENDING)
+## 36. AML-inclusive training (FINAL for fold 0; folds 1 and 2 not run)
 
 Question: does a model that learns from AML Hi-C reproduce what is specific
 to a patient, which the models trained on the 12 non-AML cells do not
@@ -3339,9 +3339,7 @@ same output folder, no checkpoint written by the duplicate). The scheduler
 now writes a pid file per started job and finds running jobs on restart
 (`.run_<job>.pid`).
 
-Results, fold 0, 25 kb (`results/aml_train/eval_f0_*.csv`; 10 kb, the
-lab-indicator ablation, the Xu loop and stripe test and the fold-1/2 cross-
-validation are pending).
+Results, fold 0, 25 kb (`results/aml_train/eval_f0_*.csv`).
 
 Training. all12aml_refin_drop_25kb stopped at epoch 33 (best hard-validation
 Pearson 0.733; honest-validation Pearson 0.916 at epoch 14), all12aml_honest_
@@ -3404,8 +3402,8 @@ non-AML consensus reference remains better on marks (0.886), as expected for
 a cell from another lab.
 
 Xu et al.'s AML-specific loops and stripes (10 kb, four test patients, 592
-loops and 481 stripes), models trained without AML data only (the 10 kb
-AML models are pending): the measured loop enrichment lies 0.31 log2 units
+loops and 481 stripes), models trained without AML data (the AML models
+follow below): the measured loop enrichment lies 0.31 log2 units
 above the AML reference at the loop pixel (stripes 0.21), the predictions
 0.01 to 0.02 above it for the input-reference models (stripes 0.03 to 0.07;
 the reference-free model lies below it) and correlate with the measured gain
@@ -3558,3 +3556,30 @@ SCC is 0.763 and 0.711 against 0.538 to 0.567 and 0.696 to 0.700, its
 insulation correlation 0.674 and 0.622 against 0.447 to 0.455 and 0.484 to
 0.500. Against Hi-cGAN (even chromosomes held out) the ChIP-only model
 leads by 0.57 to 0.62 Pearson.
+
+## 38. AML-inclusive training with the methylation channel (PENDING)
+
+Recipe of section 36 (patients, HSPC donors, MOLM-13, AML windows x3, lab
+indicator, AML reference of the training patients, input-reference model,
+track dropout 0.5, honest validation, selection on the patient-specific hard
+windows, fold 0) plus the 14th track Meth: run all12aml_meth_refin_drop at
+10 kb and 25 kb (cache mc_all12aml_meth_ref_<k>kb). Meth per sample: the ENCODE
+WGBS of the non-AML cells and the RRBS of HCT116, MCF-7 and HFF (the v2 cell
+set of section 35, 10 of the 12 cells; NHEK and PC-9 absent), the Xu et al.
+WGBS (`aml/primary/meth/xu_<patient>`, `aml_primary_meth.py`, 1 kb bins,
+value 1 + methylated fraction) for the seven training patients that have it
+(018, 103, 168, 472, 546, 629, 673); absent for training patient 1360, the two
+HSPC donors and MOLM-13. `select_tracks` receives Meth through the added-track
+rule of `run_config` (checked: the run's select_tracks ends with
+'H4K20me1', 'Meth'). Test patients 027, 270 and 773 have WGBS; 1916 has CUT&Tag
+and no WGBS and is scored with Meth absent. Inference conditions
+(`aml_train_eval.py`, label aml_meth_refin): the patient's marks, marks plus Meth,
+Meth alone and no input; for U-937 and the HSPC donors Meth is absent.
+Evaluation as section 36 (Pearson, SCC, patient-specific regions, residual
+correlation against the AML reference, the HSPC consensus, consensus12 and
+the mean of the other patients; Xu loops and stripes at 10 kb; the standard
+413-region evaluation of the non-AML cells), the test patients with WGBS
+additionally summarised alone.
+
+Results: pending (queued after the 5 kb block).
+
