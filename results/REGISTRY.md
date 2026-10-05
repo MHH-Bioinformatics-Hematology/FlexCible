@@ -3411,12 +3411,71 @@ above the AML reference at the loop pixel (stripes 0.21), the predictions
 the reference-free model lies below it) and correlate with the measured gain
 at 0.10 to 0.24 (loops) and 0.25 to 0.42 (stripes).
 
-Reading so far. At 25 kb the AML-inclusive input-reference model gains a
-little over the same model without AML data and exceeds neither the AML
-reference nor the mean of the other patients; the patient's own ChIP adds
-0.002 Pearson overall and 0.025 on the patient-specific regions, and the
-same holds for healthy donors: no gain beyond the reference map for either
-kind of cell. This is the negative result so far.
+Results, fold 0, 10 kb and the lab-indicator ablation.
+
+Training. all12aml_refin_drop_10kb stopped at epoch 34 (best hard-
+validation 0.524), all12aml_honest_drop_10kb at epoch 12 (0.217). Normal
+accuracy, 12 training cells / five held-out cells: 0.923 / 0.889 for
+all12aml_refin_drop_10kb against 0.927 / 0.903 for all12refin_drop_10kb;
+0.760 / 0.720 for the AML no-reference model against 0.819 / 0.761. The
+25 kb ablation without the lab row (all12aml_refin_drop_nolab_25kb, same data)
+stopped at epoch 36 (hard-validation 0.735) with normal accuracy 0.928 /
+0.915.
+
+Held-out patients, 10 kb (median over the four patients; Pearson, 413 regions):
+the AML reference alone 0.802, the mean of the 11 other patients 0.814, HSPC
+consensus 0.754, consensus12 0.717. Models, with the patient's marks / without
+ChIP: all12aml_refin_drop 0.818 / 0.805; with the HSPC reference 0.772 /
+0.759; all12refin_drop with the AML reference 0.801 / 0.803, with consensus12
+0.736 / 0.708; all12aml_honest_drop 0.525 / 0.366; all12honest_drop 0.510 /
+0.369. All four test patients are above the AML reference (027 0.845 against
+0.831, 1916 0.855 / 0.851, 270 0.791 / 0.773, 773 0.771 / 0.754) and two are
+above the mean of the other eleven patients (270, 773). On the patient-
+specific regions the AML-trained model reaches 0.592 with marks and 0.560
+without ChIP against 0.541 for the reference (all12refin_drop with the AML
+reference: 0.585 / 0.574). Residual correlation with the AML reference
+(all regions / patient-specific): 0.234 / 0.268 with marks, 0.164 / 0.223
+without ChIP (all12refin_drop with the AML reference 0.217 / 0.258 and 0.162 /
+0.156); against the HSPC consensus 0.446 with marks and 0.422 without (0.437
+and 0.410 for the model without AML data; with consensus12 as reference
+0.303 and 0.236); against consensus12 0.616. Healthy HSPC donors 341 and 822:
+all12aml_refin_drop 0.827 / 0.828 against 0.778 for the training-donor mean
+it reads and 0.808 for the mean of the other three donors (all12refin_drop
+with that reference 0.799 / 0.814). U-937: 0.852 / 0.826 against 0.781 for the
+AML reference and 0.818 for consensus12 (all12refin_drop with consensus12 0.856 /
+0.815).
+
+Xu et al.'s AML-specific loops and stripes (10 kb, test patients, 592 loops,
+481 stripes): the measured loop enrichment lies 0.31 log2 units above the AML
+reference at the loop pixel (stripes 0.21); the AML-trained model with marks
+predicts -0.02 (stripes -0.03), 41% of the loops (37% of the stripes) above
+the reference and correlates with the measured gain at 0.14 (stripes 0.34);
+without ChIP -0.03 (-0.08), 29% (6%), 0.16 (-0.07). The model without AML data
+and the AML reference: +0.01 (+0.03), 57% (57%), 0.10 (0.34). The loop gain is
+not reproduced by either model.
+
+Lab indicator (25 kb, with marks / without ChIP): all12aml_refin_drop_nolab
+0.904 / 0.895 against 0.900 / 0.898 with the row; patient-specific 0.768 /
+0.744 against 0.755 / 0.730; residual correlation with the AML reference
+0.231 / -0.010 against 0.167 / 0.023, with the HSPC consensus 0.488 / 0.420
+against 0.464 / 0.434. The row does not help; every difference is within
+the 0.013 noise of the median Pearson or in the direction of the model
+without it.
+
+Reading. Training on AML data and HSPC does not make the 25 kb model exceed
+the AML reference or the other-patient mean, and the patient's own ChIP adds
+0.002 there. At 10 kb the model exceeds the AML reference in all four test
+patients (+0.016 median) and the mean of the other patients in two, the
+patient-specific regions gain 0.051 over the reference with marks (0.019
+without ChIP), and the ChIP, neutral for the model without AML data (0.801
+with, 0.803 without), now adds 0.013 Pearson overall and 0.032 on the
+patient-specific regions: the first sign that the ChIP carries patient
+information once the model has seen AML maps. The gain is modest (about the
+size of the seed noise overall), it is not reproduced at the loops and
+stripes of the paper, healthy donors show the same pattern (model above its
+reference by 0.049 at 10 kb, below at 25 kb), and the lab and protocol row
+changes nothing, so the improvement is not a lab effect that the row could
+absorb. The three-fold cross-validation (flag file AML_CV) was not run.
 
 ## 37. Chromosome-held-out final models (PENDING)
 
