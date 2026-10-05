@@ -3588,9 +3588,8 @@ The reference-map model is level with C.Origami on Pearson over the band
 0.905), SCC, insulation correlation (0.924 against 0.866), boundary recall and
 loop recall (0.355 against 0.162); it exceeds Epiphany by 0.40 Pearson. The
 ChIP-only model, which has no consensus, is below C.Origami in Pearson
-(0.808 against 0.920) and SCC (0.812 against 0.913) and level on the tile
-median (0.855 against 0.905, below) and the insulation correlation (0.822
-against 0.866, below); it exceeds Epiphany by 0.25 (0.760 against 0.512), the
+(0.808 against 0.920), SCC (0.812 against 0.913), tile median (0.855
+against 0.905) and insulation correlation (0.822 against 0.866); it exceeds Epiphany by 0.25 (0.760 against 0.512), the
 Hi-cGAN IMR-90 model by 0.24 and Hi-cGAN on GM12878 and K562 by 0.47 and 0.61.
 C.Origami's boundary recall (0.474) and loop recall (0.162) lie below the
 ChIP-only model's (0.497, 0.192). The Hi-cGAN IMR-90 model scores on chr2
