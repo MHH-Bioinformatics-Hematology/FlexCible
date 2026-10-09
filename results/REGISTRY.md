@@ -4753,3 +4753,130 @@ Figures `fig_q1_partial_spearman.png`, `fig_q2_precision_sensitivity.png` and
 `fig_q3_insulation.png` were written but not visually inspected (viewing images was
 not permitted for this task). The figures are not tracked by git (`*.png` is ignored);
 `python scripts/aml_ctcf_methylation.py --stage figures` rebuilds them.
+
+
+## 47. Do the patients' own marks and methylation separate AML-specific loops from shared loops? (FINAL; sections 42 to 46 were taken by other agents, this is the next free number)
+
+`scripts/aml_loop_classifier.py` (CPU only, hicdiff env), tables and figures in `results/aml_loop_classifier/`.
+Question: with held-out patients, does the patient's own CUT&Tag (H3K27ac, H3K27me3, CTCF), WGBS methylation or
+CTCF motif content distinguish the AML-specific loops and stripes of Xu et al. 2022 (Suppl. Tables 1 and 4) from
+loops that are shared with HSPC?
+
+### Data and sample sizes
+- Positives: AML-specific loops of Suppl. Table 1 (10 kb anchors, 60 kb to 1.5 Mb), stripes of Suppl. Table 4
+  (anchor 40 kb, extent block; at most 150 sampled per patient, geometry limited to 3.2 Mb).
+- Patients: 8 with all four data types (018, 027, 168, 270, 472, 546, 629, 773; CTCF, H3K27ac, H3K27me3, WGBS),
+  10 with H3K27ac and H3K27me3 (adds 1360, 1916, no CTCF, no WGBS), 18 with WGBS (adds 1071, 1324, 260, 424, 496,
+  504, 566, 798, 838, 933 without CUT&Tag). Patients 103 and 673 have CUT&Tag but no AML-specific loops in Suppl.
+  Table 1. Loops: 1.86 to 1.89k positives in the 8-patient set, 2.2k in the 10-patient set, 3.8 to 4.1k in the
+  18-patient set; stripes 0.95 to 1.1k positives (stripe experiments use the 8 patients with all data types).
+- Features use only the patient's data and one public CD34+ ChIP experiment per mark (ChIP-Atlas, other lab, one
+  donor) as HSPC reference: anchor mean, max and +-20 kb flank of the quantile-matched CUT&Tag/ChIP tracks (the AML
+  model inputs), WGBS methylation (1 kb bins: anchor mean, minimum, 1 kb bin at the strongest CTCF motif), CTCF
+  motif (MA0139.2, hits at >= 70 percent of the maximal log-odds, strength, orientation class), distance, promoter
+  (refGene TSS in anchor, distance to nearest TSS), HSPC values and patient minus HSPC. Per pair every anchor
+  feature enters as min and max. No Hi-C-derived feature of the target pair. No RNA-seq exists in the repo, so no
+  expression feature. Methylation of HSPC does not exist (no public WGBS), so methylation has no difference feature.
+- Shared loops are called here, not by Peakachu (the Peakachu calls are not public): local maximum of the 10 kb donut
+  enrichment (hicmultiome.bioscore, same parameters as the AML scripts), log2 enrichment >= 0.6 in the patient map
+  and >= 0.6 (3x3 maximum) in the HSPC consensus, both anchors mappable, not within 2 bins of an AML-specific loop
+  of the patient. Median log2 enrichment: positives 0.69 (patient) and 0.18 (HSPC consensus; for the 55 percent of
+  positives with a local maximum within 1 bin); negatives 0.83 to 0.88 and 0.71 to 0.73. Negatives are stronger
+  loops than positives; strength is not matched and the enrichment is never a feature.
+- Negative sets (1:1, within the patient, nearest neighbour without replacement, exact orientation class, distance
+  caliper max(2 bins, 15 percent)): A_full = shared loops matched on distance, motif orientation (convergent,
+  divergent, tandem, none) and the anchors' mean H3K27ac (caliper 0.25 SD; CUT&Tag patients); A_do = distance and
+  orientation only; A_hspc = distance, orientation and the anchors' HSPC CTCF and HSPC H3K27ac (own marks left free);
+  B_rand = random anchor pairs on mappable bins of the same chromosome at the same bin distance. Stripes: the
+  stripe rectangle (same gap and extent) moved along the chromosome; shared = band mean log O/E >= the 25th
+  percentile of the patient's positives in both the patient and the HSPC consensus; matching on orientation
+  (anchor motif facing the extent) and anchor K27ac (A_full) or HSPC marks (A_hspc).
+- Matching quality (`matching_quality.csv`): matched positives 4500/4520 (A_do), 2232/2276 (A_full, 8+2 patients
+  with CUT&Tag), 4160/4520 (A_hspc), 4520/4520 (B_rand) for loops; stripes 1317, 1283, 1109, 1317 of 1394. Mean
+  log-distance SMD < 0.001; orientation equal in 100 percent. A_full anchor-K27ac SMD within +-0.033 per patient.
+  A_hspc residual SMD: HSPC CTCF up to 0.21, HSPC K27ac up to 0.11 per patient. In A_do and A_hspc the own anchor
+  K27ac is higher in positives (mean SMD 0.10 and 0.32, per patient up to 0.36 and 0.71): a gain signal.
+
+### Validation
+Leave-one-patient-out (LOPO) and leave-subtype-out (LSO; subtype from the SV junctions of Suppl. Table 5: BCR-ABL1
+{027, 168, 496}, inv(16) {629, 504, 798}, KMT2A-r {270}, t(8;21) {933}; every other patient is its own group; mutation
+subtypes are not assigned to patients in the paper's tables). Never a random split. Recurrent loops share anchors
+across patients, and the HSPC features identify the locus, so the primary folds are locus-disjoint: training rows
+with an anchor within 2 bins of a test anchor are dropped. Plain LOPO is kept (`cv = lopo_plain`) and is higher
+(A_do, gradient boosting 0.912 against 0.880): that part was locus memorisation. Models: logistic regression (C 0.05) and
+histogram gradient boosting (depth 3, 150 iterations). Metrics: mean over patients of the per-patient AUROC
+(macro) and pooled AUROC and AUPRC, patient-bootstrap 95 percent intervals (1000 resamples of patients). Controls:
+distance only (logistic regression), labels shuffled within each patient (20 repetitions logistic regression, 10
+gradient boosting; 97.5th percentile of the macro AUROC reported). Prevalence 0.5.
+
+### Results (gradient boosting, LOPO locus-disjoint, macro AUROC [95 percent patient bootstrap])
+Distance only 0.50 and shuffled labels 0.50 (97.5th percentile 0.51 to 0.53) in every row. LSO equals LOPO within 0.004.
+
+| experiment | patients | pos | negatives | AUROC | pooled AUPRC |
+|---|---|---|---|---|---|
+| loops, all data | 8 | 1861 | A_full | 0.874 [0.841, 0.903] | 0.881 |
+| loops, all data | 8 | 1885 | A_do | 0.880 [0.853, 0.902] | 0.893 |
+| loops, all data | 8 | 1851 | A_hspc | 0.837 [0.805, 0.865] | 0.832 |
+| loops, all data | 8 | 1886 | B_rand | 0.792 [0.760, 0.826] | 0.775 |
+| loops, K27ac + K27me3 | 10 | 2184 | A_hspc | 0.833 [0.805, 0.860] | 0.824 |
+| loops, meth + motif + gene + HSPC | 18 | 3827 | A_hspc | 0.820 [0.802, 0.840] | 0.806 |
+| stripes, all data | 8 | 1099 | A_full | 0.674 [0.652, 0.696] | 0.651 |
+| stripes, all data | 8 | 945 | A_hspc | 0.608 [0.581, 0.634] | 0.612 |
+| stripes, all data | 8 | 1128 | B_rand | 0.810 [0.794, 0.829] | 0.800 |
+
+Logistic regression is 0.01 to 0.04 lower everywhere. All rows are far above the controls; the question is what
+carries it.
+
+Which groups carry it (`group_importance.csv`, `incremental.csv`, `univariate.csv`; 8 patients, A_do unless noted):
+- The HSPC state of the locus alone gives 0.873 (A_do), 0.813 (A_hspc), mostly HSPC CTCF (0.847 and 0.789 alone).
+  This is largely built into the labels (a shared loop exists in HSPC Hi-C and sits on HSPC CTCF) and is not a
+  patient signal. Positives have lower CTCF in the flanks (univariate AUROC 0.26 to 0.36 for CTCF flank features, 0 of 8
+  patients above 0.5) and lower H3K27me3 (0.37 to 0.40).
+- Patient marks without any HSPC input: all four data types 0.752 [0.704, 0.801] (A_full) and 0.730 (A_hspc);
+  own CTCF 0.717, own H3K27me3 0.606, own H3K27ac 0.538 (A_do); with HSPC matching own CTCF 0.669, H3K27me3
+  0.628, H3K27ac 0.596. Own marks plus methylation, motif and gene: 0.787 (A_full), 0.746 (A_hspc), 0.637 [0.619, 0.657] in the
+  18 patients (A_hspc, methylation instead of marks). The patient-minus-HSPC differences alone give 0.80 (A_do).
+- Gain of H3K27ac is the clearest directional patient signal: patient-minus-HSPC H3K27ac at the anchors has a
+  univariate AUROC of 0.62 and is above 0.5 in 8 of 8 patients (A_hspc), also own H3K27ac max 0.61 (7 of 8).
+- Added to the HSPC state (paired patient bootstrap of the AUROC difference, A_hspc, 8 patients): + own marks
+  +0.023 [0.018, 0.028], + differences +0.017 [0.005, 0.024], + methylation +0.002 [-0.002, 0.005], + motif and
+  gene +0.007 [0.001, 0.013], everything +0.023 [0.014, 0.031]. 10 patients with K27ac and K27me3: +0.015 [0.010, 0.020].
+  A_full: +0.015 [0.011, 0.021]. A_do: +0.006 [-0.001, 0.012] (not different from zero). 18 patients, methylation
+  and motif without own marks: +0.007 [0.004, 0.009].
+- Methylation alone separates shared from specific loops (0.641, A_do) but adds 0.002 to 0.004 on top of the HSPC
+  state; in A_hspc alone it is 0.548. Distance is 0.50 by construction.
+
+Pair types (`by_type.csv`, A_hspc, pooled AUROC [bootstrap]): P-E-like 0.864 [0.802, 0.913] (241 positives), P-S-like
+0.741 [0.607, 0.827] (83), other 0.838 (1527); A_do: 0.854, 0.753, 0.889. Types follow the patient's own anchors (promoter in
+one anchor, the partner above the 70th percentile of the training H3K27ac scale for P-E-like, of H3K27me3 for P-S-like, P-S
+first); few P-S loops carry the numbers, the intervals overlap. Stripes (A_hspc): repressive-anchor 0.677 (397), enhancer-anchor 0.495
+(278), other 0.619; against shared stripes the own data add nothing over the HSPC state (+0.004 [-0.013, 0.018]),
+and with methylation +0.025 [0.008, 0.038] only in A_full.
+
+### Answer
+Yes, a held-out-patient signal exists far above the controls (0.84 to 0.88 AUROC for loops, controls 0.50), but most
+of it is the HSPC state of the locus, which the definition of a shared loop imposes. The patient's own data add a small, reproducible amount over
+the HSPC state: +0.015 to +0.026 AUROC when the negatives are matched on HSPC state or anchor K27ac, carried by CTCF,
+H3K27me3 and the patient-minus-HSPC H3K27ac gain, not by methylation. Against negatives matched on distance and orientation
+only, the increment is not distinguishable from zero. The signal is real but modest and is weaker than the full
+classifier numbers suggest. Stripes: only 0.61 to 0.67 against shared stripes, with no increment of the own marks beyond the HSPC state.
+
+### Limits
+- Few patients with CUT&Tag (8 with all data types, 10 with the two histone marks); one lab and one protocol, so batch, depth
+  and CUT&Tag quality are shared by train and test and a patient-level quality effect is not excluded.
+- HSPC marks come from one donor of another lab, constant over all loops; patient-minus-HSPC differences contain lab and assay
+  differences. HSPC methylation does not exist.
+- AML-specific loops are Peakachu calls (probabilities, thresholded) against 4 HSPC; shared loops are our donut calls at
+  10 kb and are stronger than the positives. The 55 percent local-maximum recovery of the positives shows that the two
+  call sets are not the same operation.
+- CTCF motif hits are sparse at 10 kb (about 12 percent of pairs have a hit in both anchors); the orientation class is
+  mostly "none". Methylation is at 1 kb resolution (motif CpGs not resolved individually).
+- Locus-disjoint folds remove anchors within 2 bins only; related loci (same TAD or gene) remain. Mutation subtypes are not
+  known per patient, so LSO is nearly LOPO. Bootstrap intervals over 8 to 18 patients are narrow because per-patient AUROCs
+  are similar; they do not cover the batch limits above.
+- Stripe negatives are geometry-matched shifts of the rectangle, a weaker notion of "shared stripe" than for loops.
+- Figures `fig_auroc_summary.png`, `fig_group_importance.png`, `fig_per_patient.png`, `fig_matching_balance.png` were
+  not visually checked. Intermediate Hi-C label tables and tracks are cached under aml/primary/work/loopclf/ (not in git).
+
+Reproduce: `python scripts/aml_loop_classifier.py --stage hic tracks motifs stripes_hic build model figures`
+(hicdiff env; `--jobs 8 --null-reps-lr 20 --null-reps-gb 10` were used).
