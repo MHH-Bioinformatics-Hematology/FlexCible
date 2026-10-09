@@ -4519,3 +4519,237 @@ validation), so no window is recomputed and the held-out patients and HSPC donor
 stay held out. `scripts/aml_train_eval.py` scores it as `aml_refres` next to
 `aml_refin` and the other models of fold 0 (queue block c). The 25 kb run and
 folds 1 and 2 are not queued. Results: pending.
+
+## 46. CTCF binding, motif CpG methylation and insulation in the Xu et al. AML patients (FINAL; sections 42 to 45 were taken by another agent, this is the next free number)
+
+`scripts/aml_ctcf_methylation.py` (CPU), tables and figures in
+`results/aml_ctcf_methylation/`. Question: does the section 41 finding (CpG
+methylation inside the CTCF motif lowers CTCF height beyond motif strength) hold in
+the primary AML patients of Xu et al. 2022, and does it have a Hi-C consequence.
+
+**Data.** Sites are the 72,626 motif hits of section 41 (hg38). Patients with both
+CTCF CUT&Tag and WGBS: 018, 027, 103, 168, 270, 472, 546, 629, 773 (9; 673 has WGBS
+but no CTCF CUT&Tag, 1916 and 1360 have CUT&Tag but no WGBS). All 9 have Hi-C
+(10 kb O/E maps `aml/oe/xu_*_proper_10kb.cool`, the maps of the AML scoring scripts),
+and 4 HSPC donors serve as the Hi-C baseline. H3K27ac CUT&Tag exists for all 9;
+H3K4me3 was not measured in the patients, so the activity covariate is H3K27ac alone.
+Patient WGBS is the GEO processed bigWig (CG methylation per 10 bp bin, no read
+counts): motif methylation is the unweighted mean of the 10 bp bins that hold a CpG
+of the 15 bp motif (the bin of the C and of the G; a bin can also hold a CpG outside
+the motif), flank methylation the mean of the other covered bins within +-250 bp.
+The reads >= 10 rule of section 41 cannot be applied to the patients. Of the 72,626
+sites 13,729 hold a CpG in the motif; 13,142 to 13,324 of these have a covered
+bin in each patient (6.1 to 6.2 thousand on the even chromosomes, against 291 to
+4,365 per non-AML cell in section 41). CTCF height is log1p of the mean MACS2
+-log10 p-value signal within +-100 bp of the motif centre, H3K27ac within +-500 bp.
+Healthy references: no HSPC or PBMC WGBS exists in the repo or in the GEO deposit, so
+the healthy methylation reference is ENCODE CD14+ monocyte WGBS (CpG level, reads >=
+10, section 41 table); the HSPC CTCF reference is the CD34+ ChIP-seq SRX037935
+(ChIP-Atlas, 9.8 M reads), a different assay and laboratory than the CUT&Tag, so
+CTCF is compared by rank, never by value. Sample 773 (extreme CpG-island
+methylation in the paper) is kept and every pooled number is given with and without it.
+
+### 1. Methylation at the motif CpGs against CTCF height (even chromosomes)
+
+Partial Spearman correlation of CTCF height with motif methylation given a cubic in
+the rank of motif strength, exactly the section 41 statistic (the code is imported
+from `chip_seq_meth_relationships.py`; the recomputation on the 8 non-AML cells
+reproduces the section 41 column: GM12878 -0.46, IMR-90 -0.67, H1 -0.64, HepG2 -0.48,
+A549 -0.60, CD14+ -0.61, K562 -0.28, HMEC -0.68). Chromosome-bootstrap intervals
+(300 resamples) of the first column in brackets. Table `q1_partial_spearman.csv`,
+`q1_per_patient_even.csv`.
+
+| patient | n sites | Spearman height vs strength (all sites) | given strength | + H3K27ac | + flank methylation | + flank + H3K27ac | flank given strength |
+|---|---|---|---|---|---|---|---|
+| 018 | 6122 | 0.14 | -0.18 (-0.20 to -0.15) | -0.15 | -0.06 | -0.07 | -0.18 |
+| 027 | 6138 | 0.28 | -0.58 (-0.61 to -0.52) | -0.55 | -0.29 | -0.31 | -0.54 |
+| 103 | 6205 | 0.22 | -0.39 (-0.42 to -0.36) | -0.34 | -0.16 | -0.17 | -0.38 |
+| 168 | 6131 | 0.18 | -0.27 (-0.31 to -0.23) | -0.20 | -0.12 | -0.12 | -0.26 |
+| 270 | 6138 | 0.13 | -0.18 (-0.21 to -0.16) | -0.15 | -0.08 | -0.08 | -0.18 |
+| 472 | 6162 | 0.13 | -0.25 (-0.28 to -0.22) | -0.19 | -0.11 | -0.10 | -0.24 |
+| 546 | 6133 | 0.26 | -0.51 (-0.55 to -0.45) | -0.47 | -0.24 | -0.25 | -0.49 |
+| 629 | 6199 | 0.21 | -0.37 (-0.40 to -0.34) | -0.30 | -0.14 | -0.15 | -0.38 |
+| 773 | 6165 | 0.25 | -0.52 (-0.56 to -0.47) | -0.50 | -0.22 | -0.24 | -0.52 |
+
+Pooled (median over samples, the same chromosomes resampled in every sample, 300
+resamples; `q1_pooled.csv`; all-chromosome values differ by at most 0.03):
+
+| group | given strength | + H3K27ac | + flank | + flank + H3K27ac | flank given strength |
+|---|---|---|---|---|---|
+| 9 AML patients | -0.37 (-0.40 to -0.33) | -0.30 (-0.33 to -0.25) | -0.14 (-0.18 to -0.11) | -0.15 (-0.19 to -0.11) | -0.38 |
+| 8 AML patients without 773 | -0.32 (-0.35 to -0.30) | -0.25 | -0.13 | -0.13 | -0.32 |
+| 8 non-AML cells of section 41 (H3K27ac only as covariate) | -0.60 (-0.62 to -0.57) | -0.58 | -0.41 | -0.42 | -0.48 |
+
+Methylation at the motif lowers CTCF height beyond motif strength in every patient
+(all nine intervals exclude 0), and the association persists with flank methylation
+and H3K27ac fixed (-0.06 to -0.31), but it is weaker than in the non-AML cells
+(median -0.37 against -0.60). Six of the nine patients are weaker than every
+non-AML cell except K562 (-0.28); 027 (-0.58), 773 (-0.52) and 546 (-0.51) lie
+within the non-AML range. Median log1p CTCF height at motif methylation below 0.2
+and above 0.8: 027 1.87 and 0.31, 773 1.68 and 0.34, 546 1.31 and 0.38, 103 0.87 and
+0.33, 629 0.72 and 0.24, 018 0.47 and 0.42 (non-AML: GM12878 3.60 and 0.30, K562 3.12 and 0.65; table
+`q1_height_by_methylation_level.csv`). The patients differ by CUT&Tag signal
+quality: height against motif strength alone is 0.13 to 0.28 (018, 270, 472 0.13 to
+0.14) against 0.25 to 0.32 in the non-AML cells, and across the 9 patients the partial
+correlation follows this value (Spearman -0.95). Part of the weaker AML association
+is therefore measurement (CUT&Tag depth, unweighted 10 bp bin methylation without
+read counts, a bin that can mix motif and flank CpGs) and the data do not say how
+much; for the patients with good CUT&Tag (027, 546, 773) the partial is -0.51 to -0.58.
+
+### 2. Sites that gain methylation against healthy and lose CTCF
+
+Gain: motif methylation in the patient at least 0.3 above CD14+ monocytes (reads >= 10
+there). HSPC-bound: the site is in the top 20 percent of all 72,626 sites by HSPC CTCF
+height (percentile >= 0.8). Lost, definition A (pre-set): the patient percentile of
+CTCF height is at least 0.3 below the HSPC percentile. Definition B (added because the
+number of A-lost sites differs between patients with CUT&Tag depth, 1,868 for 027 to
+6,226 for 018): the patient height is in the lowest quarter among the HSPC-bound
+sites (same prevalence in every patient). Testable: HSPC-bound with a covered motif CpG
+in the patient and in CD14+. Tables `q2_*.csv`; 18 definitions (A: drop 0.2, 0.3, 0.4,
+B: lowest 0.15, 0.25, 0.35, each with bound 0.7, 0.8, 0.9) in `q2_2x2_grid.csv`.
+
+Pooled over the 9 patients (chromosome-bootstrap intervals, 200 resamples of the same
+chromosomes in all patients; `q2_2x2_pooled.csv`):
+
+| definition, patients | gain and lost | gain, kept | no gain, lost | no gain, kept | precision P(lost given gain) | P(lost given no gain) | relative risk | sensitivity P(gain given lost) |
+|---|---|---|---|---|---|---|---|---|
+| A, 9 | 208 | 274 | 3091 | 12583 | 0.43 (0.35 to 0.49) | 0.20 | 2.19 (1.80 to 2.52) | 0.063 (0.056 to 0.071) |
+| A, 8 without 773 | 136 | 172 | 2991 | 11061 | 0.44 (0.33 to 0.54) | 0.21 | 2.07 (1.53 to 2.52) | 0.044 (0.036 to 0.052) |
+| B, 9 | 226 | 256 | 2523 | 13151 | 0.47 (0.37 to 0.55) | 0.16 | 2.91 (2.39 to 3.44) | 0.082 (0.070 to 0.094) |
+| B, 8 without 773 | 133 | 175 | 2364 | 11688 | 0.43 (0.31 to 0.53) | 0.17 | 2.57 (1.79 to 3.11) | 0.053 (0.045 to 0.064) |
+
+Over the 18 definitions the pooled relative risk lies between 1.92 and 4.08 and the
+sensitivity between 0.045 and 0.11. Per patient (A, `q2_2x2_primary.csv`; relative
+risk, gain-and-lost sites): 027 9.9 (15), 773 6.7 (72), 546 5.7 (33), 629 3.3 (13),
+103 2.2 (4), 472 1.7 (16), 018 1.7 (19), 168 1.5 (28), 270 1.2 (8); the interval of
+103 and 270 includes 1. The AUROC of the methylation change for separating lost from
+kept sites among the testable ones is 0.48 to 0.54 for 018, 103, 168, 270, 472, 629,
+and 0.67 (027), 0.62 (546), 0.77 (773). The explanatory power is therefore carried by
+the patients with a large methylation change.
+
+How many lost sites are explained (A, pooled over patients, `q2_explained_lost_sites.csv`):
+of 38,441 patient lost sites 26,809 (70 percent) have no CpG in the motif and cannot be
+explained by motif methylation; 3,299 (8.6 percent) are testable (a covered CpG in the
+patient and in CD14+; for another 19 percent the CpG is not covered in CD14+ at 10
+reads, and 2.4 percent lack patient coverage); 208 of the testable ones (6.3 percent) and 0.54 percent of all lost sites
+gain methylation. By patient the testable lost sites with a gain: 773 42 percent, 027 22
+percent, 546 21 percent, the other six 1.6 to 5.4 percent.
+
+Coverage (`q2_coverage_dependence_pooled.csv`; pooled A, 9 patients): restricting the
+reference to at least 10, 20, 40 reads gives relative risk 2.19 (482 gain sites), 2.60
+(84), 4.35 (6): the association does not weaken with more reference depth, but the
+number of gain sites falls below 100 beyond 20 reads. Patient read depth is not
+available. As proxies, sites in the upper half of the number of covered bins in the
++-250 bp window (a local depth surrogate) give 2.24 (454 gain sites), the lower half
+1.35 (28 gain sites); sites whose motif bin value is neither 0 nor 1 (these carry
+information on at least two reads) give 2.04 with sensitivity 0.19, a selection that
+favours intermediate values and is only a robustness check.
+
+Same-assay check (`q2_same_assay_vs_other_patients.csv`): each patient against the
+median of the other 8 patients (CUT&Tag percentile and WGBS, sites covered in at least 4
+others; no healthy sample, so this is differential within AML): pooled 200 gain-and-lost,
+676 gain-kept, 6,411 no-gain-lost, 30,835 no-gain-kept; precision 0.23, P(lost given
+no gain) 0.17, relative risk 1.33, sensitivity 0.030. Per patient relative risk 12.3
+(027), 5.6 (773), 4.2 (546), 2.4 (103), 2.0 (629), 1.5 (472), 1.4 (270), 1.0 (168),
+1.4 (018): the same three patients carry the effect.
+
+### 3. Hi-C consequence: insulation at gain-and-lost sites
+
+Insulation is `scripts/hic_measures.py:insulation_band` on the patient O/E maps (10 kb,
+mean log O/E of the w x w square across the site bin, w = 10 bins = 100 kb as the main
+setting, w = 5 as a check), taken at the 10 kb bin of the motif centre; a higher value
+means more contact across the site, i.e. weaker insulation. Per site d = insulation
+(patient) - insulation (mean of the 4 HSPC donors). Test sites: gain-and-lost (A or B),
+one per 10 kb bin, CNV segments of `explain_cnv_segments.csv` removed. Controls: sites
+covered for methylation with no gain (change < 0.1), HSPC-bound, matched on motif
+strength (within 0.02 of the fraction of the maximum PWM score) and HSPC CTCF height
+(within 0.25 log1p units), up to 5 per test site, caliper-limited (test sites without a
+control are dropped). Paired difference = d(site) minus mean d(controls), mean over
+sites, 95 percent interval from a chromosome bootstrap (2000 resamples; per patient
+1000). This is descriptive on all 22 autosomes; no model was fitted. Tables
+`q3_insulation_summary.csv`, `q3_paired_sites.csv.gz`.
+
+Pooled over patients (103 has only 4 gain-and-lost sites and has no per-patient row; its
+sites are included in the pooled rows):
+
+| test sites against controls | def. | w | test sites | mean d, test | mean d, controls | paired difference | 95% interval |
+|---|---|---|---|---|---|---|---|
+| gain-and-lost, no-gain controls | A | 10 | 195 | +0.010 | -0.018 | +0.028 | -0.003 to +0.057 |
+| same, controls also matched on HSPC insulation | A | 10 | 190 | +0.014 | -0.014 | +0.028 | +0.002 to +0.054 |
+| gain-and-lost, no-gain controls | B | 10 | 216 | +0.008 | -0.018 | +0.026 | -0.003 to +0.051 |
+| gain-and-lost, no-gain controls | A | 5 | 195 | +0.010 | -0.022 | +0.032 | -0.0005 to +0.064 |
+| same, controls also matched on HSPC insulation | A | 5 | 192 | +0.009 | -0.026 | +0.035 | +0.010 to +0.061 |
+| gain-and-lost, no-gain controls | B | 5 | 216 | +0.008 | -0.025 | +0.033 | +0.004 to +0.061 |
+| gain-and-lost against gain-kept controls (same methylation gain, CTCF kept) | A | 10 | 168 | +0.018 | -0.005 | +0.023 | -0.010 to +0.057 |
+| same | B | 10 | 195 | +0.014 | -0.009 | +0.023 | -0.001 to +0.047 |
+| same | A | 5 | 168 | +0.014 | +0.013 | +0.001 | -0.028 to +0.031 |
+| lost without gain, no-gain-kept controls | A | 10 | 2688 | -0.015 | -0.010 | -0.005 | -0.015 to +0.006 |
+| gain with CTCF kept, no-gain controls | A | 10 | 1572 | -0.029 | -0.002 | -0.028 | -0.042 to -0.012 |
+
+Sites that gain methylation and lose CTCF are about 0.03 weaker in insulation than
+matched controls (57 percent of the paired differences are positive), about 0.2 of the
+standard deviation of d among these sites (0.147). The interval includes 0 for the
+pre-set matching (A, w = 10) and for the unmatched A at w = 5 (upper end -0.0005); it
+excludes 0 when the controls are also matched on the HSPC insulation (w = 10 and 5) and
+for definition B at w = 5. Against controls that gain methylation but keep CTCF
+the difference is +0.023 at w = 10 and +0.001 at w = 5. Lost sites without a
+methylation gain show no difference (-0.005), so loss alone does not weaken the
+insulation in this comparison. Sites that gain methylation with CTCF kept have
+stronger insulation than no-gain controls (-0.028), a site-class offset unrelated to
+the CTCF loss that is the reason for the gain-kept control. Per patient (A, w = 10;
+paired difference, sites): 546 +0.076 (32; interval +0.015 to +0.135), 018 +0.065 (16;
++0.006 to +0.131), 773 +0.032 (70; -0.003 to +0.068), 027 +0.019 (15), 168 +0.017 (23),
+629 -0.024 (13), 472 -0.035 (15), 270 -0.057 (7); the patients with a positive,
+interval-excluding-0 difference are 546 and 018 only, and 018 has one of the weakest CTCF
+associations of part 1.
+
+### 4. What this shows
+
+Direction of causality is not resolved. Methylation at the motif CpGs and CTCF height
+are negatively associated in all nine patients beyond motif strength, flank
+methylation and H3K27ac, and sites that gain methylation against a healthy myeloid
+sample lose CTCF about twice as often as those that do not (relative risk 2.1 to
+2.9, interval above 1 in each of the four pooled rows, carried by 027, 546 and 773).
+The same pattern is expected if methylation blocks CTCF binding and if CTCF loss lets
+the CpGs become methylated (bound CTCF protects its motif from methylation, section
+41); a cross-sectional comparison cannot separate the two, and the Hi-C difference
+(about 0.03 weaker insulation at gain-and-lost sites, borderline) is compatible with
+either order. The 5-azacytidine and knockdown experiments of the paper address the
+direction; they are not used here. The share of lost sites that motif methylation can
+explain is small: 70 percent of the lost sites have no CpG in the motif and 6 percent
+of the testable lost sites gain methylation (sensitivity 0.04 to 0.08 pooled; 0.2 to
+0.4 in the three strong patients). Motif hypermethylation accounts for a small part
+of the lost sites; the remainder has no motif CpG, no covered comparison or no gain.
+
+Sample sizes. Patients: 9 with CTCF CUT&Tag and WGBS (8 without 773); Hi-C for all 9
+(103 has 4 gain-and-lost sites and no per-patient insulation row). Sites: 72,626 motif
+hits, 13,729 with a motif CpG, 13,142 to 13,324 covered per patient; 1,786 to 1,803
+testable HSPC-bound sites per patient (16,156 pooled in the 2x2 table); 482 gain sites
+and 208 (A) or 226 (B) gain-and-lost sites pooled; 195 (A) or 216 (B) gain-and-lost
+sites enter the insulation comparison after the one-site-per-bin, CNV and
+control-match filters.
+
+Limits. (i) Patient WGBS has no read counts: the 10 reads rule is not applied to the
+patients, and the motif value is an unweighted bin mean that can include flank CpGs and
+attenuates the correlation. (ii) The healthy references are not HSPC: the methylation
+reference is differentiated CD14+ monocytes of other donors, the CTCF reference a
+CD34+ ChIP-seq from another laboratory and assay; CUT&Tag against ChIP-seq is compared
+by rank only and a rank loss includes assay and depth differences (the per-patient
+A-lost counts range from 1,868 to 6,226). A site methylated in HSPC but not in
+monocytes would be called a gain that is not one, a site unmethylated in HSPC and
+methylated in monocytes a gain that is missed; the size of this is not measured.
+(iii) Gain and loss thresholds are arbitrary; the 18-definition grid gives a relative
+risk between 1.92 and 4.08 with 80 to 511 gain-and-lost sites. (iv) Sites are motif
+hits with PWM at least 0.6 of the maximum, not called peaks; the bound set is the top
+20 percent by HSPC height. (v) H3K4me3 is not available for the patients. (vi)
+Intervals resample chromosomes; the patients share chromosomes and sites, so pooled
+intervals treat the patients as fixed, and the 10 kb insulation resolution cannot place
+a site inside a bin. (vii) No multiple-testing correction; per-patient rows rest on 4
+to 72 sites. (viii) The statistics of part 1 use the even chromosomes (as section 41);
+the all-chromosome versions are in the same tables; the Hi-C comparison is descriptive
+and uses all autosomes.
+
+Figures `fig_q1_partial_spearman.png`, `fig_q2_precision_sensitivity.png` and
+`fig_q3_insulation.png` were written but not visually inspected (viewing images was
+not permitted for this task). The figures are not tracked by git (`*.png` is ignored);
+`python scripts/aml_ctcf_methylation.py --stage figures` rebuilds them.
