@@ -4019,3 +4019,308 @@ those on the test-window set optimistic. (10) cd14mono has a consensus of 0.668
 mean; the medians over cells are less affected. (11) The weighted consensus was
 evaluated as a map, not inside a model; a model with the target's ChIP may profit
 less or differently.
+
+## 41. ChIP-seq peak height against DNA sequence and DNA methylation: shared and independent parts (FINAL)
+
+`scripts/chip_seq_meth_relationships.py` (CPU), tables and figures in
+`results/chip_seq_meth_relationships/`. Targets, cells and the honest split
+are those of section 35 part B: each ChIP track at 10 kb, log1p and z-scored
+as the model sees it, training on the odd chromosomes, scoring on the even
+chromosomes only, seen_cell (odd chromosomes of the seven training cells) and
+unseen_cell (leave one training cell out; K562 and HMEC in no training set and
+scored with the model trained on all seven, so their seen_cell and unseen_cell
+results are one fit, reported as unseen_cell). Independent cells: 9 (GM12878,
+IMR-90, H1, HepG2, A549, GM23248, CD14+ monocyte, K562, HMEC; HMEC deep and
+HMEC share inputs and count once). Cells that lack a track reduce the count:
+CTCF 8, RAD21 6, SMC3 5, the other ten marks 9 (seen_cell: 6, 5, 4 and 7).
+The lifted hg19 RRBS cells (HCT116, MCF-7, HFF) are excluded because their
+methylation channel is the cell mean in over 95 percent of the 1 kb bins
+(section 35 part C). Intervals are percentile bootstrap intervals of the
+median over cells (5000 resamples of cells); with 5 to 9 cells they are wide.
+
+**Feature sets.** Methylation (M): the 10 section 35 features (bin mean,
+minimum, maximum, standard deviation of the 1 kb values, +-50 kb and +-500 kb
+means, local standard deviation, low and high methylated fractions). Sequence
+(S): the 3 section 35 features (GC, CpG density, CTCF motif strength;
+`seq_base`) or the extended set (`seq`, 16 features: those 3 plus GC and CpG
+density over +-50 kb and +-500 kb, forward and reverse CTCF motif counts, CTCF
+motif count in +-50 kb, and bin and +-50 kb counts of the YY1, ZNF143 and MAZ
+motifs the model also reads). Other marks (O): the other 12 tracks of the
+same cell (missing tracks are NaN, handled by the boosting trees); W: the
+other marks of the same group; X: the marks of the other groups. Groups:
+CTCF and cohesin (CTCF, RAD21, SMC3), active (H3K27ac, H3K4me1, H3K4me2,
+H3K4me3, H3K9ac), gene body (H3K36me3, H3K79me2, H4K20me1), repressive
+(H3K27me3, H3K9me3). Histogram gradient boosting as in section 35, 500,000
+training rows, 143 fit sets (13 marks x 11 sets) each with the all-training fit
+and the leave-one-cell-out fits.
+
+**Reproduction check.** The set `both_base` (3 sequence features + methylation)
+gives the section 35 medians (unseen_cell R2: H3K9ac 0.54, H3K4me2 0.54,
+H3K4me3 0.47, H3K79me2 0.44, H3K36me3 0.40, H3K27ac 0.27, CTCF 0.18).
+
+### 1. Variance partition (sequence against methylation)
+
+Unique sequence = R2(both) - R2(M), unique methylation = R2(both) - R2(S),
+shared = R2(S) + R2(M) - R2(both). unseen_cell, extended sequence set, median
+over cells (R2; in brackets the signed squared Pearson correlation, which
+removes the cell-specific scale error, section 4). Tables
+`variance_partition_summary.csv`, `variance_partition_per_cell.csv`; figure
+`fig_variance_partition.png`.
+
+| mark | cells | R2 S | R2 M | R2 both (95% interval) | unique S | shared | unique M |
+|---|---|---|---|---|---|---|---|
+| H3K9ac | 9 | 0.30 (0.32) | 0.49 (0.54) | 0.55 (0.29 to 0.65) | 0.04 | 0.26 | 0.29 (0.29) |
+| H3K4me2 | 9 | 0.32 (0.33) | 0.48 (0.56) | 0.51 (0.36 to 0.63) | 0.04 | 0.27 | 0.25 (0.26) |
+| H3K4me3 | 9 | 0.33 (0.36) | 0.36 (0.43) | 0.47 (-0.79 to 0.54) | 0.07 | 0.22 | 0.21 (0.21) |
+| H3K79me2 | 9 | 0.20 (0.21) | 0.42 (0.43) | 0.43 (0.07 to 0.46) | 0.04 | 0.14 | 0.23 (0.24) |
+| H3K36me3 | 9 | 0.14 (0.22) | 0.39 (0.46) | 0.41 (-0.21 to 0.57) | 0.01 | 0.14 | 0.22 (0.27) |
+| H3K27ac | 9 | 0.11 (0.18) | 0.27 (0.41) | 0.26 (-0.30 to 0.43) | 0.01 | 0.09 | 0.09 (0.27) |
+| H3K27me3 | 9 | 0.19 (0.23) | 0.10 (0.21) | 0.26 (0.07 to 0.40) | 0.15 | 0.02 | 0.11 (0.19) |
+| RAD21 | 6 | 0.24 (0.29) | 0.02 (0.12) | 0.24 (-0.16 to 0.32) | 0.17 | 0.07 | -0.01 (0.02) |
+| SMC3 | 5 | 0.25 (0.30) | 0.06 (0.20) | 0.22 (-0.13 to 0.40) | 0.15 | 0.13 | 0.12 (0.08) |
+| CTCF | 8 | 0.24 (0.27) | 0.07 (0.17) | 0.19 (0.08 to 0.27) | 0.13 | 0.10 | 0.04 (0.04) |
+| H3K4me1 | 9 | 0.13 (0.18) | 0.21 (0.35) | 0.18 (-0.68 to 0.43) | 0.03 | 0.09 | 0.22 (0.24) |
+| H4K20me1 | 9 | 0.19 (0.28) | 0.01 (0.14) | 0.16 (-0.43 to 0.28) | 0.08 | 0.07 | -0.03 (-0.01) |
+| H3K9me3 | 9 | 0.07 (0.13) | -0.06 (0.04) | 0.05 (-0.42 to 0.18) | 0.11 | 0.02 | -0.07 (-0.02) |
+
+The parts are medians per part and do not add to R2(both). Bootstrap
+intervals of the unique methylation part exclude 0 only for H3K9ac (0.21 to
+0.35), H3K4me2 (0.01 to 0.35), H3K4me3 (0.04 to 0.51) and, in the squared Pearson partition, for
+H3K9ac, H3K4me2, H3K4me3, H3K36me3, H3K79me2, H3K27ac, H3K4me1 and H3K27me3;
+for CTCF, RAD21, SMC3, H4K20me1 and H3K9me3 the unique methylation part is
+indistinguishable from 0 and the unique sequence part carries the explained
+variance (CTCF 0.13, RAD21 0.17, SMC3 0.15, H3K9me3 0.11, H3K27me3 0.15).
+seen_cell (7 training cells): R2 both 0.67 (H3K9ac), 0.62 (H3K4me3), 0.61
+(H3K4me2), 0.55 (H3K36me3), 0.50 (H3K79me2), 0.47 (H3K27ac), 0.46
+(H3K27me3), 0.45 (H3K4me1), 0.42 (RAD21), 0.39 (SMC3), 0.38 (CTCF), 0.35
+(H4K20me1), 0.29 (H3K9me3), with unique methylation 0.11 to 0.39 for every
+mark (intervals above 0 for all 13, e.g. CTCF 0.11, interval 0.05 to 0.28)
+and unique sequence 0.02 to 0.14. A seen cell therefore gives methylation a
+unique share also for CTCF and cohesin that an unseen cell does not.
+
+Sequence set matters. With the 3 section 35 sequence features the unique
+methylation part of unseen_cell R2 is larger (H3K9ac 0.42, H3K36me3 0.34,
+H3K79me2 0.33, H3K27ac 0.15, H3K4me1 0.28) than with the extended set (0.29,
+0.22, 0.23, 0.09, 0.22): a part of the methylation signal in section 35 is
+GC and CpG context, which is DNA sequence. The extended set raises R2 of
+sequence alone, e.g. H3K27ac 0.03 to 0.11, H3K36me3 0.00 to 0.14, H3K79me2
+0.07 to 0.20.
+
+Grouped permutation importance of the unseen_cell combined model (extended
+sequence + methylation; median drop of R2 when the group is shuffled; `
+permutation_importance_summary.csv`; correlated groups share their drop, so
+the values underestimate each group): sequence 0.36 (CTCF), 0.36 (RAD21),
+0.33 (SMC3), 0.42 (H3K27me3), 0.23 (H3K9me3, H4K20me1, H3K4me3); methylation
+local + context: H3K4me2 0.66 + 0.44, H3K4me3 0.64 + 0.31, H3K9ac 0.57 +
+0.43, H3K27ac 0.42 + 0.36, H3K36me3 0.49 + 0.13, H3K79me2 0.20 + 0.36,
+H3K4me1 0.34 + 0.36; CTCF 0.10 + 0.19; H3K9me3 0.05 + 0.03.
+
+### 2. CTCF motif sites: ChIP height, motif strength and CpG methylation
+
+Sites: 72,626 non-overlapping hits of the CTCF motif (JASPAR MA0139.2, PWM
+score at least 0.6 of the maximum; the model channel uses 0.8, which gives
+about 6,000 sites) genome-wide. Per cell: log1p of the mean bigWig signal of
+CTCF, RAD21 and SMC3 within +-100 bp of the motif centre, of H3K27ac and
+H3K4me3 within +-500 bp (activity covariates), and the methylated fraction of
+the CpGs wholly inside the 15 bp motif (ENCODE WGBS CpG beds, both strands of
+a CpG summed; at least 10 reads, otherwise the site has no value) and of the
+CpGs in the flanks (+-250 bp). 82 percent of the sites have no CpG in the
+motif; 4,365 (GM12878) down to 291 (IMR-90) even-chromosome sites per cell
+have a covered motif CpG (IMR-90 291, HepG2 1,401, CD14+ 1,804, HMEC 1,867,
+K562 2,883, A549 3,283, H1 3,964: WGBS depth differs between cells). Only even
+chromosomes enter the statistics; intervals resample whole chromosomes.
+Tables `motif_statistics.csv`, `motif_models.csv`; figure
+`fig_ctcf_height_vs_motif_strength_by_methylation.png`.
+
+Height against strength (Spearman, all even sites): 0.25 to 0.32 for CTCF
+over the eight cells (0.24 to 0.28 RAD21, 0.23 to 0.25 SMC3). Among sites
+with a covered motif CpG, CTCF height falls with motif methylation (Spearman
+-0.36 K562 to -0.74 HMEC, median -0.65); the median log1p height is 2.7 to
+3.8 at methylation below 0.2 and 0.3 to 1.0 above 0.8 (K562 3.13 and 0.65).
+Partial Spearman correlation of height with motif methylation given motif
+strength (cubic in the rank of the strength):
+
+| cell | n sites | given strength | + activity covariates | + flank methylation | flank methylation given strength |
+|---|---|---|---|---|---|
+| GM12878 | 4365 | -0.46 | -0.44 | -0.33 | -0.38 |
+| IMR-90 | 291 | -0.67 | -0.55 | -0.42 | -0.58 |
+| H1 | 3964 | -0.64 | -0.60 | -0.43 | -0.53 |
+| HepG2 | 1401 | -0.48 | -0.44 | -0.38 | -0.31 |
+| A549 | 3283 | -0.60 | -0.55 | -0.44 | -0.46 |
+| CD14+ monocyte | 1804 | -0.61 | -0.52 | -0.40 | -0.51 |
+| K562 (held out) | 2883 | -0.28 | -0.30 | -0.36 | 0.04 |
+| HMEC (held out) | 1867 | -0.68 | -0.64 | -0.48 | -0.57 |
+
+Chromosome-bootstrap intervals of the first column are at most +-0.04 wide
+except IMR-90 (-0.77 to -0.55). Methylation at the motif lowers CTCF height
+beyond motif strength in every cell, also in the two held-out cells, and the
+association remains at -0.33 to -0.48 after the flank methylation and the
+H3K27ac and H3K4me3 height of the site are held fixed (the flank column
+partials out strength and flank methylation: motif methylation at the site
+carries information beyond the surrounding methylation). RAD21 (median
+partial -0.53 given strength, -0.39 with flank) and SMC3 (-0.47, -0.40)
+behave alike. The association is correlational: bound CTCF protects its
+CpGs from methylation, so low methylation can be a consequence of binding;
+the data cannot separate the two directions.
+
+Odd-to-even models (boosting, trained on the odd-chromosome sites of the
+other training cells with height z-scored within cell, scored on the
+even-chromosome sites with a covered motif CpG; Spearman, median over cells;
+K562 and HMEC separately in brackets, mean of the two): CTCF strength alone
+0.44 (0.44); + motif methylation 0.70 (0.63); + motif and flank methylation
+0.69 (0.65); + activity 0.56 (0.53); activity + motif + flank methylation 0.72
+(0.67). Motif methylation raises the Spearman correlation by 0.25 over
+strength (median over cells) and by 0.14 over strength + activity (minimum
+over cells 0.06); the gain on K562 is the smallest (0.43 to 0.52 with motif methylation).
+RAD21: 0.43, 0.64, 0.64 (K562 alone 0.55 for the last); SMC3: 0.44, 0.62, 0.62
+(K562 0.56).
+
+### 3. Cross-mark relationships
+
+unseen_cell, signed squared Pearson (R2 in the table `metrics_summary.csv`),
+median over cells; figure `fig_crossmark_predictability.png`.
+
+| mark | group | S | M | own group (W) | other groups (X) | all 12 (O) | O + S | O + M | O + S + M |
+|---|---|---|---|---|---|---|---|---|---|
+| CTCF | ctcf_cohesin | 0.27 | 0.17 | 0.60 | 0.35 | 0.68 | 0.70 | 0.68 | 0.69 |
+| RAD21 | ctcf_cohesin | 0.29 | 0.12 | 0.75 | 0.47 | 0.75 | 0.75 | 0.74 | 0.74 |
+| SMC3 | ctcf_cohesin | 0.30 | 0.20 | 0.76 | 0.57 | 0.78 | 0.78 | 0.77 | 0.77 |
+| H3K27ac | active | 0.18 | 0.41 | 0.81 | 0.57 | 0.81 | 0.80 | 0.82 | 0.81 |
+| H3K4me1 | active | 0.18 | 0.35 | 0.82 | 0.56 | 0.83 | 0.83 | 0.83 | 0.84 |
+| H3K4me2 | active | 0.33 | 0.56 | 0.89 | 0.54 | 0.88 | 0.89 | 0.89 | 0.89 |
+| H3K4me3 | active | 0.36 | 0.43 | 0.78 | 0.39 | 0.77 | 0.80 | 0.79 | 0.79 |
+| H3K9ac | active | 0.32 | 0.54 | 0.88 | 0.62 | 0.89 | 0.89 | 0.89 | 0.90 |
+| H3K36me3 | gene body | 0.22 | 0.46 | 0.57 | 0.45 | 0.64 | 0.67 | 0.67 | 0.68 |
+| H3K79me2 | gene body | 0.21 | 0.43 | 0.60 | 0.57 | 0.79 | 0.81 | 0.81 | 0.82 |
+| H4K20me1 | gene body | 0.28 | 0.14 | 0.57 | 0.42 | 0.63 | 0.66 | 0.64 | 0.67 |
+| H3K27me3 | repressive | 0.23 | 0.21 | 0.11 | 0.54 | 0.53 | 0.58 | 0.64 | 0.67 |
+| H3K9me3 | repressive | 0.13 | 0.04 | 0.09 | 0.38 | 0.40 | 0.36 | 0.37 | 0.35 |
+
+The other twelve tracks explain 0.40 (H3K9me3) to 0.89 (H3K9ac, H3K4me2) of
+the height of a mark on an unseen cell, against 0.10 to 0.60 for sequence
+plus methylation. Adding the other marks to sequence + methylation raises
+the squared Pearson by 0.14 (H3K9me3) to 0.45 (H3K4me1). In the other
+direction, once the other marks are present neither sequence nor methylation
+adds more than a median of 0.02 (sequence) or 0.014 (methylation) for most
+marks (`redundancy_gains.csv`; the intervals of 10 of the 13 marks include 0).
+Exceptions where methylation adds to the other marks and sequence: H3K27me3
++0.044 (interval 0.008 to 0.089) and H3K36me3 +0.039 (0.008 to 0.081),
+H3K9ac +0.003 (0.001 to 0.007, negligible in size); sequence adds to the
+other marks for H3K27me3 (+0.07, interval 0.05 to 0.12) and CTCF (+0.017,
+0.005 to 0.05), and to the other marks + methylation for H3K27me3 (+0.04),
+H3K4me3 (+0.010) and H3K4me1 (+0.004) with intervals above 0 and for H3K27ac
+(-0.007) below 0 (sizes under 0.02 except H3K27me3). Methylation therefore carries information on
+H3K27me3 and H3K36me3 that the other 12 tracks lack, and none that is
+measurable on the cohesin, active and CTCF marks.
+
+Within group against cross group. Active marks are best explained by their
+group (W 0.78 to 0.89) and clearly less by the other groups (X 0.39 to 0.62;
+adding the own group to X raises the squared Pearson by 0.22 to 0.35); the
+CTCF and cohesin group likewise (W 0.60 to 0.76 against X 0.35 to 0.57). Gene
+body marks lean on the other groups nearly as much as on their own (W 0.57 to
+0.60, X 0.42 to 0.57; H3K79me2 gains 0.17 from the other groups). The two
+repressive marks are not predictable from each other (W 0.11 and 0.09) and are
+predicted by the other groups (X 0.54 and 0.38; H3K9me3 +0.29, H3K27me3
++0.46). In the combined model with the other marks, sequence and methylation
+the permutation drop of R2 when a whole group is shuffled is 1.1 to 1.8 for
+the active group on the active marks (H3K4me2 1.80, H3K27ac 1.49, H3K4me3
+1.45, H3K9ac 1.17, H3K4me1 1.09), 0.85 to 1.29 for the CTCF and cohesin
+group on CTCF, RAD21 and SMC3, 1.39 for the gene body group on H4K20me1, 0.57
+for H3K79me2 and 0.44 for H3K36me3, whereas on the active and CTCF and cohesin marks every other
+group, sequence and methylation cost under 0.05. The gene body marks also
+lean on the active group (H4K20me1 0.22, H3K79me2 0.49, H3K36me3 0.15) and
+H3K27me3 on gene body marks (0.20), local methylation (0.25) and
+sequence (0.15). The model reads the group, and within a
+group the individual marks are replaceable in the prediction of another mark,
+which fits the Hi-C finding of section 3 (swaps within a group cost 0.001 to
+0.007, across groups up to 0.15). The repressive group is the exception: its
+two marks are not interchangeable, which section 3 did not test.
+
+### 4. Generalisation limits
+
+seen_cell to unseen_cell on the same seven training cells, sequence +
+methylation model (`generalisation.csv`; median over cells; change of R2 with
+interval over cells): CTCF 0.38 to 0.21 (-0.12, -0.34 to -0.06), H3K27ac
+0.47 to 0.26 (-0.20), H3K27me3 0.46 to 0.26, H3K36me3 0.55 to 0.22 (-0.33),
+H3K4me1 0.45 to 0.18, H3K4me2 0.61 to 0.47, H3K4me3 0.62 to 0.49, H3K79me2
+0.50 to 0.45 (-0.07), H3K9ac 0.67 to 0.60 (-0.07), H3K9me3 0.29 to 0.05
+(-0.34), H4K20me1 0.35 to 0.20, RAD21 0.42 to 0.26, SMC3 0.39 to 0.30. The
+decrease is negative for all 13 marks with intervals below 0. Pearson falls
+less (CTCF 0.64 to 0.56, H3K9ac 0.82 to 0.81, H3K36me3 0.76 to 0.61, H3K9me3
+0.56 to 0.32) and Spearman by 0.05 to 0.18.
+
+Cell-specific scale. The unseen_cell R2 of the combined model is negative
+in 23 of 109 mark-cell pairs, and in every one of them the Pearson
+correlation is positive (0.10 to 0.80). Examples: H3K4me3 in HMEC (R2 -1.00,
+Pearson 0.60), H3K4me1 in K562 (-1.13, 0.59), H3K27ac in H1 (-1.15, 0.26),
+H3K9me3 in K562 (-0.89, 0.28), RAD21 in K562 (-0.44, 0.49), H3K4me3 in
+IMR-90 (-0.79, 0.80). R2 is exactly the squared Pearson minus a bias term
+(difference of the means) and a scale term (difference of the spreads) in
+units of the target variance; the median bias term of the combined model is
+0.02 to 0.13 over marks and the median share of bias in the gap between
+squared Pearson and R2 is 0.75. A cell whose z-scored track has another mean
+level than the training cells (the z-scoring uses fixed training statistics)
+therefore loses R2 without losing rank agreement. Fraction of cells with
+negative R2: 0.44 (H3K9me3), 0.40 (SMC3), 0.33 (H3K27ac, H3K4me1,
+H4K20me1), 0.22 (H3K36me3, H3K4me3), 0.17 (RAD21), 0.11 (H3K27me3, H3K4me2,
+H3K9ac), 0 (CTCF, H3K79me2). On K562 and HMEC (R2 / Pearson of the combined
+model): H3K9ac 0.51 / 0.77 (K562), 0.44 / 0.73 (HMEC); H3K36me3 0.57 / 0.83
+and 0.51 / 0.72; CTCF 0.08 / 0.53 and 0.17 / 0.44. Spearman is below Pearson
+for H3K4me3 (0.22 against 0.72) and the other zero-inflated tracks, so the
+Pearson values of the active marks lean on a few strong peaks.
+
+### Novel against section 35
+
+(a) The variance is partitioned into unique and shared parts with intervals
+over cells; the extended sequence set shows that a part of what section 35
+attributed to methylation is shared with GC and CpG context (unique
+methylation for H3K27ac 0.15 to 0.09, H3K9ac 0.42 to 0.29) and that for
+CTCF, RAD21 and SMC3 the sequence part is the unique one on unseen cells.
+(b) The motif-level analysis (new data: CpG-level methylation inside the
+motif) shows a strong negative association of motif methylation with CTCF,
+RAD21 and SMC3 height beyond motif strength, activity marks and flank
+methylation, which the 1 kb Meth track of section 35 cannot resolve and which
+is plausibly diluted in the 10 kb bin (section 35 found Pearson 0.42 to
+0.52 for CTCF); this dilution was not tested. (c) The
+other twelve marks make methylation redundant for most marks, with H3K27me3
+and H3K36me3 as exceptions, and the group structure of the predictability
+matches the Hi-C group result. (d) The seen_cell to unseen_cell loss and the
+bias term of the cell-specific scale are quantified.
+
+### Limitations
+
+1. Five to nine cells; intervals over cells are wide (the interval of the
+unseen R2 of H3K4me3 reaches -0.79 because of one cell). RAD21 and SMC3 rest
+on 6 and 5 cells (4 and 5 training cells), CTCF on 8; GM23248, CD14+
+monocyte and HMEC lack some of the three. K562 and HMEC are two held-out
+cells; conclusions about held-out cells rest on two cells.
+2. The 10 kb table models are boosting on aggregated features; no sequence
+network (planned for a GPU) is included, so "sequence" means composition,
+motif counts and context, and its unique part is a lower bound.
+3. Permutation importance of correlated groups underestimates each group;
+unique parts are differences of R2 values of separate fits and can be
+negative (suppression) or biased by the 500,000-row subsample.
+4. The z-scoring uses the training statistics of the checkpoint, so R2 on
+a new cell contains the bias term; the squared Pearson partition is given
+next to the R2 partition for that reason. Squared Pearson is not a held-out
+R2 (it assumes a known per-cell affine recalibration) and is a diagnostic.
+5. Other marks as predictors contain NaN for missing tracks; models trained
+mostly on cells with all 13 tracks meet other missingness patterns in the test cell
+(HMEC lacks RAD21 and SMC3, GM23248 lacks CTCF, RAD21 and SMC3).
+6. Motif analysis: the PWM threshold 0.6 admits many unbound sites, and only
+sites with a CpG wholly inside the 15 bp motif and 10 or more reads enter the
+methylation statistics (9 to 13 percent of the sites in the deeper cells, 18 percent of motifs
+contain a CpG, a subset with stronger motif scores, so the height-against-
+strength correlation of this subset, 0.44, is higher than that of all sites,
+0.28). IMR-90 has 291 and HepG2 1,401 such sites. The motif signal is the
+bigWig mean in a 200 bp window, not a peak call. The statistics are descriptive; the
+odd-to-even models use the cell's z-scored height and the other training
+cells; the partial correlations use the even chromosomes of the cell alone.
+Methylation at the motif and CTCF binding are not separable causally.
+7. The RRBS cells (HCT116, MCF-7, HFF) are excluded; HUVEC has no
+methylation.
+8. Figures were written but not visually inspected (the permission to view
+images was declined during this analysis): `fig_variance_partition.png`,
+`fig_crossmark_predictability.png`, `fig_scale_problem.png`,
+`fig_ctcf_height_vs_motif_strength_by_methylation.png`. Every number above
+was read from the CSV tables.
