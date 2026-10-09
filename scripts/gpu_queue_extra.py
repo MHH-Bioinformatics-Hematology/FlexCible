@@ -80,8 +80,10 @@ def jobs():
     import scenario_bench as sb
     J = []
 
-    def cpu(name, cmd, ready, done):
-        J.append(gs.Job(name, f"{NICE} {cmd}", ready, done))
+    def cpu(name, cmd, ready, done, lane=None):
+        j = gs.Job(name, f"{NICE} {cmd}", ready, done)
+        j.lane = lane            # jobs of one lane never run together (shared motif-scan cache)
+        J.append(j)
 
     def gpu(name, cmd, ready, done):
         J.append(gs.Job(name, cmd, ready, done, gpu=True))
@@ -98,7 +100,7 @@ def jobs():
                             ("all12honest_drop_meth", 25000, "mc_all12honest_drop_meth_25kb"),
                             ("all12honest_drop_meth", 10000, "mc_all12honest_drop_meth_10kb")):
         cpu(f"cache_{cache}", f"{M} --runs {run} --res {res} --stage precompute --workers 3",
-            cpg_ok, (lambda c=cache: cache_ok(c)))
+            cpg_ok, (lambda c=cache: cache_ok(c)), lane="cache")
     cpu("seq_cnn_cache", cnn_cmd("cache"), lambda: cnn_data_ok(),
         lambda: (CNN_OUT / "cache" / "seq").exists() and any((CNN_OUT / "cache" / "seq").iterdir()))
 
@@ -273,6 +275,8 @@ def main():
                 os.killpg(p.pid, signal.SIGTERM)
             except OSError:
                 pass
+        for n in running:
+            (MR / f".extra_run_{n}.pid").unlink(missing_ok=True)
         PIDFILE.unlink(missing_ok=True)
         sys.exit(0)
     signal.signal(signal.SIGTERM, stop)
@@ -306,6 +310,9 @@ def main():
             if j.gpu or j.name in running or not j.ready():
                 continue
             if getattr(j, "uses_gpu", False) and not opened:
+                continue
+            lane = getattr(j, "lane", None)
+            if lane and any(getattr(k, "lane", None) == lane and k.name in running for k in all_jobs):
                 continue
             running[j.name] = launch(j)
             cpu_running += 1
