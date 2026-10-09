@@ -1,0 +1,341 @@
+res_kb,set,group,cell,variant,selected_tau,selected_k,refs_with_S
+25,akita413,heldout5,k562,hicsim (ORACLE),0.02,,12.0
+25,akita413,heldout5,k562,chip_gw,0.05,5,12.0
+25,akita413,heldout5,k562,chip_gw_sp,0.05,3,12.0
+25,akita413,heldout5,k562,ctcfk27_gw,0.075,5,12.0
+25,akita413,heldout5,k562,chip_loc,0.075,5,12.0
+25,akita413,heldout5,k562,ctcfk27_loc,0.15,5,12.0
+25,akita413,heldout5,k562,meth_gw,inf,all,10.0
+25,akita413,heldout5,k562,meth_loc,1.0,all,10.0
+25,akita413,heldout5,k562,comb_gw,0.5,all,12.0
+25,akita413,heldout5,k562,comb_loc,0.2,all,12.0
+25,akita413,heldout5,hmec,hicsim (ORACLE),0.03,,12.0
+25,akita413,heldout5,hmec,chip_gw,0.05,5,12.0
+25,akita413,heldout5,hmec,chip_gw_sp,0.05,3,12.0
+25,akita413,heldout5,hmec,ctcfk27_gw,0.075,5,12.0
+25,akita413,heldout5,hmec,chip_loc,0.075,5,12.0
+25,akita413,heldout5,hmec,ctcfk27_loc,0.15,5,12.0
+25,akita413,heldout5,hmec,meth_gw,inf,all,10.0
+25,akita413,heldout5,hmec,meth_loc,1.0,all,10.0
+25,akita413,heldout5,hmec,comb_gw,0.5,all,12.0
+25,akita413,heldout5,hmec,comb_loc,0.2,all,12.0
+25,akita413,heldout5,huvec,hicsim (ORACLE),0.05,,12.0
+25,akita413,heldout5,huvec,chip_gw,0.05,5,12.0
+25,akita413,heldout5,huvec,chip_gw_sp,0.05,3,12.0
+25,akita413,heldout5,huvec,ctcfk27_gw,0.075,5,12.0
+25,akita413,heldout5,huvec,chip_loc,0.075,5,12.0
+25,akita413,heldout5,huvec,ctcfk27_loc,0.15,5,12.0
+25,akita413,heldout5,huvec,meth_gw,inf,all,0.0
+25,akita413,heldout5,huvec,meth_loc,1.0,all,0.0
+25,akita413,heldout5,huvec,comb_gw,0.5,all,12.0
+25,akita413,heldout5,huvec,comb_loc,0.2,all,12.0
+25,akita413,heldout5,hmec_deep,hicsim (ORACLE),0.03,,12.0
+25,akita413,heldout5,hmec_deep,chip_gw,0.05,5,12.0
+25,akita413,heldout5,hmec_deep,chip_gw_sp,0.05,3,12.0
+25,akita413,heldout5,hmec_deep,ctcfk27_gw,0.075,5,12.0
+25,akita413,heldout5,hmec_deep,chip_loc,0.075,5,12.0
+25,akita413,heldout5,hmec_deep,ctcfk27_loc,0.15,5,12.0
+25,akita413,heldout5,hmec_deep,meth_gw,inf,all,10.0
+25,akita413,heldout5,hmec_deep,meth_loc,1.0,all,10.0
+25,akita413,heldout5,hmec_deep,comb_gw,0.5,all,12.0
+25,akita413,heldout5,hmec_deep,comb_loc,0.2,all,12.0
+25,akita413,heldout5,huvec_deep,hicsim (ORACLE),inf,,12.0
+25,akita413,heldout5,huvec_deep,chip_gw,0.05,5,12.0
+25,akita413,heldout5,huvec_deep,chip_gw_sp,0.05,3,12.0
+25,akita413,heldout5,huvec_deep,ctcfk27_gw,0.075,5,12.0
+25,akita413,heldout5,huvec_deep,chip_loc,0.075,5,12.0
+25,akita413,heldout5,huvec_deep,ctcfk27_loc,0.15,5,12.0
+25,akita413,heldout5,huvec_deep,meth_gw,inf,all,0.0
+25,akita413,heldout5,huvec_deep,meth_loc,1.0,all,0.0
+25,akita413,heldout5,huvec_deep,comb_gw,0.5,all,12.0
+25,akita413,heldout5,huvec_deep,comb_loc,0.2,all,12.0
+25,akita413,train12,gm12878,hicsim (ORACLE),inf,,11.0
+25,akita413,train12,gm12878,chip_gw,0.05,5,11.0
+25,akita413,train12,gm12878,chip_gw_sp,0.05,3,11.0
+25,akita413,train12,gm12878,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,gm12878,chip_loc,0.1,5,11.0
+25,akita413,train12,gm12878,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,gm12878,meth_gw,inf,all,9.0
+25,akita413,train12,gm12878,meth_loc,1.0,all,9.0
+25,akita413,train12,gm12878,comb_gw,0.5,all,11.0
+25,akita413,train12,gm12878,comb_loc,0.2,all,11.0
+25,akita413,train12,imr90,hicsim (ORACLE),0.02,,11.0
+25,akita413,train12,imr90,chip_gw,0.05,5,11.0
+25,akita413,train12,imr90,chip_gw_sp,0.075,all,11.0
+25,akita413,train12,imr90,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,imr90,chip_loc,0.1,5,11.0
+25,akita413,train12,imr90,ctcfk27_loc,0.15,5,11.0
+25,akita413,train12,imr90,meth_gw,inf,all,9.0
+25,akita413,train12,imr90,meth_loc,1.0,all,9.0
+25,akita413,train12,imr90,comb_gw,0.5,all,11.0
+25,akita413,train12,imr90,comb_loc,0.2,all,11.0
+25,akita413,train12,hct116,hicsim (ORACLE),0.02,,11.0
+25,akita413,train12,hct116,chip_gw,0.05,5,11.0
+25,akita413,train12,hct116,chip_gw_sp,0.05,3,11.0
+25,akita413,train12,hct116,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,hct116,chip_loc,0.075,5,11.0
+25,akita413,train12,hct116,ctcfk27_loc,0.15,5,11.0
+25,akita413,train12,hct116,meth_gw,inf,all,9.0
+25,akita413,train12,hct116,meth_loc,0.5,all,9.0
+25,akita413,train12,hct116,comb_gw,0.5,all,11.0
+25,akita413,train12,hct116,comb_loc,0.2,all,11.0
+25,akita413,train12,hff,hicsim (ORACLE),0.03,,11.0
+25,akita413,train12,hff,chip_gw,0.05,5,11.0
+25,akita413,train12,hff,chip_gw_sp,0.05,all,11.0
+25,akita413,train12,hff,ctcfk27_gw,0.1,5,11.0
+25,akita413,train12,hff,chip_loc,0.1,5,11.0
+25,akita413,train12,hff,ctcfk27_loc,0.15,5,11.0
+25,akita413,train12,hff,meth_gw,inf,all,9.0
+25,akita413,train12,hff,meth_loc,1.0,all,9.0
+25,akita413,train12,hff,comb_gw,0.5,all,11.0
+25,akita413,train12,hff,comb_loc,0.2,all,11.0
+25,akita413,train12,h1,hicsim (ORACLE),0.02,,11.0
+25,akita413,train12,h1,chip_gw,0.05,5,11.0
+25,akita413,train12,h1,chip_gw_sp,0.05,5,11.0
+25,akita413,train12,h1,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,h1,chip_loc,0.1,5,11.0
+25,akita413,train12,h1,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,h1,meth_gw,inf,all,9.0
+25,akita413,train12,h1,meth_loc,1.0,all,9.0
+25,akita413,train12,h1,comb_gw,0.5,all,11.0
+25,akita413,train12,h1,comb_loc,0.2,5,11.0
+25,akita413,train12,hepg2,hicsim (ORACLE),0.02,,11.0
+25,akita413,train12,hepg2,chip_gw,0.05,5,11.0
+25,akita413,train12,hepg2,chip_gw_sp,0.05,3,11.0
+25,akita413,train12,hepg2,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,hepg2,chip_loc,0.1,5,11.0
+25,akita413,train12,hepg2,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,hepg2,meth_gw,inf,all,9.0
+25,akita413,train12,hepg2,meth_loc,1.0,all,9.0
+25,akita413,train12,hepg2,comb_gw,0.5,all,11.0
+25,akita413,train12,hepg2,comb_loc,0.2,all,11.0
+25,akita413,train12,a549,hicsim (ORACLE),0.03,,11.0
+25,akita413,train12,a549,chip_gw,0.05,5,11.0
+25,akita413,train12,a549,chip_gw_sp,0.05,3,11.0
+25,akita413,train12,a549,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,a549,chip_loc,0.075,5,11.0
+25,akita413,train12,a549,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,a549,meth_gw,inf,all,9.0
+25,akita413,train12,a549,meth_loc,1.0,all,9.0
+25,akita413,train12,a549,comb_gw,1.0,all,11.0
+25,akita413,train12,a549,comb_loc,0.2,all,11.0
+25,akita413,train12,nhek,hicsim (ORACLE),0.03,,11.0
+25,akita413,train12,nhek,chip_gw,0.05,5,11.0
+25,akita413,train12,nhek,chip_gw_sp,0.05,5,11.0
+25,akita413,train12,nhek,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,nhek,chip_loc,0.075,5,11.0
+25,akita413,train12,nhek,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,nhek,meth_gw,inf,all,0.0
+25,akita413,train12,nhek,meth_loc,1.0,all,0.0
+25,akita413,train12,nhek,comb_gw,0.5,all,11.0
+25,akita413,train12,nhek,comb_loc,0.2,all,11.0
+25,akita413,train12,gm23248,hicsim (ORACLE),0.03,,11.0
+25,akita413,train12,gm23248,chip_gw,0.05,5,11.0
+25,akita413,train12,gm23248,chip_gw_sp,0.075,all,11.0
+25,akita413,train12,gm23248,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,gm23248,chip_loc,0.075,5,11.0
+25,akita413,train12,gm23248,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,gm23248,meth_gw,inf,all,9.0
+25,akita413,train12,gm23248,meth_loc,inf,all,9.0
+25,akita413,train12,gm23248,comb_gw,1.0,all,11.0
+25,akita413,train12,gm23248,comb_loc,0.3,all,11.0
+25,akita413,train12,mcf7,hicsim (ORACLE),0.02,,11.0
+25,akita413,train12,mcf7,chip_gw,0.05,5,11.0
+25,akita413,train12,mcf7,chip_gw_sp,0.05,all,11.0
+25,akita413,train12,mcf7,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,mcf7,chip_loc,0.075,5,11.0
+25,akita413,train12,mcf7,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,mcf7,meth_gw,inf,all,9.0
+25,akita413,train12,mcf7,meth_loc,1.0,all,9.0
+25,akita413,train12,mcf7,comb_gw,0.5,all,11.0
+25,akita413,train12,mcf7,comb_loc,0.2,all,11.0
+25,akita413,train12,cd14mono,hicsim (ORACLE),0.02,,11.0
+25,akita413,train12,cd14mono,chip_gw,0.05,5,11.0
+25,akita413,train12,cd14mono,chip_gw_sp,0.075,all,11.0
+25,akita413,train12,cd14mono,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,cd14mono,chip_loc,0.075,5,11.0
+25,akita413,train12,cd14mono,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,cd14mono,meth_gw,inf,all,9.0
+25,akita413,train12,cd14mono,meth_loc,inf,all,9.0
+25,akita413,train12,cd14mono,comb_gw,0.5,all,11.0
+25,akita413,train12,cd14mono,comb_loc,0.2,all,11.0
+25,akita413,train12,pc9,hicsim (ORACLE),0.03,,11.0
+25,akita413,train12,pc9,chip_gw,0.05,5,11.0
+25,akita413,train12,pc9,chip_gw_sp,0.05,3,11.0
+25,akita413,train12,pc9,ctcfk27_gw,0.075,5,11.0
+25,akita413,train12,pc9,chip_loc,0.1,5,11.0
+25,akita413,train12,pc9,ctcfk27_loc,0.1,5,11.0
+25,akita413,train12,pc9,meth_gw,inf,all,0.0
+25,akita413,train12,pc9,meth_loc,1.0,all,0.0
+25,akita413,train12,pc9,comb_gw,inf,all,11.0
+25,akita413,train12,pc9,comb_loc,0.2,all,11.0
+25,testwin,heldout5,k562,hicsim (ORACLE),0.05,,12.0
+25,testwin,heldout5,k562,chip_gw,0.05,5,12.0
+25,testwin,heldout5,k562,chip_gw_sp,0.05,3,12.0
+25,testwin,heldout5,k562,ctcfk27_gw,0.075,5,12.0
+25,testwin,heldout5,k562,chip_loc,0.075,5,12.0
+25,testwin,heldout5,k562,ctcfk27_loc,0.15,5,12.0
+25,testwin,heldout5,k562,meth_gw,inf,all,10.0
+25,testwin,heldout5,k562,meth_loc,1.0,all,10.0
+25,testwin,heldout5,k562,comb_gw,0.5,all,12.0
+25,testwin,heldout5,k562,comb_loc,0.2,all,12.0
+25,testwin,heldout5,hmec,hicsim (ORACLE),0.03,,12.0
+25,testwin,heldout5,hmec,chip_gw,0.05,5,12.0
+25,testwin,heldout5,hmec,chip_gw_sp,0.05,3,12.0
+25,testwin,heldout5,hmec,ctcfk27_gw,0.075,5,12.0
+25,testwin,heldout5,hmec,chip_loc,0.075,5,12.0
+25,testwin,heldout5,hmec,ctcfk27_loc,0.15,5,12.0
+25,testwin,heldout5,hmec,meth_gw,inf,all,10.0
+25,testwin,heldout5,hmec,meth_loc,1.0,all,10.0
+25,testwin,heldout5,hmec,comb_gw,0.5,all,12.0
+25,testwin,heldout5,hmec,comb_loc,0.2,all,12.0
+25,testwin,heldout5,huvec,hicsim (ORACLE),0.05,,12.0
+25,testwin,heldout5,huvec,chip_gw,0.05,5,12.0
+25,testwin,heldout5,huvec,chip_gw_sp,0.05,3,12.0
+25,testwin,heldout5,huvec,ctcfk27_gw,0.075,5,12.0
+25,testwin,heldout5,huvec,chip_loc,0.075,5,12.0
+25,testwin,heldout5,huvec,ctcfk27_loc,0.15,5,12.0
+25,testwin,heldout5,huvec,meth_gw,inf,all,0.0
+25,testwin,heldout5,huvec,meth_loc,1.0,all,0.0
+25,testwin,heldout5,huvec,comb_gw,0.5,all,12.0
+25,testwin,heldout5,huvec,comb_loc,0.2,all,12.0
+25,testwin,heldout5,hmec_deep,hicsim (ORACLE),0.03,,12.0
+25,testwin,heldout5,hmec_deep,chip_gw,0.05,5,12.0
+25,testwin,heldout5,hmec_deep,chip_gw_sp,0.05,3,12.0
+25,testwin,heldout5,hmec_deep,ctcfk27_gw,0.075,5,12.0
+25,testwin,heldout5,hmec_deep,chip_loc,0.075,5,12.0
+25,testwin,heldout5,hmec_deep,ctcfk27_loc,0.15,5,12.0
+25,testwin,heldout5,hmec_deep,meth_gw,inf,all,10.0
+25,testwin,heldout5,hmec_deep,meth_loc,1.0,all,10.0
+25,testwin,heldout5,hmec_deep,comb_gw,0.5,all,12.0
+25,testwin,heldout5,hmec_deep,comb_loc,0.2,all,12.0
+25,testwin,heldout5,huvec_deep,hicsim (ORACLE),0.3,,12.0
+25,testwin,heldout5,huvec_deep,chip_gw,0.05,5,12.0
+25,testwin,heldout5,huvec_deep,chip_gw_sp,0.05,3,12.0
+25,testwin,heldout5,huvec_deep,ctcfk27_gw,0.075,5,12.0
+25,testwin,heldout5,huvec_deep,chip_loc,0.075,5,12.0
+25,testwin,heldout5,huvec_deep,ctcfk27_loc,0.15,5,12.0
+25,testwin,heldout5,huvec_deep,meth_gw,inf,all,0.0
+25,testwin,heldout5,huvec_deep,meth_loc,1.0,all,0.0
+25,testwin,heldout5,huvec_deep,comb_gw,0.5,all,12.0
+25,testwin,heldout5,huvec_deep,comb_loc,0.2,all,12.0
+25,testwin,train12,gm12878,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,gm12878,chip_gw,0.05,5,11.0
+25,testwin,train12,gm12878,chip_gw_sp,0.05,3,11.0
+25,testwin,train12,gm12878,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,gm12878,chip_loc,0.1,5,11.0
+25,testwin,train12,gm12878,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,gm12878,meth_gw,inf,all,9.0
+25,testwin,train12,gm12878,meth_loc,1.0,all,9.0
+25,testwin,train12,gm12878,comb_gw,0.5,all,11.0
+25,testwin,train12,gm12878,comb_loc,0.2,all,11.0
+25,testwin,train12,imr90,hicsim (ORACLE),0.05,,11.0
+25,testwin,train12,imr90,chip_gw,0.05,5,11.0
+25,testwin,train12,imr90,chip_gw_sp,0.075,all,11.0
+25,testwin,train12,imr90,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,imr90,chip_loc,0.1,5,11.0
+25,testwin,train12,imr90,ctcfk27_loc,0.15,5,11.0
+25,testwin,train12,imr90,meth_gw,inf,all,9.0
+25,testwin,train12,imr90,meth_loc,1.0,all,9.0
+25,testwin,train12,imr90,comb_gw,0.5,all,11.0
+25,testwin,train12,imr90,comb_loc,0.2,all,11.0
+25,testwin,train12,hct116,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,hct116,chip_gw,0.05,5,11.0
+25,testwin,train12,hct116,chip_gw_sp,0.05,3,11.0
+25,testwin,train12,hct116,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,hct116,chip_loc,0.075,5,11.0
+25,testwin,train12,hct116,ctcfk27_loc,0.15,5,11.0
+25,testwin,train12,hct116,meth_gw,inf,all,9.0
+25,testwin,train12,hct116,meth_loc,0.5,all,9.0
+25,testwin,train12,hct116,comb_gw,0.5,all,11.0
+25,testwin,train12,hct116,comb_loc,0.2,all,11.0
+25,testwin,train12,hff,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,hff,chip_gw,0.05,5,11.0
+25,testwin,train12,hff,chip_gw_sp,0.05,all,11.0
+25,testwin,train12,hff,ctcfk27_gw,0.1,5,11.0
+25,testwin,train12,hff,chip_loc,0.1,5,11.0
+25,testwin,train12,hff,ctcfk27_loc,0.15,5,11.0
+25,testwin,train12,hff,meth_gw,inf,all,9.0
+25,testwin,train12,hff,meth_loc,1.0,all,9.0
+25,testwin,train12,hff,comb_gw,0.5,all,11.0
+25,testwin,train12,hff,comb_loc,0.2,all,11.0
+25,testwin,train12,h1,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,h1,chip_gw,0.05,5,11.0
+25,testwin,train12,h1,chip_gw_sp,0.05,5,11.0
+25,testwin,train12,h1,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,h1,chip_loc,0.1,5,11.0
+25,testwin,train12,h1,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,h1,meth_gw,inf,all,9.0
+25,testwin,train12,h1,meth_loc,1.0,all,9.0
+25,testwin,train12,h1,comb_gw,0.5,all,11.0
+25,testwin,train12,h1,comb_loc,0.2,5,11.0
+25,testwin,train12,hepg2,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,hepg2,chip_gw,0.05,5,11.0
+25,testwin,train12,hepg2,chip_gw_sp,0.05,3,11.0
+25,testwin,train12,hepg2,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,hepg2,chip_loc,0.1,5,11.0
+25,testwin,train12,hepg2,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,hepg2,meth_gw,inf,all,9.0
+25,testwin,train12,hepg2,meth_loc,1.0,all,9.0
+25,testwin,train12,hepg2,comb_gw,0.5,all,11.0
+25,testwin,train12,hepg2,comb_loc,0.2,all,11.0
+25,testwin,train12,a549,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,a549,chip_gw,0.05,5,11.0
+25,testwin,train12,a549,chip_gw_sp,0.05,3,11.0
+25,testwin,train12,a549,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,a549,chip_loc,0.075,5,11.0
+25,testwin,train12,a549,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,a549,meth_gw,inf,all,9.0
+25,testwin,train12,a549,meth_loc,1.0,all,9.0
+25,testwin,train12,a549,comb_gw,1.0,all,11.0
+25,testwin,train12,a549,comb_loc,0.2,all,11.0
+25,testwin,train12,nhek,hicsim (ORACLE),0.02,,11.0
+25,testwin,train12,nhek,chip_gw,0.05,5,11.0
+25,testwin,train12,nhek,chip_gw_sp,0.05,5,11.0
+25,testwin,train12,nhek,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,nhek,chip_loc,0.075,5,11.0
+25,testwin,train12,nhek,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,nhek,meth_gw,inf,all,0.0
+25,testwin,train12,nhek,meth_loc,1.0,all,0.0
+25,testwin,train12,nhek,comb_gw,0.5,all,11.0
+25,testwin,train12,nhek,comb_loc,0.2,all,11.0
+25,testwin,train12,gm23248,hicsim (ORACLE),0.05,,11.0
+25,testwin,train12,gm23248,chip_gw,0.05,5,11.0
+25,testwin,train12,gm23248,chip_gw_sp,0.075,all,11.0
+25,testwin,train12,gm23248,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,gm23248,chip_loc,0.075,5,11.0
+25,testwin,train12,gm23248,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,gm23248,meth_gw,inf,all,9.0
+25,testwin,train12,gm23248,meth_loc,inf,all,9.0
+25,testwin,train12,gm23248,comb_gw,1.0,all,11.0
+25,testwin,train12,gm23248,comb_loc,0.3,all,11.0
+25,testwin,train12,mcf7,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,mcf7,chip_gw,0.05,5,11.0
+25,testwin,train12,mcf7,chip_gw_sp,0.05,all,11.0
+25,testwin,train12,mcf7,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,mcf7,chip_loc,0.075,5,11.0
+25,testwin,train12,mcf7,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,mcf7,meth_gw,inf,all,9.0
+25,testwin,train12,mcf7,meth_loc,1.0,all,9.0
+25,testwin,train12,mcf7,comb_gw,0.5,all,11.0
+25,testwin,train12,mcf7,comb_loc,0.2,all,11.0
+25,testwin,train12,cd14mono,hicsim (ORACLE),0.03,,11.0
+25,testwin,train12,cd14mono,chip_gw,0.05,5,11.0
+25,testwin,train12,cd14mono,chip_gw_sp,0.075,all,11.0
+25,testwin,train12,cd14mono,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,cd14mono,chip_loc,0.075,5,11.0
+25,testwin,train12,cd14mono,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,cd14mono,meth_gw,inf,all,9.0
+25,testwin,train12,cd14mono,meth_loc,inf,all,9.0
+25,testwin,train12,cd14mono,comb_gw,0.5,all,11.0
+25,testwin,train12,cd14mono,comb_loc,0.2,all,11.0
+25,testwin,train12,pc9,hicsim (ORACLE),0.05,,11.0
+25,testwin,train12,pc9,chip_gw,0.05,5,11.0
+25,testwin,train12,pc9,chip_gw_sp,0.05,3,11.0
+25,testwin,train12,pc9,ctcfk27_gw,0.075,5,11.0
+25,testwin,train12,pc9,chip_loc,0.1,5,11.0
+25,testwin,train12,pc9,ctcfk27_loc,0.1,5,11.0
+25,testwin,train12,pc9,meth_gw,inf,all,0.0
+25,testwin,train12,pc9,meth_loc,1.0,all,0.0
+25,testwin,train12,pc9,comb_gw,inf,all,11.0
+25,testwin,train12,pc9,comb_loc,0.2,all,11.0

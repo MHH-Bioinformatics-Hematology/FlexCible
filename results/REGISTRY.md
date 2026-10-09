@@ -3820,3 +3820,202 @@ other cells' consensus maps during fitting. A model that learns where to deviate
 from the consensus may use variance in ways a pixel-wise shrinkage cannot, so
 this analysis bounds only the variance-alone route. Windows in the test-window
 set overlap by half, so its intervals are optimistic. 5 kb not run.
+
+## 40. Similarity-weighted consensus against the plain mean (FINAL, 25 and 10 kb)
+
+Question: does weighting the other cells' Hi-C by how similar their ChIP profiles
+(or DNA methylation) are to the target cell's predict the target's Hi-C better
+than the plain unweighted mean of the other cells' maps (the leave-one-out
+consensus)? CPU only, no model. Script `scripts/consensus_weighted.py`, tables and
+figures in `results/consensus_weighted/` (`summary_<k>kb.csv`, `per_cell_<k>kb.csv`,
+`grid_by_cell_<k>kb.csv`, `selected_params_<k>kb.csv`, `fit_selection_<k>kb.csv`,
+`rank_agreement_<k>kb.csv`, `similarity_<k>kb.csv`, `similarity_by_track_<k>kb.csv`,
+`consensus_weighted_<k>kb.png`). 5 kb was not run.
+
+Setup. Maps, regions and evaluation as in section 39 (proper O/E maps,
+`consensus_variance_diag.py` loading; median per-region Pearson on the upper
+triangle, k >= 2; the 413 Akita test regions and the disjoint test windows of
+cache mc_all12ref, 295 at 25 kb and 311 at 10 kb). The plain consensus alone
+reproduces 0.8977 (25 kb) and 0.8586 (10 kb) for the 5 held-out cells and 0.9223
+and 0.8867 for the training cells. Targets: the 5 held-out cells (references =
+the 12 training cells) and the 12 training cells (strict leave-one-out, the 11
+other training cells). The similarity S(T, c) uses only input tracks (13 ChIP
+bigWigs as the model reads them, log1p of the binned mean signal; the Meth track
+of section 27), never any Hi-C of T. HMEC and HMEC deep share one set of inputs, as
+do HUVEC and HUVEC deep.
+
+Similarity variants. chip_gw: Pearson across all genome bins per track, mean over
+the tracks both cells have (a cell with missing tracks is compared on the common
+tracks; GM23248 has no CTCF, HFF 7 of 13 tracks); chip_gw_sp: the same with
+Spearman; ctcfk27_gw: CTCF and H3K27ac only; chip_loc and ctcfk27_loc: the same
+Pearson computed inside each evaluation window (about 42 bins at 25 kb, 105 at
+10 kb for the 413 regions), so the weights vary by locus; meth_gw, meth_loc: Meth
+only; comb_gw, comb_loc: mean of the available ChIP and Meth similarities.
+Methylation exists for 10 of the 12 training cells (WGBS for 7, lifted hg19 RRBS
+for HCT116, MCF-7 and HFF; none for NHEK and PC-9) and for K562 and HMEC (HMEC
+deep), none for HUVEC. A reference without Meth takes the mean of the defined
+similarities of its row; a target without Meth gets equal weights (meth variants
+are informative for 3 of 5 held-out cells and 10 of 12 training cells; comb
+variants fall back to ChIP only).
+
+Weights. softmax(S / tau) over the references, tau in {inf, 1, 0.5, 0.3, 0.2, 0.15,
+0.1, 0.075, 0.05, 0.03, 0.02, 0.01, 0.005}, and top-k with equal weights (k = 5, 3,
+2, 1, all); inf and "all" are the plain mean, k = 1 is the limit tau -> 0. tau and k
+are chosen per variant on 300 random training-chromosome windows (the "fit" set of
+section 39, 0 overlaps with the 413 regions and with the test windows, checked in
+the script) by the pooled median per-window Pearson with the 12 training cells as
+targets, each with its own leave-one-out references, leaving the target out of its
+own selection (a training target never sees its own Hi-C in the choice; Meth
+variants use only training cells with Meth). No held-out cell, test region or test
+window selects anything. Selected: chip_loc tau 0.075 (K562 and the held-out set)
+or 0.1 (training cells) with k = 5 at 25 kb, tau 0.1 and k = 5 at 10 kb; chip_gw
+tau 0.05 (25 kb) and 0.075 (10 kb); the Meth-only variants select tau = inf or 1
+(plain mean or nearly so). On the fit windows the pooled median Pearson of the 12
+training cells is 0.8925 (plain) and 0.9078 (chip_loc, tau 0.1) at 25 kb, 0.8598 and
+0.8745 at 10 kb.
+
+Reference rows (ORACLE, use the target's own Hi-C, not achievable): best single
+other cell; non-negative least-squares weights fitted on the evaluation pixels
+(in-sample) and 2-fold cross-fitted over regions; softmax of the true Hi-C
+similarity (median per-region Pearson of T with c) with the best tau chosen on the
+evaluation regions. These oracles give one weight vector per target, constant over
+loci, so they bound genome-wide weighting only, not locus-varying weights.
+
+(a) Median per-region Pearson on the 413 Akita regions, 5 held-out cells. Column
+"delta" is the median over the 5 cells of the per-cell difference (variant minus
+plain, difference of the two region-medians), "won" the cells with delta > 0.0001,
+95% interval from a bootstrap over regions (shared resample across cells) of that
+median over cells:
+
+| variant (selected) | 25 kb median over cells | 25 kb delta (95% CI) | 25 kb won | 10 kb median over cells | 10 kb delta (95% CI) | 10 kb won |
+|---|---|---|---|---|---|---|
+| plain mean | 0.8977 | 0 | | 0.8586 | 0 | |
+| chip_gw softmax | 0.9051 | 0.0024 (-0.0018 to 0.0071) | 3 | 0.8659 | 0.0006 (-0.0024 to 0.0064) | 3 |
+| chip_gw top-k | 0.8972 | -0.0031 (-0.0081 to -0.0003) | 0 | 0.8598 | -0.0091 (-0.0127 to -0.0035) | 1 |
+| chip_gw Spearman softmax | 0.9035 | 0.0006 (-0.0040 to 0.0058) | 3 | 0.8608 | 0.0010 (-0.0029 to 0.0061) | 3 |
+| ctcfk27_gw softmax | 0.9052 | 0.0012 (-0.0018 to 0.0050) | 3 | 0.8660 | -0.0023 (-0.0042 to 0.0031) | 2 |
+| **chip_loc softmax** | **0.9131** | **0.0080 (0.0052 to 0.0126)** | **5** | **0.8731** | **0.0060 (0.0024 to 0.0103)** | **5** |
+| chip_loc top-k | 0.9039 | 0.0021 (-0.0009 to 0.0069) | 5 | 0.8617 | -0.0030 (-0.0070 to 0.0032) | 1 |
+| ctcfk27_loc softmax | 0.9061 | 0.0048 (0.0020 to 0.0094) | 5 | 0.8709 | 0.0040 (-0.0008 to 0.0096) | 4 |
+| meth_gw softmax | 0.8977 | 0.0000 | 0 of 3 informative | 0.8586 | 0.0000 | 0 of 3 |
+| meth_loc softmax | 0.8990 | 0.0000 (0.0000 to 0.0014) | 2 of 3 | 0.8613 | 0.0000 (0.0000 to 0.0013) | 2 of 3 |
+| comb_gw softmax | 0.9013 | -0.0002 (-0.0007 to 0.0025) | 2 | 0.8588 | 0.0002 (-0.0004 to 0.0016) | 3 |
+| comb_loc softmax | 0.9038 | 0.0049 (0.0023 to 0.0078) | 5 | 0.8620 | 0.0034 (0.0011 to 0.0057) | 5 |
+| ORACLE best single other cell | 0.8821 | -0.0153 | 0 | 0.8267 | -0.0417 | 0 |
+| ORACLE NNLS in-sample | 0.9069 | 0.0052 | 5 | 0.8692 | 0.0040 | 3 |
+| ORACLE NNLS cross-fitted | 0.9057 | 0.0044 | 5 | 0.8671 | 0.0037 | 3 |
+| ORACLE softmax of Hi-C similarity | 0.9047 | 0.0069 | 4 | 0.8698 | 0.0028 | 5 |
+
+The median over cells of the cell medians (column "median over cells") differs
+from plain by more than the median of the per-cell deltas (chip_loc: 0.9131 against
+0.8977, a difference of 0.0154) because the cells change rank order; the decision
+rule below uses the smaller, paired median of deltas. Weighted tau = 0.005, k = 1
+(the single most similar cell) loses 0.047 (25 kb, chip_gw) to 0.053 (meth_gw): the
+best-looking single neighbour is worse than the 12-cell mean in every held-out cell.
+Per cell, chip_loc softmax (413 regions, delta with bootstrap interval): 25 kb K562
++0.0159 (0.0084 to 0.0217), HMEC +0.0080 (0.0015 to 0.0128), HUVEC +0.0058
+(-0.0005 to 0.0162), HMEC deep +0.0090 (0.0045 to 0.0137), HUVEC deep +0.0079
+(0.0016 to 0.0136); 10 kb +0.0145, +0.0018 (-0.0020 to 0.0108), +0.0081, +0.0052,
++0.0060. Share of regions above the plain mean 0.61 to 0.68 (25 kb) and 0.61 to
+0.69 (10 kb).
+
+(b) Same on the disjoint test windows (windows overlap by half, so the intervals are
+optimistic), 5 held-out cells, median of per-cell deltas (won): chip_loc softmax
++0.0183 (5) at 25 kb and +0.0079 (5) at 10 kb; ctcfk27_loc +0.0087 (5) and +0.0097
+(5); comb_loc +0.0088 (5) and +0.0032 (5); chip_gw +0.0042 (3) and +0.0040 (4);
+ctcfk27_gw +0.0027 (4) and +0.0048 (5); meth_gw 0 and meth_loc +0.0016 (3 of 3, 25
+kb) and 0.0000 (10 kb); ORACLE NNLS cross-fitted +0.0115 and +0.0045; ORACLE
+Hi-C-similarity softmax +0.0064 and +0.0052.
+
+(c) 12 training cells, strict leave-one-out, 413 regions, delta (cells won of 12):
+chip_loc softmax +0.0068 (11) at 25 kb and +0.0086 (11) at 10 kb; chip_gw softmax
++0.0076 (9) and +0.0050 (12); ctcfk27_gw +0.0042 (10) and +0.0068 (11); ctcfk27_loc
++0.0044 (11) and +0.0072 (11); comb_loc +0.0014 (7) and +0.0011 (8); meth and comb_gw
+0.0000 to +0.0001; top-k variants chip_gw +0.0064 (9) and +0.0049 (9), chip_loc +0.0052
+(9) and +0.0034 (8), ctcfk27_loc +0.0006 (6) and +0.0036 (8); chip_gw Spearman softmax
++0.0023 (8) and +0.0038 (9). ORACLE
+NNLS cross-fitted +0.0131 (12) and +0.0136 (12); ORACLE Hi-C-similarity softmax +0.0112
+and +0.0079 (11 won, 1 tie); best single cell -0.0195 (4 won) and -0.0316 (1 won).
+Per training cell chip_loc 25 kb: gm12878 +0.0164, imr90 +0.0101, hct116 +0.0040, hff
++0.0201, h1 +0.0053, hepg2 +0.0036, a549 +0.0037, nhek -0.0016, gm23248 +0.0150, mcf7
++0.0069, cd14mono +0.0233, pc9 +0.0067.
+
+(d) Does S rank the other cells like the true Hi-C similarity? Spearman between S
+and the median per-region Pearson of the Hi-C maps of T and c, over the 11 or 12
+references, 413 regions, median (range) over targets, held-out / training:
+
+| S | 25 kb held-out | 25 kb training | 10 kb held-out | 10 kb training |
+|---|---|---|---|---|
+| chip_gw | 0.69 (0.55 to 0.76) | 0.62 (0.32 to 0.86) | 0.69 (0.39 to 0.76) | 0.50 (-0.02 to 0.83) |
+| chip_loc | 0.69 (0.55 to 0.82) | 0.57 (0.15 to 0.90) | 0.64 (0.24 to 0.75) | 0.38 (-0.16 to 0.87) |
+| ctcfk27_gw | 0.41 (0.33 to 0.55) | 0.49 (-0.12 to 0.93) | 0.36 (0.22 to 0.38) | 0.45 (-0.08 to 0.91) |
+| ctcfk27_loc | 0.43 (0.29 to 0.52) | 0.68 (-0.17 to 0.87) | 0.34 (0.06 to 0.40) | 0.55 (-0.13 to 0.90) |
+| chip_gw Spearman | 0.59 (0.14 to 0.64) | 0.37 (-0.34 to 0.74) | 0.54 (0.19 to 0.70) | 0.40 (-0.11 to 0.78) |
+| meth_gw | 0.27 (0.21 to 0.28; 3 cells) | 0.15 (-0.83 to 0.37; 10 cells) | 0.39 (0.36 to 0.41) | 0.16 (-0.68 to 0.60) |
+| comb_gw | 0.38 (0.11 to 0.69) | 0.27 (-0.40 to 0.55) | 0.39 (0.16 to 0.69) | 0.25 (-0.55 to 0.52) |
+
+ChIP similarity over the 13 tracks ranks the references moderately well (0.6 to
+0.7 held-out), CTCF plus H3K27ac alone and methylation alone rank them poorly, and
+the methylation ranking is negative for some training cells. The per-window
+Spearman between the local S and the per-window Hi-C similarity (median over
+windows) is only 0.33 (chip_loc, 25 kb), 0.25 (ctcfk27_loc and comb_loc) and 0.09
+(meth_loc), 0.36, 0.28 and 0.10 at 10 kb: the local ChIP similarity of one 1 Mb
+window identifies the similar cell at that window only weakly.
+
+Decision rule (median over the 5 held-out cells of the paired delta above 0.005
+and wins in at least 4 of 5, 413 regions, softmax variants with tau chosen on
+training cells). Met by chip_loc softmax at both resolutions (0.0080 with 5 of 5 at
+25 kb, 0.0060 with 5 of 5 at 10 kb; also on the disjoint test windows and as 11 of 12
+on the training cells). Not met by: ctcfk27_loc (0.0048 at 25 kb, 0.0040 at 10 kb),
+comb_loc (0.0049, 0.0034), every genome-wide variant (chip_gw 0.0024 and 0.0006),
+every top-k variant, and the methylation variants (0.0000; no more than 3 of 5
+held-out cells have Meth, so wins in 4 of 5 are impossible). A weighting by
+methylation alone or by CTCF and H3K27ac alone gives no usable gain, and the
+methylation similarity chosen on training cells is the plain mean.
+
+Verdict. The idea works only in the locus-varying ChIP form, and then the gain is
+small: +0.006 to +0.008 median Pearson on the 413 regions (+0.008 to +0.018 on the
+disjoint windows) against a seed noise of 0.013 (section 15). The genome-wide ORACLE
+weights (one vector per target, fitted on the target's own Hi-C) reach +0.0044 to
++0.0069 at 25 kb, so chip_loc (+0.0080) exceeds them because its weights vary by
+locus. 60 to 70% of regions improve. Methylation adds nothing here. Recommendation:
+not worth a training campaign as such. The target's own ChIP tracks enter the model
+as input and the model learns the residual against the reference, so the part of the
+0.006 to 0.008 that survives as reference-input gain is expected to be smaller than
+on the consensus alone; this was not measured. If a retraining happens anyway, one
+25 kb ablation with the chip_loc softmax consensus (tau 0.075 to 0.1, computed per
+window from the target's own tracks and the 12 or 11 reference tracks) as the
+reference input and residual base would settle it. It needs a reference cache
+that depends on the target's inputs per window, and overlapping windows
+(stride half the window) give window-dependent references for the same pixel,
+which the present cache design does not allow.
+
+Limitations. (1) Only 11 or 12 reference cells; a softmax over so few maps has few
+degrees of freedom (the selected top-5 of 11 or 12 already drops half the cells).
+(2) The reference panel mixes assays (7 in situ Hi-C, 3 intact Hi-C, 2 Micro-C) and
+the similarity of inputs may track assay-linked differences in the maps; the effect
+on the weights was not separated. (3) Methylation is missing for NHEK, PC-9 and HUVEC,
+and HCT116, MCF-7 and HFF are lifted RRBS next to WGBS; the Meth results rest on 3
+informative held-out cells (K562, HMEC, HMEC deep) and 10 training cells and say
+little about methylation beyond this panel. (4) tau and k were chosen on 300
+training windows of the training chromosomes with the 12 training cells (11 for a
+training target), so every selected value is fitted to training-cell behaviour;
+the selected parameters are nearly flat around the optimum (the fit-window median
+changes by under 0.001 between tau 0.1 and 0.075 for chip_loc) but 12 cells make
+the choice itself uncertain. (5) HMEC and HMEC deep, and HUVEC and HUVEC deep, share
+inputs and tau, so the 5 held-out cells are 3 independent input sets; "5 of 5" is
+effectively 3 of 3. (6) Nine similarity variants, two weightings and two resolutions
+were evaluated; one variant passes the rule at both resolutions, which is
+unlikely to be a selection artefact of one window set, but the gain was not tested on
+a second independent panel. (7) The local similarity correlates the cells' tracks in
+one 1 Mb to 2 Mb window of 42 to 192 bins and is noisy; per-window rank agreement
+with the true Hi-C similarity is 0.1 to 0.4. (8) The oracles use one global weight
+vector; a locus-wise oracle was not computed, so the table gives no upper bound for
+locus-varying weights. (9) Seed noise 0.013 is the model-training noise of
+section 15 and a loose scale for a deterministic reference; paired intervals over
+regions are the relevant uncertainty, and the half-overlapping test windows make
+those on the test-window set optimistic. (10) cd14mono has a consensus of 0.668
+(25 kb), well below the other cells, and its large gain (+0.023) moves the training-cell
+mean; the medians over cells are less affected. (11) The weighted consensus was
+evaluated as a map, not inside a model; a model with the target's ChIP may profit
+less or differently.
