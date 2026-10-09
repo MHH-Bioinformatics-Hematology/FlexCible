@@ -3691,3 +3691,133 @@ additionally summarised alone.
 
 Results: pending (queued after the 5 kb block).
 
+
+## 39. Across-cell variability as a predictor of the consensus error (FINAL, 25 and 10 kb)
+
+Question: does the across-cell variability of the other cells' Hi-C predict
+where the leave-one-out consensus is wrong for a target cell, so that std and
+presence channels would be worth adding to the model input? CPU only, no model.
+Script `scripts/consensus_variance_diag.py`, tables and figures in
+`results/consensus_variance/` (`corr_by_cell_<k>kb.csv`, `corr_pooled_<k>kb.csv`,
+`shrinkage_by_cell_<k>kb.csv`, `shrinkage_summary_<k>kb.csv`,
+`noise_floor_<k>kb.csv`, `binned_curve_<k>kb.csv`,
+`consensus_variance_<k>kb.png`). 5 kb was not run.
+
+Setup. Per-pixel statistics of the other cells' proper O/E maps
+(`crosscell_oe/<cell>_proper_<k>kb.cool`, the maps that `consensus_oe.py` averages;
+the recomputed mean equals the stored `consensus_loo_gm12878` to 2e-7). Targets: the
+5 held-out cells (K562, HMEC, HUVEC, HMEC deep, HUVEC deep; others = the 12
+training cells, i.e. consensus12) and the 12 training cells (others = the 11
+remaining training cells, i.e. consensus_loo). A held-out cell never enters a
+mean, std, threshold or fitted parameter. Per pixel (upper triangle, k >= 2,
+target and consensus nonzero): mean_others, std_others (ddof 1), presence (share
+of other cells above their own 90th percentile of that diagonal, taken on 300
+random training windows), range, residual = measured - mean_others. Two window
+sets: the 413 Akita test regions (the convention of the reference_summary
+tables) and the disjoint test windows of cache mc_all12ref (295 at 25 kb, 311 at
+10 kb). The median-of-cell-medians of the consensus alone reproduces the
+reference_summary values on the 413 regions (held-out 0.8977 at 25 kb, 0.8586 at
+10 kb; training cells 0.9223 and 0.8867). Spearman on diagonal ranks = Pearson of
+the percentile ranks within each diagonal, with a 95% interval from a bootstrap
+over windows.
+
+(a) |residual| against std_others, median over cells (range over cells), 413
+regions:
+
+| res | cells | pixel Spearman | diagonal-rank Spearman | pooled over cells (95% CI) | R2 of res^2 on std^2 per diagonal | R2 with std^2, presence, range^2, (mean dev)^2 |
+|---|---|---|---|---|---|---|
+| 25 kb | 5 held-out | 0.27 | 0.12 (0.09 to 0.16) | 0.125 (0.112 to 0.135) | 0.027 | 0.041 |
+| 25 kb | K562, HMEC deep, HUVEC deep | 0.28 | 0.145 (0.11 to 0.16) | 0.139 (0.123 to 0.155) | 0.031 | 0.064 |
+| 25 kb | 12 training LOO | 0.27 | 0.143 (0.12 to 0.22) | 0.149 (0.141 to 0.157) | 0.024 | 0.039 |
+| 10 kb | 5 held-out | 0.25 | 0.10 (0.04 to 0.13) | 0.086 (0.078 to 0.093) | 0.015 | 0.024 |
+| 10 kb | K562, HMEC deep, HUVEC deep | 0.29 | 0.123 (0.10 to 0.13) | 0.117 (0.107 to 0.128) | 0.018 | 0.032 |
+| 10 kb | 12 training LOO | 0.28 | 0.119 (0.10 to 0.20) | 0.133 (0.127 to 0.139) | 0.015 | 0.024 |
+
+The disjoint test windows give the same picture (diagonal-rank Spearman 0.115,
+0.136, 0.146 at 25 kb and 0.091, 0.113, 0.116 at 10 kb for the three groups).
+The pixel-level Spearman of 0.25 to 0.28 is mostly the shared distance trend
+(both quantities fall with distance). Presence and range add nothing beyond
+std (diagonal-rank Spearman with |residual|: presence -0.05 to 0.03, range
+0.09 to 0.13). The best single training cell is gm23248 (0.22 at 25 kb); no
+held-out cell exceeds 0.165.
+
+(b) Signed residual, diagonal ranks, 413 regions, median over cells. Held-out
+cells at 25 kb: against std 0.20, against presence -0.19, against the
+consensus deviation from its diagonal mean -0.36; training cells: 0.01, 0.00 and
+-0.04 (per-cell values range from -0.09 to 0.13 for std and from -0.37 to 0.23
+for presence, in both signs). The consensus overshoots away from the diagonal
+mean for K562 and HMEC (the signed residual falls with the consensus deviation)
+but not for HUVEC, and the direction differs between training cells, so no sign
+rule transfers. The consensus overshoot (consensus minus measured, signed by the
+consensus deviation) against std is 0.03 to 0.09 for the held-out cells. At 10 kb
+the held-out values are 0.14, -0.14 and similarly cell-dependent.
+
+(d) Median per-region Pearson, 413 regions, median over cells of the cell
+medians (held-out 5 / training 12). Shrinkage parameters fit on the 12 training
+cells' training windows, leave-the-target-out (the target's own residual never
+fits its own parameter; the other cells' consensus maps still contain it):
+pred = mu_d + w (consensus - mu_d), mu_d the per-diagonal mean of training-cell
+maps, w = 1 / (1 + lambda (std / diagonal-mean std)^2), lambda in 0 to 8 chosen
+by median Pearson (1 parameter); or a slope per bin of std, of presence or of
+distance (5 to 7 parameters), plus a constant w as a variance-free control.
+
+| res | consensus alone | std shrinkage (lambda) | std-bin slopes | presence-bin slopes | distance-bin slopes (control) | constant w |
+|---|---|---|---|---|---|---|
+| 25 kb held-out | 0.8977 | 0.8977 (0) | 0.8982 | 0.8978 | 0.8979 | 0.8978 |
+| 25 kb training | 0.9223 | 0.9223 (0) | 0.9222 | 0.9222 | 0.9222 | 0.9223 |
+| 10 kb held-out | 0.8586 | 0.8586 (0) | 0.8567 | 0.8584 | 0.8587 | 0.8586 |
+| 10 kb training | 0.8867 | 0.8867 (0) | 0.8872 | 0.8866 | 0.8866 | 0.8866 |
+
+Training selects lambda = 0 at both resolutions, so the one-parameter
+variant is the consensus. The per-cell medians move by at most 0.0004 (25 kb)
+and 0.002 (10 kb), in both directions, and the std-aware variants are no better
+than the distance-only control. Variance information alone does not move the
+0.898 (25 kb) and 0.859 (10 kb) consensus-alone medians. Figure: mean |residual|
+rises with std_others in every distance band (at 10 kb, 50 to 100 kb: 0.10 to
+0.16 over the std range 0.08 to 0.28), so std tracks the error magnitude, but
+the per-pixel scatter around that trend is large, which is the R2 of 0.015 to
+0.03.
+
+Noise floor (`noise_floor_<k>kb.csv`). Replicate noise per pixel as
+(rep1 - rep2)^2 / 2: single-lane replicate pairs of GM12878, IMR90, K562, HMEC and
+HUVEC (110 to 230 M contacts per replicate) and, as a lower noise estimate, four
+deep intact pairs (K562 ENCSR676BEP 1.0 and 1.45 billion contacts; three
+GM12878 pairs). Share of mean std_others^2 that one replicate's noise accounts
+for: 23% (single lane) and 21% (deep pairs) at 25 kb (range over distance bands
+0.19 to 0.38), and 65% and 49% at 10 kb. The diagonal-rank Spearman between
+std_others and the pixel noise level is 0.10 (single lane) and 0.13 (deep) at
+25 kb, and -0.03 and 0.04 at 10 kb; the pixel-level Spearman is 0.35 and 0.33
+(a shared distance trend). Against the target's own replicate disagreement,
+|residual| has diagonal-rank Spearman -0.00 to 0.10, and the partial Spearman of
+|residual| with std_others given the target's own replicate-difference rank is
+0.11 to 0.17 at 25 kb and 0.10 to 0.15 at 10 kb, the same as without the
+adjustment. Replicate noise accounts for 4.7% (deep K562 pair) to 25%
+(single-lane K562) of the mean squared residual at 25 kb and 16% to 83% at
+10 kb for the K562 map; HUVEC and HUVEC deep reach 44% at 25 kb.
+
+Decision. At 25 kb the diagonal-rank Spearman between |residual| and std_others
+is 0.09 to 0.16 for the held-out cells (pooled 0.125) and at 10 kb 0.04 to 0.13
+(pooled 0.086); both are between the 0.1 (not informative) and 0.2
+(informative) thresholds and below 0.2 in every held-out cell. Presence and
+range carry no extra signal, and every variance-aware shrinkage leaves the
+consensus-alone medians unchanged. Recommendation: do not train a model with
+std and presence input channels on the basis of this analysis. The extra
+channels would give the network a feature that explains 2 to 3% of the squared
+residual at 25 kb and 1.5 to 2% at 10 kb, and at 10 kb the std is dominated
+by replicate noise (49 to 65% of std^2).
+
+Limitations. The std rests on 11 or 12 other cells, so each pixel's std is
+itself a noisy estimate (relative error about 20%), which attenuates every
+correlation here; a larger reference panel would raise them somewhat, and the
+number cannot be separated from the attenuation with the data at hand. The
+consensus cells include 4 Micro-C and 3 intact Hi-C maps next to 5 in situ
+Hi-C maps, so std partly measures assay differences. The replicate noise is that
+of a single replicate and of 0.25 to 1.45 billion contact pairs, higher than that
+of the merged deep maps entering the consensus (upper bound), and replicate
+pairs exist for 5 cells only (the pixel noise map is their mean for every
+target); HMEC and HUVEC single-lane targets are replicate 1 itself. The parameter
+fit leaves the target's own map out of its own parameters but not out of the
+other cells' consensus maps during fitting. A model that learns where to deviate
+from the consensus may use variance in ways a pixel-wise shrinkage cannot, so
+this analysis bounds only the variance-alone route. Windows in the test-window
+set overlap by half, so its intervals are optimistic. 5 kb not run.
