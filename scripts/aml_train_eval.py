@@ -108,6 +108,9 @@ def models(fold: int, res: int) -> list[dict]:
     if fold == 0:                     # the same recipe with the Meth channel (section 38)
         ms.append({"label": "aml_meth_refin", "run": f"all12aml_meth_refin_drop_{k}kb",
                    "ref": "aml", "lab": True, "meth": True})
+    if fold == 0:                     # the reference as residual instead of an input plane
+        ms.append({"label": "aml_refres", "run": f"all12aml_refres_drop_{k}kb", "ref": "aml",
+                   "lab": True})
     if fold == 0 and res == 25000:
         ms.append({"label": "aml_refin_nolab", "run": "all12aml_refin_drop_nolab_25kb",
                    "ref": "aml", "lab": False})

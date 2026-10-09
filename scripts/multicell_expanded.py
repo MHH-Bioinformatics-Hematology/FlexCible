@@ -177,6 +177,10 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("refin_drop", "honest_drop")
        for f in ("", "_f1", "_f2")},
     "all12aml_refin_drop_nolab": (TRAIN12, None),      # the same without the lab indicator
+    # the recipe with the reference as residual (model.reference "residual": the
+    # network predicts patient minus AML reference) instead of an input plane;
+    # same cache as all12aml_refin_drop (mc_all12aml_ref_<k>kb), fold 0
+    "all12aml_refres_drop": (TRAIN12, None),
     # the AML-inclusive recipe with the 14th track Meth (v2 cell set for the
     # non-AML cells; the Xu WGBS of the patients that have it; registry section 38)
     "all12aml_meth_refin_drop": (TRAIN12, None),
@@ -321,6 +325,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12refres_drop_motifmeth": "residual",
             **{r: "input" for r in STRUCT_RUNS},
             **{k: "input" for k in AML_RUNS if "refin" in k},
+            "all12aml_refres_drop": "residual",
             "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]

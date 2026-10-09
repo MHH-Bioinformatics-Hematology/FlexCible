@@ -4502,3 +4502,20 @@ seed 0 7.2; total 28.8. Dedicated trainings exist only where inference-only scor
 needs a check: the table `scenario_infer_vs_dedicated.csv` gives the difference
 per set. Outputs: `results/scenario_bench/scenario_cells.csv`,
 `scenario_summary.csv`, `scenario_infer_vs_dedicated.csv`. Results: pending.
+
+## 45. AML-inclusive training with the reference as residual (PENDING, queued)
+
+Question. In the AML-inclusive recipe of section 36 the AML reference map (mean
+proper O/E of the training patients) enters as an input plane (`model.reference`
+input). With `residual` the network predicts patient minus AML reference and the
+reference is also added to the output, so the target of the backbone is the
+deviation from the AML reference alone.
+
+Implementation. Run `all12aml_refres_drop` (fold 0, 10 kb) in
+`scripts/multicell_expanded.py`: the config of `all12aml_refin_drop` with
+`model.reference: residual`; it reads the same cache (`mc_all12aml_ref_<k>kb`: same
+windows, AML reference, lab indicator, oversampling x3, patient-specific hard
+validation), so no window is recomputed and the held-out patients and HSPC donors
+stay held out. `scripts/aml_train_eval.py` scores it as `aml_refres` next to
+`aml_refin` and the other models of fold 0 (queue block c). The 25 kb run and
+folds 1 and 2 are not queued. Results: pending.
