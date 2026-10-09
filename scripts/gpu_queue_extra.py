@@ -12,9 +12,9 @@ one GPU training at a time, in this order:
      10 kb) with inference-only sets, then dedicated trainings per set
   c  all12aml_refres_drop 10 kb: AML-inclusive recipe of section 36 with the
      reference as residual (patient minus AML reference), fold 0
-  d  the sequence CNN (scripts/run_seq_cnn_remote.sh), three modes, GPU 0
+  d  (removed 2026-10-09: the sequence CNN runs on another computer)
 
-CPU preparation (the four window caches, the CNN bigWig cache) starts at once
+CPU preparation (the six window caches) starts at once
 at nice 19. Every job is skipped when its output exists, so the queue can be
 stopped and started again; an interrupted training restarts from scratch.
 
@@ -107,8 +107,6 @@ def jobs():
                             ("all12honest_drop_motifmeth", 10000, "mc_all12honest_drop_motifmeth_10kb")):
         cpu(f"cache_{cache}", f"{M} --runs {run} --res {res} --stage precompute --workers 3",
             cpg_ok, (lambda c=cache: cache_ok(c)), lane="cache")
-    cpu("seq_cnn_cache", cnn_cmd("cache"), lambda: cnn_data_ok(),
-        lambda: (CNN_OUT / "cache" / "seq").exists() and any((CNN_OUT / "cache" / "seq").iterdir()))
 
     def train(run, res, cache):
         gpu(f"train_{mx.run_name(run, res)}",
@@ -162,9 +160,8 @@ def jobs():
     aux("aml_refres_eval_f0", gs.locked("amleval", f"{PY} scripts/aml_train_eval.py --fold 0"),
         lambda: gs.trained("all12aml_refres_drop", 10000))
 
-    # ---- (d) sequence CNN, three modes, one local GPU
-    gpu("seq_cnn_train_eval", cnn_cmd("all"), lambda: cnn_data_ok(),
-        lambda: marked("seq_cnn_train_eval"))
+    # (d) the sequence CNN runs on another computer (2026-10-09), not in this queue;
+    # cnn_cmd() below still builds the one-command local run if it is needed again
     return J
 
 
