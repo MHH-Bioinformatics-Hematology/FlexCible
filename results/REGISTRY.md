@@ -4495,10 +4495,23 @@ WGBS; HUVEC has no methylation, so only the sets without Meth are scored there.
 Median per-region Pearson of the O/E maps with test-time augmentation; the measured
 consensus is scored alongside as a floor and is never an input.
 
-Budget (GPU hours, in `runs/coarse_gap/QUEUE.md`): base models 4.0; dedicated at
-25 kb all 8 sets with 2 seeds 17.6 (25 kb total 19.6, under 30); dedicated at 10 kb
-for the four key sets meth_only, ctcf_meth, ctcf_h3k27ac_meth, five_marks_meth with
-seed 0 7.2; total 28.8. Dedicated trainings exist only where inference-only scoring
+Crossing with the motif planes (added 2026-10-09). Methylation inside a CTCF motif
+marks where CTCF cannot bind (necessary, not sufficient), so with the CTCF track
+missing the planes of section 43 are the only route by which CTCF site information
+still enters. A second honest base model, `all12honest_drop_motifmeth` (the base
+model plus `motifs.motif_meth`; 25 kb seeds 0 and 1, 10 kb seed 0), is scored
+inference-only on three sets with the planes on and with their methylation removed
+(`crosscell_predict` pseudo track NOMM, same model and tracks, set suffix `_nomm`):
+H3K27ac + H3K4me3 + Meth (no CTCF track), Meth only, CTCF + H3K27ac + Meth. Because
+track dropout trains the model on random track subsets, these sets are in
+distribution; the rows are also set against the model trained without planes
+(`scenario_motifmeth_vs_off.csv`). No dedicated training is made for these rows.
+
+Budget (GPU hours, in `runs/coarse_gap/QUEUE.md`): base models 4.0; motif_meth base
+models 3.0; dedicated at 25 kb all 8 sets with 2 seeds 17.6 (25 kb total 21.6, under
+30); dedicated at 10 kb for the key sets meth_only, ctcf_meth, ctcf_h3k27ac_meth with
+seed 0 5.4; total 30.0. The 10 kb dedicated five_marks_meth row (1.8 h) was dropped
+to absorb the motif_meth base models. Dedicated trainings exist only where inference-only scoring
 needs a check: the table `scenario_infer_vs_dedicated.csv` gives the difference
 per set. Outputs: `results/scenario_bench/scenario_cells.csv`,
 `scenario_summary.csv`, `scenario_infer_vs_dedicated.csv`. Results: pending.

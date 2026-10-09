@@ -14,6 +14,8 @@ GC/CpG always present):
   ctcf_h3k27ac         CTCF + H3K27ac                       (+ Meth: ctcf_h3k27ac_meth)
   ctcf_ac_k4me3        CTCF + H3K27ac + H3K4me3             (+ Meth: ctcf_ac_k4me3_meth)
   five_marks           CTCF + H3K27ac + H3K4me3 + H3K27me3 + H3K36me3   (+ Meth: five_marks_meth)
+  noctcf_ac_k4me3_meth H3K27ac + H3K4me3 + Meth (no CTCF track), scored with and without
+                       motif_meth planes (second base model, below)
   reference rows       chip13 (all 13 ChIP tracks), full (13 + Meth), seq_only
 
 Two ways to score a set, on the same regions and metric:
@@ -25,6 +27,13 @@ Two ways to score a set, on the same regions and metric:
              base model's cache and cell set), the machinery of the section 20
              and 35 part C minimal-input runs (scripts/minimal_inputs.py) without
              the consensus input
+
+Motif_meth rows. A second honest base model, all12honest_drop_motifmeth (25 kb seeds
+0 and 1, 10 kb seed 0), has the methylation-aware CTCF motif planes (registry 43). On it
+the sets noctcf_ac_k4me3_meth, meth_only and ctcf_h3k27ac_meth are scored inference-only
+with the planes (set name) and with their methylation removed (suffix _nomm); the track
+dropout of the model covers these sets. scenario_motifmeth_vs_off.csv also compares with
+the model trained without planes.
 
 Evaluation: the 413 Akita test regions ("akita413") and the disjoint test
 windows of the 12-cell cache ("testwin", the gm12878 test shard windows of
@@ -78,7 +87,14 @@ SETS = {
     "five_marks_meth": ["CTCF", "H3K27ac", "H3K4me3", "H3K27me3", "H3K36me3", "Meth"],
 }
 REF_ROWS = {"chip13": list(CHIP13), "full": list(CHIP13) + ["Meth"], "seq_only": []}
-INFER_SETS = {**SETS, **REF_ROWS}
+# rows crossing the motif_meth planes with a missing CTCF track (registry section 44, part 2)
+NOCTCF = {"noctcf_ac_k4me3_meth": ["H3K27ac", "H3K4me3", "Meth"]}
+INFER_SETS = {**SETS, **NOCTCF, **REF_ROWS}
+# scored on the motif_meth base models; "<name>_nomm" gives the same tracks with the
+# methylation removed from the motif planes (crosscell_predict pseudo track NOMM)
+MM_BASE_SETS = {**NOCTCF, "meth_only": ["Meth"], "ctcf_h3k27ac_meth": ["CTCF", "H3K27ac", "Meth"]}
+MM_SETS = {**MM_BASE_SETS, **{f"{k}_nomm": v + ["NOMM"] for k, v in MM_BASE_SETS.items()}}
+MM_RUNS = [(25000, 0), (25000, 1), (10000, 0)]
 HELD_OUT = ["k562", "hmec_deep", "huvec_deep"]
 TRAIN_CELLS = ["gm12878", "imr90", "h1", "hepg2", "a549", "gm23248", "cd14mono"]
 CELLS = HELD_OUT + TRAIN_CELLS
@@ -88,7 +104,7 @@ SEEDS = (0, 1)
 
 # dedicated trainings (GPU budget in runs/coarse_gap/QUEUE.md): every set at 25 kb
 # with both seeds; at 10 kb the key sets with seed 0
-KEY_10KB = ["meth_only", "ctcf_meth", "ctcf_h3k27ac_meth", "five_marks_meth"]
+KEY_10KB = ["meth_only", "ctcf_meth", "ctcf_h3k27ac_meth"]
 
 
 def dedicated_runs() -> list[str]:
@@ -109,6 +125,10 @@ def parse_name(run: str) -> tuple[str, int, int]:
 
 def base_name(res: int, seed: int) -> str:
     return mx.run_name("all12honest_drop_meth" + ("_s1" if seed == 1 else ""), res)
+
+
+def mm_base_name(res: int, seed: int) -> str:
+    return mx.run_name("all12honest_drop_motifmeth" + ("_s1" if seed == 1 else ""), res)
 
 
 def log(msg):
@@ -248,6 +268,16 @@ def stage_infer(res: int, seed: int, gpu: str):
             log(f"infer {name} {kind} {cell} gpu{gpu} rc={rc}")
 
 
+def stage_infer_mm(res: int, seed: int, gpu: str):
+    name = mm_base_name(res, seed)
+    ck = mx.best_ckpt(mx.out_of(name) / name)
+    for kind in REGION_SETS:
+        for cell in CELLS:
+            sets = {k: v for k, v in MM_SETS.items() if cell in cells_for(v)}
+            rc = predict(None, ck, res, cell, kind, sets, OUT / "infer_mm" / name / kind, gpu)
+            log(f"infer_mm {name} {kind} {cell} gpu{gpu} rc={rc}")
+
+
 def stage_dedicated(run: str, gpu: str):
     setname, res, seed = parse_name(run)
     ck = mx.best_ckpt(OUT / run)
@@ -281,6 +311,16 @@ def stage_summary():
                             rows.append(dict(res_kb=res // 1000, seed=seed, mode="infer", set=st,
                                              regions=kind, cell=cell, n=m[0], pearson=m[1],
                                              consensus=m[2]))
+    for res, seed in MM_RUNS:
+        name = mm_base_name(res, seed)
+        for kind in REGION_SETS:
+            for st in MM_SETS:
+                for cell in CELLS:
+                    m = _med(OUT / "infer_mm" / name / kind / st / f"predict_{cell}.csv")
+                    if m:
+                        rows.append(dict(res_kb=res // 1000, seed=seed, mode="infer_mm", set=st,
+                                         regions=kind, cell=cell, n=m[0], pearson=m[1],
+                                         consensus=m[2]))
     for run in dedicated_runs():
         setname, res, seed = parse_name(run)
         for kind in REGION_SETS:
@@ -309,6 +349,19 @@ def stage_summary():
                          values="pearson").reset_index()
     wide["dedicated_minus_infer"] = wide.get("dedicated") - wide.get("infer")
     wide.to_csv(RES_OUT / "scenario_infer_vs_dedicated.csv", index=False, float_format="%.4f")
+    # motif_meth planes on versus off, same model and tracks; and versus the model trained without planes
+    mm = P[P["mode"] == "infer_mm"].copy()
+    if len(mm):
+        mm["base_set"] = mm.set.str.removesuffix("_nomm")
+        mm["planes"] = np.where(mm.set.str.endswith("_nomm"), "off", "on")
+        w2 = mm.pivot_table(index=["res_kb", "regions", "group", "base_set"], columns="planes",
+                            values="pearson").reset_index()
+        w2["planes_on_minus_off"] = w2["on"] - w2["off"]
+        plain = P[P["mode"] == "infer"].rename(columns={"set": "base_set", "pearson": "plain_model"})
+        w2 = w2.merge(plain[["res_kb", "regions", "group", "base_set", "plain_model"]], how="left",
+                      on=["res_kb", "regions", "group", "base_set"])
+        w2["on_minus_plain_model"] = w2["on"] - w2["plain_model"]
+        w2.to_csv(RES_OUT / "scenario_motifmeth_vs_off.csv", index=False, float_format="%.4f")
     log(f"summary: {len(S)} cell rows, {len(P)} pooled rows")
     return S
 
@@ -317,7 +370,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True,
-                    choices=["configs", "train", "infer", "dedicated", "summary"])
+                    choices=["configs", "train", "infer", "infer_mm", "dedicated", "summary"])
     ap.add_argument("--run", default=None)
     ap.add_argument("--res", type=int, default=25000)
     ap.add_argument("--seed", type=int, default=0)
@@ -331,6 +384,8 @@ def main():
             stage_train(a.run, a.gpus)
         elif st == "infer":
             stage_infer(a.res, a.seed, a.gpu)
+        elif st == "infer_mm":
+            stage_infer_mm(a.res, a.seed, a.gpu)
         elif st == "dedicated":
             stage_dedicated(a.run, a.gpu)
         elif st == "summary":

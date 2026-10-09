@@ -25,6 +25,9 @@ GPU start condition (either one):
                       not exist (the scheduler never exits while the AML_CV
                       jobs of folds 1 and 2 wait for that flag)
 
+Reload: `touch runs/multicell_reference/.extra_reload`; when no job of the queue is running it
+re-executes itself (same PID, same arguments) and reads the current code and job list.
+
 Stop: kill <PID in runs/multicell_reference/.extra_queue.pid> (SIGTERM; the
 queue then ends its running jobs' process groups and exits). Nothing here uses
 killall, pkill or the scheduler's pid files for anything but reading.
@@ -50,6 +53,7 @@ REPO, PY, MR = mx.REPO, mx.PY, mx.REF_OUT
 LOG = MR / "extra_queue.log"
 OUTLOG = MR / "extra_queue.out"
 PIDFILE = MR / ".extra_queue.pid"
+RELOAD = MR / ".extra_reload"
 M = gs.M
 SB = f"{PY} scripts/scenario_bench.py"
 NICE = "nice -n 19"
@@ -98,7 +102,9 @@ def jobs():
     for run, res, cache in (("all12refres_drop_motifmeth", 25000, "mc_all12refres_drop_motifmeth_25kb"),
                             ("all12refres_drop_motifmeth", 10000, "mc_all12refres_drop_motifmeth_10kb"),
                             ("all12honest_drop_meth", 25000, "mc_all12honest_drop_meth_25kb"),
-                            ("all12honest_drop_meth", 10000, "mc_all12honest_drop_meth_10kb")):
+                            ("all12honest_drop_meth", 10000, "mc_all12honest_drop_meth_10kb"),
+                            ("all12honest_drop_motifmeth", 25000, "mc_all12honest_drop_motifmeth_25kb"),
+                            ("all12honest_drop_motifmeth", 10000, "mc_all12honest_drop_motifmeth_10kb")):
         cpu(f"cache_{cache}", f"{M} --runs {run} --res {res} --stage precompute --workers 3",
             cpg_ok, (lambda c=cache: cache_ok(c)), lane="cache")
     cpu("seq_cnn_cache", cnn_cmd("cache"), lambda: cnn_data_ok(),
@@ -129,6 +135,14 @@ def jobs():
             aux(f"scen_infer_{res // 1000}kb_s{seed}",
                 f"{SB} --stage infer --res {res} --seed {seed} --gpu {seed}",
                 (lambda r=run, k=res: gs.trained(r, k)))
+    # base models with the motif_meth planes (registry 44, part 2): inference-only rows crossing the
+    # planes with a missing CTCF track
+    for res, seed in sb.MM_RUNS:
+        run = "all12honest_drop_motifmeth" + ("_s1" if seed else "")
+        train(run, res, f"mc_all12honest_drop_motifmeth_{res // 1000}kb")
+        aux(f"scen_infer_mm_{res // 1000}kb_s{seed}",
+            f"{SB} --stage infer_mm --res {res} --seed {seed} --gpu {seed}",
+            (lambda r=run, k=res: gs.trained(r, k)))
     for run_name in sb.dedicated_runs():
         setname, res, seed = sb.parse_name(run_name)
         gpu(f"train_{run_name}", f"{SB} --stage configs && {SB} --stage train --run {run_name} --gpus 0,1",
@@ -138,7 +152,8 @@ def jobs():
             (lambda n=run_name: sb.dedicated_done(n)))
     aux("scen_summary", f"{SB} --stage summary",
         lambda: all(sb.dedicated_done(n) for n in sb.dedicated_runs())
-        and all(marked(f"scen_infer_{k}kb_s{s}") for k in (25, 10) for s in (0, 1)), gpu_use=False)
+        and all(marked(f"scen_infer_{k}kb_s{s}") for k in (25, 10) for s in (0, 1))
+        and all(marked(f"scen_infer_mm_{r // 1000}kb_s{s}") for r, s in sb.MM_RUNS), gpu_use=False)
 
     # ---- (c) AML residual-only training, fold 0, 10 kb
     import aml_train as at
@@ -262,7 +277,8 @@ def main():
                 "ready" if j.ready() else "wait")
             print(f"{'GPU' if j.gpu else 'aux'} {j.name:55s} {state}")
         return
-    if PIDFILE.exists() and alive(PIDFILE.read_text().strip() or 0):
+    if (PIDFILE.exists() and PIDFILE.read_text().strip() != str(os.getpid())
+            and alive(PIDFILE.read_text().strip() or 0)):
         raise SystemExit(f"already running: pid {PIDFILE.read_text().strip()}")
     PIDFILE.write_text(str(os.getpid()))
     running: dict[str, subprocess.Popen] = {}
@@ -298,6 +314,10 @@ def main():
         if not pending and not running:
             note("EXTRA_QUEUE_DONE")
             break
+        if RELOAD.exists() and not running:      # touch RELOAD while idle: same PID, new job list
+            RELOAD.unlink()
+            note("reload requested: re-executing with the current code and job list")
+            os.execv(sys.executable, [sys.executable] + sys.argv)
         gpu_busy = any(j.gpu for j in all_jobs if j.name in running)
         opened = gate()
         head = next((j for j in pending if j.gpu), None)     # strict order a, b, c, d

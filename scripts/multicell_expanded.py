@@ -208,6 +208,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # (scripts/scenario_bench.py; registry section 44)
     "all12honest_drop_meth": (TRAIN12, None),
     "all12honest_drop_meth_s1": (TRAIN12, None),
+    # the same with the methylation-aware CTCF motif planes (motifs.motif_meth)
+    "all12honest_drop_motifmeth": (TRAIN12, None),
+    "all12honest_drop_motifmeth_s1": (TRAIN12, None),
     # copy number (CNVgain, CNVloss from Hi-C coverage, scripts/cnv_sv.py) as
     # two more tracks and the structural-variant loss mask (registry section 28)
     "all12refres_drop_cnv": (TRAIN12, None),
@@ -258,9 +261,12 @@ DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth_v2"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_motifmeth"] = (0.5, 0.0)
-DROPOUT_RUNS.update({"all12honest_drop_meth": (0.5, 0.0), "all12honest_drop_meth_s1": (0.5, 0.0)})
+DROPOUT_RUNS.update({k: (0.5, 0.0) for k in ("all12honest_drop_meth", "all12honest_drop_meth_s1",
+                                              "all12honest_drop_motifmeth",
+                                              "all12honest_drop_motifmeth_s1")})
 # seeded copies of a run: base -> (run whose cache they share, training seed)
-SEEDED = {"all12honest_drop_meth_s1": ("all12honest_drop_meth", 1)}
+SEEDED = {"all12honest_drop_meth_s1": ("all12honest_drop_meth", 1),
+          "all12honest_drop_motifmeth_s1": ("all12honest_drop_motifmeth", 1)}
 DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
 # chromosome-held-out final models (registry section 37): the union of the
@@ -277,10 +283,13 @@ CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
 METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
-             "all12refres_drop_motifmeth", "all12honest_drop_meth", "all12honest_drop_meth_s1"}
-MOTIFMETH_RUNS = {"all12refres_drop_motifmeth"}
+             "all12refres_drop_motifmeth", "all12honest_drop_meth", "all12honest_drop_meth_s1",
+             "all12honest_drop_motifmeth", "all12honest_drop_motifmeth_s1"}
+MOTIFMETH_RUNS = {"all12refres_drop_motifmeth", "all12honest_drop_motifmeth",
+                  "all12honest_drop_motifmeth_s1"}
 METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop", "all12honest_drop_meth",
-           "all12honest_drop_meth_s1"}
+           "all12honest_drop_meth_s1", "all12honest_drop_motifmeth",
+           "all12honest_drop_motifmeth_s1"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS
@@ -330,7 +339,8 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
-HONEST_RUNS = set(REF_RUNS) | {"all12honest_drop_meth", "all12honest_drop_meth_s1", "all12honest", "all12honest_drop", "all12honest_drop_hard",
+HONEST_RUNS = set(REF_RUNS) | {"all12honest_drop_meth", "all12honest_drop_meth_s1", "all12honest_drop_motifmeth",
+                               "all12honest_drop_motifmeth_s1", "all12honest", "all12honest_drop", "all12honest_drop_hard",
                                "all12deg_honest_drop", "all12cohunk_honest_drop"} | AML_RUNS | {"all12honest_drop_chrho"}
 REF_OUT = HM / "runs/multicell_reference"
 

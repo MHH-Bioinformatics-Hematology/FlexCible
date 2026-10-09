@@ -166,12 +166,15 @@ def main():
     print(f"[{a.cell}] {n_chip-len(missing)}/{n_chip} marks; missing={missing}", flush=True)
     # keep sets: extra tracks set to their absent value on top of the cell's own gaps
     sets = {"": []}
+    nomm_sets = set()          # keep sets naming the pseudo track NOMM: methylation of the motif planes removed
     if a.keep_sets:
         sets = {}
         for item in a.keep_sets:
             nm, _, lst = item.partition("=")
             kp = {t.strip().upper() for t in lst.split(",") if t.strip()}
             sets[nm] = [t for t in channels["tracks"] if t not in missing and t.upper() not in kp]
+            if "NOMM" in kp:
+                nomm_sets.add(nm)
         if a.save_pred and "{set}" not in a.save_pred:
             raise SystemExit("--keep-sets with --save-pred needs a {set} placeholder")
     sample.missing_tracks = list(missing)        # declared absent -> raw zero -> absent value
@@ -238,10 +241,10 @@ def main():
             sym_full[row_of[t]] = absent[row_of[t]]
         sym_sets, coh_report = {}, {}
         for k, drop in sets.items():
-            sy = sym_full.copy() if (drop or coh_i is not None) else sym_full
+            sy = sym_full.copy() if (drop or coh_i is not None or k in nomm_sets) else sym_full
             for t in drop:
                 sy[row_of[t]] = absent[row_of[t]]
-            if mm_rows is not None and "Meth" in drop:
+            if mm_rows is not None and ("Meth" in drop or k in nomm_sets):
                 mm.drop_methylation(sy, track_norm, mm_rows)      # motif planes lose it too
             if coh_i is not None:
                 gone = set(missing) | set(drop)
