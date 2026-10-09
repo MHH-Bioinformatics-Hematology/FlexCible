@@ -4893,3 +4893,154 @@ classifier numbers suggest. Stripes: only 0.61 to 0.67 against shared stripes, w
 
 Reproduce: `python scripts/aml_loop_classifier.py --stage hic tracks motifs stripes_hic build model figures`
 (hicdiff env; `--jobs 8 --null-reps-lr 20 --null-reps-gb 10` were used).
+
+
+## 48. Can motif CpG methylation exclude unbound CTCF motif hits? Site-level bound versus unbound classification (FINAL; section 47 was the last number when this was written)
+
+`scripts/ctcf_site_exclusion.py` (CPU, 4 threads), tables and figures in
+`results/ctcf_site_exclusion/`. Sections 41 and 46 measured a height regression. The question here is the
+site-level one that matters for a model without a CTCF track: is a motif hit bound or unbound, and does
+methylation of the CpGs inside the motif identify the unbound hits.
+
+**Data.** The 72,626 motif hits of section 41 (JASPAR MA0139.2, PWM >= 0.6 of the maximum, hg38), the per-cell
+tables of section 41 (CTCF height = log1p of the mean ChIP signal within +-100 bp of the motif centre; motif
+methylation = methylated fraction over the CpGs wholly inside the motif, reads pooled, >= 10 reads, called
+"covered"; flank = +-250 bp) and, for patients, the tables of section 46 (9 patients with CTCF CUT&Tag and
+WGBS; 10 bp bin means, no read counts). GM23248 has no CTCF track and is not used, so the cells are the
+6 training cells (GM12878, IMR-90, H1, HepG2, A549, CD14+ monocyte) and K562 and HMEC (in no training set). No
+ENCODE peak calls exist in the repo, so bound and unbound are defined from the signal. The per-site maximum over
+the motif CpGs (CpGs with >= 5 reads) was added from the CpG tables (`runs/chip_meth_rel/cpg`).
+
+**Labels** (per cell and patient; thresholds in `labels_thresholds.csv`). Background = 100,000 random 200 bp
+windows >= 500 bp from every motif hit, scored like a site (log1p of the mean signal).
+Definition A: bound = height above the 95th percentile of the background; unbound = height at or below the
+median of the cell's 72,626 hits. Definition B: bound = top 20 percent of the hits by height; unbound = at or
+below the median. Sites between the two thresholds are ambiguous and are left out of every main number. In H1
+and HepG2 the motif median lies above the background 95th percentile, so definition A has no ambiguous sites
+there and unbound there means at or below that percentile. Sites per cell (A, bound/unbound; B is 14,525/36,313 everywhere): GM12878 28,066/36,313, IMR-90 30,885/36,313,
+H1 39,642/32,984, HepG2 37,338/35,288, A549 32,378/36,313, CD14+ 26,754/36,313, K562 35,430/36,313, HMEC
+27,866/36,313. The share bound among labelled sites is 0.42 to 0.55 in the cells and 0.14 to 0.34 in the patients
+(sparser CUT&Tag signal).
+
+**Models.** Features: (a) motif strength (PWM fraction) and orientation; (a_cpg) a plus the number of motif
+CpGs (control for CpG-containing sequence without methylation values); (b) a_cpg plus covered flag, motif
+methylation mean and maximum; (c) b plus flank methylation and its covered flag; (d) methylation alone (b and
+c without strength and orientation). Logistic regression and histogram gradient boosting, odd chromosomes of the
+training cells to even chromosomes of the scored cell. `seen_cell`: the cell is in the training set, other
+chromosomes. `unseen_cell`: leave-one-cell-out for the 6 training cells, the model of all 6 for K562 and HMEC.
+Chromosome-block bootstrap (300 resamples of the 11 even chromosomes) for AUROC, AUPRC and the paired
+difference to the strength-only model. Tables `site_classification_metrics.csv` (all rows, both scopes, both
+models, both schemes), `summary_covered_sites.csv`, `patient_transfer_metrics.csv`.
+
+### 1. Coverage (`coverage.csv`)
+
+A motif CpG exists in 18.9 percent of the 72,626 hits (30.0 percent of the 14,131 strong hits, PWM >= 0.75 of
+the maximum). The share with a covered motif CpG (>= 10 reads) is 12.9 (GM12878), 0.9 (IMR-90), 11.8 (H1),
+3.2 (HepG2), 9.6 (A549), 5.5 (CD14+), 9.1 (K562) and 5.5 (HMEC) percent of all hits, i.e. 5 to 68 percent of the hits that
+hold a CpG. The patient bin means cover 95.7 to 97.0 percent of the hits that hold a CpG (18.1 to 18.4 percent of all hits). Of the unbound strong hits (label A), 94.5 to 99.6 percent carry no covered motif CpG in the cells, so a methylation rule can
+only act on a small minority of them.
+
+### 2. Classification on sites with a covered motif CpG (gradient boosting, label A, unseen cell)
+
+AUROC, 95 percent chromosome-bootstrap interval in brackets. n = covered labelled sites of the even chromosomes,
+prev = share bound. d is methylation alone. Definition B and the seen_cell scheme give the same ordering
+(`summary_covered_sites.csv`).
+
+| cell | n | prev | a strength + orientation | b + motif methylation | c + flank methylation | d methylation alone |
+|---|---|---|---|---|---|---|
+| GM12878 | 4,048 | 0.73 | 0.767 [0.757, 0.779] | 0.850 [0.834, 0.862] | 0.834 [0.818, 0.846] | 0.747 |
+| IMR-90 | 283 | 0.80 | 0.659 [0.562, 0.746] | 0.886 [0.833, 0.937] | 0.894 [0.838, 0.947] | 0.872 |
+| H1 | 4,031 | 0.81 | 0.766 [0.752, 0.783] | 0.893 [0.884, 0.902] | 0.893 [0.884, 0.903] | 0.871 |
+| HepG2 | 1,457 | 0.81 | 0.768 [0.745, 0.786] | 0.862 [0.844, 0.885] | 0.863 [0.847, 0.880] | 0.797 |
+| A549 | 3,201 | 0.74 | 0.770 [0.752, 0.784] | 0.889 [0.877, 0.901] | 0.888 [0.876, 0.899] | 0.845 |
+| CD14+ | 1,685 | 0.73 | 0.743 [0.725, 0.757] | 0.897 [0.883, 0.910] | 0.896 [0.879, 0.913] | 0.850 |
+| K562 (held out) | 2,928 | 0.81 | 0.768 [0.752, 0.780] | 0.814 [0.797, 0.830] | 0.816 [0.799, 0.834] | 0.738 |
+| HMEC (held out) | 1,733 | 0.72 | 0.766 [0.743, 0.786] | 0.912 [0.902, 0.921] | 0.912 [0.899, 0.923] | 0.892 |
+
+The gain of b over a is +0.046 (K562) to +0.227 (IMR-90) AUROC, every paired bootstrap interval excludes zero,
+and the AUPRC gain is +0.013 to +0.088 (the baseline AUPRC is already 0.88 to 0.94 because 72 to 81 percent of
+the covered sites are bound). The number-of-CpGs control a_cpg adds only +0.006 to +0.031 AUROC, so the gain
+comes from the methylation values. Flank methylation adds nothing beyond the motif (c versus b within +-0.02,
+lower in GM12878 by 0.016). Methylation alone (d) reaches 0.74 to 0.89, above the strength-only model in 6 of 8
+cells (GM12878 and K562 are the exceptions). Logistic regression gives the same picture (b 0.81 to 0.91 for the 8 cells). On all labelled sites
+(covered or not, `scope = all_labelled_sites`) the strength-only AUROC is 0.66 to 0.77 and b is 0.82 to 0.91; the model
+with methylation there uses the covered flag as well. Definition B gives AUROC 0.89 to 0.98
+for b (a: 0.72 to 0.83). Patients (models of the 6 training cells applied to the patients' even chromosomes, no
+CpG maximum because the bins give none): a 0.63 to 0.73, b_nm 0.70 to 0.88, c_nm 0.70 to 0.88 AUROC;
+the gain over a is +0.070 to +0.165, all intervals above zero (`patient_transfer_metrics.csv`; the patient
+methylation is a bin mean on a different scale than the read-pooled value the models were trained on).
+
+### 3. Exclusion view: strong motifs (PWM >= 0.75), covered, label A
+
+Fraction bound by motif methylation (`exclusion_bound_fraction_by_methylation.csv`, GM12878 as example, n in
+brackets): 0.97 (2,402) at 0-0.1, 0.89 at 0.1-0.2, 0.74 at 0.2-0.3, 0.76 at 0.4-0.5, 0.72 at 0.6-0.7, 0.47 to
+0.67 at 0.8-1.0 (19 to 92 sites per bin). In the other cells the fraction bound at 0.9-1.0 is 0.33 (IMR-90, 9
+sites), 0.59 (CD14+), 0.58 (HMEC), 0.60 (A549), 0.74 (K562), 0.76 (H1), 0.80 (HepG2). Fully methylated strong hits are
+therefore still bound in the majority of cases, and the fraction bound is 0.97 to 1.00 at 0-0.1 and 0.89 to 1.00 at 0.1-0.2.
+
+Rule "motif methylation > t implies unbound" (`exclusion_rules_cells.csv`; 95 percent chromosome-bootstrap
+intervals in the file). precision = share of excluded sites that are unbound; FER = bound covered sites that the rule
+excludes, as share of all bound covered strong sites; removed = share of ALL unbound strong hits (covered and
+uncovered) that the rule removes. The base rate of unbound among covered strong sites is 0.02 to 0.06.
+
+| cell | covered strong bound/unbound | unbound strong total | t=0.5 excl. (bound), precision, FER | t=0.7 | t=0.9 | removed of all unbound at 0.5/0.7/0.9 |
+|---|---|---|---|---|---|---|
+| GM12878 | 2605/146 | 2667 | 167 (111), 0.34, 0.043 | 120 (77), 0.36, 0.030 | 82 (57), 0.30, 0.022 | 0.021/0.016/0.009 |
+| IMR-90 | 155/9 | 2564 | 16 (9), 0.44, 0.058 | 12 (6), 0.50, 0.039 | 8 (3), 0.62, 0.019 | 0.003/0.002/0.002 |
+| H1 | 2594/56 | 1797 | 292 (245), 0.16, 0.094 | 216 (174), 0.19, 0.067 | 99 (74), 0.25, 0.029 | 0.026/0.023/0.014 |
+| HepG2 | 654/15 | 1969 | 33 (27), 0.18, 0.041 | 21 (17), 0.19, 0.026 | 6 (4), 0.33, 0.006 | 0.003/0.002/0.001 |
+| A549 | 1895/92 | 2409 | 167 (114), 0.32, 0.060 | 130 (81), 0.38, 0.043 | 65 (40), 0.38, 0.021 | 0.022/0.020/0.010 |
+| CD14+ | 1120/72 | 2671 | 166 (113), 0.32, 0.101 | 135 (86), 0.36, 0.077 | 80 (47), 0.41, 0.042 | 0.020/0.018/0.012 |
+| K562 (held out) | 1991/55 | 2312 | 42 (36), 0.14, 0.018 | 31 (25), 0.19, 0.013 | 16 (12), 0.25, 0.006 | 0.003/0.003/0.002 |
+| HMEC (held out) | 1031/57 | 2606 | 122 (79), 0.35, 0.077 | 94 (58), 0.38, 0.056 | 60 (35), 0.42, 0.034 | 0.017/0.014/0.010 |
+
+With the strict bound definition B (bound = top 20 percent) the precision is 0.55 to 1.00 (GM12878 0.65/0.75/0.69,
+A549 0.90/0.96/1.00, HMEC 0.74/0.84/0.89, K562 0.60/0.67/0.80 at t = 0.5/0.7/0.9) and the FER 0 to 0.037,
+so the exclusion precision depends on how weak a binding is counted as bound. The removed share of all unbound strong hits is 0.1 to 2.7
+percent under both definitions: at least 97 percent of them stay, because they are below the threshold or have no covered motif CpG.
+
+AML patients (`exclusion_rules_patients*.csv`, pooled over 9 patients, label A): precision of the rule 0.76, 0.77,
+0.80 at t = 0.5, 0.7, 0.9 against a base unbound rate of 0.39 among covered strong sites (per patient 0.59 to 0.91;
+base rate 0.17 to 0.62); FER 0.076, 0.060, 0.036; removed share of all unbound strong hits 0.077, 0.066, 0.046.
+Patients are different from the ENCODE cells in two ways: the CUT&Tag signal makes 17 to 62 percent of the covered
+strong sites unbound under A, and the 10 bp bin means give no read-count filter, so coverage is high (96 percent of
+hits with a CpG) but each value has no depth. Patient 773 and 027 have the lowest precision (0.62).
+
+### 4. Hi-C relevance (`hic_regions_excluded.csv`)
+
+The 413 Akita test regions (1,048,576 bp windows; scored central window = 917,504 bp) hold 1,281 strong hits in
+the scored window. The sites that the rule excludes inside the scored windows (label A, t = 0.5/0.7/0.9; unique
+sites, of which unbound): GM12878 18/15/11 (8/6/4), IMR-90 2/1/1, H1 22/13/6 (4/4/0), HepG2 5/2/1, A549 16/13/4,
+CD14+ 8/7/5, K562 1/1/1 (1/1/1), HMEC 16/13/10 (6/5/4). Against 120 to 200 unbound strong hits in the regions per cell, the
+rule removes 1 to 8 of them at t = 0.5 (0.6 to 4 percent). The nine patients exclude 39 to 68 sites per patient at t = 0.5 (full table
+in the file).
+
+### What the result supports
+
+Methylation of the motif CpGs is informative about binding of a CTCF motif hit that has a covered CpG: among
+such hits it separates bound from unbound with AUROC 0.81 to 0.91 (unseen cells, including the two never-trained
+cells) against 0.66 to 0.77 for motif strength and orientation, and the gain persists in AML patients. The
+information is mostly "unmethylated hits are bound" (0.97 to 1.00 bound at 0-0.1); the converse is weak, since
+fully methylated strong hits are bound in 33 to 80 percent of cases. Methylation of the motif does not decide binding in either direction: at least 97 percent of the unbound strong hits survive the rule, so an
+unmethylated motif can still be unbound (an unmethylated motif is permissive for binding and far from sufficient; a methylated motif is bound in 33 to 80 percent of the fully methylated cases, so methylation is not necessary for exclusion either), and 58 to 86 percent of the sites that a hard rule excludes are bound
+(precision 0.14 to 0.42 under A at t = 0.5 to 0.9 in the cells; 0.55 to 1.00 under B). Coverage limit: 1 to 13 percent
+of all hits (5 to 68 percent of hits with a CpG) have a covered motif CpG in the cells, 81 percent have no CpG in the
+motif at all; a rule therefore removes at most 2.7 percent of the unbound strong hits.
+
+For a model that gets no CTCF track, motif methylation can reduce the probability assigned to a methylated
+CpG-containing hit and so improve the ranking of bound over unbound hits where it is measured, which is
+the effect behind the methylation-weighted motif planes (section 43). It cannot supply the information about where CTCF is
+absent for the bulk of the genome, because the unbound hits are overwhelmingly unmethylated or without CpG. The remaining separation of
+unbound hits has to come from other inputs (accessibility, histone marks, the sequence context of the hit).
+
+Limits. No peak calls exist for the ENCODE cells, so the labels are signal quantiles; the
+results depend on the definition (A and B bracket them) and signal scale is cell specific (thresholds are per cell).
+The strong motif cut-off (0.75) is a choice. IMR-90 has 9 and HepG2 15 unbound covered strong sites, so their rows
+carry wide intervals. Methylation correlates with CpG islands and promoters, which are bound for reasons other than
+the motif, and the models do not separate this from a direct effect of the methylated base; the
+number-of-CpGs control addresses sequence content only. The patient transfer uses models trained on read-pooled
+methylation and 10 bp bin means differ in scale. The figures `fig_auroc_by_feature_set.png`,
+`fig_bound_fraction_by_methylation.png` and `fig_exclusion_rule.png` were written by the script and not viewed.
+
+Reproduce: `python scripts/ctcf_site_exclusion.py --stage bg labels coverage models exclusion patients hic figures`
+(python env with scikit-learn, pyBigWig, matplotlib; CPU).
