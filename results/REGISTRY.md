@@ -4471,3 +4471,34 @@ consensus, track dropout 0.5, the 12 training cells, the nine WGBS cells carry
 Meth and CpG as in all12refres_drop_meth), caches `mc_all12refres_drop_motifmeth_<k>kb`,
 queued in `scripts/gpu_queue_extra.py` (block a) with the standard evaluation, so
 the rows land in `reference_summary.csv`. Results: pending.
+
+## 44. Sparse input sets without the consensus, with and without Meth (PENDING, queued)
+
+Question. For a user who has only a few tracks, which input sets give a usable
+prediction without any reference map, and what does the methylation channel add to
+each. Sets: meth only; CTCF + Meth; CTCF + H3K27ac; CTCF + H3K27ac + H3K4me3; the
+five marks CTCF, H3K27ac, H3K4me3, H3K27me3, H3K36me3; the last three with and
+without Meth. Reference rows: all 13 ChIP tracks, 13 + Meth, sequence only.
+
+Design (`scripts/scenario_bench.py`). No reference map enters any model. Base
+model `all12honest_drop_meth` (12 training cells, honest validation, track dropout
+0.5, 14th track Meth with the section 35 v2 cell set), 25 and 10 kb, seeds 0 and 1
+(`_s1`, same cache, different training seed and validation draw). Two ways to
+score a set on identical regions and metric: (infer) the base model with the other
+tracks absent (`crosscell_predict --keep-sets`, as section 35 part A), and
+(dedicated) a model trained on the set alone (`select_tracks` = the set, motifs
+kept, track dropout 0.5, honest validation) as the dedicated runs of sections 20
+and 35 part C but without the consensus input. Evaluation: the 413 Akita test
+regions and the 295 (25 kb) and 311 (10 kb) disjoint test windows of the 12-cell
+cache, for K562, HMEC (deep) and HUVEC (deep) held out and seven training cells with
+WGBS; HUVEC has no methylation, so only the sets without Meth are scored there.
+Median per-region Pearson of the O/E maps with test-time augmentation; the measured
+consensus is scored alongside as a floor and is never an input.
+
+Budget (GPU hours, in `runs/coarse_gap/QUEUE.md`): base models 4.0; dedicated at
+25 kb all 8 sets with 2 seeds 17.6 (25 kb total 19.6, under 30); dedicated at 10 kb
+for the four key sets meth_only, ctcf_meth, ctcf_h3k27ac_meth, five_marks_meth with
+seed 0 7.2; total 28.8. Dedicated trainings exist only where inference-only scoring
+needs a check: the table `scenario_infer_vs_dedicated.csv` gives the difference
+per set. Outputs: `results/scenario_bench/scenario_cells.csv`,
+`scenario_summary.csv`, `scenario_infer_vs_dedicated.csv`. Results: pending.

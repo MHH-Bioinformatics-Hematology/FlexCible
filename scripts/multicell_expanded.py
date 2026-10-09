@@ -199,6 +199,11 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # hicmultiome.motifmeth; registry section 43): CpG.npz of the WGBS cells
     # (scripts/motif_meth.py --stage cpg), cell set as all12refres_drop_meth
     "all12refres_drop_motifmeth": (TRAIN12, None),
+    # no consensus (honest) with track dropout and Meth, v2 cell set, two training
+    # seeds on one cache: the base models of the scenario benchmark
+    # (scripts/scenario_bench.py; registry section 44)
+    "all12honest_drop_meth": (TRAIN12, None),
+    "all12honest_drop_meth_s1": (TRAIN12, None),
     # copy number (CNVgain, CNVloss from Hi-C coverage, scripts/cnv_sv.py) as
     # two more tracks and the structural-variant loss mask (registry section 28)
     "all12refres_drop_cnv": (TRAIN12, None),
@@ -249,6 +254,9 @@ DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth_v2"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_motifmeth"] = (0.5, 0.0)
+DROPOUT_RUNS.update({"all12honest_drop_meth": (0.5, 0.0), "all12honest_drop_meth_s1": (0.5, 0.0)})
+# seeded copies of a run: base -> (run whose cache they share, training seed)
+SEEDED = {"all12honest_drop_meth_s1": ("all12honest_drop_meth", 1)}
 DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
 # chromosome-held-out final models (registry section 37): the union of the
@@ -265,9 +273,10 @@ CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
 METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
-             "all12refres_drop_motifmeth"}
+             "all12refres_drop_motifmeth", "all12honest_drop_meth", "all12honest_drop_meth_s1"}
 MOTIFMETH_RUNS = {"all12refres_drop_motifmeth"}
-METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop"}
+METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop", "all12honest_drop_meth",
+           "all12honest_drop_meth_s1"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
 DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS
@@ -316,7 +325,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
 # runs trained with train.val_exclude_overlap (honest validation)
-HONEST_RUNS = set(REF_RUNS) | {"all12honest", "all12honest_drop", "all12honest_drop_hard",
+HONEST_RUNS = set(REF_RUNS) | {"all12honest_drop_meth", "all12honest_drop_meth_s1", "all12honest", "all12honest_drop", "all12honest_drop_hard",
                                "all12deg_honest_drop", "all12cohunk_honest_drop"} | AML_RUNS | {"all12honest_drop_chrho"}
 REF_OUT = HM / "runs/multicell_reference"
 
@@ -482,6 +491,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
     cache_name = (f"mc_all12aml_{'meth_' if base in METH_RUNS else ''}{'ref_' if base in REF_RUNS else ''}{res // 1000}kb"
                   f"{'_f' + str(fold) if fold else ''}{'_nolab' if base.endswith('_nolab') else ''}"
                   if base in AML_RUNS
+                  else f"mc_{SEEDED[base][0]}_{res // 1000}kb" if base in SEEDED
                   else f"mc_all12ref_chrho_{res // 1000}kb" if base in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
                   else f"mc_all12chrho_{res // 1000}kb" if base == "all12honest_drop_chrho"
                   else f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS
@@ -502,6 +512,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
         # any cell) for the runs made after 2026-09-28; the earlier runs as run
         "val_exclude_overlap": base in HONEST_RUNS,
     })
+    if base in SEEDED:
+        cfg["train"]["seed"] = SEEDED[base][1]
     if base in DROPOUT_RUNS:
         td, rd = DROPOUT_RUNS[base]
         cfg["train"].update({"track_dropout": td, "track_dropout_mode": "uniform_count",
