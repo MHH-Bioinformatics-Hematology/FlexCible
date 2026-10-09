@@ -1,0 +1,16 @@
+# Defaults of scripts/seq_cnn_chip.py (command-line options override). Paths come from the
+# environment (DATA_ROOT, OUT_ROOT) so this file holds no machine-specific path.
+res: 10000
+window: 131072
+out_bins: 8
+width: 384
+blocks: 12
+stem: 64
+loss: mse            # or poisson
+steps: 20000
+batch_size: 32
+lr: 0.001
+val_every: 1000
+val_windows: 1024
+ckpt_every: 500
+num_workers: 8

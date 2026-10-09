@@ -4324,3 +4324,84 @@ images was declined during this analysis): `fig_variance_partition.png`,
 `fig_crossmark_predictability.png`, `fig_scale_problem.png`,
 `fig_ctcf_height_vs_motif_strength_by_methylation.png`. Every number above
 was read from the CSV tables.
+
+## 42. How much of ChIP height DNA sequence and methylation explain (PENDING)
+
+Question. How much of the ChIP-seq peak height of the 13 marks (CTCF, RAD21,
+SMC3, H3K27ac, H3K27me3, H3K36me3, H3K4me1, H3K4me2, H3K4me3, H3K79me2, H3K9ac,
+H3K9me3, H4K20me1) at 10 kb bins does DNA sequence explain, how much the
+cell's methylation, and how much do the two share. The gradient-boosting
+analysis of section 35 part B uses hand-made sequence features (GC, CpG density,
+CTCF motif strength; sequence-only Pearson 0.30 to 0.49,
+`results/methylation/meth_track_prediction.csv`); this section replaces them by
+a sequence CNN.
+
+Script `scripts/seq_cnn_chip.py` (self-contained; needs torch, numpy, scipy,
+pandas, pyyaml, pyBigWig, pyfaidx), launcher `scripts/run_seq_cnn_remote.sh`,
+defaults `configs/seq_cnn.yaml`. Model: dilated residual 1D CNN, 9.3 M
+parameters, one-hot input window of 131072 bp, trunk stride 128 bp, 12 dilated
+residual blocks (dilations 1 to 128), exact pooling of the trunk to 8 output
+bins of 10 kb (80 kb centred, 25.5 kb context each side), 13-mark multitask
+head. Training with bf16 autocast, AdamW, cosine schedule, 20000 steps at batch
+32. Target: log1p of the bin mean, z-scored per mark with training statistics;
+loss MSE averaged over marks (`--loss poisson` available). Augmentation:
+reverse complement (Meth channel and bin order reversed). Bins with an N or
+overlapping the ENCODE blacklist v2 are excluded.
+
+Modes (each trained multitask):
+- `seq`: sequence only. The prediction is identical for all cells; the training
+  loss uses the tracks of all seven training cells, so the optimum is the
+  across-cell mean. Scored against each cell's own track, next to the ceiling of
+  a cell-agnostic prediction (`ceiling_incl`: mean of the training cells
+  including the scored one; `ceiling_loo`: mean of the other training cells).
+- `seq_meth`: sequence + two channels at base-pair resolution, the 1 kb Meth
+  track of the cell (value - 1 = methylated fraction, bins without data at the
+  cell mean) and the genome-wide mean methylation of the cell.
+- `meth`: the two methylation channels only (control).
+- `--cell-embedding`: learned cell embedding for seen cells. It cannot
+  generalise to unseen cells (k562 and hmec are skipped in such a run); it is
+  a ceiling for cell-specific information, not a model for new cells.
+- `--holdout-cell X`: leave one training cell out; X is scored as unseen.
+- `--res 1000`: 1 kb output bins (80 bins per window).
+
+Splits (by chromosome only). Training: odd chromosomes chr1 to chr21 of the
+seven training cells (gm12878, imr90, h1, hepg2, a549, gm23248, cd14mono).
+Validation: chr2 and chr4 of the training cells, used for model selection.
+Test: chr6, 8, 10, 12, 14, 16, 18, 20, 22 for all nine cells, i.e. the training
+cells (seen) and k562 and hmec (never trained on). The sets are disjoint and
+asserted at start; input windows are clipped to their own chromosome, so no
+validation or test base is in a training window. The z-score statistics come
+from training chromosomes of training cells only. The number of independent
+cells is nine; hmec_deep shares ChIP and Meth with hmec and is not scored
+separately. This differs from section 35 part B, which tests on all even
+chromosomes.
+
+Commands.
+    # 1. smoke test on CPU (minutes)
+    python scripts/seq_cnn_chip.py --smoke --mode seq_meth --data-root $DATA_ROOT
+    # 2. full run on one GPU (cache, three modes, summary)
+    DATA_ROOT=/path/to/hic-multiome OUT_ROOT=./runs/seq_cnn bash scripts/run_seq_cnn_remote.sh
+    # 3. optional variants
+    EXTRA="--cell-embedding" MODES="seq_meth" bash scripts/run_seq_cnn_remote.sh
+    EXTRA="--holdout-cell imr90" MODES="seq_meth" bash scripts/run_seq_cnn_remote.sh
+    EXTRA="--res 1000 --steps 40000" MODES="seq seq_meth" bash scripts/run_seq_cnn_remote.sh
+
+Outputs: `results/seq_cnn/seq_cnn_results.csv` (mode, variant, mark, cell,
+scheme seen_cell or unseen_cell, split, n_bins, r2, pearson, spearman),
+`seq_cnn_summary.csv` (median over cells per mode, scheme and mark, with the
+number of cells and of independent cells), `seq_cnn_partition.csv` (R2 of seq,
+meth and seq_meth per mark and cell with shared = R2_seq + R2_meth - R2_seq_meth,
+unique_seq = R2_seq_meth - R2_meth, unique_meth = R2_seq_meth - R2_seq).
+
+What answers what.
+- R2_seq and Pearson of `seq` against `ceiling_incl`: how much of ChIP height
+  sequence explains, and how much of the cell-agnostic part it reaches.
+- `seq_meth` against `seq` on k562 and hmec (unseen_cell): the gain from
+  methylation for cells never trained on; against `meth`: the gain from sequence.
+- `shared`, `unique_seq`, `unique_meth` of the partition: the overlap of the two
+  information sources per mark.
+- `seq` and `seq_meth` against the gradient-boosting values of section 35 part
+  B: whether a sequence CNN improves on hand-made features.
+- seen_cell against unseen_cell with `--holdout-cell`: the cost of an unseen
+  cell.
+Status PENDING: smoke test passed on CPU; no training result yet.
