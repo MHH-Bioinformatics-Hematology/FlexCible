@@ -1,0 +1,327 @@
+"""Extra GPU queue behind scripts/gpu_scheduler.py (runs/coarse_gap/QUEUE.md).
+
+A separate process that never touches the scheduler: it imports gpu_scheduler
+for its Job class, its trained() / eval_cmd() / marker helpers and its
+read-only job list, and waits until the scheduler's GPUs are free. Its jobs run
+one GPU training at a time, in this order:
+
+  a  all12refres_drop_motifmeth 25 kb, 10 kb (methylation-aware CTCF motif
+     planes, registry section 43) with the scheduler's standard evaluation
+  b  scenario benchmark without the consensus (scripts/scenario_bench.py,
+     registry section 44): base models all12honest_drop_meth (2 seeds, 25 and
+     10 kb) with inference-only sets, then dedicated trainings per set
+  c  all12aml_refres_drop 10 kb: AML-inclusive recipe of section 36 with the
+     reference as residual (patient minus AML reference), fold 0
+  d  the sequence CNN (scripts/run_seq_cnn_remote.sh), three modes, GPU 0
+
+CPU preparation (the four window caches, the CNN bigWig cache) starts at once
+at nice 19. Every job is skipped when its output exists, so the queue can be
+stopped and started again; an interrupted training restarts from scratch.
+
+GPU start condition (either one):
+  --wait-pid PID      the scheduler process has exited
+  --idle-minutes N    the scheduler has run no GPU job and has no GPU job ready
+                      for N minutes, and runs/multicell_reference/AML_CV does
+                      not exist (the scheduler never exits while the AML_CV
+                      jobs of folds 1 and 2 wait for that flag)
+
+Stop: kill <PID in runs/multicell_reference/.extra_queue.pid> (SIGTERM; the
+queue then ends its running jobs' process groups and exits). Nothing here uses
+killall, pkill or the scheduler's pid files for anything but reading.
+
+    python scripts/gpu_queue_extra.py --wait-pid 1902496 --idle-minutes 60
+    python scripts/gpu_queue_extra.py --list
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gpu_scheduler as gs                                           # noqa: E402
+import multicell_expanded as mx                                      # noqa: E402
+
+REPO, PY, MR = mx.REPO, mx.PY, mx.REF_OUT
+LOG = MR / "extra_queue.log"
+OUTLOG = MR / "extra_queue.out"
+PIDFILE = MR / ".extra_queue.pid"
+M = gs.M
+SB = f"{PY} scripts/scenario_bench.py"
+NICE = "nice -n 19"
+CNN_DATA = Path.home() / "data/seq_cnn_data"      # symlinks to the data folders, see QUEUE.md
+CNN_OUT = mx.HM / "runs/seq_cnn"
+CNN_MODES = ("seq", "seq_meth", "meth")
+CPU_SLOTS = 2
+
+
+def note(msg):
+    with open(LOG, "a") as fh:
+        fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
+
+
+def X(name) -> str:
+    return "x_" + name
+
+
+def marked(name) -> bool:
+    return gs.is_marked(X(name))
+
+
+def cache_ok(name) -> bool:
+    return gs.cache_ok(name)
+
+
+def jobs():
+    import scenario_bench as sb
+    J = []
+
+    def cpu(name, cmd, ready, done):
+        J.append(gs.Job(name, f"{NICE} {cmd}", ready, done))
+
+    def gpu(name, cmd, ready, done):
+        J.append(gs.Job(name, cmd, ready, done, gpu=True))
+
+    def aux(name, cmd, ready, gpu_use=True):
+        j = gs.Job(name, cmd, ready, (lambda n=name: marked(n)))
+        j.uses_gpu = gpu_use
+        J.append(j)
+
+    # ---- CPU preparation (starts at once)
+    cpg_ok = lambda: all((me_dir / "CpG.npz").exists() for me_dir in cpg_dirs())
+    for run, res, cache in (("all12refres_drop_motifmeth", 25000, "mc_all12refres_drop_motifmeth_25kb"),
+                            ("all12refres_drop_motifmeth", 10000, "mc_all12refres_drop_motifmeth_10kb"),
+                            ("all12honest_drop_meth", 25000, "mc_all12honest_drop_meth_25kb"),
+                            ("all12honest_drop_meth", 10000, "mc_all12honest_drop_meth_10kb")):
+        cpu(f"cache_{cache}", f"{M} --runs {run} --res {res} --stage precompute --workers 3",
+            cpg_ok, (lambda c=cache: cache_ok(c)))
+    cpu("seq_cnn_cache", cnn_cmd("cache"), lambda: cnn_data_ok(),
+        lambda: (CNN_OUT / "cache" / "seq").exists() and any((CNN_OUT / "cache" / "seq").iterdir()))
+
+    def train(run, res, cache):
+        gpu(f"train_{mx.run_name(run, res)}",
+            f"{M} --runs {run} --res {res} --stage precompute --workers 3 && "
+            f"{M} --runs {run} --res {res} --stage train --gpus 0,1",
+            (lambda c=cache: cache_ok(c)), (lambda r=run, k=res: gs.trained(r, k)))
+
+    # ---- (a) methylation-aware motif planes
+    for res in (25000, 10000):
+        cache = f"mc_all12refres_drop_motifmeth_{res // 1000}kb"
+        train("all12refres_drop_motifmeth", res, cache)
+        n = mx.run_name("all12refres_drop_motifmeth", res)
+        aux(f"eval_{n}", f"{gs.eval_cmd('all12refres_drop_motifmeth', res)} && "
+                         f"( {gs.STATUS} || true )",
+            (lambda r=res: gs.trained("all12refres_drop_motifmeth", r)))
+
+    # ---- (b) scenario benchmark without the consensus
+    aux("scen_configs", f"{SB} --stage configs", lambda: True, gpu_use=False)
+    for res in (25000, 10000):
+        cache = f"mc_all12honest_drop_meth_{res // 1000}kb"
+        for seed in (0, 1):
+            run = "all12honest_drop_meth" + ("_s1" if seed else "")
+            train(run, res, cache)
+            aux(f"scen_infer_{res // 1000}kb_s{seed}",
+                f"{SB} --stage infer --res {res} --seed {seed} --gpu {seed}",
+                (lambda r=run, k=res: gs.trained(r, k)))
+    for run_name in sb.dedicated_runs():
+        setname, res, seed = sb.parse_name(run_name)
+        gpu(f"train_{run_name}", f"{SB} --stage configs && {SB} --stage train --run {run_name} --gpus 0,1",
+            (lambda r=res, s=seed: gs.trained("all12honest_drop_meth" + ("_s1" if s else ""), r)),
+            (lambda n=run_name: sb.dedicated_done(n)))
+        aux(f"scen_ded_{run_name}", f"{SB} --stage dedicated --run {run_name} --gpu {seed}",
+            (lambda n=run_name: sb.dedicated_done(n)))
+    aux("scen_summary", f"{SB} --stage summary",
+        lambda: all(sb.dedicated_done(n) for n in sb.dedicated_runs())
+        and all(marked(f"scen_infer_{k}kb_s{s}") for k in (25, 10) for s in (0, 1)), gpu_use=False)
+
+    # ---- (c) AML residual-only training, fold 0, 10 kb
+    import aml_train as at
+    train("all12aml_refres_drop", 10000, "mc_all12aml_ref_10kb")
+    J[-1].ready = (lambda b=J[-1].ready: b() and at.hard_split_path(0, 10000).exists())
+    aux("aml_refres_eval_f0", gs.locked("amleval", f"{PY} scripts/aml_train_eval.py --fold 0"),
+        lambda: gs.trained("all12aml_refres_drop", 10000))
+
+    # ---- (d) sequence CNN, three modes, one local GPU
+    gpu("seq_cnn_train_eval", cnn_cmd("all"), lambda: cnn_data_ok(),
+        lambda: marked("seq_cnn_train_eval"))
+    return J
+
+
+def cpg_dirs():
+    import methylation as me
+    return [me.meth_dir(c) for c in me.FILES]
+
+
+def cnn_data_ok() -> bool:
+    d = CNN_DATA
+    cells = ("gm12878 imr90 h1 hepg2 a549 gm23248 cd14mono k562 hmec").split()
+    return ((d / "genome/hg38.fa").exists() and (d / "genome/hg38.fa.fai").exists()
+            and all((d / f"hg38_{c}").is_dir() and (d / f"meth/{c}/Meth.bigwig").exists()
+                    for c in cells))
+
+
+def cnn_cmd(what: str) -> str:
+    env = f"DATA_ROOT={CNN_DATA} OUT_ROOT={CNN_OUT} PYTHON={PY} CUDA_VISIBLE_DEVICES=0"
+    if what == "cache":
+        return (f"env {env} {PY} scripts/seq_cnn_chip.py --stage cache --mode seq "
+                f"--data-root {CNN_DATA} --out-root {CNN_OUT} --build-workers 3")
+    return f"env {env} bash scripts/run_seq_cnn_remote.sh"
+
+
+def alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def scheduler_gpu_busy() -> bool:
+    """True when the scheduler runs a GPU job or has one ready (read-only)."""
+    for pf in MR.glob(".run_train_*.pid"):
+        try:
+            if alive(pf.read_text().strip()):
+                return True
+        except OSError:
+            return True
+    import yaml
+    real = yaml.safe_dump
+    yaml.safe_dump = lambda *a, **k: None       # jobs() writes stage configs: not from here
+    try:
+        return any(j.gpu and not j.done() and j.ready() for j in gs.jobs())
+    except Exception as e:                      # unknown: assume busy
+        note(f"scheduler state unreadable ({e!r}), assuming busy")
+        return True
+    finally:
+        yaml.safe_dump = real
+
+
+class Gate:
+    """Opens when the scheduler pid is gone, or after N idle minutes."""
+
+    def __init__(self, wait_pids, idle_min):
+        self.pids, self.idle_min = wait_pids, idle_min
+        self.idle_since = None
+        self.last_check = 0.0
+        self.last_note = 0.0
+        self.open_ = False
+
+    def __call__(self) -> bool:
+        if self.open_:
+            return True
+        if not any(alive(p) for p in self.pids):
+            note(f"gate open: scheduler pid(s) {self.pids} have exited")
+            self.open_ = True
+            return True
+        if not self.idle_min or time.time() - self.last_check < 120:
+            return False
+        self.last_check = time.time()
+        if (MR / "AML_CV").exists() or scheduler_gpu_busy():
+            self.idle_since = None
+        else:
+            self.idle_since = self.idle_since or time.time()
+            if time.time() - self.idle_since >= 60 * self.idle_min:
+                note(f"gate open: scheduler idle on the GPUs for {self.idle_min} min "
+                     "(it is still alive, waiting for the AML_CV flag)")
+                self.open_ = True
+                return True
+        if time.time() - self.last_note > 3600:
+            self.last_note = time.time()
+            note("waiting for the scheduler: " + (
+                "idle since " + time.strftime("%H:%M", time.localtime(self.idle_since))
+                if self.idle_since else "its GPU work is not finished"))
+        return False
+
+
+def launch(job):
+    note(f"start {job.name}")
+    wrapped = (f"cd {REPO} && ( {job.cmd} ) >> {OUTLOG} 2>&1; rc=$?; "
+               f"[ $rc -eq 0 ] && touch {gs.mark(X(job.name))}; exit $rc")
+    p = subprocess.Popen(["bash", "-c", wrapped], start_new_session=True)
+    (MR / f".extra_run_{job.name}.pid").write_text(str(p.pid))
+    return p
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--wait-pid", type=int, nargs="*", default=[])
+    ap.add_argument("--idle-minutes", type=int, default=0)
+    ap.add_argument("--list", action="store_true", help="print the job list and exit")
+    a = ap.parse_args()
+    all_jobs = jobs()
+    if a.list:
+        for j in all_jobs:
+            state = "done" if (j.done() or marked(j.name)) else (
+                "ready" if j.ready() else "wait")
+            print(f"{'GPU' if j.gpu else 'aux'} {j.name:55s} {state}")
+        return
+    if PIDFILE.exists() and alive(PIDFILE.read_text().strip() or 0):
+        raise SystemExit(f"already running: pid {PIDFILE.read_text().strip()}")
+    PIDFILE.write_text(str(os.getpid()))
+    running: dict[str, subprocess.Popen] = {}
+    failed: set[str] = set()
+
+    def stop(signum, frame):
+        note(f"signal {signum}: ending {list(running)} and exiting")
+        for p in running.values():
+            try:
+                os.killpg(p.pid, signal.SIGTERM)
+            except OSError:
+                pass
+        PIDFILE.unlink(missing_ok=True)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    gate = Gate(a.wait_pid, a.idle_minutes)
+    note(f"gpu_queue_extra started (pid {os.getpid()}), waiting for pid(s) {a.wait_pid}, "
+         f"idle minutes {a.idle_minutes}; {len(all_jobs)} jobs")
+    stalled = 0
+    while True:
+        for n, p in list(running.items()):
+            if p.poll() is not None:
+                note(f"{'done' if p.returncode == 0 else 'FAILED'} {n}")
+                (MR / f".extra_run_{n}.pid").unlink(missing_ok=True)
+                if p.returncode != 0:
+                    failed.add(n)
+                del running[n]
+        pending = [j for j in all_jobs if j.name not in running and j.name not in failed
+                   and not j.done() and not marked(j.name)]
+        if not pending and not running:
+            note("EXTRA_QUEUE_DONE")
+            break
+        gpu_busy = any(j.gpu for j in all_jobs if j.name in running)
+        opened = gate()
+        head = next((j for j in pending if j.gpu), None)     # strict order a, b, c, d
+        if opened and not gpu_busy and head is not None and head.ready():
+            running[head.name] = launch(head)
+        cpu_running = sum(1 for j in all_jobs if j.name in running and not j.gpu)
+        for j in pending:
+            if cpu_running >= CPU_SLOTS:
+                break
+            if j.gpu or j.name in running or not j.ready():
+                continue
+            if getattr(j, "uses_gpu", False) and not opened:
+                continue
+            running[j.name] = launch(j)
+            cpu_running += 1
+        # nothing can start and nothing runs although the gate is open: blocked by failures
+        if opened and not running and not any(
+                j.ready() for j in pending if not j.gpu or j is head):
+            stalled += 1
+            if stalled > 10:
+                note("EXTRA_QUEUE_STALLED, blocked: " + ", ".join(j.name for j in pending[:20])
+                     + (f"; failed: {sorted(failed)}" if failed else ""))
+                break
+        else:
+            stalled = 0
+        time.sleep(30)
+    PIDFILE.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    main()
