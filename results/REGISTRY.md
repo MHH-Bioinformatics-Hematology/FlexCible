@@ -3793,7 +3793,7 @@ std_others and the pixel noise level is 0.10 (single lane) and 0.13 (deep) at
 0.11 to 0.17 at 25 kb and 0.10 to 0.15 at 10 kb, the same as without the
 adjustment. Replicate noise accounts for 4.7% (deep K562 pair) to 25%
 (single-lane K562) of the mean squared residual at 25 kb and 16% to 83% at
-10 kb for the K562 map; HUVEC and HUVEC deep reach 44% at 25 kb.
+10 kb for the K562 map; the HUVEC maps reach 42% (HUVEC) and 44% (HUVEC deep) at 25 kb.
 
 Decision. At 25 kb the diagonal-rank Spearman between |residual| and std_others
 is 0.09 to 0.16 for the held-out cells (pooled 0.125) and at 10 kb 0.04 to 0.13
@@ -3807,12 +3807,11 @@ residual at 25 kb and 1.5 to 2% at 10 kb, and at 10 kb the std is dominated
 by replicate noise (49 to 65% of std^2).
 
 Limitations. The std rests on 11 or 12 other cells, so each pixel's std is
-itself a noisy estimate (relative error about 20%), which attenuates every
-correlation here; a larger reference panel would raise them somewhat, and the
-number cannot be separated from the attenuation with the data at hand. The
-consensus cells include 4 Micro-C and 3 intact Hi-C maps next to 5 in situ
-Hi-C maps, so std partly measures assay differences. The replicate noise is that
-of a single replicate and of 0.25 to 1.45 billion contact pairs, higher than that
+itself a noisy estimate, which attenuates every correlation here; a larger
+reference panel could raise them somewhat, and the size of that attenuation was
+not measured. The consensus cells include 2 Micro-C and 3 intact Hi-C maps next
+to 7 in situ Hi-C maps, so std partly measures assay differences. The replicate noise is that
+of a single replicate and of 0.25 to 1.45 billion contacts per replicate (deep pairs), higher than that
 of the merged deep maps entering the consensus (upper bound), and replicate
 pairs exist for 5 cells only (the pixel noise map is their mean for every
 target); HMEC and HUVEC single-lane targets are replicate 1 itself. The parameter
