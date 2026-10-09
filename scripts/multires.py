@@ -40,7 +40,7 @@ RUN = "all12multires"
 TRAIN_DIR = OUT / f"{RUN}_train"
 # memory-mapped training windows on local disk (not /tmp): both DDP ranks map
 # the same files instead of each decompressing the caches from the share
-STAGE = Path.home() / "scratch/hicmx_multires_stage"
+STAGE = Path(os.environ.get("HICMULTI_STAGE_MULTIRES", str(Path.home() / "scratch/hicmx_multires_stage")))
 LOG = OUT / f"{RUN}_train.log"
 A = ["gm12878", "imr90", "hct116", "hff", "h1", "hepg2", "a549", "k562", "hmec_deep"]
 B = ["nhek", "gm23248", "mcf7", "cd14mono", "pc9", "hmec", "huvec", "huvec_deep"]

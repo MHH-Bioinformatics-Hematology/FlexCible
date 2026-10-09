@@ -116,13 +116,14 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 
-HM = Path("/mnt/processed/wolffjoa/hic-multiome")
+DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
+HM = Path(os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome"))
 OE = HM / "crosscell_oe"
 MR = HM / "runs/multicell_reference"
 OUT = HM / "runs/hic_measures"
 TABLES = REPO / "results/hic_measures"
-ENVS = Path.home() / "miniconda3/envs"
-PY = str(ENVS / "hicdiff/bin/python")
+ENVS = Path(os.environ.get("HICMULTI_ENVS", str(Path.home() / "miniconda3/envs")))
+PY = os.environ.get("HICMULTI_PY", str(ENVS / "hicdiff/bin/python"))
 HX376 = ENVS / "__hicexplorer@3.7.6/bin"
 REPQC = ENVS / "chromatin_replicateQC/bin/3DChromatin_ReplicateQC"
 ENT3C = ENVS / "ent3c/bin/ENT3C"
@@ -132,7 +133,7 @@ HP = Path("/mnt/processed/wolffjoa/hyperparameter_publication")
 REPQC_PARAMS = HP / "Revision_1/3dchromatin/parameters.txt"
 REGRESSORS = HP / "Revision_1/regression_model_results_revision_no_gpu"
 REGRESSOR_ROWS = HP / "Revision_1/merged_df.csv"
-HOLDOUT_BED = Path.home() / "data/hic-multiome/akita_holdout_valid_test.bed"
+HOLDOUT_BED = DATA / "akita_holdout_valid_test.bed"
 REGIONS413 = Path("/mnt/processed/wolffjoa/restart_of_prediction_project/akita_normalization"
                   "/akita_validation/sequences_test_list.tsv")
 

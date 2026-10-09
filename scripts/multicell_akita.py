@@ -42,15 +42,16 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
-HM = Path("/mnt/processed/wolffjoa/hic-multiome")
+DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
+HM = Path(os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome"))
 OE = HM / "crosscell_oe"
 REF_RUN = HM / "runs/motif_grid/full__all13__4motifs"
 REF_CFG = HM / "runs/motif_grid/full__all13__4motifs.yaml"
-TRAIN_BED = Path.home() / "data/hic-multiome/akita/akita_train_regions.bed"
+TRAIN_BED = DATA / "akita/akita_train_regions.bed"
 OUT = HM / "runs/multicell"
 CACHE = REPO / "cache"
-PY = sys.executable
-TORCHRUN = str(Path(sys.executable).parent / "torchrun")
+PY = os.environ.get("HICMULTI_PY", sys.executable)
+TORCHRUN = os.environ.get("HICMULTI_TORCHRUN", str(Path(PY).parent / "torchrun"))
 
 ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
          "H3K4me2", "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"]
@@ -58,7 +59,7 @@ ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
 # name: (target O/E cool, ChIP bigwig dir, assay)
 CELLS = {
     "gm12878": (OE / "gm12878_proper_2kb.cool",
-                Path.home() / "data/hic-multiome/hg38_gm12878", "hic"),
+                DATA / "hg38_gm12878", "hic"),
     "imr90": (OE / "imr90_proper_2kb.cool", HM / "hg38_imr90", "hic"),
     "hct116": (OE / "hct116_proper_2kb.cool", HM / "hg38_hct116", "hic"),
     "hff": (OE / "hff_proper_2kb.cool", HM / "hg38_hff", "microc"),

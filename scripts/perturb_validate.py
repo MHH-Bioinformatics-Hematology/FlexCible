@@ -45,7 +45,8 @@ import benchmark_metrics as bm                                       # noqa: E40
 import multicell_expanded as mx                                      # noqa: E402
 from hicmultiome import bioscore as bs                               # noqa: E402
 
-HM = Path("/mnt/processed/wolffjoa/hic-multiome")
+DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
+HM = Path(os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome"))
 PT = HM / "perturb"
 OUT = HM / "runs/perturb_validate"
 RES_OUT = REPO / "results/perturb_validate"
@@ -98,8 +99,8 @@ EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # Kim et al. 2024, eight histone marks from Rao et al. 2017, untreated and 6 h
 # auxin; H3K4me2, H3K9ac and H4K20me1 from the ENCODE HCT116 set in both):
 # predicted change = prediction from the auxin ChIP minus from the untreated ChIP
-CHIP_DIRS = {"chip_untreated": Path.home() / "data/hic-multiome/perturb_chip/untreated",
-             "chip_auxin6h": Path.home() / "data/hic-multiome/perturb_chip/auxin6h"}
+CHIP_DIRS = {"chip_untreated": DATA / "perturb_chip/untreated",
+             "chip_auxin6h": DATA / "perturb_chip/auxin6h"}
 CHIP_EXP = {"rad21"}
 
 

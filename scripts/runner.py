@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PY = str(Path.home() / "miniconda3/envs/hicdiff/bin/python")
+PY = os.environ.get("HICMULTI_PY", str(Path.home() / "miniconda3/envs/hicdiff/bin/python"))
 
 
 @dataclass

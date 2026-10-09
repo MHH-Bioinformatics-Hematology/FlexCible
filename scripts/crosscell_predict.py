@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -124,7 +125,7 @@ def main():
                          "(absent in the cell or dropped by a keep set), '0'/'1' force it "
                          "(0 with absent RAD21 tests the model without the indicator)")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--out-dir", default="/mnt/processed/wolffjoa/hic-multiome/runs/crosscell")
+    ap.add_argument("--out-dir", default=os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome") + "/runs/crosscell")
     a = ap.parse_args()
 
     device = a.device if torch.cuda.is_available() else "cpu"

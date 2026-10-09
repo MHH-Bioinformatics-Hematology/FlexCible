@@ -55,16 +55,17 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
-HM = Path("/mnt/processed/wolffjoa/hic-multiome")
+DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
+HM = Path(os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome"))
 OE = HM / "crosscell_oe"
 REF_RUN = HM / "runs/motif_grid/full__all13__4motifs"
 REF_CFG = HM / "runs/motif_grid/full__all13__4motifs.yaml"
-TRAIN_BED = Path.home() / "data/hic-multiome/akita/akita_train_regions.bed"
+TRAIN_BED = DATA / "akita/akita_train_regions.bed"
 OLD = HM / "runs/multicell"
 OUT = HM / "runs/multicell_expanded"
 CACHE = HM / "cache_expanded"
-PY = sys.executable
-TORCHRUN = str(Path(sys.executable).parent / "torchrun")
+PY = os.environ.get("HICMULTI_PY", sys.executable)
+TORCHRUN = os.environ.get("HICMULTI_TORCHRUN", str(Path(PY).parent / "torchrun"))
 
 ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
          "H3K4me2", "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"]
@@ -72,7 +73,7 @@ ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1",
 # name: (target O/E cool, ChIP bigwig dir, assay, cell identity for baselines)
 # assay: hic = in situ Hi-C, intact = intact Hi-C, microc = Micro-C
 CELLS = {
-    "gm12878": (OE / "gm12878_proper_2kb.cool", Path.home() / "data/hic-multiome/hg38_gm12878",
+    "gm12878": (OE / "gm12878_proper_2kb.cool", DATA / "hg38_gm12878",
                 "hic", "gm12878"),
     "imr90": (OE / "imr90_proper_2kb.cool", HM / "hg38_imr90", "hic", "imr90"),
     "hct116": (OE / "hct116_proper_2kb.cool", HM / "hg38_hct116", "hic", "hct116"),
@@ -316,12 +317,12 @@ def hff_cohesin_dir() -> Path:
     (d / "missing.json").write_text(json.dumps([t for t in ALL13 if t.upper() not in have]))
     (d / "picks.csv").write_text((coh / "picks.csv").read_text())
     return d
-PERTURB_CHIP = Path.home() / "data/hic-multiome/perturb_chip"
+PERTURB_CHIP = DATA / "perturb_chip"
 DEGRON_TRAIN_CHROMS = [f"chr{i}" for i in range(1, 23, 2)]     # odd autosomes
 # the auxin condition's identity (consensus, leakage guard): HCT116
 SAMPLE_IDENT = {"hct116_auxin": "hct116"}
 HARD_SPLIT_DIR = REPO / "results/hard_split"
-STAGE_ROOT = Path.home() / "scratch/hicmx_stage"      # local disk, not /tmp
+STAGE_ROOT = Path(os.environ.get("HICMULTI_STAGE", str(Path.home() / "scratch/hicmx_stage")))      # local disk, not /tmp
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
             "all12multires": "residual", "all12casc": "residual",
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",

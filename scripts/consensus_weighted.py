@@ -51,6 +51,7 @@ Binned tracks are cached under --cache-dir (outside the repository).
 from __future__ import annotations
 
 import argparse
+import os
 import warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -61,6 +62,7 @@ from scipy.linalg import cholesky, solve_triangular
 from scipy.optimize import nnls
 from scipy.stats import rankdata, spearmanr
 
+DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
 import consensus_variance_diag as cv
 from consensus_variance_diag import (HM, TEST5, TRAIN12, Windows, cell_cool, pearson_by_group)
 
@@ -96,7 +98,7 @@ def track_path(cell, track):
     else:
         p = HM / f"hg38_{cell}" / f"{track}.bigwig"
         if not p.exists():                      # gm12878 tracks live outside the project data folder
-            p = Path.home() / "data/hic-multiome" / f"hg38_{cell}" / f"{track}.bigwig"
+            p = DATA / f"hg38_{cell}" / f"{track}.bigwig"
     return p if p.exists() else None
 
 

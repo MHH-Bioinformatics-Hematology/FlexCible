@@ -50,7 +50,7 @@ import multicell_expanded as mx                                     # noqa: E402
 
 OUT = mx.HM / "runs/meth_replace"
 RES_OUT = REPO / "results/methylation"
-PY = sys.executable
+PY = os.environ.get("HICMULTI_PY", sys.executable)
 NOISE = 0.013            # seed noise of the median per-region Pearson (section 15)
 GROUPS = {"CTCF": ["CTCF"], "cohesin": ["RAD21", "SMC3"],
           "active": ["H3K27ac", "H3K4me1", "H3K4me2", "H3K4me3", "H3K9ac"],

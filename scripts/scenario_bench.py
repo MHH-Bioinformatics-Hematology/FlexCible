@@ -72,8 +72,8 @@ import multicell_expanded as mx                                     # noqa: E402
 OUT = mx.HM / "runs/scenario_bench"
 CFG_OUT = REPO / "configs/scenario"
 RES_OUT = REPO / "results/scenario_bench"
-PY = sys.executable
-TORCHRUN = str(Path(sys.executable).parent / "torchrun")
+PY = os.environ.get("HICMULTI_PY", sys.executable)
+TORCHRUN = os.environ.get("HICMULTI_TORCHRUN", str(Path(PY).parent / "torchrun"))
 
 CHIP13 = mx.ALL13
 SETS = {

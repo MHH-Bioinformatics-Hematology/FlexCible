@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import os
 import subprocess
 import sys
 import time
@@ -33,7 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
-HM = Path("/mnt/processed/wolffjoa/hic-multiome")
+DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
+HM = Path(os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome"))
 MD = HM / "meth"
 RAW = MD / "raw"
 BIN = 1000
@@ -57,7 +59,7 @@ HG19 = {
     "mcf7": ["ENCFF001TOZ", "ENCFF001TPA"],     # ENCSR939RXT
     "hff": ["ENCFF001TPS", "ENCFF001TPT"],      # ENCSR000DFG, foreskin fibroblast (newborn)
 }
-CHAIN19 = Path.home() / "data/hic-multiome/chain/hg19ToHg38.over.chain.gz"
+CHAIN19 = DATA / "chain/hg19ToHg38.over.chain.gz"
 ALIAS = {"hmec_deep": "hmec"}
 CHROM_SIZES_FROM = HM / "hg38_imr90" / "CTCF.bigwig"
 
