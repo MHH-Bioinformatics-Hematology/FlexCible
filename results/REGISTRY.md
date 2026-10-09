@@ -4405,3 +4405,69 @@ What answers what.
 - seen_cell against unseen_cell with `--holdout-cell`: the cost of an unseen
   cell.
 Status PENDING: smoke test passed on CPU; no training result yet.
+
+## 43. Methylation-aware directed CTCF motif planes (PENDING, queued)
+
+Question. Section 41 found that CpG methylation inside the CTCF motif lowers the
+CTCF ChIP height beyond the motif score (partial Spearman -0.46 to -0.68 with the
+motif strength held fixed), while the 1 kb Meth track averaged to the 10 kb bin
+dilutes that signal. Does giving the Hi-C model the methylation of each motif site
+improve the prediction over the Meth track alone.
+
+Input option `motifs.motif_meth` (default off; `motif_meth_id` MA0139.2). Code:
+`hicmultiome/motifmeth.py`, `precompute.assemble_chrom`, `config.py`, `train.py`
+(row selection and dropout coupling), `scripts/crosscell_predict.py` (absent-Meth
+sets), `scripts/motif_meth.py`. Per cell and chromosome, every CTCF hit of the
+model's motif scan (PWM >= 0.8 of the maximum, the channel threshold; start
+positions from `motifs.cached_motif_positions`) gets the weight
+
+    w = 1 - (methylated reads / reads) over the CpGs wholly inside the motif,
+        reads pooled over the CpGs, at least 10 reads (MIN_SITE_COV as in section 41);
+    w = 1 for a site without covered motif CpG (no CpG in the motif or coverage
+        below 10 reads), the unmodified hit.
+
+A bin holds the sum of w over the forward (reverse) hits starting in it, so a cell
+without CpG data has planes equal to the unmodified hit counts. The planes enter as
+one more directed motif pair, pseudo motif `MA0139.2:meth`, next to the unmodified
+pair, so the fwd_i * rev_j conditioning planes, the reverse augmentation and the
+row selection of `select_tracks` / `select_motifs` apply unchanged. Because w = 1
+means both "unmethylated" and "no information", a conditioning row
+`motifmeth_covered` (sequence-feature block) carries the fraction of the bin's hits
+with measured motif methylation (0 without CpG data and where Meth is absent).
+Indicator rather than mean imputation: the indicator keeps the unmodified strength
+exact and lets the network learn what an uncovered site means. CpG tables are the
+per-chromosome arrays of `scripts/chip_seq_meth_relationships.py --stage cpg`
+(`<chrom>_pos`, `_cov`, `_meth`), copied by `scripts/motif_meth.py --stage cpg` to
+`meth/<cell>/CpG.npz` of the nine WGBS cells; every other cell (NHEK, PC-9,
+HUVEC, the RRBS cells HCT116, MCF-7, HFF) gets the unmodified planes and covered = 0.
+
+Honesty. The planes are inputs derived from the cell's own WGBS and its genome; no
+Hi-C or reference enters them. Normalisation statistics are fit on training
+chromosomes of the training cells like every other row; held-out cells (K562,
+HMEC, HUVEC) are never trained on. Track dropout removes the methylation of the
+planes together with the Meth track: in a window that drops Meth the weighted pair
+is replaced by the unmodified pair (rescaled to its own z-score statistics, the
+reverse-augmented windows with the swapped plane's statistics) and the covered row
+by its absent value, which is exactly the input of a cell without CpG data.
+`crosscell_predict --keep-sets` without Meth does the same, so absent-Meth scoring
+cannot leak methylation through the planes. Edited-sequence prediction
+(`variants.predict_edited`) raises for such a model.
+
+Meth reaching the network (regression of the 2026-10-02 select_tracks bug,
+`tests/test_motif_meth.py`, CPU, 8 tests, plus the 177 tests of the suite): a
+select_tracks list with Meth keeps the Meth row, the weighted pair and the covered
+row, one without it drops the Meth row (asserted); a random-weight model gives a
+different output when the CpG-derived rows change, when the Meth row changes, and
+the input channel count exceeds that of the option-off model; the per-site weights
+equal an independent loop on a synthetic genome with planted sites; a normalised
+CpG cell after `drop_methylation` equals the same cell without CpG file; the torch
+dropout path equals it for plain and reverse-augmented windows; an end-to-end
+precompute plus train with track dropout 0.5 over three cells (CpG, Meth without
+CpG, no Meth) runs and logs the coupling.
+
+Runs (scheduler-style names, `scripts/multicell_expanded.py`):
+`all12refres_drop_motifmeth_25kb` and `_10kb` (residual on the leave-one-out
+consensus, track dropout 0.5, the 12 training cells, the nine WGBS cells carry
+Meth and CpG as in all12refres_drop_meth), caches `mc_all12refres_drop_motifmeth_<k>kb`,
+queued in `scripts/gpu_queue_extra.py` (block a) with the standard evaluation, so
+the rows land in `reference_summary.csv`. Results: pending.

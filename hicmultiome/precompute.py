@@ -35,7 +35,8 @@ from .matrix import (
     open_cool,
     plan_windows,
 )
-from .motifs import cached_motif_tracks
+from . import motifmeth as mm
+from .motifs import cached_motif_positions, cached_motif_tracks
 from .reference import assert_reference_excludes
 from .sequence import cached_sequence_features
 from .tracks import TrackNormalizer, discover_tracks, read_all_tracks
@@ -145,6 +146,8 @@ def seq_feature_names(cfg: Config) -> list[str]:
     if cfg.data.cohesin_unknown:
         names.append(COHESIN_ROW)
     names += [f"lab_{c}" for c in cfg.data.lab_classes]
+    if cfg.motif_meth_active:
+        names.append(mm.COVERED_FEATURE)
     return names
 
 
@@ -155,6 +158,8 @@ def sym_row_names(cfg: Config) -> list[str]:
     if cfg.data.cohesin_unknown:
         rows.append("cohesin:unknown")
     rows += [f"lab:{c}" for c in cfg.data.lab_classes]
+    if cfg.motif_meth_active:
+        rows.append(mm.COVERED_ROW)
     for mid in cfg.active_motif_ids:
         rows += [f"motif:{mid}:fwd", f"motif:{mid}:rev"]
     return rows
@@ -194,10 +199,22 @@ def assemble_chrom(
         parts.append(np.full((1, nb), cohesin_unknown_value(cfg, dead), dtype=np.float32))
     for c in cfg.data.lab_classes:
         parts.append(np.full((1, nb), float(sample.lab == c), dtype=np.float32))
+    mmeth = None
+    if cfg.motif_meth_active:
+        # methylation-weighted motif pair + covered fraction (hicmultiome.motifmeth)
+        mmeth = (mm.methylated_motif_tracks(
+            fasta, chrom, cfg.motifs.motif_meth_id, cfg.motifs.dir, nb, cfg.data.resolution,
+            cfg.motifs.score_frac, cfg.sequence.cache_dir,
+            mm.find_cpg_file(sample.extra_bigwig_dirs))
+            if fasta else np.zeros((3, nb), dtype=np.float32))
+        parts.append(mmeth[2:3])
     if not fasta and cfg.any_fasta and cfg.active_motif_ids:
         parts.append(np.zeros((2 * len(cfg.active_motif_ids), nb), dtype=np.float32))
     if fasta:
         for mid in cfg.active_motif_ids:
+            if mm.is_meth_id(mid):
+                parts.append(mmeth[:2])
+                continue
             parts.append(
                 cached_motif_tracks(
                     fasta, chrom, mid, cfg.motifs.dir,
@@ -321,6 +338,10 @@ def build(cfg: Config, workers: int = 1) -> dict:
                     cached_sequence_features(fasta, chrom, cfg.sequence.features, nb,
                                              cfg.data.resolution, cfg.sequence.cache_dir)
                 for mid in cfg.active_motif_ids:
+                    if mm.is_meth_id(mid):          # the hit positions, shared by all cells
+                        cached_motif_positions(fasta, chrom, mm.base_id(mid), cfg.motifs.dir,
+                                               cfg.motifs.score_frac, cfg.sequence.cache_dir)
+                        continue
                     cached_motif_tracks(fasta, chrom, mid, cfg.motifs.dir, nb,
                                         cfg.data.resolution, cfg.motifs.score_frac,
                                         cfg.sequence.cache_dir)

@@ -195,6 +195,10 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # the same with the larger cell set: the hg19 RRBS of HCT116, MCF-7 and HFF
     # lifted to hg38 (scripts/methylation.py, registry section 35)
     "all12refres_drop_meth_v2": (TRAIN12, None),
+    # Meth plus methylation-aware directed CTCF motif planes (motifs.motif_meth,
+    # hicmultiome.motifmeth; registry section 43): CpG.npz of the WGBS cells
+    # (scripts/motif_meth.py --stage cpg), cell set as all12refres_drop_meth
+    "all12refres_drop_motifmeth": (TRAIN12, None),
     # copy number (CNVgain, CNVloss from Hi-C coverage, scripts/cnv_sv.py) as
     # two more tracks and the structural-variant loss mask (registry section 28)
     "all12refres_drop_cnv": (TRAIN12, None),
@@ -244,6 +248,7 @@ DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth_v2"] = (0.5, 0.0)
+DROPOUT_RUNS["all12refres_drop_motifmeth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_cnv"] = (0.5, 0.0)
 DROPOUT_RUNS.update({r: (0.5, 0.0) for r in STRUCT_RUNS})
 # chromosome-held-out final models (registry section 37): the union of the
@@ -259,7 +264,9 @@ CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
-METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop"}
+METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
+             "all12refres_drop_motifmeth"}
+MOTIFMETH_RUNS = {"all12refres_drop_motifmeth"}
 METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
@@ -302,6 +309,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
             "all12refres_drop_meth": "residual",
             "all12refres_drop_meth_v2": "residual", "all12refres_drop_cnv": "residual",
+            "all12refres_drop_motifmeth": "residual",
             **{r: "input" for r in STRUCT_RUNS},
             **{k: "input" for k in AML_RUNS if "refin" in k},
             "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
@@ -400,6 +408,8 @@ def run_config(name, val_per_cell, patience, max_epochs):
                 smp["extra_bigwig_dirs"] = [str(me.meth_dir(smp["name"], v2))]
             else:
                 smp["missing_tracks"] = smp["missing_tracks"] + [me.TRACK]
+    if base in MOTIFMETH_RUNS:
+        cfg["motifs"]["motif_meth"] = True      # the CpG.npz sits in each cell's meth folder
     if base in CNV_RUNS:
         import cnv_sv as cs_
         for t in cs_.TRACKS:

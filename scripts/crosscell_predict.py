@@ -28,6 +28,7 @@ from scipy.stats import pearsonr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc
+from hicmultiome import motifmeth as mm
 from hicmultiome.config import Config
 from hicmultiome.genome import match_name
 from hicmultiome.matrix import MatrixNormalizer, open_cool
@@ -143,6 +144,8 @@ def main():
     mat_norm = MatrixNormalizer.load(ckpt / f"norm_matrix_{cfg.get_sample(None).name}.json")
     track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
     absent = track_norm.absent_values()
+    mm_rows = (mm.coupling_rows(channels["sym_rows"], cfg.motifs.motif_meth_id)
+               if cfg.motif_meth_active else None)
     use_seq = cfg.sequence.uses_encoder
     fasta = cfg.get_sample(None).fasta or cfg.sequence.fasta
 
@@ -238,6 +241,8 @@ def main():
             sy = sym_full.copy() if (drop or coh_i is not None) else sym_full
             for t in drop:
                 sy[row_of[t]] = absent[row_of[t]]
+            if mm_rows is not None and "Meth" in drop:
+                mm.drop_methylation(sy, track_norm, mm_rows)      # motif planes lose it too
             if coh_i is not None:
                 gone = set(missing) | set(drop)
                 mode = ("0" if k.endswith("_ind0") else "1" if k.endswith("_ind1")

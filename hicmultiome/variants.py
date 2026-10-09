@@ -210,6 +210,10 @@ def edited_rows(cfg: Config, sample, chrom: str, edits: list[Edit],
         off += feats.shape[0]
 
     # 3) motifs RE-SCANNED on the edited sequence
+    if cfg.motif_meth_active:
+        raise NotImplementedError("edited-sequence prediction does not support "
+                                  "motifs.motif_meth (the CpG positions of an edited "
+                                  "sequence are not mapped)")
     for mid in cfg.active_motif_ids:
         pwm = pwm_logodds(read_jaspar(Path(cfg.motifs.dir).expanduser() /
                                       f"{mid}.jaspar"))

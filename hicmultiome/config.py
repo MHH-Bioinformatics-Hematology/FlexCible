@@ -244,6 +244,13 @@ class MotifConfig:
     score_frac: float = 0.80             # hit = log-odds >= frac * max score
     directed_pairs: bool = True          # add fwd_i*rev_j / rev_i*fwd_j channels
                                          # (captures convergent CTCF loop anchors)
+    # methylation-aware directed motif strength (hicmultiome.motifmeth): one
+    # more fwd/rev pair of the motif `motif_meth_id` with every site weighted
+    # by (1 - methylated fraction of the CpGs inside it), plus a covered row.
+    # Needs the cell's CpG.npz in samples[].extra_bigwig_dirs (cells without
+    # one get the unmodified planes and covered = 0). Default off.
+    motif_meth: bool = False
+    motif_meth_id: str = "MA0139.2"
 
 
 @dataclass
@@ -564,7 +571,18 @@ class Config:
         for m in self.motifs.extra:
             if m not in seen:
                 seen.append(m)
+        if self.motifs.motif_meth:
+            from .motifmeth import meth_id
+            if self.motifs.motif_meth_id not in seen:
+                raise ValueError(f"motifs.motif_meth_id {self.motifs.motif_meth_id!r} is not a "
+                                 f"motif of the tracks or motifs.extra ({seen})")
+            seen.append(meth_id(self.motifs.motif_meth_id))
         return seen
+
+    @property
+    def motif_meth_active(self) -> bool:
+        """The methylation-weighted motif pair and the covered row are built."""
+        return bool(self.motifs.motif_meth and self.any_fasta and self.motifs.enabled)
 
     @property
     def any_fasta(self) -> bool:
@@ -657,6 +675,7 @@ class Config:
                              "samples[].reference_cool) needs window.transform "
                              "'prescaled' (the reference holds log O/E values)")
         for mid in self.active_motif_ids:
+            mid = mid[: -len(":meth")] if mid.endswith(":meth") else mid
             p = Path(self.motifs.dir).expanduser() / f"{mid}.jaspar"
             if not p.exists():
                 raise FileNotFoundError(

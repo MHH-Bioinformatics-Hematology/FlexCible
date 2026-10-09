@@ -29,9 +29,11 @@ import torch.distributed as dist
 
 from .config import Config
 from .dataset import WindowDataset, reverse_cond, split_cond
+from . import motifmeth as mm
 from .losses import build_loss
 from .model import (HiCModel, HiCUNet, SeqEncoder, build_backbone,
                     build_spatial_cond, make_model, n_cond_channels)
+from .motifmeth import meth_id
 from .sequence import window_codes
 from .utils import get_logger, set_seed
 
@@ -381,6 +383,28 @@ def log_val_split(coords, vi, ti, exclude_overlap: bool):
             log.warning("  sample %s has NO validation window", s)
 
 
+def apply_motif_meth_drop(cond: torch.Tensor, dropped: torch.Tensor, mmc, rev_mask=None):
+    """In place: the windows with `dropped` (bool, B) lose the methylation of
+    the motif planes (see motif_meth_coupling). rev_mask marks the windows whose
+    fwd/rev rows were swapped by the reverse augmentation: the row at a fwd
+    position then holds the rev plane's normalisation, so the other plane's
+    statistics apply."""
+    bs, dm = cond.shape[0], dropped[:, None]
+    for k, (dst, src, ca, cb) in enumerate(mmc[1]):
+        ca_t = torch.full((bs, 1), ca, device=cond.device)
+        cb_t = torch.full((bs, 1), cb, device=cond.device)
+        if rev_mask is not None:
+            oa, ob = mmc[1][1 - k][2], mmc[1][1 - k][3]
+            ca_t = torch.where(rev_mask[:, None], ca_t.new_full((bs, 1), oa), ca_t)
+            cb_t = torch.where(rev_mask[:, None], cb_t.new_full((bs, 1), ob), cb_t)
+        cond[:, dst] = torch.where(dm, ca_t * cond[:, src] + cb_t, cond[:, dst])
+    cond[:, mmc[2]] = torch.where(dm, torch.full_like(cond[:, mmc[2]], mmc[3]), cond[:, mmc[2]])
+    return cond
+
+
+METH_TRACK = "Meth"      # scripts/methylation.py TRACK
+
+
 def dropout_chip_rows(cfg: Config, channels: dict) -> list[int]:
     """Cache rows of the ChIP tracks the model reads, in the order they lead
     its (possibly reduced) cond: track dropout acts on cond rows
@@ -404,12 +428,44 @@ def _select_rows(cfg: Config, channels: dict):
     else:
         track_motif = {t.name: t.motif for t in cfg.data.tracks}
         used = {track_motif.get(tracks[i]) for i in keep_t} | set(cfg.motifs.extra)
+    # the methylation-weighted pair of a kept motif (motifs.motif_meth) travels with it
+    used |= {meth_id(m) for m in list(used) if m is not None}
     keep_m = [m for m, mid in enumerate(motifs) if mid in used]
     nt, ns = len(tracks), len(seqf)
     rows = (keep_t
             + list(range(nt, nt + ns))
             + [nt + ns + 2 * m + k for m in keep_m for k in (0, 1)])
     return rows, len(keep_t) + ns, len(keep_m), len(rows)
+
+
+def motif_meth_coupling(cfg: Config, channels: dict, chip_rows: list[int], track_norm):
+    """Track dropout of the Meth track also removes the methylation of the
+    CTCF motif planes (motifs.motif_meth): in a window that drops Meth the
+    weighted pair is replaced by the unmodified pair and the covered row by
+    its absent value, the state of a cell without methylation. Returns None
+    when the model has no such planes or no Meth track among the dropout rows,
+    else (draw position of Meth, [(dst, src, a, b)] per plane, covered row,
+    covered absent value), all as indices into the model's (reduced) cond."""
+    if not cfg.motif_meth_active or METH_TRACK not in channels["tracks"]:
+        return None
+    t = channels["tracks"].index(METH_TRACK)
+    if t not in chip_rows:
+        return None
+    rows_full = mm.coupling_rows(channels["sym_rows"], cfg.motifs.motif_meth_id)
+    full_to_cond = {r: i for i, r in enumerate(_select_rows(cfg, channels)[0])} if (
+        cfg.train.select_tracks is not None or cfg.train.select_motifs is not None) else None
+
+    def cond_row(r):
+        if full_to_cond is None:
+            return r
+        if r not in full_to_cond:
+            raise ValueError(f"motif_meth: cond row {r} is not kept by select_tracks/select_motifs")
+        return full_to_cond[r]
+    a, b, cov_absent = mm.absent_transform(track_norm, rows_full)
+    planes = [(cond_row(rows_full["meth"][k]), cond_row(rows_full["unmod"][k]),
+               float(a[k]), float(b[k])) for k in range(2)]
+    return chip_rows.index(t), planes, cond_row(rows_full["covered"]), cov_absent
+
 
 
 def _fasta_map(cfg: Config) -> dict:
@@ -816,6 +872,13 @@ def train(cfg: Config):
     # cohesin-unknown indicator (data.cohesin_unknown): the SMC3 row follows
     # the RAD21 dropout draw and the indicator row (normalised "1") is set in
     # every window that loses the cohesin group
+    mmc = None
+    if absent_t is not None:
+        mmc = motif_meth_coupling(cfg, ds.channels, chip_rows, tn)
+        if mmc is not None and is_main:
+            log.info("motif_meth: Meth dropout removes the methylation of the motif planes "
+                     "(cond rows %s from %s, covered row %d)", [p[0] for p in mmc[1]],
+                     [p[1] for p in mmc[1]], mmc[2])
     coh = None
     if cfg.data.cohesin_unknown and absent_t is not None:
         from .precompute import COHESIN_ROW, COHESIN_TRACKS
@@ -1089,6 +1152,8 @@ def train(cfg: Config):
                         cond_b[:, coh[2]] = torch.where(
                             drop[:, coh[0], None],
                             torch.full_like(cond_b[:, coh[2]], coh[3]), cond_b[:, coh[2]])
+                    if mmc is not None:
+                        apply_motif_meth_drop(cond_b, drop[:, mmc[0]], mmc, rev_mask)
             sym, pairs = split_cond(cond_b, offset, n_motifs)
             planes = None
             dropped = None
