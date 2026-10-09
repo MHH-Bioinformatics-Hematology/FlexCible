@@ -28,6 +28,11 @@ GPU start condition (either one):
 Reload: `touch runs/multicell_reference/.extra_reload`; when no job of the queue is running it
 re-executes itself (same PID, same arguments) and reads the current code and job list.
 
+Claims: every dedicated scenario training is claimed on the shared drive
+(scripts/claim_job.py, runs/multicell_reference/claims/<run>.claim) before a local start. A job
+claimed by another host is skipped and re-checked at every poll until its output exists or the
+claim is released; a local failure releases the claim, a success keeps it.
+
 Stop: kill <PID in runs/multicell_reference/.extra_queue.pid> (SIGTERM; the
 queue then ends its running jobs' process groups and exits). Nothing here uses
 killall, pkill or the scheduler's pid files for anything but reading.
@@ -46,6 +51,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import claim_job as cj                                               # noqa: E402
 import gpu_scheduler as gs                                           # noqa: E402
 import multicell_expanded as mx                                      # noqa: E402
 
@@ -146,6 +152,7 @@ def jobs():
         gpu(f"train_{run_name}", f"{SB} --stage configs && {SB} --stage train --run {run_name} --gpus 0,1",
             (lambda r=res, s=seed: gs.trained("all12honest_drop_meth" + ("_s1" if s else ""), r)),
             (lambda n=run_name: sb.dedicated_done(n)))
+        J[-1].claim = run_name      # claimed on the shared drive before a local start (claim_job.py)
         aux(f"scen_ded_{run_name}", f"{SB} --stage dedicated --run {run_name} --gpu {seed}",
             (lambda n=run_name: sb.dedicated_done(n)))
     aux("scen_summary", f"{SB} --stage summary",
@@ -251,6 +258,37 @@ class Gate:
         return False
 
 
+CLAIMS = cj.DEFAULT_DIR
+
+
+def claimed_elsewhere(job, claims_dir=None) -> bool:
+    """The job's claim is held by another host: it runs (or ran) there."""
+    run = getattr(job, "claim", None)
+    if not run:
+        return False
+    c = cj.read_claim(Path(claims_dir or CLAIMS), run)
+    return c is not None and c.get("host") != cj.host()
+
+
+def try_claim(job, claims_dir=None) -> bool:
+    """Claim the job's run name for this host. True: start it. A claim this host
+    already holds (an earlier run of this queue that is not running now) counts as ours."""
+    run = getattr(job, "claim", None)
+    if not run:
+        return True
+    d = Path(claims_dir or CLAIMS)
+    if cj.claim(d, run, None, f"gpu_queue_extra {job.name}") == 0:
+        return True
+    c = cj.read_claim(d, run)
+    return c is not None and c.get("host") == cj.host()
+
+
+def release_claim(job, claims_dir=None):
+    run = getattr(job, "claim", None)
+    if run:
+        cj.release(Path(claims_dir or CLAIMS), run)
+
+
 def launch(job):
     note(f"start {job.name}")
     wrapped = (f"cd {REPO} && ( {job.cmd} ) >> {OUTLOG} 2>&1; rc=$?; "
@@ -305,6 +343,7 @@ def main():
                 (MR / f".extra_run_{n}.pid").unlink(missing_ok=True)
                 if p.returncode != 0:
                     failed.add(n)
+                    release_claim(next(j for j in all_jobs if j.name == n))   # failure only
                 del running[n]
         pending = [j for j in all_jobs if j.name not in running and j.name not in failed
                    and not j.done() and not marked(j.name)]
@@ -317,9 +356,15 @@ def main():
             os.execv(sys.executable, [sys.executable] + sys.argv)
         gpu_busy = any(j.gpu for j in all_jobs if j.name in running)
         opened = gate()
-        head = next((j for j in pending if j.gpu), None)     # strict order a, b, c, d
+        # strict order; a job claimed by another host is running elsewhere: skip it, re-check later
+        gpu_pending = [j for j in pending if j.gpu]
+        elsewhere = [j for j in gpu_pending if claimed_elsewhere(j)]
+        head = next((j for j in gpu_pending if j not in elsewhere), None)
         if opened and not gpu_busy and head is not None and head.ready():
-            running[head.name] = launch(head)
+            if try_claim(head):
+                running[head.name] = launch(head)
+            else:
+                note(f"{head.name}: claimed elsewhere just now, skipped")
         cpu_running = sum(1 for j in all_jobs if j.name in running and not j.gpu)
         for j in pending:
             if cpu_running >= CPU_SLOTS:
@@ -334,7 +379,7 @@ def main():
             running[j.name] = launch(j)
             cpu_running += 1
         # nothing can start and nothing runs although the gate is open: blocked by failures
-        if opened and not running and not any(
+        if opened and not running and not elsewhere and not any(
                 j.ready() for j in pending if not j.gpu or j is head):
             stalled += 1
             if stalled > 10:
