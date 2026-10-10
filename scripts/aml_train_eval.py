@@ -47,7 +47,7 @@ OUTD = mx.HM / "runs/aml_train_eval"
 RES_OUT = REPO / "results/aml_train"
 PY = sys.executable
 RES = [25000, 10000]
-GPUS = ["0", "1"]
+GPUS = os.environ.get("HICMULTI_GPUS", "0,1").split(",")
 
 
 def log(msg):
