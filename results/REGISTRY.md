@@ -5786,3 +5786,72 @@ WGBS-only (no CUT&Tag) and are in no AML training fold.
    unaffected.
 4. AML-sites figures (`aml_sites_figures.py`): use patients with CUT&Tag; 496, 260 and 424 are not among them; unaffected, but any
    "n patients" statement for Hi-C or WGBS counts samples, which overstate the number of donors by 2.
+
+## 55. Cohesin-fraction input and cohesin-loss augmentation (PENDING; section 54 was the last number when this was written)
+
+Problem (sections 21, 25, 32): the RAD21 degron is predicted with a change-map correlation of 0.80
+(10 kb) when the measured auxin ChIP is given, but a RAD21 track declared absent moves the loops by
++0.03 log O/E (measured -0.73), 20.8% of the loops come out weaker, and the U-937 STAG2 knockout stays
+wrong; the cohesin-unknown indicator (section 32) did not help. Diagnosis in
+`results/cohesin_fix/DIAGNOSIS.md` (`scripts/cohesin_fix_diagnose.py`, 184 even-chromosome Akita test
+windows of HCT116, all12deg_refres_drop_10kb): the change predicted from an absent RAD21 has a spread of
+0.034 against the measured 0.319 (11%), from the measured auxin track 0.202 (63%); loops, borders and the
+distance profile all move by 0 to 5% of the measured amount. The model reads the peak-to-background
+contrast of the RAD21 track (contrast scaled to 0.26 around the window median: Pearson 0.70, spread
+0.116; every value scaled to 0.26: Pearson 0.08, spread 0.016; absent: spread 0.034), not the level, not the
+consensus, not the CTCF or histone tracks (auxin CTCF only: -0.10). Cause: with track dropout an absent
+RAD21 means "not measured" in every cell with an intact map (five of the twelve have no cohesin ChIP), the
+only low-cohesin example is one sample, and the cohesin-unknown indicator is 1 exactly where loops are
+intact (response to an absent RAD21 0.042 with the indicator, 0.070 without). The degron sample was also
+encoded with its own contact scale (1.316 against 1.914), which stretches the weaker map (predicted spread
+0.254 decoded with its own scale against 0.202). The STAG2 knockout is a different perturbation: loops
++0.08 (short -0.105, long +0.181), clone-pair ceiling of the change map 0.25, change map correlated with
+the RAD21 degron change at 0.14, opposite sign of the mean change at 100 to 250 kb (+0.018 against
+-0.021); a total-cohesin scalar cannot span it and RAD21/SMC3 ChIP of the wild type cannot encode the loss
+of STAG2-specific cohesin.
+
+Fix (all default off). (1) Cohesin-fraction row (`data.cohesin_fraction`, `samples[].cohesin_fraction`):
+one constant input row, log1p(f)/ln 2 - 1 (1 intact = 0, none = -1), a statement about the biology and not
+about which ChIP was measured (1 for every sample, also those without RAD21/SMC3 ChIP; 0.26 for the 6 h
+auxin sample: RAD21 enrichment above the median in the top 1% untreated bins, auxin over untreated, odd
+chromosomes). (2) Cohesin-loss augmentation (`train.cohesin_aug` p = 0.25, `hicmultiome/cohesin.py`): a
+training window of an intact sample is replaced by a synthetic depleted one with f drawn from
+{0, 0.1, 0.26, 0.5, 0.75}: RAD21/SMC3 contrast scaled to f around the window median, or (share 0.5) set to
+the absent code, the fraction row set to f, and the target moved by (1 - f)/(1 - 0.26) times the change of
+the degron operator in log O/E units. The operator (`scripts/cohesin_operator.py`; 5 dilated 3x3
+convolutions, 24 channels, symmetric, zero within 2 bins of the diagonal) is fitted on the odd
+chromosomes of the HCT116 untreated/auxin pair only and predicts the change of the even-chromosome Akita
+test windows from the untreated map alone at median window Pearson 0.834 (10 kb; high-pass part 0.516,
+spread 0.257 against 0.338) and 0.877 (25 kb; 0.636; 0.244 against 0.309); the per-diagonal mean change
+scores -0.087 / -0.119 and a single linear high-pass factor 0.288 / 0.432. (3) `samples[].norm_like`:
+hct116_auxin takes the contact scale of hct116. Runs all12cohfix_refres_drop (all of it) and
+all12cohfixna_refres_drop (row and shared scale only, no augmentation; ablation), 25 and 10 kb, otherwise
+the degron recipe of section 25 (hct116 reads the untreated degron ChIP, hct116_auxin the 6 h auxin Hi-C
+and ChIP on the odd autosomes, uniform-count track dropout 0.5, residual on the leave-one-out consensus,
+honest validation). One cache (`mc_all12cohfix_refres_drop_<k>kb`) serves both; the operators sit on the
+share (`cohesin_fix/operator_<k>kb.pt`).
+
+Leakage safeguards. The operator sees HCT116 pairs of the odd chromosomes only; its even-chromosome
+numbers come from the Akita test windows and no choice (architecture, 30 epochs) was made on them. The
+auxin sample trains on odd chromosomes only; the even chromosomes are the evaluation. Synthetic windows are
+made on the fly from training windows only, after the honest validation split (no training window overlaps
+a validation position in any sample); validation windows are not augmented. The consensus of each
+sample excludes it (leave-one-out; hct116_auxin uses the hct116 one). The CTCF degron, the washout maps and
+the U-937 knockout are never trained on. The track normaliser statistics are fitted on all training
+chromosomes of every sample, the auxin sample's even chromosomes included (ChIP signal only, as in
+section 25).
+
+Evaluation (same scripts and tables as for the degron models; new rows): `perturb_validate.py`
+(`minus_RAD21` fraction 1, `minus_RAD21_f0`, `minus_RAD21_f0.5`, `measured_chip` with fraction 0.26,
+`minus_CTCF`), `washout.py` (the fraction row follows 0.26 + f (1 - 0.26)), `aml_eval.py` perturb (variants
+u937_ko_absent_f0, _f0.5, u937_ko_f0.5 and _f0.75), intact performance (`multicell_expanded.py --stage eval`
+and summary; the augmentation must not lower the 413-region medians of all12deg_refres_drop), and
+`cohesin_fix_diagnose.py` on the trained model. Acceptance: change Pearson on the even chromosomes and loops
+weaker for `minus_RAD21_f0` at least those of `measured_chip` of all12deg_refres_drop (0.80, 98.4%),
+CTCF degron (held out) not below 0.40, washout monotone, intact medians within 0.005. A fraction row that
+the model ignores (spread of `wt_f0` below 0.1 of the measured) counts as a failure.
+
+Status: operators fitted, 25 kb cache built, 60-step CPU smoke on the real 25 kb cache passed (36 of 180
+windows augmented), unit tests `tests/test_cohesin_fix.py` (8) and the full suite (187 passed) pass; 10 kb
+cache in progress. Trainings are queued as `results/cohesin_fix/REMOTE_JOB.md` (0.6 GPU hours for the two
+main runs, 1.2 with the ablation) and wait for the GPU. Results: pending.

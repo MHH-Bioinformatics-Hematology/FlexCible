@@ -128,6 +128,14 @@ def assay_classes(cfg: Config) -> list[str]:
 
 COHESIN_ROW = "cohesin_unknown"      # data.cohesin_unknown row (0 measured, 1 absent)
 COHESIN_TRACKS = ("RAD21", "SMC3")
+FRACTION_ROW = "cohesin_fraction"    # data.cohesin_fraction row: log1p(f) / ln 2 - 1
+FRACTION_SYM = "cohesin:fraction"
+
+
+def fraction_row_value(f: float) -> float:
+    """Normalised value of a cohesin fraction f in [0, 1] (what the row holds
+    after the track normaliser): 0 for intact cohesin, -1 for none."""
+    return float(np.log1p(f) / np.log(2.0) - 1.0)
 
 
 def cohesin_unknown_value(cfg: Config, dead) -> float:
@@ -135,6 +143,14 @@ def cohesin_unknown_value(cfg: Config, dead) -> float:
     measured (all in `dead`: missing or zeroed), else 0.0."""
     tr = [t for t in COHESIN_TRACKS if t in cfg.track_names]
     return float(bool(tr) and all(t in dead for t in tr))
+
+
+def fix_fraction_norm(track_norm, row: int) -> None:
+    """Statistics of the cohesin:fraction row: its values are nearly all 1, so a
+    fitted standard deviation would blow a depleted sample up; fixed to
+    (log1p(f) - ln 2) / ln 2, which gives 0 for f = 1 and -1 for f = 0."""
+    track_norm.mean[row] = float(np.log(2.0))
+    track_norm.std[row] = float(np.log(2.0))
 
 
 def seq_feature_names(cfg: Config) -> list[str]:
@@ -145,6 +161,8 @@ def seq_feature_names(cfg: Config) -> list[str]:
     names += [f"assay_{a}" for a in assay_classes(cfg)]
     if cfg.data.cohesin_unknown:
         names.append(COHESIN_ROW)
+    if cfg.data.cohesin_fraction:
+        names.append(FRACTION_ROW)
     names += [f"lab_{c}" for c in cfg.data.lab_classes]
     if cfg.motif_meth_active:
         names.append(mm.COVERED_FEATURE)
@@ -157,6 +175,8 @@ def sym_row_names(cfg: Config) -> list[str]:
     rows += [f"assay:{a}" for a in assay_classes(cfg)]
     if cfg.data.cohesin_unknown:
         rows.append("cohesin:unknown")
+    if cfg.data.cohesin_fraction:
+        rows.append(FRACTION_SYM)
     rows += [f"lab:{c}" for c in cfg.data.lab_classes]
     if cfg.motif_meth_active:
         rows.append(mm.COVERED_ROW)
@@ -197,6 +217,10 @@ def assemble_chrom(
         parts.append(np.full((1, nb), float(sample.assay == a), dtype=np.float32))
     if cfg.data.cohesin_unknown:
         parts.append(np.full((1, nb), cohesin_unknown_value(cfg, dead), dtype=np.float32))
+    if cfg.data.cohesin_fraction:
+        # raw value = the fraction itself; the track normaliser's statistics of
+        # this row are replaced after the fit (fix_fraction_norm)
+        parts.append(np.full((1, nb), float(sample.cohesin_fraction), dtype=np.float32))
     for c in cfg.data.lab_classes:
         parts.append(np.full((1, nb), float(sample.lab == c), dtype=np.float32))
     mmeth = None
@@ -405,7 +429,15 @@ def build(cfg: Config, workers: int = 1) -> dict:
         transform=cfg.track.transform, norm=cfg.track.norm,
         smooth_bins=cfg.track.smooth_bins,
     ).fit(all_rows_arrays, all_valid_rows)
+    if cfg.data.cohesin_fraction:
+        fix_fraction_norm(track_norm, rows.index(FRACTION_SYM))
     track_norm.save(cache / "norm_tracks.json")
+    for s in samples:             # a perturbed condition shares its control's contact scale
+        if s.norm_like:
+            mat_norms[s.name] = mat_norms[s.norm_like]
+            mat_norms[s.name].save(cache / f"norm_matrix_{s.name}.json")
+            log.info("  %s contact scale = %.4f (norm_like %s)", s.name,
+                     mat_norms[s.name].scale, s.norm_like)
 
     channels = {
         "sym_rows": rows,

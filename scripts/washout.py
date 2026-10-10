@@ -116,7 +116,8 @@ DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome
 CHIP = DATA / "perturb_chip"
 FAMILIES = ["all12refres_drop", "all12honest_drop", "all12deg_refres_drop",
             "all12deg_honest_drop", "all12hffcoh_refres_drop", "all12refres", "all12honest",
-            "all12cohunk_refres_drop", "all12cohunk_honest_drop"]
+            "all12cohunk_refres_drop", "all12cohunk_honest_drop",
+            "all12cohfix_refres_drop", "all12cohfixna_refres_drop"]       # section 55: cohesin:fraction row follows f
 
 
 def _trained(fam, res):
@@ -175,6 +176,13 @@ def stage_predict():
                 smp.missing_tracks = [t for t in tracks if t.upper() not in have]
                 files[cond] = (smp, sample_track_files(cfg, smp))
             ri = tracks.index("RAD21")
+            seqf = b["channels"]["seq_features"]
+            frac_row = (len(tracks) + seqf.index("cohesin_fraction")
+                        if "cohesin_fraction" in seqf else None)
+            # cohesin left at RAD21 interpolation f: the auxin sample's fraction at f = 0,
+            # 1 at f = 1 (linear in f, like the RAD21 track)
+            f_aux = (cfg.get_sample("hct116_auxin").cohesin_fraction
+                     if frac_row is not None else 1.0)
             rows = []
             for chrom, grp in regs.groupby("chrom"):
                 import cooler
@@ -187,6 +195,9 @@ def stage_predict():
                     raw = raw_u.copy()
                     raw[ri] = (1 - f) * raw_a[ri] + f * raw_u[ri]
                     sy = tn.apply(raw)
+                    if frac_row is not None:
+                        sy[frac_row] = tn.apply(np.full((len(tn.mean), 1), f_aux + f * (1 - f_aux),
+                                                        np.float32))[frac_row, 0]
                     for t in files["untreated"][0].missing_tracks:
                         sy[tracks.index(t)] = absent[tracks.index(t)]
                     syms[f] = sy

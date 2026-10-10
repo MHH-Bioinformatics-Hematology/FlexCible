@@ -650,6 +650,53 @@ def _plot_curve(rows, out_png):
     plt.close(fig)
 
 
+def _build_cohesin_aug(cfg: Config, ds, ti, data, chip_rows, offset, sl, device, cache_dir,
+                       is_main):
+    """CohesinAugmenter (train.cohesin_aug) and the contact scale of every
+    resident training window of this rank (aligned with the window stripe)."""
+    from .cohesin import CohesinAugmenter, load_operator
+    from .precompute import COHESIN_TRACKS, FRACTION_ROW
+    from .tracks import TrackNormalizer
+
+    if (cfg.train.window_subsample > 1 or cfg.train.oversample_factor > 1
+            or cfg.train.hard_split):
+        raise ValueError("train.cohesin_aug is not supported with window_subsample, "
+                         "oversample_* or hard_split")
+    seqf = ds.channels["seq_features"]
+    if FRACTION_ROW not in seqf:
+        raise RuntimeError("train.cohesin_aug but the cache has no cohesin_fraction row: "
+                           "set data.cohesin_fraction and re-run hicmultiome.precompute")
+    if ds.channels.get("has_capture") or ds.channels.get("capture_input"):
+        raise ValueError("train.cohesin_aug is not supported with capture data")
+    tracks_all = ds.channels["tracks"]
+    tn = TrackNormalizer.load(Path(cache_dir) / "norm_tracks.json")
+    absent_all = tn.absent_values()
+    keep = [t for t in COHESIN_TRACKS if t in tracks_all and tracks_all.index(t) in chip_rows]
+    if not keep:
+        raise ValueError("train.cohesin_aug needs RAD21 or SMC3 among the model tracks")
+    rows = [chip_rows.index(tracks_all.index(t)) for t in keep]
+    op, f_ref = load_operator(cfg.train.cohesin_aug_operator, device)
+    aug = CohesinAugmenter(
+        op, f_ref, cfg.train.cohesin_aug, cfg.train.cohesin_aug_fractions,
+        cfg.train.cohesin_aug_absent, rows,
+        [tn.mean[tracks_all.index(t)] for t in keep], [tn.std[tracks_all.index(t)] for t in keep],
+        [float(absent_all[tracks_all.index(t)]) for t in keep],
+        offset - len(seqf) + seqf.index(FRACTION_ROW), device)
+    names_all = _coords(ds)[2]
+    names = [names_all[i] for i in ti] if ti is not None else list(names_all)
+    scale_of = {n: float(json.loads((Path(cache_dir) / f"norm_matrix_{n}.json").read_text())["scale"])
+                for n in set(names)}
+    sc_all = torch.tensor([scale_of[n] for n in names], dtype=torch.float32)
+    if len(sc_all) != data["target"].shape[0]:
+        raise RuntimeError("cohesin_aug: window names do not align with the training windows")
+    if is_main:
+        log.info("cohesin_aug: p=%.2f fractions %s absent-track share %.2f, operator %s "
+                 "(fitted at cohesin fraction %.2f), tracks %s", cfg.train.cohesin_aug,
+                 cfg.train.cohesin_aug_fractions, cfg.train.cohesin_aug_absent,
+                 cfg.train.cohesin_aug_operator, f_ref, keep)
+    return aug, sc_all[sl].to(device) if sl is not None else sc_all.to(device)
+
+
 def train(cfg: Config):
     if cfg.train.stream:
         return train_stream(cfg)
@@ -902,6 +949,12 @@ def train(cfg: Config):
                 log.info("cohesin_unknown: group %s dropped jointly, indicator cond row %d "
                          "set to %.3f", keep, r_ind, one)
 
+    aug = win_scale = None
+    n_aug_epoch = 0
+    if cfg.train.cohesin_aug > 0:
+        aug, win_scale = _build_cohesin_aug(cfg, ds, ti, data, chip_rows, offset, sl, device,
+                                            cache_dir, is_main)
+
     capin = bool(cfg.capture.use_as_input and ds.n_out == 2)
     cond_mode = cfg.model.cond_mode
     emb = cfg.sequence.embed_dim if use_seq else 0
@@ -1129,6 +1182,9 @@ def train(cfg: Config):
                         ref_b = torch.where(m1, torch.flip(ref_b, dims=[-1, -2]), ref_b)
                     if prior_b is not None:
                         prior_b = torch.where(m1, torch.flip(prior_b, dims=[-1, -2]), prior_b)
+            if aug is not None:
+                cond_b, tgt, n_a = aug(cond_b, tgt, win_scale[idx])
+                n_aug_epoch += n_a
             if absent_t is not None:
                 if cfg.train.track_dropout_mode == "uniform_count":
                     # per window keep k ~ Uniform{1..n_chip} tracks, drop the rest:
@@ -1226,8 +1282,10 @@ def train(cfg: Config):
                          epoch, step, loss_val, seen / (now - t0), (now - t0) / 60.0)
                 last_log = now
         if is_main and nb:
-            log.info("epoch %d done  avg_loss=%.4f (step %d)%s", epoch, ep_loss / nb, step,
-                     "".join(f"  {k}={float(v) / nb:.4f}" for k, v in ep_terms.items()))
+            log.info("epoch %d done  avg_loss=%.4f (step %d)%s%s", epoch, ep_loss / nb, step,
+                     "".join(f"  {k}={float(v) / nb:.4f}" for k, v in ep_terms.items()),
+                     f"  cohesin-augmented windows {n_aug_epoch}" if aug is not None else "")
+        n_aug_epoch = 0
         if step - last_eval >= cfg.train.eval_every or stop:
             validate(loss_val)
         # epoch-based early stopping: max_epochs cap, or no val improvement for

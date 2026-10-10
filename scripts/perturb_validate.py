@@ -68,6 +68,23 @@ PERTS = {"full": None,
          "minus_RAD21": [t for t in mx.ALL13 if t != "RAD21"],
          "minus_CTCF": [t for t in mx.ALL13 if t != "CTCF"],
          "minus_H3K36me3": [t for t in mx.ALL13 if t != "H3K36me3"]}
+# models trained with data.cohesin_fraction (registry section 55) are also asked for
+# cohesin depletion explicitly: the RAD21 track absent AND the cohesin:fraction row
+# at 0 or 0.5 (crosscell_predict reads the _f<value> suffix of the keep-set name);
+# plain minus_RAD21 leaves the row at 1 (a missing ChIP, not a depletion)
+FRACTION_PERTS = {"minus_RAD21_f0": PERTS["minus_RAD21"], "minus_RAD21_f0.5": PERTS["minus_RAD21"]}
+
+
+def perts_of(model: str) -> dict:
+    return {**PERTS, **FRACTION_PERTS} if "cohfix" in model else PERTS
+
+
+def aux_fraction(model: str) -> list[str]:
+    """crosscell_predict arguments for the measured auxin ChIP of a model that has
+    the cohesin:fraction row: the fraction of the auxin sample the model trained on."""
+    return ["--cohesin-fraction", str(mx.COHFIX_AUX_FRACTION)] if "cohfix" in model else []
+
+
 MODELS = {  # name -> (run dir, res, reference run name or None)
     "all12honest_10kb": (mx.REF_OUT / "all12honest_10kb", 10000, None),
     "all12honest_25kb": (mx.REF_OUT / "all12honest_25kb", 25000, None),
@@ -83,7 +100,8 @@ MODELS = {  # name -> (run dir, res, reference run name or None)
     **{f"{b}_{k}kb": (mx.REF_OUT / f"{b}_{k}kb", k * 1000,
                       None if "honest" in b else b)
        for b in ("all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop",
-                 "all12cohunk_refres_drop", "all12cohunk_honest_drop")
+                 "all12cohunk_refres_drop", "all12cohunk_honest_drop",
+                 "all12cohfix_refres_drop", "all12cohfixna_refres_drop")        # section 55
        for k in (10, 25)},
 }
 # 5 and 2 kb track-dropout recipes (the cohesin-unknown model at 5 kb only)
@@ -162,7 +180,7 @@ def pred_file(model: str, pert: str) -> Path:
 def unfinished(model: str, run: Path, res: int) -> bool:
     """A 5 or 2 kb or cohesin-unknown run still training (its `best` pointer
     exists from the first checkpoint on): never predicted before it stopped."""
-    if res in (5000, 2000) or "cohunk" in model:
+    if res in (5000, 2000) or "cohunk" in model or "cohfix" in model:
         si = mx.stop_info(run.name, 10)
         return not (si and si[2] == "patience")
     return False
@@ -174,10 +192,11 @@ def stage_predict():
             continue
         ck = run / (run / "best").read_text().strip()
         _, bw, assay, _ = mx.CELLS["hct116"]
-        if all(pred_file(model, p).exists() for p in PERTS):
+        if all(pred_file(model, p).exists() for p in perts_of(model)):
             continue
         od = pred_file(model, "x").parent
-        extra = ["--keep-sets", *[f"{p}={','.join(keep or mx.ALL13)}" for p, keep in PERTS.items()]]
+        extra = ["--keep-sets", *[f"{p}={','.join(keep or mx.ALL13)}"
+                                  for p, keep in perts_of(model).items()]]
         if ref:
             extra += ["--reference", mx.reference_of(mx.run_name(ref, res), "hct116")]
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml",
@@ -199,7 +218,7 @@ def stage_predict_chip():
             if f.exists():
                 continue
             od = f.parent / name
-            extra = []
+            extra = aux_fraction(model) if name == "chip_auxin6h" else []
             if ref:
                 extra += ["--reference", mx.reference_of(mx.run_name(ref, res), "hct116")]
             rc = sh([PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml",
@@ -280,11 +299,11 @@ def stage_score():
             u_p, t_p = oe_path(exp, "untreated", res), oe_path(exp, "treated", res)
             if not (u_p.exists() and t_p.exists()):
                 continue
-            preds = {p: pred_file(model, p) for p in PERTS}
+            preds = {p: pred_file(model, p) for p in perts_of(model)}
             if not all(f.exists() for f in preds.values()):
                 continue
             Z = {p: np.load(f) for p, f in preds.items()}
-            pairs = [(p, "full", p) for p in PERTS if p != "full"]
+            pairs = [(p, "full", p) for p in perts_of(model) if p != "full"]
             if exp in CHIP_EXP and all(pred_file(model, c).exists() for c in CHIP_DIRS):
                 for c in CHIP_DIRS:
                     Z[c] = np.load(pred_file(model, c))

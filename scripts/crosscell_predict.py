@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -124,6 +125,12 @@ def main():
                          "indicator to 1 where no cohesin track (RAD21, SMC3) is given "
                          "(absent in the cell or dropped by a keep set), '0'/'1' force it "
                          "(0 with absent RAD21 tests the model without the indicator)")
+    ap.add_argument("--cohesin-fraction", type=float, default=1.0,
+                    help="models trained with data.cohesin_fraction: the fraction of cohesin "
+                         "left in the cell (1 intact, 0 none), the value of the cohesin:fraction "
+                         "row. A keep set named *_f<value> (e.g. minus_RAD21_f0) overrides it. "
+                         "A missing RAD21/SMC3 track alone does not change it: the row states "
+                         "the biology, not what was measured")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default=os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome") + "/runs/crosscell")
     a = ap.parse_args()
@@ -185,6 +192,12 @@ def main():
         coh_v = [float(track_norm.apply(np.full((len(track_norm.mean), 1), v, np.float32))[coh_i, 0])
                  for v in (0.0, 1.0)]
         coh_tracks = [t for t in ("RAD21", "SMC3") if t in row_of]
+    frac_i = None                                # cohesin-fraction row (full sym rows)
+    if "cohesin_fraction" in channels["seq_features"]:
+        frac_i = len(channels["tracks"]) + channels["seq_features"].index("cohesin_fraction")
+
+    def frac_z(f):
+        return float(track_norm.apply(np.full((len(track_norm.mean), 1), f, np.float32))[frac_i, 0])
     track_files = sample_track_files(cfg, sample)
 
     ref_clr = None
@@ -242,7 +255,11 @@ def main():
             sym_full[row_of[t]] = absent[row_of[t]]
         sym_sets, coh_report = {}, {}
         for k, drop in sets.items():
-            sy = sym_full.copy() if (drop or coh_i is not None or k in nomm_sets) else sym_full
+            sy = sym_full.copy() if (drop or coh_i is not None or frac_i is not None
+                                     or k in nomm_sets) else sym_full
+            if frac_i is not None:
+                mf = re.search(r"_f(\d+(?:\.\d+)?)$", k)
+                sy[frac_i] = frac_z(float(mf.group(1)) if mf else a.cohesin_fraction)
             for t in drop:
                 sy[row_of[t]] = absent[row_of[t]]
             if mm_rows is not None and ("Meth" in drop or k in nomm_sets):

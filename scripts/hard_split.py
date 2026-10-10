@@ -60,7 +60,8 @@ FAMILIES = ["all12refres", "all12honest", "all12refres_drop", "all12honest_drop"
 # further families scored with --families (Track 2, section 26)
 MORE_FAMILIES = ["all12refin", "all12refin_drop", "all12refin_drop_ctcfac",
                  "all12refres_drop_varw", "all12deg_refres_drop", "all12deg_honest_drop",
-                 "all12cohunk_refres_drop", "all12cohunk_honest_drop"]
+                 "all12cohunk_refres_drop", "all12cohunk_honest_drop", "all12cohfix_refres_drop",
+                 "all12cohfixna_refres_drop"]
 REF_FAMILIES = {"all12refres", "all12refres_drop", "all12refres_refdrop", "all12multires"}
 COVERAGE_Q, MASK_MAX, REP_MIN, HARD_FRAC = 0.15, 0.20, 0.3, 0.20
 

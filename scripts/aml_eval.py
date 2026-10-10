@@ -314,7 +314,10 @@ for _k in (10, 25):
                      ("all12hffcoh_refres_drop", "consensus12"),
                      # cohesin-unknown indicator (section 25, 1c)
                      ("all12cohunk_refres_drop", "consensus12"),
-                     ("all12cohunk_honest_drop", None)):
+                     ("all12cohunk_honest_drop", None),
+                     # cohesin-fraction input and cohesin-loss augmentation (section 55)
+                     ("all12cohfix_refres_drop", "consensus12"),
+                     ("all12cohfixna_refres_drop", "consensus12")):
         MODELS[f"{_b}_{_k}kb"] = (
             _k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
             RUNS / f"multicell_reference/{_b}_{_k}kb", _b, _ref)
@@ -334,8 +337,12 @@ _DROP = {"all12refres_drop", "all12honest_drop", "all12refres_refdrop",
          "all12refres_drop_hard", "all12honest_drop_hard",
          "all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop",
          "all12cohunk_refres_drop", "all12cohunk_honest_drop", "all12refin_drop",
-         "all12refin_drop_struct3"}
+         "all12refin_drop_struct3", "all12cohfix_refres_drop", "all12cohfixna_refres_drop"}
 COHUNK_FAMILIES = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
+# models with the cohesin-fraction row: the knockout is also asked as a fraction
+# (keep-set name suffix _f<value>, read by crosscell_predict): cohesin absent and the
+# fraction at 0 or 0.5, and the unchanged wild-type ChIP with the fraction at 0.5 or 0.75
+COHFIX_FAMILIES = {"all12cohfix_refres_drop", "all12cohfixna_refres_drop"}
 
 # input sets: ChIP folder and, for the perturbation, the keep sets
 INPUTS = {
@@ -443,6 +450,10 @@ def predict(models: list[str], jobs: int, threads: int) -> None:
                 sets = [f"all={u937_all}", "ko_absent=" + ",".join(KO_ABSENT_KEEP)]
                 if MODELS[m][3] in COHUNK_FAMILIES:     # cohesin absent, indicator forced to 0
                     sets.append("ko_absent_ind0=" + ",".join(KO_ABSENT_KEEP))
+                if MODELS[m][3] in COHFIX_FAMILIES:
+                    sets += [f"ko_absent_f0={','.join(KO_ABSENT_KEEP)}",
+                             f"ko_absent_f0.5={','.join(KO_ABSENT_KEEP)}",
+                             f"ko_f0.5={u937_all}", f"ko_f0.75={u937_all}"]
             todo.append((prio, m, inp, cell, sets))
     # inputs by priority, coarse resolutions first within a priority
     todo.sort(key=lambda t: (t[0], -MODELS[t[1]][0]))
@@ -765,7 +776,8 @@ def grid(summ: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------- perturbation
-KO_VARIANTS = ["u937_ko_ctcfonly", "u937_ko_half", "u937_ko_absent", "u937_ko_absent_ind0"]
+KO_VARIANTS = ["u937_ko_ctcfonly", "u937_ko_half", "u937_ko_absent", "u937_ko_absent_ind0",
+               "u937_ko_absent_f0", "u937_ko_absent_f0.5", "u937_ko_f0.5", "u937_ko_f0.75"]
 # measured change between independent clones: (KO clone - WT clone) pairs that
 # share no map, scored against each other (the ceiling of a change prediction)
 DELTA_REP = [(("u937_ko_c1", "u937_wt_c1"), ("u937_ko_c2", "u937_wt_c2")),

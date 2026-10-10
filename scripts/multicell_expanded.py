@@ -171,6 +171,11 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # 1c; data.cohesin_unknown): absent cohesin is "unknown", not "HFF-like"
     "all12cohunk_refres_drop": (TRAIN12, None),
     "all12cohunk_honest_drop": (TRAIN12, None),
+    # the degron recipe plus the cohesin-fraction input and cohesin-loss
+    # augmentation (registry section 55; data.cohesin_fraction, train.cohesin_aug)
+    "all12cohfix_refres_drop": (TRAIN12, None),
+    # the same without the augmentation (cohesin-fraction row and shared contact scale only)
+    "all12cohfixna_refres_drop": (TRAIN12, None),
     # AML-inclusive training (registry section 36; scripts/aml_train.py): the 12
     # cells plus MOLM-13 and eight Xu 2022 patients (fold 0; _f1, _f2 the other
     # test folds; _f10 to _f12 the folds without the healthy donors, registry
@@ -260,6 +265,8 @@ DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop":
 DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0.5, 0.0),
                      "all12refres_drop_varw": (0.5, 0.0)})
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
+DROPOUT_RUNS["all12cohfix_refres_drop"] = (0.5, 0.0)
+DROPOUT_RUNS["all12cohfixna_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_meth_v2"] = (0.5, 0.0)
 DROPOUT_RUNS["all12refres_drop_motifmeth"] = (0.5, 0.0)
@@ -294,7 +301,14 @@ METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop", "all12honest_
            "all12honest_drop_motifmeth_s1"}
 CNV_RUNS = {"all12refres_drop_cnv"}
 COHUNK_RUNS = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
-DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS
+COHFIX_RUNS = {"all12cohfix_refres_drop", "all12cohfixna_refres_drop"}
+DEGRON_RUNS = {"all12deg_refres_drop", "all12deg_honest_drop"} | COHUNK_RUNS | COHFIX_RUNS
+# cohesin left in the 6 h auxin condition (registry section 55): the RAD21 enrichment
+# above the median in the top 1% untreated bins, auxin / untreated, odd chromosomes
+# (0.259; 0.258 at the 99th percentile of each track; 0.34 as a genome-wide sum)
+COHFIX_AUX_FRACTION = 0.26
+COHFIX_AUG = {"cohesin_aug": 0.25, "cohesin_aug_fractions": [0.0, 0.1, 0.26, 0.5, 0.75],
+              "cohesin_aug_absent": 0.5}
 HFF_COHESIN_DIR = HM / "hg38_hff_cohesin"
 
 
@@ -329,6 +343,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",
             "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
             "all12deg_refres_drop": "residual", "all12cohunk_refres_drop": "residual",
+            "all12cohfix_refres_drop": "residual", "all12cohfixna_refres_drop": "residual",
             "all12refin_drop": "input", "all12refin_drop_ctcfac": "input",
             "all12refres_drop_varw": "residual", "all12hffcoh_refres_drop": "residual",
             "all12refres_drop_meth": "residual",
@@ -463,6 +478,16 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cells = cells + ["hct116_auxin"]
     if base in COHUNK_RUNS:
         cfg["data"]["cohesin_unknown"] = True
+    if base in COHFIX_RUNS:
+        cfg["data"]["cohesin_fraction"] = True
+        aux = next(s_ for s_ in cfg["data"]["samples"] if s_["name"] == "hct116_auxin")
+        aux["cohesin_fraction"] = COHFIX_AUX_FRACTION      # intact for every other sample
+        aux["norm_like"] = "hct116"                         # control and auxin on one contact scale
+        if base == "all12cohfix_refres_drop":      # the no-augmentation ablation keeps the defaults
+            cfg["train"].update(COHFIX_AUG)
+            # fitted by scripts/cohesin_operator.py; the copy on the share is read by every machine
+            cfg["train"]["cohesin_aug_operator"] = str(HM / "cohesin_fix"
+                                                       / f"operator_{res // 1000}kb.pt")
     aml_set = set()
     if base in AML_RUNS:
         import aml_train as at
@@ -511,6 +536,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
                   else f"mc_{SEEDED[base][0]}_{res // 1000}kb" if base in SEEDED
                   else f"mc_all12ref_chrho_{res // 1000}kb" if base in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
                   else f"mc_all12chrho_{res // 1000}kb" if base == "all12honest_drop_chrho"
+                  else f"mc_all12cohfix_refres_drop_{res // 1000}kb" if base in COHFIX_RUNS   # one cache
                   else f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS
                   | {"all12hffcoh_refres_drop"}
                   else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"

@@ -129,8 +129,22 @@ class SampleSpec:
     # data.lab_classes lists it (a constant indicator row per class, like the
     # assay indicator); "" = none of them
     lab: str = ""
+    # Fraction of the cohesin that is left in this sample's cells (registry
+    # section 55): 1 = intact (every ordinary sample, also those without
+    # cohesin ChIP), below 1 for a cohesin-depleted condition such as the
+    # 6 h RAD21 auxin sample; read when data.cohesin_fraction is on, as the
+    # value of the constant cohesin:fraction row.
+    cohesin_fraction: float = 1.0
+    # Take this other sample's matrix normaliser (contact scale) instead of
+    # fitting one, so a perturbed condition and its control are encoded on
+    # the same scale (the per-sample clip quantile of |log O/E| is smaller
+    # for a map that lost its loops, which stretches it back). None = fit.
+    norm_like: str | None = None
 
     def __post_init__(self):
+        if not 0.0 <= self.cohesin_fraction <= 1.0:
+            raise ValueError(f"sample {self.name!r}: cohesin_fraction {self.cohesin_fraction} "
+                             "outside [0, 1]")
         if self.assay not in ASSAYS:
             raise ValueError(f"sample {self.name!r}: unknown assay {self.assay!r} "
                              f"(expected one of {ASSAYS})")
@@ -176,6 +190,13 @@ class DataConfig:
     # every window that loses it, so "no cohesin track" means "unknown" and
     # not "HFF-like". Off = no row (previous behaviour, previous caches).
     cohesin_unknown: bool = False
+    # Cohesin-fraction input (registry section 55): one constant row after the
+    # cohesin_unknown row holding the fraction of cohesin left in the sample's
+    # cells (SampleSpec.cohesin_fraction; 1 control, 0 absent), normalised as
+    # log1p(f) / ln 2 - 1 so that 1 maps to 0 and 0 to -1. It is a statement
+    # about the biology, not about which ChIP was measured: samples without
+    # RAD21/SMC3 ChIP stay at 1. Off = no row (previous caches).
+    cohesin_fraction: bool = False
     # Laboratory / protocol indicator (registry section 36): one constant row
     # per listed class after the assay and cohesin rows, 1 for samples whose
     # SampleSpec.lab equals the class. Separates the lab and protocol component
@@ -527,6 +548,21 @@ class TrainConfig:
     # the logged best-val matters, to avoid a 128 MB write every epoch stalling
     # the GPU.
     save_checkpoints: bool = True
+    # Cohesin-loss augmentation (registry section 55, needs data.cohesin_fraction
+    # and window.transform prescaled): with this probability a training window
+    # of an intact sample (cohesin:fraction 1) is replaced by a synthetic
+    # cohesin-depleted one. A fraction f is drawn from cohesin_aug_fractions;
+    # the RAD21 and SMC3 rows are scaled to f around the window median (or set
+    # to the absent code with probability cohesin_aug_absent), the fraction row
+    # is set to f, and the target moves by (1 - f) / (1 - cohesin_aug_ref) times
+    # the change that the degron operator (scripts/cohesin_operator.py,
+    # cohesin_aug_operator) predicts for the map, in log O/E units, where the
+    # operator file records the cohesin fraction of the condition it was fitted
+    # on. 0 = off.
+    cohesin_aug: float = 0.0
+    cohesin_aug_operator: str | None = None
+    cohesin_aug_fractions: list[float] = field(default_factory=lambda: [0.0, 0.15, 0.3, 0.5, 0.75])
+    cohesin_aug_absent: float = 0.5
 
 
 @dataclass
@@ -653,6 +689,22 @@ class Config:
                         f"sample {s.name!r}: unknown track {t!r} in "
                         "missing_tracks/zeroed_tracks"
                     )
+        for s in self.data.samples:
+            if s.norm_like is not None and s.norm_like not in snames:
+                raise ValueError(f"sample {s.name!r}: norm_like {s.norm_like!r} is not a sample")
+            if s.cohesin_fraction < 1.0 and not self.data.cohesin_fraction:
+                raise ValueError(f"sample {s.name!r}: cohesin_fraction < 1 needs "
+                                 "data.cohesin_fraction")
+        if self.train.cohesin_aug > 0:
+            if not self.data.cohesin_fraction:
+                raise ValueError("train.cohesin_aug needs data.cohesin_fraction")
+            if not self.train.cohesin_aug_operator:
+                raise ValueError("train.cohesin_aug needs train.cohesin_aug_operator")
+            if self.window.transform != "prescaled":
+                raise ValueError("train.cohesin_aug needs window.transform 'prescaled'")
+            if not 0.0 <= self.train.cohesin_aug <= 1.0 or not all(
+                    0.0 <= f < 1.0 for f in self.train.cohesin_aug_fractions):
+                raise ValueError("train.cohesin_aug in [0, 1], cohesin_aug_fractions in [0, 1)")
         if self.model.reference != "none":
             lack = [s.name for s in self.data.samples
                     if not (s.reference_cool or self.data.reference_cool)]
