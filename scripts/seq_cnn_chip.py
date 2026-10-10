@@ -29,6 +29,19 @@ cell: unseen cells are skipped in the evaluation of such a run. It serves as a
 ceiling on what cell-specific information could add, never as a model for new
 cells.
 
+Robustness to cells outside the training range (registry section 59; all defaults
+reproduce the earlier results, the variants get a name suffix):
+  --meth-norm cell|rank  per-cell z-score or quantile normalisation of the Meth
+                         channel from the cell's own Meth track (suffix _cellnorm,
+                         _ranknorm); the mean-methylation channel is then 0
+  --meth-aug             training only: random per-window scale and shift of the
+                         Meth channels (suffix _aug)
+  --meth-dropout P       training only: whole windows with zeroed Meth channels
+                         (suffix _mdropP)
+  --target-norm cell     per-cell z-scoring of the targets and metrics on per-cell
+                         standardised predictions and targets (suffix _tcell); tested
+                         by the CPU smoke run only, not trained on the full data
+
 Splits (by chromosome only, autosomes chr1 to chr22):
   train        odd chromosomes (chr1, 3, ..., 21) of the training cells
   validation   chr2 and chr4 of the training cells (model selection)
@@ -182,6 +195,27 @@ def build_parser():
     ap.add_argument("--ckpt-every", type=int, default=500)
     ap.add_argument("--patience", type=int, default=0,
                     help="stop after this many validations without improvement (0 = never)")
+    ap.add_argument("--meth-norm", choices=["none", "cell", "rank"], default="none",
+                    help="Meth channel scaling. none: methylated fraction scaled to -1..1 plus a "
+                    "constant channel with the cell's genome-wide mean (original behaviour). "
+                    "cell: z-score with the cell's own mean and sd over its valid bins; rank: "
+                    "per-cell quantile normalisation to a standard normal. In both the mean "
+                    "channel is set to 0 (a cell's mean methylation is its fingerprint). "
+                    "The statistics use the cell's Meth track only (no ChIP, no label)")
+    ap.add_argument("--meth-aug", action="store_true",
+                    help="training only: per window random scale U(1-s, 1+s) and shift N(0, t) "
+                    "of the Meth channels (mean channel gets the same affine map)")
+    ap.add_argument("--meth-aug-scale", type=float, default=0.5, help="s of --meth-aug")
+    ap.add_argument("--meth-aug-shift", type=float, default=0.5, help="t of --meth-aug")
+    ap.add_argument("--meth-dropout", type=float, default=0.0,
+                    help="training only: probability that a whole window gets zeros in both Meth "
+                    "channels (the sequence path stays usable without Meth)")
+    ap.add_argument("--target-norm", choices=["global", "cell"], default="global",
+                    help="global (default): z-score per mark with the pooled training-cell "
+                    "statistics. cell: z-score per mark and cell with that cell's own statistics "
+                    "(training chromosomes of a fitted cell, all used chromosomes of an unseen "
+                    "cell); predictions are then scale-free per cell, and the test metrics "
+                    "standardise predictions and targets per mark and cell first")
     ap.add_argument("--no-rc-aug", action="store_true")
     ap.add_argument("--no-tta", action="store_true", help="no reverse-complement averaging at test")
     ap.add_argument("--num-workers", type=int, default=min(8, os.cpu_count() or 1))
@@ -221,7 +255,12 @@ def parse_args(argv=None):
         a.fit_cells = [c for c in a.train_cells if c != a.holdout_cell]
     else:
         a.fit_cells = list(a.train_cells)
-    a.run_name = a.mode + ("_embed" if a.cell_embedding else "") + \
+    mflag = ""
+    if a.mode != "seq":
+        mflag = {"none": "", "cell": "_cellnorm", "rank": "_ranknorm"}[a.meth_norm] + \
+            ("_aug" if a.meth_aug else "") + (f"_mdrop{a.meth_dropout:g}" if a.meth_dropout > 0 else "")
+    a.run_name = a.mode + ("_embed" if a.cell_embedding else "") + mflag + \
+        ("_tcell" if a.target_norm == "cell" else "") + \
         (f"_ho-{a.holdout_cell}" if a.holdout_cell else "") + \
         (f"_{a.res // 1000}kb" if a.res != 10000 else "") + ("_poisson" if a.loss == "poisson" else "")
     if a.out_dir is None:
@@ -447,6 +486,8 @@ class Data:
             z = np.load(cache / "meth" / f"{cell}.npz")
             self.meth[cell] = {c: z[c] for c in self.chroms}
             self.meth_mean[cell] = float(z["_mean"])
+        if a.meth_norm != "none":
+            self.normalise_meth()
         # z-score statistics: training chromosomes of the fitted cells, valid bins only
         self.mu = np.zeros(len(MARKS))
         self.sd = np.ones(len(MARKS))
@@ -457,7 +498,51 @@ class Data:
             self.mu[k], self.sd[k] = v.mean(), max(v.std(), 1e-6)
         self.y = {cell: {c: ((raw[cell][c].astype(np.float32) - self.mu) / self.sd).astype(np.float16)
                          for c in self.chroms} for cell in a.cells}
+        if a.target_norm == "cell":
+            self.cell_target_norm(raw)
         self.check_disjoint()
+
+    def valid_meth_values(self, cell):
+        """1 kb Meth values of one cell inside its valid 10 kb bins (all used chromosomes)."""
+        out = []
+        for c in self.chroms:
+            v = self.meth[cell][c]
+            n = min(len(v), self.nb[c] * (self.res // METH_BIN)) if self.res >= METH_BIN else len(v)
+            ok = np.repeat(self.valid[c], max(self.res // METH_BIN, 1))[:n]
+            out.append(v[:n][ok[:n]])
+        return np.concatenate(out).astype(np.float64)
+
+    def normalise_meth(self):
+        """Per-cell scaling of the Meth channel from the cell's own genome-wide Meth values."""
+        from scipy.special import ndtri
+        for cell in self.a.cells:
+            ref = self.valid_meth_values(cell)
+            if self.a.meth_norm == "cell":
+                mu, sd = ref.mean(), max(ref.std(), 1e-6)
+                f = lambda v: ((v - mu) / sd).astype(np.float32)
+            else:
+                srt = np.sort(ref)
+                def f(v, srt=srt):
+                    u = (np.searchsorted(srt, v, "left") + np.searchsorted(srt, v, "right")) / (2.0 * len(srt))
+                    return ndtri(np.clip(u, 0.5 / len(srt), 1 - 0.5 / len(srt))).astype(np.float32)
+            self.meth[cell] = {c: f(v) for c, v in self.meth[cell].items()}
+            # padding value outside the chromosome = the cell's typical level; the mean channel
+            # is not informative any more and is 0 for every cell
+            self.meth_mean[cell] = float(f(np.array([self.meth_mean[cell]]))[0])
+
+    def cell_target_norm(self, raw):
+        """z-score every cell's targets with its own statistics (see --target-norm)."""
+        a = self.a
+        for cell in a.cells:
+            chs = a.train_chroms if cell in a.fit_cells else self.chroms
+            for k in range(len(MARKS)):
+                v = np.concatenate([raw[cell][c][self.valid[c], k].astype(np.float64) for c in chs])
+                v = v[~np.isnan(v)]
+                if len(v) < 10:
+                    continue
+                mu, sd = v.mean(), max(v.std(), 1e-6)
+                for c in self.chroms:
+                    self.y[cell][c][:, k] = ((raw[cell][c][:, k].astype(np.float32) - mu) / sd).astype(np.float16)
 
     def check_disjoint(self):
         a = self.a
@@ -501,6 +586,8 @@ class Data:
         codes = self.codes(chrom, start)
         meth = self.meth_bp(cell, chrom, start) if cell is not None else np.zeros(self.L, np.float32)
         mm = self.meth_mean[cell] if cell is not None else 0.0
+        if cell is not None and self.a.meth_norm != "none":
+            mm = 0.0
         item = {"codes": codes, "meth": meth, "mmean": np.float32(mm)}
         item["y"] = (np.stack([self.target(c, chrom, b0) for c in cells_y]) if cells_y
                      else np.zeros((0, self.NB, len(MARKS)), np.float32))
@@ -658,7 +745,7 @@ def in_channels(a):
     return {"seq": 4, "seq_meth": 6, "meth": 2}[a.mode]
 
 
-def make_input(batch, a, dev):
+def make_input(batch, a, dev, train=False):
     import torch
     import torch.nn.functional as F
     chans = []
@@ -668,7 +755,19 @@ def make_input(batch, a, dev):
     if a.mode in ("seq_meth", "meth"):
         m = batch["meth"].to(dev).float()
         mm = batch["mmean"].to(dev).float()[:, None].expand_as(m)
-        chans.append(torch.stack([m * 2 - 1, mm * 2 - 1], 1))
+        if a.meth_norm == "none":
+            mt = torch.stack([m * 2 - 1, mm * 2 - 1], 1)
+        else:
+            mt = torch.stack([m, mm], 1)               # already per-cell normalised, mean channel 0
+        if train and a.meth_aug:
+            B = mt.shape[0]
+            sc = 1 + a.meth_aug_scale * (torch.rand(B, 1, 1, device=dev) * 2 - 1)
+            sh = a.meth_aug_shift * torch.randn(B, 1, 1, device=dev)
+            mt = mt * sc + sh
+        if train and a.meth_dropout > 0:
+            keep = (torch.rand(mt.shape[0], 1, 1, device=dev) >= a.meth_dropout).float()
+            mt = mt * keep
+        chans.append(mt)
     return torch.cat(chans, 1), batch["cell"].to(dev)
 
 
@@ -740,6 +839,13 @@ def corr_stats(y, p):
     return n, 1 - sse / sst, float(np.corrcoef(y, p)[0, 1]), float(spearmanr(y, p)[0])
 
 
+def standardise_pair(a, y, p):
+    """--target-norm cell: both sides standardised over the scored bins (R2 is then scale free)."""
+    if a.target_norm != "cell" or len(y) < 10 or y.std() == 0 or p.std() == 0:
+        return y, p
+    return (y - y.mean()) / y.std(), (p - p.mean()) / p.std()
+
+
 def tile_items(D, chroms, cell):
     return [(c, b0, cell) for c in chroms for b0 in range(0, D.nb[c], D.NB)]
 
@@ -789,7 +895,8 @@ def stage_eval(a):
         yy, pp = np.concatenate(yy), np.concatenate(pp)
         for m, mark in enumerate(MARKS):
             ok = np.isfinite(yy[:, m])
-            n, r2, pr, sp = corr_stats(yy[ok, m].astype(np.float64), pp[ok, m].astype(np.float64))
+            n, r2, pr, sp = corr_stats(*standardise_pair(a, yy[ok, m].astype(np.float64),
+                                                         pp[ok, m].astype(np.float64)))
             rows.append(dict(mode=a.mode, variant=a.run_name, mark=mark, cell=cell,
                              scheme=cell_scheme(a, cell), split="test", res=a.res, n_bins=n,
                              r2=r2, pearson=pr, spearman=sp))
@@ -827,8 +934,9 @@ def ceiling_rows(a, D):
             yy, pp = np.concatenate(yy), np.concatenate(pp)
             for m, mark in enumerate(MARKS):
                 ok = np.isfinite(yy[:, m]) & np.isfinite(pp[:, m])
-                n, r2, pr, sp = corr_stats(yy[ok, m].astype(np.float64), pp[ok, m].astype(np.float64))
-                rows.append(dict(mode=kind, variant=kind, mark=mark, cell=cell,
+                n, r2, pr, sp = corr_stats(*standardise_pair(a, yy[ok, m].astype(np.float64),
+                                                             pp[ok, m].astype(np.float64)))
+                rows.append(dict(mode=kind, variant=kind + ("_tcell" if a.target_norm == "cell" else ""), mark=mark, cell=cell,
                                  scheme=cell_scheme(a, cell), split="test", res=a.res, n_bins=n,
                                  r2=r2, pearson=pr, spearman=sp))
     return pd.DataFrame(rows)
@@ -915,7 +1023,7 @@ def stage_train(a):
         b = next(it)
         for g in opt.param_groups:
             g["lr"] = lr_at(step)
-        x, cell = make_input(b, a, dev)
+        x, cell = make_input(b, a, dev, train=True)
         with torch.autocast(device_type=dev.type, dtype=torch.bfloat16, enabled=amp):
             pred = model(x, cell)
         loss = loss_fn(pred.float(), b["y"].to(dev), D, a.loss, dev)
@@ -968,7 +1076,8 @@ def stage_summarize(a):
     ce = [pd.read_csv(f) for f in sorted(root.glob("*/ceiling.csv"))]
     if not ev:
         raise SystemExit(f"no eval.csv under {root}")
-    allr = pd.concat(ev + ce[:1], ignore_index=True)
+    allr = pd.concat(ev + ce, ignore_index=True)
+    allr = allr.drop_duplicates(["variant", "mark", "cell"]).reset_index(drop=True)
     allr["independent_cell"] = allr["cell"].replace(ALIAS)
     res = Path(a.results_dir)
     res.mkdir(parents=True, exist_ok=True)
@@ -989,7 +1098,7 @@ def stage_summarize(a):
         pv.to_csv(res / "seq_cnn_partition.csv", index=False, float_format="%.5f")
         print(pv.groupby(["scheme", "mark"])[["r2_seq", "r2_meth", "r2_seq_meth", "shared",
                                               "unique_seq", "unique_meth"]].median().round(3).to_string())
-    keep = summ[summ.variant.isin(["seq", "seq_meth", "meth", "ceiling_incl", "ceiling_loo"])]
+    keep = summ[~summ.variant.str.contains("_embed|_ho-|_poisson|_1kb")]
     print(keep.pivot_table(index="mark", columns=["variant", "scheme"], values="pearson_median")
           .round(3).to_string())
     log(f"wrote {res / 'seq_cnn_results.csv'}")

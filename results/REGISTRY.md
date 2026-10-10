@@ -6260,3 +6260,440 @@ Reproduce (hicdiff env):
     BENCH_HICGAN_IMR90_25KB=1 python scripts/benchmark_competitors.py --stage oe --names hicgan_imr90_on_imr90_25kb hicgan_gm12878_on_imr90_25kb
     python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-25kb-comps --jobs 1 --threads 4
     python scripts/chrho_25kb_table.py
+
+
+## 59. Why the sequence + methylation CNN fails on K562 and what fixes it (FINAL; section 58 was the last number when this was written)
+
+Question. In section 42 the sequence + methylation CNN (`seq_meth`) beats gradient
+boosting on the seven training cells but fails on K562 and HMEC, which are in no
+training set (unseen_cell R2 -0.2 to -24 for most marks; K562 median Pearson 0.34
+for `seq_meth` and -0.20 for `meth`; HMEC 0.74 and 0.67), while sequence alone
+generalises (R2 0.12 to 0.53) and the gradient-boosting analysis of section 41
+reaches R2 up to 0.49. Which input property causes this and does a change of the
+Meth input fix it.
+
+Setup. Section 42 model, split, targets and budget unchanged (9.3 M parameters,
+20000 steps, batch 32, one seed, one RTX 4090, about 33 minutes of training and 4
+minutes of evaluation per variant). Test: chr6, 8, ..., 22 of the nine cells.
+Independent cells on unseen_cell: 2 (K562, HMEC); on seen_cell: 7. Median
+"unseen" values below are the median of the two cells (for RAD21 and SMC3 only
+K562 has the track, so that median is one cell). Gradient boosting (`GB_both`) is
+the `both` set of section 41 (extended sequence features + methylation features,
+`partition_fits.csv`, unseen_cell), scored on all even chromosomes (including
+chr2 and chr4, 500,000 training rows); `ceiling_loo` is the across-cell mean of
+the seven training cells scored against the cell (a cell-agnostic prediction, the
+best `seq` can reach).
+
+### Diagnosis (CPU for the distributions, GPU only to dump predictions of the saved section 42 checkpoints)
+
+Meth input (value as the script uses it: methylated fraction of 1 kb bins inside
+valid 10 kb bins, all chromosomes):
+
+| cell | mean | sd | q05 | q25 | q50 | q75 | q95 |
+|---|---|---|---|---|---|---|---|
+| gm12878 | 0.446 | 0.299 | 0.01 | 0.20 | 0.41 | 0.68 | 0.96 |
+| imr90 | 0.691 | 0.216 | 0.25 | 0.65 | 0.66 | 0.86 | 1.00 |
+| h1 | 0.855 | 0.129 | 0.65 | 0.83 | 0.89 | 0.92 | 0.96 |
+| hepg2 | 0.397 | 0.341 | 0.00 | 0.08 | 0.32 | 0.70 | 0.97 |
+| a549 | 0.512 | 0.311 | 0.02 | 0.23 | 0.56 | 0.81 | 0.93 |
+| gm23248 | 0.600 | 0.284 | 0.10 | 0.36 | 0.63 | 0.86 | 0.97 |
+| cd14mono | 0.833 | 0.177 | 0.53 | 0.73 | 0.88 | 0.96 | 1.00 |
+| k562 (unseen) | 0.219 | 0.307 | 0.00 | 0.00 | 0.03 | 0.35 | 0.89 |
+| hmec (unseen) | 0.725 | 0.221 | 0.27 | 0.61 | 0.77 | 0.90 | 0.98 |
+
+The training cells span a genome-wide mean methylation of 0.40 (HepG2) to 0.86
+(H1). K562 has 0.22 and half of its bins below 0.03, outside the training range
+and in the corner of the input space the model never saw (the constant mean
+channel is 0.22 against a training minimum of 0.40). HMEC (0.73) lies inside the
+range. The z-scored targets (training-cell statistics, valid bins, all
+chromosomes) have a per-cell, per-mark mean within +-0.55 of 0 and a standard
+deviation of 0.5 to 1.6 in all cells including K562 (e.g. K562 H3K27ac +0.20 /
+0.67, H3K4me3 +0.09 / 0.86, H3K9ac -0.05 / 0.98); the only larger offsets are
+seen cells (IMR-90 H3K4me3 -0.89). The target scale of K562 and HMEC is thus
+not unusual.
+
+Predictions against targets on the test chromosomes (checkpoints of section 42;
+median over marks; `results/seq_cnn/v2/diag_prediction_bias.csv`, columns y_mean,
+p_mean, slope of y on the prediction, R2 with the offset removed):
+
+| model, cells | abs. offset p_mean - y_mean | sd of prediction (sd of target 0.9) | slope | R2 | R2 after removing the offset | Pearson |
+|---|---|---|---|---|---|---|
+| seq_meth, 7 seen | 0.01 | 0.74 | 0.99 | 0.68 | 0.68 | 0.83 |
+| seq_meth, HMEC | 0.27 | 0.81 | 0.95 | 0.41 | 0.55 | 0.74 |
+| seq_meth, K562 | 1.68 | 0.90 | 0.25 | -3.93 | -1.64 | 0.34 |
+| meth, 7 seen | 0.02 | 0.70 | 0.97 | 0.58 | 0.59 | 0.77 |
+| meth, HMEC | 0.29 | 0.85 | 0.70 | 0.27 | 0.40 | 0.67 |
+| meth, K562 | 5.42 | 2.85 | -0.06 | -60.65 | -16.73 | -0.20 |
+
+Per mark in K562 `seq_meth` predicts offsets up to +5.6 z (H3K4me2, H3K4me3,
+H3K9ac) with prediction sd up to 2.3; `meth` predicts +12 z for H3K4me2. Removing
+the offset still leaves R2 below zero, so K562 has both a level error and a
+ranking error (Pearson -0.2 to 0.6 across marks), and the prediction slope of 0.25
+means the predictions are not a rescaled copy of the truth.
+
+Verdict. Hypothesis 1 (Meth input of the unseen cell outside the training
+distribution) is supported for K562: the failure grows with the distance of the
+input from the training range (HMEC inside the range works, Pearson 0.74; K562
+outside fails; the methylation-only control, which has no sequence to fall back
+on, explodes to offsets of 5 to 12 z). Hypothesis 3 (target scale per cell) is not
+supported: the target means and sds of K562 and HMEC are ordinary; the offset is
+produced by the model, so `--target-norm cell` was implemented but not trained.
+Hypothesis 2 (memorisation of training cells by their methylation fingerprint) is
+weak: removing the cell-mean channel and the per-cell scale (`cellnorm`) leaves
+the seen-cell results unchanged (Pearson 0.82 against 0.83) and does not by itself
+fix K562.
+
+### Fix: flags of `scripts/seq_cnn_chip.py` (defaults keep section 42 reproducible; variant names carry a suffix)
+
+- `--meth-norm cell`: the Meth channel is z-scored with the cell's own mean and sd
+  over its valid bins (statistics from the cell's Meth track only, no ChIP, no
+  label); the constant mean-methylation channel is set to 0. `--meth-norm rank`
+  does the same by quantile normalisation to a standard normal (implemented,
+  smoke-tested, not trained). Variant `*_cellnorm`.
+- `--meth-aug`: training only, random per-window scale U(0.5, 1.5) and shift
+  N(0, 0.5) of the two Meth channels (`--meth-aug-scale`, `--meth-aug-shift`).
+  Variant `*_aug`.
+- `--meth-dropout P`: training only, a whole window gets zeros in both Meth channels
+  with probability P, so the sequence path stays usable. Variant `*_mdropP`.
+- `--target-norm cell`: per-cell, per-mark z-scoring of the targets; test metrics are
+  computed after standardising prediction and target per mark and cell, so R2 is
+  then scale free and Pearson and Spearman stay the main metrics. Variant `*_tcell`,
+  ceilings `ceiling_*_tcell`. Smoke-tested only.
+- `stage_summarize` keeps every variant (old rows unchanged); the partition table
+  still uses `seq`, `seq_meth`, `meth`. CPU smoke tests of all new options passed
+  (`--smoke`, chr21 train, chr22 test).
+
+Commands (remote GPU; `OUT_ROOT` = the section 42 run folder with its cache):
+
+    P="python scripts/seq_cnn_chip.py --config configs/seq_cnn.yaml --stage train eval"
+    $P --mode seq_meth --meth-norm cell
+    $P --mode meth     --meth-norm cell
+    $P --mode seq_meth --meth-aug
+    $P --mode seq_meth --meth-norm cell --meth-aug --meth-dropout 0.2
+    python scripts/seq_cnn_chip.py --config configs/seq_cnn.yaml --stage summarize --results-dir results/seq_cnn/v2
+
+Wall time on the RTX 4090: 4 variants x (33 min training + 4 min evaluation) = 2 h 12 min
+(08:22 to 10:34 on 2026-10-10), plus 5 min per prediction dump.
+
+### Results
+
+Summary (median over marks of the per-mark medians over cells; full per-mark
+values below and in `results/seq_cnn/v2/comparison_by_mark.csv`):
+
+| cells | metric | seq | meth | seq_meth | meth_cellnorm | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|---|---|---|
+| unseen (K562, HMEC) | R2 | 0.24 | -31.41 | -3.69 | -0.64 | -0.70 | 0.34 | -0.24 | 0.12 | 0.61 |
+| unseen | Pearson | 0.57 | 0.20 | 0.43 | 0.51 | 0.58 | 0.73 | 0.70 | 0.64 | 0.82 |
+| unseen | Spearman | 0.50 | 0.11 | 0.31 | 0.47 | 0.41 | 0.60 | 0.49 | 0.51 | 0.64 |
+| K562 | R2 | 0.40 | -60.65 | -3.93 | -0.90 | -1.45 | 0.41 | -0.53 | 0.16 | 0.62 |
+| K562 | Pearson | 0.66 | -0.20 | 0.34 | 0.43 | 0.41 | 0.73 | 0.62 | 0.60 | 0.81 |
+| K562 | Spearman | 0.54 | -0.27 | 0.00 | 0.43 | 0.35 | 0.63 | 0.53 | 0.47 | 0.64 |
+| HMEC | R2 | 0.23 | 0.27 | 0.41 | 0.45 | 0.53 | 0.52 | 0.51 | 0.36 | 0.59 |
+| HMEC | Pearson | 0.58 | 0.67 | 0.74 | 0.69 | 0.75 | 0.72 | 0.74 | 0.64 | 0.79 |
+| HMEC | Spearman | 0.44 | 0.61 | 0.63 | 0.57 | 0.61 | 0.64 | 0.64 | 0.51 | 0.67 |
+| seen (7 cells) | R2 | 0.35 | 0.60 | 0.69 | 0.57 | 0.67 | 0.64 | 0.62 | 0.46 | 0.60 |
+| seen | Pearson | 0.63 | 0.78 | 0.83 | 0.76 | 0.82 | 0.81 | 0.79 | 0.69 | 0.82 |
+| seen | Spearman | 0.57 | 0.69 | 0.75 | 0.67 | 0.74 | 0.72 | 0.72 | 0.61 | 0.69 |
+
+Prediction offset and slope after the fix (same diagnostic, median over marks):
+
+| model | cells | abs. offset | slope | R2 | R2 after removing the offset | Pearson |
+|---|---|---|---|---|---|---|
+| seq_meth_aug | K562 | 0.20 | 0.98 | 0.41 | 0.47 | 0.73 |
+| seq_meth_aug | HMEC | 0.05 | 0.93 | 0.52 | 0.52 | 0.72 |
+| seq_meth_cellnorm | K562 | 0.88 | 0.52 | -1.45 | 0.03 | 0.41 |
+| seq_meth_cellnorm | HMEC | 0.09 | 0.84 | 0.53 | 0.54 | 0.75 |
+| meth_cellnorm | K562 | 0.74 | 0.60 | -0.90 | 0.09 | 0.43 |
+| seq_meth_cellnorm_aug_mdrop0.2 | K562 | 0.60 | 0.51 | -0.53 | 0.02 | 0.62 |
+
+Per-mark tables (median over cells; blank = mark absent in the cell set):
+
+**unseen_median2, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.19 | -0.19 | -0.97 | 0.28 | -0.24 | 0.12 | 0.68 |
+| H3K27ac | 0.23 | -7.07 | -0.14 | 0.36 | 0.07 | 0.15 | 0.39 |
+| H3K27me3 | 0.24 | -1.75 | -1.07 | 0.39 | -0.29 | 0.28 | 0.47 |
+| H3K36me3 | 0.38 | 0.16 | 0.36 | 0.60 | 0.57 | 0.54 | 0.69 |
+| H3K4me1 | 0.21 | -5.19 | -0.70 | 0.09 | -0.30 | -0.33 | 0.38 |
+| H3K4me2 | 0.53 | -18.02 | 0.52 | 0.74 | 0.67 | 0.59 | 0.69 |
+| H3K4me3 | 0.24 | -23.92 | -0.56 | 0.22 | -0.04 | -0.26 | 0.38 |
+| H3K79me2 | 0.43 | -0.67 | 0.53 | 0.58 | 0.55 | 0.39 | 0.73 |
+| H3K9ac | 0.45 | -15.80 | 0.34 | 0.69 | 0.58 | 0.48 | 0.64 |
+| H3K9me3 | 0.12 | -8.96 | -1.95 | 0.02 | -0.82 | -0.34 | 0.28 |
+| H4K20me1 | 0.13 | -0.46 | -0.97 | 0.07 | -0.38 | -0.09 | 0.32 |
+| RAD21 | 0.30 | -1.38 | -3.89 | 0.15 | -1.58 | -0.44 | 0.61 |
+| SMC3 | 0.44 | -3.69 | -2.94 | 0.34 | -1.02 | -0.04 | 0.62 |
+| median over marks | 0.24 | -3.69 | -0.70 | 0.34 | -0.24 | 0.12 | 0.61 |
+
+**unseen_median2, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.46 | 0.44 | 0.40 | 0.56 | 0.48 | 0.48 | 0.83 |
+| H3K27ac | 0.56 | 0.37 | 0.73 | 0.77 | 0.75 | 0.67 | 0.71 |
+| H3K27me3 | 0.53 | 0.24 | 0.49 | 0.66 | 0.49 | 0.57 | 0.71 |
+| H3K36me3 | 0.62 | 0.68 | 0.74 | 0.80 | 0.79 | 0.78 | 0.84 |
+| H3K4me1 | 0.57 | 0.70 | 0.71 | 0.73 | 0.73 | 0.64 | 0.74 |
+| H3K4me2 | 0.74 | 0.44 | 0.79 | 0.87 | 0.86 | 0.79 | 0.83 |
+| H3K4me3 | 0.72 | 0.40 | 0.58 | 0.80 | 0.70 | 0.65 | 0.84 |
+| H3K79me2 | 0.68 | 0.60 | 0.77 | 0.80 | 0.80 | 0.66 | 0.87 |
+| H3K9ac | 0.70 | 0.35 | 0.78 | 0.85 | 0.83 | 0.75 | 0.82 |
+| H3K9me3 | 0.43 | 0.33 | 0.35 | 0.51 | 0.41 | 0.37 | 0.66 |
+| H4K20me1 | 0.56 | 0.43 | 0.41 | 0.58 | 0.46 | 0.38 | 0.70 |
+| RAD21 | 0.57 | 0.43 | 0.35 | 0.64 | 0.49 | 0.49 | 0.82 |
+| SMC3 | 0.67 | 0.34 | 0.29 | 0.66 | 0.45 | 0.44 | 0.79 |
+| median over marks | 0.57 | 0.43 | 0.58 | 0.73 | 0.70 | 0.64 | 0.82 |
+
+**unseen_median2, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.28 | 0.31 | 0.27 | 0.42 | 0.36 | 0.30 | 0.56 |
+| H3K27ac | 0.48 | 0.22 | 0.67 | 0.69 | 0.68 | 0.55 | 0.64 |
+| H3K27me3 | 0.50 | 0.19 | 0.41 | 0.60 | 0.39 | 0.51 | 0.69 |
+| H3K36me3 | 0.49 | 0.51 | 0.68 | 0.66 | 0.69 | 0.59 | 0.68 |
+| H3K4me1 | 0.56 | 0.65 | 0.68 | 0.64 | 0.68 | 0.63 | 0.72 |
+| H3K4me2 | 0.54 | 0.34 | 0.59 | 0.67 | 0.61 | 0.52 | 0.65 |
+| H3K4me3 | 0.37 | 0.23 | 0.31 | 0.50 | 0.43 | 0.20 | 0.52 |
+| H3K79me2 | 0.65 | 0.40 | 0.70 | 0.69 | 0.69 | 0.54 | 0.73 |
+| H3K9ac | 0.54 | 0.16 | 0.62 | 0.68 | 0.66 | 0.55 | 0.66 |
+| H3K9me3 | 0.44 | 0.30 | 0.30 | 0.45 | 0.38 | 0.40 | 0.64 |
+| H4K20me1 | 0.51 | 0.35 | 0.30 | 0.47 | 0.35 | 0.25 | 0.63 |
+| RAD21 | 0.46 | 0.35 | 0.35 | 0.53 | 0.49 | 0.43 | 0.64 |
+| SMC3 | 0.63 | 0.23 | 0.24 | 0.57 | 0.44 | 0.34 | 0.63 |
+| median over marks | 0.50 | 0.31 | 0.41 | 0.60 | 0.49 | 0.51 | 0.64 |
+
+**seen_median7, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.28 | 0.44 | 0.43 | 0.43 | 0.43 | 0.38 | 0.67 |
+| H3K27ac | 0.28 | 0.69 | 0.67 | 0.66 | 0.61 | 0.47 | 0.37 |
+| H3K27me3 | 0.35 | 0.65 | 0.65 | 0.62 | 0.62 | 0.46 | 0.45 |
+| H3K36me3 | 0.39 | 0.73 | 0.73 | 0.68 | 0.68 | 0.55 | 0.60 |
+| H3K4me1 | 0.25 | 0.70 | 0.69 | 0.66 | 0.66 | 0.45 | 0.37 |
+| H3K4me2 | 0.48 | 0.82 | 0.80 | 0.79 | 0.78 | 0.61 | 0.60 |
+| H3K4me3 | 0.57 | 0.87 | 0.84 | 0.82 | 0.83 | 0.62 | 0.68 |
+| H3K79me2 | 0.43 | 0.70 | 0.69 | 0.64 | 0.65 | 0.50 | 0.68 |
+| H3K9ac | 0.51 | 0.82 | 0.78 | 0.77 | 0.76 | 0.67 | 0.65 |
+| H3K9me3 | 0.19 | 0.52 | 0.50 | 0.45 | 0.45 | 0.29 | 0.39 |
+| H4K20me1 | 0.34 | 0.61 | 0.58 | 0.53 | 0.53 | 0.35 | 0.54 |
+| RAD21 | 0.34 | 0.53 | 0.53 | 0.53 | 0.52 | 0.42 | 0.72 |
+| SMC3 | 0.39 | 0.62 | 0.62 | 0.57 | 0.57 | 0.39 | 0.58 |
+| median over marks | 0.35 | 0.69 | 0.67 | 0.64 | 0.62 | 0.46 | 0.60 |
+
+**seen_median7, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.54 | 0.67 | 0.66 | 0.67 | 0.66 | 0.64 | 0.86 |
+| H3K27ac | 0.59 | 0.83 | 0.82 | 0.81 | 0.78 | 0.69 | 0.70 |
+| H3K27me3 | 0.60 | 0.81 | 0.80 | 0.79 | 0.79 | 0.71 | 0.72 |
+| H3K36me3 | 0.69 | 0.86 | 0.85 | 0.83 | 0.83 | 0.76 | 0.83 |
+| H3K4me1 | 0.56 | 0.84 | 0.83 | 0.82 | 0.81 | 0.69 | 0.66 |
+| H3K4me2 | 0.70 | 0.90 | 0.90 | 0.89 | 0.89 | 0.79 | 0.80 |
+| H3K4me3 | 0.80 | 0.93 | 0.92 | 0.91 | 0.91 | 0.80 | 0.87 |
+| H3K79me2 | 0.66 | 0.84 | 0.84 | 0.81 | 0.81 | 0.71 | 0.85 |
+| H3K9ac | 0.74 | 0.90 | 0.89 | 0.88 | 0.88 | 0.82 | 0.85 |
+| H3K9me3 | 0.50 | 0.72 | 0.71 | 0.68 | 0.68 | 0.56 | 0.66 |
+| H4K20me1 | 0.64 | 0.78 | 0.77 | 0.74 | 0.74 | 0.60 | 0.77 |
+| RAD21 | 0.60 | 0.73 | 0.73 | 0.73 | 0.72 | 0.67 | 0.86 |
+| SMC3 | 0.63 | 0.79 | 0.79 | 0.78 | 0.78 | 0.68 | 0.82 |
+| median over marks | 0.63 | 0.83 | 0.82 | 0.81 | 0.79 | 0.69 | 0.82 |
+
+**seen_median7, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.43 | 0.57 | 0.58 | 0.58 | 0.58 | 0.47 | 0.62 |
+| H3K27ac | 0.63 | 0.78 | 0.77 | 0.73 | 0.73 | 0.61 | 0.63 |
+| H3K27me3 | 0.60 | 0.78 | 0.77 | 0.75 | 0.75 | 0.68 | 0.69 |
+| H3K36me3 | 0.57 | 0.80 | 0.76 | 0.73 | 0.73 | 0.60 | 0.68 |
+| H3K4me1 | 0.60 | 0.82 | 0.81 | 0.80 | 0.79 | 0.68 | 0.71 |
+| H3K4me2 | 0.57 | 0.77 | 0.76 | 0.75 | 0.73 | 0.61 | 0.64 |
+| H3K4me3 | 0.39 | 0.59 | 0.61 | 0.61 | 0.60 | 0.40 | 0.51 |
+| H3K79me2 | 0.62 | 0.75 | 0.74 | 0.72 | 0.72 | 0.62 | 0.70 |
+| H3K9ac | 0.68 | 0.82 | 0.81 | 0.82 | 0.81 | 0.66 | 0.77 |
+| H3K9me3 | 0.56 | 0.68 | 0.68 | 0.65 | 0.66 | 0.54 | 0.71 |
+| H4K20me1 | 0.64 | 0.67 | 0.69 | 0.64 | 0.64 | 0.51 | 0.69 |
+| RAD21 | 0.54 | 0.70 | 0.70 | 0.69 | 0.68 | 0.61 | 0.71 |
+| SMC3 | 0.55 | 0.69 | 0.69 | 0.65 | 0.66 | 0.53 | 0.65 |
+| median over marks | 0.57 | 0.75 | 0.74 | 0.72 | 0.72 | 0.61 | 0.69 |
+
+**k562, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.32 | -0.54 | -2.12 | 0.35 | -0.63 | 0.08 | 0.72 |
+| H3K27ac | 0.23 | -14.54 | -0.80 | 0.18 | -0.36 | -0.13 | 0.30 |
+| H3K27me3 | 0.28 | -3.93 | -2.50 | 0.41 | -0.99 | 0.31 | 0.42 |
+| H3K36me3 | 0.43 | -0.21 | 0.18 | 0.68 | 0.56 | 0.57 | 0.72 |
+| H3K4me1 | 0.08 | -10.79 | -1.93 | -0.35 | -1.13 | -1.13 | 0.17 |
+| H3K4me2 | 0.54 | -36.60 | 0.35 | 0.78 | 0.66 | 0.51 | 0.65 |
+| H3K4me3 | 0.63 | -45.66 | -0.91 | 0.62 | 0.04 | 0.47 | 0.77 |
+| H3K79me2 | 0.40 | -1.92 | 0.47 | 0.63 | 0.56 | 0.43 | 0.69 |
+| H3K9ac | 0.53 | -31.97 | 0.07 | 0.73 | 0.50 | 0.51 | 0.68 |
+| H3K9me3 | 0.08 | -18.36 | -4.20 | -0.25 | -1.97 | -0.89 | 0.07 |
+| H4K20me1 | 0.45 | -0.20 | -1.45 | 0.42 | -0.53 | 0.16 | 0.52 |
+| RAD21 | 0.30 | -1.38 | -3.89 | 0.15 | -1.58 | -0.44 | 0.61 |
+| SMC3 | 0.44 | -3.69 | -2.94 | 0.34 | -1.02 | -0.04 | 0.62 |
+| median over marks | 0.40 | -3.93 | -1.45 | 0.41 | -0.53 | 0.16 | 0.62 |
+
+**k562, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.59 | 0.43 | 0.35 | 0.64 | 0.50 | 0.53 | 0.86 |
+| H3K27ac | 0.62 | 0.00 | 0.73 | 0.81 | 0.78 | 0.69 | 0.71 |
+| H3K27me3 | 0.57 | -0.20 | 0.37 | 0.70 | 0.33 | 0.60 | 0.70 |
+| H3K36me3 | 0.67 | 0.59 | 0.72 | 0.87 | 0.81 | 0.83 | 0.86 |
+| H3K4me1 | 0.54 | 0.61 | 0.66 | 0.73 | 0.72 | 0.59 | 0.70 |
+| H3K4me2 | 0.74 | 0.02 | 0.73 | 0.90 | 0.87 | 0.76 | 0.81 |
+| H3K4me3 | 0.79 | 0.08 | 0.41 | 0.82 | 0.62 | 0.69 | 0.88 |
+| H3K79me2 | 0.66 | 0.42 | 0.74 | 0.83 | 0.80 | 0.68 | 0.84 |
+| H3K9ac | 0.73 | -0.09 | 0.77 | 0.89 | 0.85 | 0.77 | 0.82 |
+| H3K9me3 | 0.46 | -0.04 | 0.03 | 0.47 | 0.22 | 0.28 | 0.61 |
+| H4K20me1 | 0.67 | 0.44 | 0.36 | 0.67 | 0.41 | 0.45 | 0.73 |
+| RAD21 | 0.57 | 0.43 | 0.35 | 0.64 | 0.49 | 0.49 | 0.82 |
+| SMC3 | 0.67 | 0.34 | 0.29 | 0.66 | 0.45 | 0.44 | 0.79 |
+| median over marks | 0.66 | 0.34 | 0.41 | 0.73 | 0.62 | 0.60 | 0.81 |
+
+**k562, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.54 | 0.41 | 0.32 | 0.59 | 0.53 | 0.47 | 0.66 |
+| H3K27ac | 0.48 | -0.29 | 0.63 | 0.67 | 0.63 | 0.48 | 0.60 |
+| H3K27me3 | 0.60 | -0.24 | 0.33 | 0.64 | 0.23 | 0.56 | 0.71 |
+| H3K36me3 | 0.50 | 0.26 | 0.61 | 0.63 | 0.63 | 0.47 | 0.63 |
+| H3K4me1 | 0.50 | 0.51 | 0.61 | 0.62 | 0.64 | 0.59 | 0.65 |
+| H3K4me2 | 0.65 | -0.02 | 0.51 | 0.68 | 0.54 | 0.50 | 0.64 |
+| H3K4me3 | 0.41 | -0.01 | 0.12 | 0.37 | 0.25 | 0.22 | 0.49 |
+| H3K79me2 | 0.57 | -0.00 | 0.66 | 0.66 | 0.62 | 0.37 | 0.68 |
+| H3K9ac | 0.61 | -0.29 | 0.63 | 0.73 | 0.67 | 0.59 | 0.70 |
+| H3K9me3 | 0.43 | 0.00 | 0.02 | 0.37 | 0.18 | 0.34 | 0.53 |
+| H4K20me1 | 0.74 | 0.46 | 0.31 | 0.64 | 0.37 | 0.39 | 0.74 |
+| RAD21 | 0.46 | 0.35 | 0.35 | 0.53 | 0.49 | 0.43 | 0.64 |
+| SMC3 | 0.63 | 0.23 | 0.24 | 0.57 | 0.44 | 0.34 | 0.63 |
+| median over marks | 0.54 | 0.00 | 0.35 | 0.63 | 0.53 | 0.47 | 0.64 |
+
+**hmec, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.05 | 0.16 | 0.18 | 0.21 | 0.15 | 0.17 | 0.63 |
+| H3K27ac | 0.23 | 0.40 | 0.53 | 0.54 | 0.51 | 0.43 | 0.49 |
+| H3K27me3 | 0.20 | 0.42 | 0.36 | 0.37 | 0.40 | 0.24 | 0.52 |
+| H3K36me3 | 0.33 | 0.52 | 0.54 | 0.52 | 0.57 | 0.51 | 0.66 |
+| H3K4me1 | 0.34 | 0.41 | 0.53 | 0.52 | 0.54 | 0.47 | 0.59 |
+| H3K4me2 | 0.53 | 0.57 | 0.70 | 0.70 | 0.69 | 0.66 | 0.72 |
+| H3K4me3 | -0.14 | -2.18 | -0.22 | -0.18 | -0.13 | -1.00 | -0.01 |
+| H3K79me2 | 0.46 | 0.58 | 0.60 | 0.54 | 0.54 | 0.36 | 0.78 |
+| H3K9ac | 0.38 | 0.38 | 0.61 | 0.66 | 0.66 | 0.44 | 0.60 |
+| H3K9me3 | 0.15 | 0.43 | 0.30 | 0.29 | 0.33 | 0.21 | 0.48 |
+| H4K20me1 | -0.20 | -0.71 | -0.49 | -0.29 | -0.24 | -0.35 | 0.12 |
+| RAD21 |  |  |  |  |  |  |  |
+| SMC3 |  |  |  |  |  |  |  |
+| median over marks | 0.23 | 0.41 | 0.53 | 0.52 | 0.51 | 0.36 | 0.59 |
+
+**hmec, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.32 | 0.45 | 0.46 | 0.49 | 0.45 | 0.44 | 0.81 |
+| H3K27ac | 0.50 | 0.74 | 0.73 | 0.73 | 0.72 | 0.66 | 0.70 |
+| H3K27me3 | 0.49 | 0.68 | 0.62 | 0.63 | 0.64 | 0.54 | 0.73 |
+| H3K36me3 | 0.58 | 0.76 | 0.75 | 0.72 | 0.76 | 0.72 | 0.81 |
+| H3K4me1 | 0.60 | 0.79 | 0.76 | 0.72 | 0.74 | 0.69 | 0.79 |
+| H3K4me2 | 0.73 | 0.85 | 0.84 | 0.84 | 0.84 | 0.81 | 0.86 |
+| H3K4me3 | 0.65 | 0.72 | 0.76 | 0.79 | 0.79 | 0.60 | 0.79 |
+| H3K79me2 | 0.70 | 0.79 | 0.80 | 0.78 | 0.79 | 0.64 | 0.91 |
+| H3K9ac | 0.67 | 0.80 | 0.80 | 0.82 | 0.81 | 0.73 | 0.82 |
+| H3K9me3 | 0.40 | 0.70 | 0.67 | 0.54 | 0.61 | 0.46 | 0.70 |
+| H4K20me1 | 0.45 | 0.43 | 0.46 | 0.48 | 0.50 | 0.31 | 0.67 |
+| RAD21 |  |  |  |  |  |  |  |
+| SMC3 |  |  |  |  |  |  |  |
+| median over marks | 0.58 | 0.74 | 0.75 | 0.72 | 0.74 | 0.64 | 0.79 |
+
+**hmec, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.03 | 0.21 | 0.22 | 0.25 | 0.20 | 0.13 | 0.45 |
+| H3K27ac | 0.49 | 0.73 | 0.70 | 0.71 | 0.72 | 0.62 | 0.68 |
+| H3K27me3 | 0.41 | 0.63 | 0.49 | 0.56 | 0.56 | 0.47 | 0.66 |
+| H3K36me3 | 0.49 | 0.76 | 0.74 | 0.69 | 0.75 | 0.71 | 0.72 |
+| H3K4me1 | 0.62 | 0.79 | 0.74 | 0.66 | 0.72 | 0.67 | 0.79 |
+| H3K4me2 | 0.42 | 0.70 | 0.67 | 0.66 | 0.67 | 0.53 | 0.67 |
+| H3K4me3 | 0.34 | 0.47 | 0.51 | 0.64 | 0.62 | 0.18 | 0.54 |
+| H3K79me2 | 0.72 | 0.80 | 0.74 | 0.73 | 0.75 | 0.72 | 0.79 |
+| H3K9ac | 0.47 | 0.61 | 0.61 | 0.64 | 0.64 | 0.51 | 0.62 |
+| H3K9me3 | 0.44 | 0.61 | 0.59 | 0.54 | 0.58 | 0.46 | 0.76 |
+| H4K20me1 | 0.28 | 0.24 | 0.29 | 0.31 | 0.33 | 0.11 | 0.52 |
+| RAD21 |  |  |  |  |  |  |  |
+| SMC3 |  |  |  |  |  |  |  |
+| median over marks | 0.44 | 0.63 | 0.61 | 0.64 | 0.64 | 0.51 | 0.67 |
+
+
+### Reading
+
+- The unseen-cell failure is fixed for `seq_meth_aug` (legacy Meth scaling plus
+  random per-window scale and shift): median unseen R2 0.34 (from -3.69),
+  Pearson 0.73 (from 0.43), Spearman 0.60 (from 0.31); K562 Pearson 0.73 (from
+  0.34) and R2 0.41 (from -3.93), prediction offset 0.20 z (from 1.68) and slope
+  0.98 (from 0.25). Marks with a negative R2 remain in single cells (K562
+  H3K4me1 -0.35 and H3K9me3 -0.25; HMEC H3K4me3 -0.18 and H4K20me1 -0.29), the
+  same marks for which `seq` and the ceiling are weak.
+- Per-cell normalisation alone (`seq_meth_cellnorm`, `meth_cellnorm`) improves the
+  ranking on K562 (Pearson 0.34 to 0.41 and -0.20 to 0.43 for meth-only) and HMEC
+  (R2 0.41 to 0.53) but leaves a level error on K562 (offset 0.88 z, R2 -1.45,
+  R2 after removing the offset 0.03), so it does not fix K562 by itself. Adding
+  augmentation and window dropout to it (`seq_meth_cellnorm_aug_mdrop0.2`) gives
+  Pearson 0.70 and R2 -0.24; the augmentation on the legacy scaling is the better
+  variant here. Why the augmented legacy scaling beats the normalised input on
+  K562 was not tested.
+- Against gradient boosting (`GB_both`, section 41) on the two unseen cells the
+  best CNN has R2 0.34 against 0.12, Pearson 0.73 against 0.64, Spearman 0.60
+  against 0.51 (K562: 0.41 / 0.73 / 0.63 against 0.16 / 0.60 / 0.47; HMEC: 0.52 /
+  0.72 / 0.64 against 0.36 / 0.64 / 0.51). The unaugmented `seq_meth` is below
+  gradient boosting on unseen cells. On the seven seen cells all CNN variants
+  except `meth_cellnorm` are above gradient boosting (R2 0.62 to 0.69 against
+  0.46); the augmentation costs 0.05 R2 and 0.02 Pearson there.
+- Against sequence alone (`seq`) the best methylation-aware CNN adds on unseen
+  cells 0.10 R2 (0.34 against 0.24), 0.16 Pearson (0.73 against 0.57) and 0.10
+  Spearman. The gain comes mostly from HMEC (R2 0.52 against 0.23); on K562 R2 is
+  equal (0.41 against 0.40) and only Pearson rises (0.73 against 0.66). The
+  cell-agnostic ceiling (`ceiling_loo`, the mean of the seven measured training
+  tracks, which needs ChIP data of other cells as input) is still above every
+  model on unseen cells (R2 0.61, Pearson 0.82).
+
+### Limitations
+
+- Two independent unseen cells (K562, HMEC); medians of two cells have no
+  interval, and RAD21 and SMC3 exist only for K562. One training run per variant,
+  one seed.
+- The four variants were compared on the same two unseen cells that report the
+  result; there is no validation on an unseen cell, so the choice of
+  `seq_meth_aug` as the best variant is made on the evaluation cells and the
+  size of its advantage is an optimistic estimate. The diagnosis (K562 input
+  outside the training range) rests on the correlation of failure with input
+  distance across two cells and the meth-only control, not on an intervention
+  on K562 (for example shifting its methylation into the training range).
+- Gradient boosting uses all even chromosomes and 500,000 training rows, the CNN the
+  even chromosomes without chr2 and chr4 (validation); the two columns are close
+  but not identical test sets.
+- `--target-norm cell` and `--meth-norm rank` are implemented and smoke-tested only.
+  The remote repository copy of the script differs from the committed one only in the
+  header comment.
+
+### Files
+
+`scripts/seq_cnn_chip.py`; `results/seq_cnn/v2/seq_cnn_results.csv`,
+`seq_cnn_summary.csv`, `seq_cnn_partition.csv` (all variants, section 42 rows
+included; the partition still uses `seq`, `seq_meth`, `meth`),
+`comparison_by_mark.csv` (per mark medians for seen, unseen, K562 and HMEC with
+`GB_both` and `ceiling_loo`), `diag_prediction_bias.csv` (y_mean, p_mean, sds,
+slope, R2, R2 after removing the offset, Pearson per model, cell and mark). The
+section 42 files stay in `results/seq_cnn/`.
