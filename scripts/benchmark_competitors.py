@@ -133,6 +133,16 @@ for _res, _dir in ((10000, HICGAN_X10), (25000, HICGAN_X25)):
             heldout="even", cell=_c, model_cell=_m,
             chroms=(["chr2", "chr3"] if _c == "imr90" else EVEN))
 
+# 5 kb extension of the chromosome-held-out comparison (registry section 58); registered only
+# on request (BENCH_5KB=1) so that the default competitor list is unchanged. Hi-cGAN has a
+# 5 kb record for GM12878 only (best_plus_two: RAD21, H3K4me3, SMC3; window 512 bins).
+if os.environ.get("BENCH_5KB") == "1":
+    COMPETITORS["hicgan_gm12878_5kb"] = dict(
+        label="Hi-cGAN (submitted)",
+        path=HICGAN_BEST / "5kb/best_plus_two/training_odd_gm12878_pred_all_chromosomes_L1_gen_00099_RAD21_H3K4me3_SMC3.cool",
+        per_chrom=False, build="hg19", res=5000, reach=2_560_000, space="counts",
+        heldout="even", cell="gm12878", chroms=["chr2", "chr14"])
+
 # our models: (label, run dir, cells) per resolution
 OURS = {
     25000: {"all12refres": MC_REF / "all12refres_25kb", "all12honest": MC_REF / "all12honest_25kb"},

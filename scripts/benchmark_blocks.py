@@ -59,6 +59,14 @@ def params(res: int) -> dict:
                     loop=bs.BioParams(loop_coarsen=1, donut_inner=1, donut_outer=3,
                                       loop_min_dist=3, loop_max_dist=100, loop_match_tol=1,
                                       apa_half=3, apa_corner=1, loop_nms=1))
+    if res == 5000:
+        # the 10 kb row with every window in bins doubled, so that each span in bp
+        # (insulation square 50 kb, donut 10 to 30 kb, loop distance 30 kb to 1 Mb,
+        # APA half-width 30 kb, matching tolerance 10 kb) equals the 10 kb row
+        return dict(ins=10, btol=2, flank=10,
+                    loop=bs.BioParams(loop_coarsen=1, donut_inner=2, donut_outer=6,
+                                      loop_min_dist=6, loop_max_dist=200, loop_match_tol=2,
+                                      apa_half=6, apa_corner=2, loop_nms=2))
     # donut outer 3: with outer 2 the donut (cross removed) keeps only its 4
     # corner pixels, fewer than the 8 local_enrichment requires
     return dict(ins=3, btol=1, flank=4,

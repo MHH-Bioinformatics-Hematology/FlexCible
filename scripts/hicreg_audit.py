@@ -197,6 +197,13 @@ def variants():
                     v[f"hicreg{feat.lower()}{mode.lower()}_{cell}_{k}kb"] = ("released", cell, feat, mode, res)
             other = "k562" if cell == "gm12878" else "gm12878"
             v[f"hicregwindowcrosscell_{other}to{cell}_{k}kb"] = ("crosscell", cell, other, res)
+    if os.environ.get("BENCH_5KB") == "1":
+        # native 5 kb of the released predictions (no summing); registered only on
+        # request so that the default variants are unchanged
+        for cell in CELLS:
+            for feat in ("WINDOW", "MULTICELL"):
+                for mode in ("CV", "CrossChrom"):
+                    v[f"hicreg{feat.lower()}{mode.lower()}_{cell}_5kb"] = ("released", cell, feat, mode, 5000)
     return v
 
 

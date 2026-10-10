@@ -147,7 +147,7 @@ TRAIN12 = ["gm12878", "imr90", "hct116", "hff", "h1", "hepg2", "a549", "nhek",
            "gm23248", "mcf7", "cd14mono", "pc9"]
 HELDOUT = ["k562", "hmec_deep", "huvec_deep"]
 BIGWIG = {"k562": HM / "hg38_k562", "hmec_deep": HM / "hg38_hmec", "huvec_deep": HM / "hg38_huvec"}
-WINDOW = {25000: 80, 10000: 192}
+WINDOW = {25000: 80, 10000: 192, 5000: 384}   # 5000: chromosome-held-out 5 kb (--chrho-res 5000)
 RESOLUTIONS = [25000, 10000]
 CHROMS = {"heldout": ["chr2", "chr12", "chr18"], "trainchrom": ["chr2", "chr18"],
           "trainstretch": ["chr2", "chr18"]}
@@ -171,6 +171,7 @@ BEST_OTHER = {
             "gm23248": "hff", "mcf7": "h1", "cd14mono": "gm12878", "pc9": "a549",
             "k562": "hct116", "hmec_deep": "nhek", "huvec_deep": "imr90"},
 }
+BEST_OTHER[5000] = dict(BEST_OTHER[10000])      # 5 kb: the 10 kb table (only used for the baseline row)
 # an independent replicate map of the same cell (proper O/E), the ceiling
 REPLICATE = {"gm12878": "intact_gm12878_ENCSR965OVH_r75_ice",
              "k562": "intact_k562_ENCSR676BEP_r5_ice",
@@ -315,7 +316,7 @@ def hicgan_pearson_auc(Tc: np.ndarray, Pc: np.ndarray, res: int) -> float:
     distances 0 .. round(1 Mb / res) - 1, missing pixels as 0 counts, per
     distance Pearson (NaN dropped), AUC with the distance axis divided by the
     largest distance."""
-    K = int(np.round(1_000_000 / res))
+    K = min(int(np.round(1_000_000 / res)), Tc.shape[1])   # 5 kb Epiphany band: 198 bins < 200
     T = np.nan_to_num(Tc[:, :K])
     P = np.nan_to_num(Pc[:, :K])
     r = np.full(K, np.nan)
@@ -802,8 +803,11 @@ def stage_predict(threads: int, jobs: int, gpu: str = "") -> None:
 # ===================================================================== #
 # stage: expected (count conversion curves)
 # ===================================================================== #
-def expected_file(cell: str, res: int, chrom: str) -> Path:
-    return OUT / "expected" / f"{cell}_{res // 1000}kb_{chrom}.npz"
+def expected_file(cell: str, res: int, chrom: str, D: int = 200) -> Path:
+    # the curves cover D + 1 diagonals; the 25 and 10 kb bands (D <= 191) and the 5 kb
+    # bands up to 200 share the plain file name, a wider 5 kb band its own file
+    sfx = f"_D{D}" if D > 200 else ""
+    return OUT / "expected" / f"{cell}_{res // 1000}kb_{chrom}{sfx}.npz"
 
 
 def measured_uri(cell: str, res: int) -> str:
@@ -815,7 +819,7 @@ def compute_expected(cell: str, res: int, chrom: str, D: int = 200) -> Path:
     """Balanced expected E(d) and per-diagonal log offset of the measured map
     (exactly the curves oe_proper.py used for the target), and the raw/balanced
     scale of the band."""
-    f = expected_file(cell, res, chrom)
+    f = expected_file(cell, res, chrom, D)
     if f.exists():
         return f
     import cooler
@@ -1118,7 +1122,8 @@ def tad_measures(pred: Path | None, truth: Path | None, res: int) -> dict:
         out["TAD Fraction"] = len(bp) / len(bt)
         ex = bp[["chromosome", "start", "end"]].merge(bt[["chromosome", "start", "end"]])
         out["TAD Fraction Exact Match"] = len(ex) / len(bt)
-        hr, hp = match_points(bt.start.values // res, bp.start.values // res, 1)
+        tol = 2 if res == 5000 else 1                 # 5 kb: the 10 kb tolerance in bp (10 kb)
+        hr, hp = match_points(bt.start.values // res, bp.start.values // res, tol)
         out["bnd_recall"] = hr / len(bt)
         out["bnd_precision"] = hp / len(bp) if len(bp) else np.nan
     return out
@@ -1260,9 +1265,9 @@ def score_block(b: dict, jobs: int) -> Path:
         return outf
     t0 = time.time()
     cell, res, chrom, D = b["cell"], b["res"], b["chrom"], b["D"]
-    ef = expected_file(cell, res, chrom)
+    ef = expected_file(cell, res, chrom, D)
     if not ef.exists():
-        compute_expected(cell, res, chrom)
+        compute_expected(cell, res, chrom, D=max(200, D))
     E = np.load(ef)
     n = int(E["n"])
     T = load_band(target_cool(cell, res), chrom, n, D)
@@ -1300,7 +1305,7 @@ def score_block(b: dict, jobs: int) -> Path:
     Tm = masked(T, mask)
     Mm = {k: masked(v, mask) for k, v in maps.items()}
     W = WINDOW[res]
-    ins_w = {25000: 3, 10000: 5}[res]
+    ins_w = {25000: 3, 10000: 5, 5000: 10}[res]    # 50 kb square at 10 and 5 kb
     tile = 1_000_000 // res
     e1 = e1_bins(cell, chrom, n, res)
     lab = compartment_labels(e1)
@@ -1981,6 +1986,7 @@ CHRHO_CELLS = ["gm12878", "imr90", "k562"]
 
 
 CHRHO_25KB_COMPS = False      # --chrho-25kb-comps: C.Origami and Epiphany resampled onto the 25 kb grid
+CHRHO_RES = None              # --chrho-res 5000: only the 5 kb blocks, predictions and tables
 
 
 def chrho_blocks() -> list[dict]:
@@ -1988,6 +1994,9 @@ def chrho_blocks() -> list[dict]:
     Every block holds the chromosomes the competitor left out of its training;
     the band is cut to the competitor's reach where it is shorter than our
     window (Epiphany 990 kb, HiC-Reg 1 Mb)."""
+    if CHRHO_RES == 5000:
+        rows = chrho_blocks_5kb()
+        return _finish_blocks(rows)
     rows = [("chrho_corigami", "imr90", 10000, "chr2", None,
              ["corigami_imr90_8kb", "hicgan_imr90_on_imr90_10kb", "hicgan_gm12878_on_imr90_10kb"]),
             ("chrho_corigami", "imr90", 10000, "chr3", None, ["corigami_imr90_8kb"])]
@@ -2017,6 +2026,10 @@ def chrho_blocks() -> list[dict]:
         rows.append(("chrho_corigami", "imr90", 25000, "chr3", None, ["corigami_imr90_8kb"]))
         for c in ("chr3", "chr11", "chr17"):
             rows.append(("chrho_epiphany", "gm12878", 25000, c, 39, ["epiphany_gm12878_10kb"]))
+    return _finish_blocks(rows)
+
+
+def _finish_blocks(rows) -> list[dict]:
     out = []
     for set_, cell, res, ch, D, comps in rows:
         b = dict(set=set_, cell=cell, res=res, chrom=ch, D=D if D else WINDOW[res] - 1,
@@ -2024,6 +2037,29 @@ def chrho_blocks() -> list[dict]:
         b["id"] = f"{set_}_{cell}_{res // 1000}kb_{ch}"
         out.append(b)
     return out
+
+
+def chrho_blocks_5kb() -> list[dict]:
+    """The blocks of chrho_blocks on the 5 kb grid. C.Origami (8192 bp) and Epiphany
+    (10 kb) have no 5 kb output: their O/E maps are read at the 5 kb bin centres
+    (bilinear in (bin, bin) space, a pixel kept when all four neighbours exist, the
+    convention of the 25 and 10 kb blocks). The bands are the reach of the
+    competitor in 5 kb bins (C.Origami 2 Mb: the model window, 383 bins; Epiphany
+    990 kb: 198 bins; HiC-Reg 1 Mb: 200 bins). Hi-cGAN has a 5 kb record for GM12878
+    only (chr2, chr14), no K562 block."""
+    rows = [("chrho_corigami", "imr90", 5000, c, None, ["corigami_imr90_8kb"])
+            for c in ("chr2", "chr3")]
+    for c in ("chr3", "chr11", "chr17"):
+        rows.append(("chrho_epiphany", "gm12878", 5000, c, 198, ["epiphany_gm12878_10kb"]))
+    for cell in ("gm12878", "k562"):
+        for c in ("chr14", "chr17"):
+            rows.append(("chrho_hicreg", cell, 5000, c, 200,
+                         [f"hicregwindowcrosschrom_{cell}_5kb",
+                          f"hicregmulticellcrosschrom_{cell}_5kb",
+                          f"hicregwindowcv_{cell}_5kb"]))
+    for c in ("chr2", "chr14"):
+        rows.append(("chrho_hicgan", "gm12878", 5000, c, None, ["hicgan_gm12878_5kb"]))
+    return rows
 
 
 def chrho_use_root() -> None:
@@ -2070,7 +2106,8 @@ def chrho_predict(threads: int, jobs: int, gpu: str = "") -> None:
     chrho_use_root()
     # the cells k562 is not a training cell; its sample is gm12878 with k562 tracks
     BIGWIG.setdefault("k562", HM / "hg38_k562")
-    todo = [(m, res, c) for res in RESOLUTIONS for m in chrho_available(res)
+    todo = [(m, res, c) for res in ([CHRHO_RES] if CHRHO_RES else RESOLUTIONS)
+            for m in chrho_available(res)
             for c in CHRHO_CELLS if not pred_cool(m, res, c).exists()]
     log(f"[chrho predict] {len(todo)} predictions")
     per = max(1, threads // jobs)
@@ -2118,7 +2155,10 @@ def chrho_report() -> None:
     D = D[D.kind.isin(["model", "cool", "competitor", "measured"])]
     cols = [c for c in CHRHO_COLS if c in D.columns]
     tag = "chrho"
-    if CHRHO_25KB_COMPS:                       # the 25 kb grid, all competitors, own files
+    if CHRHO_RES == 5000:                      # the 5 kb grid, own files
+        D = D[D.res == 5000]
+        tag = "chrho_5kb"
+    elif CHRHO_25KB_COMPS:                     # the 25 kb grid, all competitors, own files
         D = D[D.res == 25000]
         tag = "chrho_25kb"
     CHRHO_TABLES.mkdir(parents=True, exist_ok=True)
@@ -2146,11 +2186,18 @@ def main():
     ap.add_argument("--chrho-25kb-comps", action="store_true",
                     help="chrho_score/chrho_report: add the C.Origami and Epiphany blocks on the "
                          "25 kb grid (default off; the default tables are unchanged)")
+    ap.add_argument("--chrho-res", type=int, default=None, choices=[5000],
+                    help="chrho_predict/chrho_score/chrho_report: only the 5 kb blocks, "
+                         "predictions and tables (chrho_5kb_*.csv); default off, the 25 and "
+                         "10 kb behaviour is unchanged")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
-    global CHRHO_25KB_COMPS
+    global CHRHO_25KB_COMPS, CHRHO_RES
     CHRHO_25KB_COMPS = a.chrho_25kb_comps
+    CHRHO_RES = a.chrho_res
+    if a.chrho_res:                      # registers the 5 kb Hi-cGAN and HiC-Reg competitors
+        os.environ["BENCH_5KB"] = "1"
     if a.chrho_25kb_comps:               # registers the 25 kb Hi-cGAN IMR-90 competitors
         os.environ["BENCH_HICGAN_IMR90_25KB"] = "1"
     for st in a.stage:
