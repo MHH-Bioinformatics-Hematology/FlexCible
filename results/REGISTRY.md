@@ -5534,3 +5534,30 @@ genome. (6) Ceilings exist for only 2 of 12 training cells; the training median 
 all12honest_drop (not all12honest of `reference_summary.csv`, which has 0.828 at 25 kb).
 
 Reproduce: `python scripts/replicate_ceiling_table.py` (CPU, seconds).
+
+## 50. Mutation subtype of the Xu et al. patients as model input or stratifier (FINAL feasibility study, CPU only; section 49 was the last number when this was written)
+
+Question: can the AML subtype or driver status of each patient be a model input or an evaluation stratifier, and is a test
+statistically meaningful? Files: `results/aml_subtype/patient_subtype_table.csv` (25 AML Hi-C patients, source column),
+`results/aml_subtype/FEASIBILITY.md`, `scripts/aml_subtype_table.py`.
+
+Data. No per-patient mutation list exists in GEO (GSE152135 source name only), the text or the Suppl. Tables; the mutation
+labels come from Fig. 1c of the paper (hand-read; fusions cross-checked against the SV junctions of Suppl. Table 5: all
+agree). Consensus groups of the 25 AML Hi-C patients: TET2 6, KMT2B 6, CEBPA 5, RUNX1 4 (3 with t(9;22)), STAG2 3, FLT3-ITD
+only 1; FLT3-ITD 6, NPM1 4, KRAS/NRAS 4. Suppl. Table 3 numbers (3, 4, 3, 4) are loop-harbouring sample counts, not group sizes.
+
+Finding that changes earlier sections: patients 103 and 673 (and 576) are healthy PBMC donors (GEO source name, Fig. 1c "Normal
+PBMC"), not AML. The 12 CUT&Tag "patients" of sections 36 and 38 are 10 AML plus 2 healthy donors; both are in the training
+AML reference of the fold 0 test patients, and fold 1 tests 103 and 673. Section 29 states that the PBMC controls have no public
+Hi-C; GSM4604271 to 73 are their maps.
+
+Fold 0 (test 027 RUNX1, 270 KMT2B, 773 CEBPA, 1916 TET2) has one test patient per group; AML training patients 018 and 546 (TET2),
+168 (RUNX1), 629 (KMT2B), 472 (STAG2), 1360 (FLT3-ITD only), no CEBPA. Same-group Pearson minus different-group Pearson over
+the 413 test regions, 25 patients: 0.024 at 25 kb (permutation p 0.052), 0.021 at 10 kb (0.16), 0.017 at 5 kb (0.20); carried by
+the TET2 group, confounded with the GEO batch.
+
+Verdict: an indicator input is not learnable (1 to 2 training patients per group, collinear with patient identity, CEBPA
+test group without a training patient, section 36 shows no headroom over the reference). Usable as evaluation stratifier and
+as a group-matched reference (Hi-C only, leave-one-patient-out over 24 patients, 0 GPU h); MYCN-loop presence (TET2/FLT3-ITD,
+CEBPA, STAG2/KRAS/NRAS versus RUNX1, KMT2B) is a 5 against 5 test among the CUT&Tag AML with minimal exact p 0.004 for one
+locus (0.17 in fold 0 alone). Details in FEASIBILITY.md.
