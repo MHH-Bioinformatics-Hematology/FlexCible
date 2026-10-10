@@ -12,6 +12,8 @@ one GPU training at a time, in this order:
      10 kb) with inference-only sets, then dedicated trainings per set
   c  all12aml_refres_drop 10 kb: AML-inclusive recipe of section 36 with the
      reference as residual (patient minus AML reference), fold 0
+  f  cohesin fix: all12cohfix_refres_drop and the ablation all12cohfixna_refres_drop, 25 and 10 kb
+     (registry 55), claimed by run name, with evaluation, perturbation, washout, AML and diagnosis
   d  (removed 2026-10-09: the sequence CNN runs on another computer)
   e  chromosome-held-out 5 kb models all12refin_drop_chrho_5kb, all12honest_drop_chrho_5kb and
      (optional, last) all12refres_drop_chrho_5kb with the standard evaluation (registry 58),
@@ -187,6 +189,37 @@ def jobs():
         J[-1].external_wait = True
         aux(f"eval_{mx.run_name(run, 5000)}", f"{gs.eval_cmd(run, 5000)} && ( {gs.STATUS} || true )",
             (lambda r=run: gs.trained(r, 5000)))
+    # ---- (f) cohesin-fraction input and cohesin-loss augmentation (registry 55,
+    # results/cohesin_fix/REMOTE_JOB.md): main run and no-augmentation ablation, 25 and 10 kb, claimed
+    # by run name (the remote runner remote_queue_cohesin.py claims the same names), one cache
+    # (mc_all12cohfix_refres_drop_<k>kb, built by the cohesin agent: wait for the manifest)
+    coh_done = {}
+    for fam in ("all12cohfix_refres_drop", "all12cohfixna_refres_drop"):
+        for res in (25000, 10000):
+            k = res // 1000
+            op = mx.HM / f"cohesin_fix/operator_{k}kb.pt"
+            gpu(f"train_{mx.run_name(fam, res)}",
+                f"{M} --runs {fam} --res {res} --stage precompute --workers 3 && "
+                f"{M} --runs {fam} --res {res} --stage train --gpus 0,1",
+                (lambda c=f"mc_all12cohfix_refres_drop_{k}kb", o=op: cache_ok(c) and o.exists()),
+                (lambda r=fam, x=res: gs.trained(r, x)))
+            J[-1].claim = mx.run_name(fam, res)
+            J[-1].external_wait = True
+            aux(f"eval_{mx.run_name(fam, res)}", f"{gs.eval_cmd(fam, res)} && ( {gs.STATUS} || true )",
+                (lambda r=fam, x=res: gs.trained(r, x)))
+            aux(f"diagnose_{mx.run_name(fam, res)}",
+                f"{PY} scripts/cohesin_fix_diagnose.py --run {mx.run_name(fam, res)}",
+                (lambda r=fam, x=res: gs.trained(r, x)), gpu_use=False)
+    names = [mx.run_name(f, r) for f in ("all12cohfix_refres_drop", "all12cohfixna_refres_drop")
+             for r in (10000, 25000)]
+    coh_ready = lambda: all(gs.trained(*mx.split_name(n)) for n in names)
+    aux("cohfix_perturb", gs.locked("perturb", f"{PY} scripts/perturb_validate.py --stage predict "
+                                    "predict_chip score"), coh_ready, gpu_use=False)
+    aux("cohfix_washout", f"CUDA_VISIBLE_DEVICES=1 {PY} scripts/washout.py --stage predict score",
+        coh_ready, gpu_use=False)
+    aux("cohfix_aml", gs.locked("aml", f"{PY} scripts/aml_eval.py --stage predict --models "
+                                f"{' '.join(names)} --jobs 2 --threads 3 && {PY} scripts/aml_eval.py "
+                                "--stage perturb --res 10000 25000"), coh_ready, gpu_use=False)
     # (d) the sequence CNN runs on another computer (2026-10-09), not in this queue;
     # cnn_cmd() below still builds the one-command local run if it is needed again
     return J
