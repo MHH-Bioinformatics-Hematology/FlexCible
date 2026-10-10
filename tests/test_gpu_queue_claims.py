@@ -40,6 +40,7 @@ def test_only_dedicated_trainings_carry_a_claim():
     import scenario_bench as sb
     J = q.jobs()
     claimed = {j.name: j.claim for j in J if getattr(j, "claim", None)}
-    assert set(claimed.values()) == set(sb.dedicated_runs())
+    chrho = {q.mx.run_name(r, 5000) for r, _ in q.CHRHO5}
+    assert set(claimed.values()) == set(sb.dedicated_runs()) | chrho
     assert all(n == f"train_{c}" for n, c in claimed.items())
     assert not any(getattr(j, "claim", None) for j in J if j.name.startswith(("scen_ded_", "scen_infer")))

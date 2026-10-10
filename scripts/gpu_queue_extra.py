@@ -13,6 +13,9 @@ one GPU training at a time, in this order:
   c  all12aml_refres_drop 10 kb: AML-inclusive recipe of section 36 with the
      reference as residual (patient minus AML reference), fold 0
   d  (removed 2026-10-09: the sequence CNN runs on another computer)
+  e  chromosome-held-out 5 kb models all12refin_drop_chrho_5kb, all12honest_drop_chrho_5kb and
+     (optional, last) all12refres_drop_chrho_5kb with the standard evaluation (registry 58),
+     claimed like the dedicated trainings, started once their caches exist
 
 CPU preparation (the six window caches) starts at once
 at nice 19. Every job is skipped when its output exists, so the queue can be
@@ -67,6 +70,10 @@ CNN_DATA = Path.home() / "data/seq_cnn_data"      # symlinks to the data folders
 CNN_OUT = mx.HM / "runs/seq_cnn"
 CNN_MODES = ("seq", "seq_meth", "meth")
 CPU_SLOTS = 2
+# 5 kb chromosome-held-out models: (run, cache); refres is optional and last
+CHRHO5 = [("all12refin_drop_chrho", "mc_all12ref_chrho_5kb"),
+          ("all12honest_drop_chrho", "mc_all12chrho_5kb"),
+          ("all12refres_drop_chrho", "mc_all12ref_chrho_5kb")]
 
 
 def note(msg):
@@ -167,6 +174,19 @@ def jobs():
     aux("aml_refres_eval_f0", gs.locked("amleval", f"{PY} scripts/aml_train_eval.py --fold 0"),
         lambda: gs.trained("all12aml_refres_drop", 10000))
 
+    # ---- (e) chromosome-held-out 5 kb models for the competitor comparison (registry 58,
+    # results/benchmark/REMOTE_JOB_chrho_5kb.md), last, claimed like the dedicated trainings. The
+    # caches are built by the competitor agent's own precompute (nice 19): wait for the manifests,
+    # never start a second precompute (the train stage skips it when the manifest exists).
+    for run, cache in CHRHO5:
+        gpu(f"train_{mx.run_name(run, 5000)}",
+            f"{M} --runs {run} --res 5000 --stage precompute --workers 3 && "
+            f"{M} --runs {run} --res 5000 --stage train --gpus 0,1",
+            (lambda c=cache: cache_ok(c)), (lambda r=run: gs.trained(r, 5000)))
+        J[-1].claim = mx.run_name(run, 5000)
+        J[-1].external_wait = True
+        aux(f"eval_{mx.run_name(run, 5000)}", f"{gs.eval_cmd(run, 5000)} && ( {gs.STATUS} || true )",
+            (lambda r=run: gs.trained(r, 5000)))
     # (d) the sequence CNN runs on another computer (2026-10-09), not in this queue;
     # cnn_cmd() below still builds the one-command local run if it is needed again
     return J
@@ -379,7 +399,8 @@ def main():
             running[j.name] = launch(j)
             cpu_running += 1
         # nothing can start and nothing runs although the gate is open: blocked by failures
-        if opened and not running and not elsewhere and not any(
+        ext = [j for j in pending if getattr(j, "external_wait", False) and not j.ready()]
+        if opened and not running and not elsewhere and not ext and not any(
                 j.ready() for j in pending if not j.gpu or j is head):
             stalled += 1
             if stalled > 10:
