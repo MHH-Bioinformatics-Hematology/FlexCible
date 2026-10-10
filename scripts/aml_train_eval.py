@@ -75,7 +75,8 @@ def samples(fold: int, res: int) -> list[dict]:
                     "meth": at.patient_meth_dir(at.guard(p)),
                     "assay": "hic", "lab": "xu",
                     "target": at.OE_DIR / f"xu_{p}_proper_{res // 1000}kb.cool",
-                    "lopo": at.CONS_DIR / f"amlcons_lopo_xu_{p}_{res // 1000}kb.cool"})
+                    "lopo": (at.clean_lopo(p, res) if fold >= at.NEW_FOLD_MIN
+                                 else at.CONS_DIR / f"amlcons_lopo_xu_{p}_{res // 1000}kb.cool")})
     for dn in at.HSPC_TEST:
         marks = sorted(b.stem for b in at.HSPC_MARKS.glob("*.bigwig"))
         out.append({"cell": at.hspc_guard(dn), "patient": f"HSPC-{dn}", "group": "hspc", "meth": None,
@@ -86,7 +87,8 @@ def samples(fold: int, res: int) -> list[dict]:
     out.append({"cell": "u937", "patient": "u937", "group": "u937", "meth": None, "dir": d,
                 "marks": sorted(b.stem for b in d.glob("*.bigwig")), "assay": "microc", "lab": "",
                 "target": at.OE_DIR / f"u937_wt_c1_proper_{res // 1000}kb.cool",
-                "lopo": at.CONS_DIR / f"amlcons_all_{res // 1000}kb.cool"})
+                "lopo": (at.clean_lopo(None, res) if fold >= at.NEW_FOLD_MIN
+                         else at.CONS_DIR / f"amlcons_all_{res // 1000}kb.cool")})
     return out
 
 

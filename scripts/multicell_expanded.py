@@ -173,10 +173,11 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     "all12cohunk_honest_drop": (TRAIN12, None),
     # AML-inclusive training (registry section 36; scripts/aml_train.py): the 12
     # cells plus MOLM-13 and eight Xu 2022 patients (fold 0; _f1, _f2 the other
-    # test folds), AML windows oversampled, AML reference map, patient-specific
+    # test folds; _f10 to _f12 the folds without the healthy donors, registry
+    # section 51), AML windows oversampled, AML reference map, patient-specific
     # hard validation
     **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("refin_drop", "honest_drop")
-       for f in ("", "_f1", "_f2")},
+       for f in ("", "_f1", "_f2", "_f10", "_f11", "_f12")},
     "all12aml_refin_drop_nolab": (TRAIN12, None),      # the same without the lab indicator
     # the recipe with the reference as residual (model.reference "residual": the
     # network predicts patient minus AML reference) instead of an input plane;

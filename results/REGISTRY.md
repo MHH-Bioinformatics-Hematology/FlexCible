@@ -5583,3 +5583,40 @@ correction, "0.822" in summary row 5 (12-cell median 0.828). The consensus-input
 consensus alone 0.898 / 0.859 / 0.785 / 0.629, honest_drop 0.775 / 0.761 / 0.684 / 0.544, 0.828 to 0.939, the Akita
 region numbers (n = 411), the chromosome-held-out comparisons and sections 39, 40, 41, 48 are honest. Sections 29, 36,
 38, 46 and 47 AML numbers need recomputing without xu_103 and xu_673 (not done here).
+
+## 52. AML-inclusive cross-validation without the healthy donors, folds 10 to 12 (PENDING until the trainings and the evaluation finish; section 51 was the last number when this was written)
+
+Reason: xu_103, xu_673 and xu_576 are healthy PBMC donors (GEO GSE152135 source name "Primary Healthy donor", Fig. 1c
+"Normal PBMC", absent from Suppl. Table 2; section 50). The AML-inclusive folds of section 36 counted 103 and 673 as
+training or test patients and put them in the AML reference. Fold 0 of section 36 (suffix-free runs, hard_f0, eval_f0,
+mc_all12aml_*) is kept unchanged for the record; the folds 1 and 2 of section 36 were never trained (flag file
+`AML_CV` absent). The partial fold-1 preparation made on 2026-10-10 on the remote machine (reference cools
+`amltrain_f1_*`, cache `mc_all12aml_ref_25kb_f1`) was deleted.
+
+Split (`results/aml_train/split_v2.json`, `scripts/aml_train.py`, fold ids 10, 11, 12 so that no name collides with the
+old suffixes): the ten AML patients with Hi-C and CUT&Tag (018, 027, 168, 270, 472, 546, 629, 773, 1360, 1916), healthy
+donors excluded (`HEALTHY`), patient-disjoint, groups from `results/aml_subtype/patient_subtype_table.csv`:
+
+| fold | test patients (group) | training AML patients |
+|---|---|---|
+| 10 | 018 (TET2), 027 (RUNX1), 270 (KMT2B) | 168, 472, 546, 629, 773, 1360, 1916 (7) |
+| 11 | 168 (RUNX1), 546 (TET2), 629 (KMT2B), 1360 (FLT3-ITD only) | 018, 027, 270, 472, 773, 1916 (6) |
+| 12 | 472 (STAG2), 773 (CEBPA), 1916 (TET2) | 018, 027, 168, 270, 546, 629, 1360 (7) |
+
+Every fold tests one TET2 patient; RUNX1 and KMT2B are tested in two folds, STAG2, CEBPA and FLT3-ITD only once; the two
+patients without CTCF CUT&Tag (1360, 1916) are in different folds. 3 to 4 test patients per fold. Patients 168 and 496
+(possible duplicate donor, check in progress) cannot be split: 496 has no CUT&Tag and is in no fold or reference. The
+check may still show 168 (or another test patient) to duplicate a training patient; if so, the fold needs reassigning.
+HSPC donors 050 and 213 and MOLM-13 train in every fold, U-937 WT and HSPC donors 341 and 822 are held out as before.
+
+References: the AML reference of a fold is the mean proper O/E of the fold's training AML patients (leave-one-out for a
+training patient, mean of all for MOLM-13 and the test patients), no test patient and no healthy donor. New for these
+folds: the evaluation baselines "mean of all other AML patients" (`amlclean_lopo_xu_<p>`, `amlclean_all`) are built from
+the AML patients only (24 others), where the section 36 baselines `amlcons_*` included the healthy donors.
+
+Code: `aml_train.py --stage split [--exclude-healthy | --include-healthy]` (default new split; `--include-healthy`
+reproduces and verifies the old split.json), `fold_of` accepts two-digit folds, `multicell_expanded` RUNS has
+`all12aml_{refin_drop,honest_drop}_f{10,11,12}`. Jobs per fold: all12aml_refin_drop and all12aml_honest_drop at 25 and
+10 kb (single GPU on the remote 4090, doubled per-rank batch, scripts/run_single_gpu.py), then `aml_train_eval.py --fold N`
+with the results copied to `runs/aml_train_remote/fold<N>/`. Expected about 13 min per 25 kb and 30 min per 10 kb run
+(measured 10 and 23 min for the 12-cell runs times 1.3), 40 to 80 min evaluation per fold. Results: PENDING.

@@ -17,6 +17,15 @@ assigned to patients in the paper's tables (Supplementary Table 3 lists
 subtype-specific loops with gene:count labels only), so no stratification by
 subtype is possible. Written to ``results/aml_train/split.json``.
 
+Folds 10, 11 and 12 (registry section 51) replace the folds 0 to 2 for new runs:
+the "patients" 103 and 673 (and 576, without CUT&Tag) are healthy PBMC donors
+(registry section 50), so they are excluded from the patient list, from the
+training patients, from the AML reference and from every baseline built here.
+The split of the ten AML patients with CUT&Tag is in
+``results/aml_train/split_v2.json``; the old split (``split.json``, healthy donors
+included, fold ids 0 to 2) stays reproducible with ``--stage split
+--include-healthy`` (default ``--exclude-healthy``).
+
 Healthy controls. The four CD34+ HSPC donors of the same study (same lab and
 protocol; Hi-C only, no donor ChIP) are samples too: donors 050 and 213 train,
 donors 341 and 822 are held out in every fold. They carry the marks of one
@@ -71,6 +80,18 @@ CONS_DIR = PRIM / "consensus"
 RES_OUT = REPO / "results/aml_train"
 PATIENTS = ["018", "027", "103", "168", "270", "472", "546", "629", "673", "773", "1360", "1916"]
 N_FOLDS = 3
+HEALTHY = ["103", "673", "576"]          # healthy PBMC donors (registry section 50), never AML
+NEW_FOLD_MIN = 10                        # fold ids >= 10: split_v2, healthy donors excluded
+AML_PATIENTS = [p for p in PATIENTS if p not in HEALTHY]
+# patients that are the same donor must stay on one side of a split (patient 496 has no CUT&Tag
+# and is not in PATIENTS, so the pair 168/496 constrains nothing here; extend after the
+# duplicate-patient check)
+SAME_DONOR = [("168", "496")]
+# test patients of the folds 10 to 12: TET2 once per fold, RUNX1 and KMT2B in two folds,
+# CEBPA, STAG2 and FLT3-ITD only once, 3 to 4 test patients per fold
+V2_FOLDS = {"10": ["018", "027", "270"], "11": ["168", "546", "629", "1360"],
+            "12": ["472", "773", "1916"]}
+SUBTYPE_TABLE = REPO / "results/aml_subtype/patient_subtype_table.csv"
 ALL13 = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1", "H3K4me2",
          "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"]
 OVERSAMPLE = 3
@@ -130,29 +151,57 @@ def make_split() -> dict:
                     "held out in every fold"}
 
 
-def split() -> dict:
-    f = RES_OUT / "split.json"
+def make_split_v2() -> dict:
+    """Folds 10 to 12: patient-disjoint folds over the AML patients with CUT&Tag, healthy
+    donors excluded, subtype groups (consensus mutation group of Xu 2022 Fig. 1c) spread."""
+    tab = pd.read_csv(SUBTYPE_TABLE, dtype={"patient": str}).set_index("patient")
+    rows = []
+    for p in AML_PATIENTS:
+        t = json.loads((REPO / f"results/aml_primary/targets/xu_{p}_25kb.json").read_text())
+        marks = sorted(b.stem for b in (INP / label(p)).glob("*.bigwig"))
+        rows.append({"patient": p, "group": str(tab.loc[p, "consensus_group"]),
+                     "contacts_M": round(t["contacts"] / 1e6, 1), "ctcf": "CTCF" in marks,
+                     "marks": marks})
+    test = [p for f in V2_FOLDS.values() for p in f]
+    assert sorted(test) == sorted(AML_PATIENTS), "folds must partition the AML patients"
+    assert not set(test) & set(HEALTHY)
+    assert all(3 <= len(f) <= 4 for f in V2_FOLDS.values())
+    for a, b in SAME_DONOR:
+        side = {f for f, ps in V2_FOLDS.items() if a in ps or b in ps}
+        assert len(side) <= 1, f"{a} and {b} are the same donor"
+    return {"patients": rows, "folds": V2_FOLDS, "healthy_excluded": HEALTHY,
+            "hspc_train": HSPC_TRAIN, "hspc_test": HSPC_TEST,
+            "note": "fold f (10 to 12) is the test set of the run suffixed _f<f>; the other folds' "
+                    "AML patients train; healthy PBMC donors 103, 673, 576 are in no fold and in no "
+                    "reference; HSPC donors 050 and 213 and MOLM-13 train in every fold, U-937 WT "
+                    "and HSPC donors 341 and 822 are held out"}
+
+
+def split(fold: int = 0) -> dict:
+    """Split of a fold id: folds >= 10 from split_v2.json, older folds from split.json."""
+    v2 = fold >= NEW_FOLD_MIN
+    f = RES_OUT / ("split_v2.json" if v2 else "split.json")
     if not f.exists():
         RES_OUT.mkdir(parents=True, exist_ok=True)
-        f.write_text(json.dumps(make_split(), indent=1))
+        f.write_text(json.dumps(make_split_v2() if v2 else make_split(), indent=1))
     return json.loads(f.read_text())
 
 
 def fold_of(base: str) -> int:
     """Fold of a run base name (all12aml_..., suffix _f1 / _f2)."""
     import re
-    m = re.search(r"_f(\d)$", base)
+    m = re.search(r"_f(\d+)$", base)
     return int(m.group(1)) if m else 0
 
 
 def train_patients(fold: int) -> list[str]:
-    sp = split()
+    sp = split(fold)
     test = set(sp["folds"][str(fold)])
-    return [p for p in PATIENTS if p not in test]
+    return [p for p in (AML_PATIENTS if fold >= NEW_FOLD_MIN else PATIENTS) if p not in test]
 
 
 def test_patients(fold: int) -> list[str]:
-    return split()["folds"][str(fold)]
+    return split(fold)["folds"][str(fold)]
 
 
 def ref_path(fold: int, res: int, patient: str | None) -> Path:
@@ -162,8 +211,26 @@ def ref_path(fold: int, res: int, patient: str | None) -> Path:
     return CONS_DIR / f"amltrain_f{fold}_{tag}_{res // 1000}kb.cool"
 
 
+def clean_lopo(p: str | None, res: int) -> Path:
+    """Baseline of folds >= 10: mean of the AML patients other than p (patient p None: all AML
+    patients), healthy donors excluded."""
+    tag = f"lopo_xu_{p}" if p else "all"
+    return CONS_DIR / f"amlclean_{tag}_{res // 1000}kb.cool"
+
+
+def build_clean_baselines(fold: int, res: int) -> None:
+    import aml_primary as ap
+    bad = {label(h) for h in HEALTHY}
+    allp = [x for x in ap.aml_patients(res) if x not in bad]
+    for p in [None] + test_patients(fold):
+        ap.build_aml_consensus(res, None, labs=[x for x in allp if x != (label(p) if p else None)],
+                               out=clean_lopo(p, res))
+
+
 def build_refs(fold: int, res: int) -> None:
     import aml_primary as ap
+    if fold >= NEW_FOLD_MIN:
+        build_clean_baselines(fold, res)
     tr = train_patients(fold)
     for p in [None] + tr:
         labs = [label(x) for x in tr if x != p]
@@ -174,6 +241,8 @@ def build_refs(fold: int, res: int) -> None:
 
 
 def refs_done(fold: int, res: int) -> bool:
+    if fold >= NEW_FOLD_MIN and not all(clean_lopo(p, res).exists() for p in [None] + test_patients(fold)):
+        return False
     return (all(ref_path(fold, res, p).exists() for p in [None] + train_patients(fold))
             and all(hspc_ref_path(res, d).exists() for d in [None] + HSPC_TRAIN))
 
@@ -302,10 +371,23 @@ def main():
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap_.add_argument("--stage", nargs="+", choices=["split", "refs", "hard"], required=True)
     ap_.add_argument("--fold", type=int, nargs="*", default=[0])
+    g = ap_.add_mutually_exclusive_group()
+    g.add_argument("--exclude-healthy", dest="include_healthy", action="store_false",
+                   help="stage split: print the split of the folds 10 to 12 (default)")
+    g.add_argument("--include-healthy", dest="include_healthy", action="store_true",
+                   help="stage split: print/verify the old split of the folds 0 to 2")
     ap_.add_argument("--res", type=int, nargs="*", default=[25000, 10000])
     a = ap_.parse_args()
     if "split" in a.stage:
-        sp = split()
+        if a.include_healthy:
+            old = make_split()
+            if (RES_OUT / "split.json").exists():
+                cur = json.loads((RES_OUT / "split.json").read_text())
+                print("old split identical to split.json (patients, folds):",
+                      all(old[k] == cur[k] for k in ("patients", "folds")))
+            sp = old
+        else:
+            sp = split(NEW_FOLD_MIN)
         print(pd.DataFrame(sp["patients"]).to_string(index=False))
         print(sp["folds"])
     if "refs" in a.stage:

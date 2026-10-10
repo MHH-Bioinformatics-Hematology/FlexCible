@@ -1,0 +1,144 @@
+{
+ "patients": [
+  {
+   "patient": "018",
+   "group": "TET2",
+   "contacts_M": 352.5,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "027",
+   "group": "RUNX1",
+   "contacts_M": 283.0,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "168",
+   "group": "RUNX1",
+   "contacts_M": 318.5,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "270",
+   "group": "KMT2B",
+   "contacts_M": 234.4,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "472",
+   "group": "STAG2",
+   "contacts_M": 267.0,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "546",
+   "group": "TET2",
+   "contacts_M": 107.3,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "629",
+   "group": "KMT2B",
+   "contacts_M": 276.7,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "773",
+   "group": "CEBPA",
+   "contacts_M": 227.0,
+   "ctcf": true,
+   "marks": [
+    "CTCF",
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "1360",
+   "group": "FLT3-ITD only",
+   "contacts_M": 412.3,
+   "ctcf": false,
+   "marks": [
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  },
+  {
+   "patient": "1916",
+   "group": "TET2",
+   "contacts_M": 349.0,
+   "ctcf": false,
+   "marks": [
+    "H3K27ac",
+    "H3K27me3"
+   ]
+  }
+ ],
+ "folds": {
+  "10": [
+   "018",
+   "027",
+   "270"
+  ],
+  "11": [
+   "168",
+   "546",
+   "629",
+   "1360"
+  ],
+  "12": [
+   "472",
+   "773",
+   "1916"
+  ]
+ },
+ "healthy_excluded": [
+  "103",
+  "673",
+  "576"
+ ],
+ "hspc_train": [
+  "050",
+  "213"
+ ],
+ "hspc_test": [
+  "341",
+  "822"
+ ],
+ "note": "fold f (10 to 12) is the test set of the run suffixed _f<f>; the other folds' AML patients train; healthy PBMC donors 103, 673, 576 are in no fold and in no reference; HSPC donors 050 and 213 and MOLM-13 train in every fold, U-937 WT and HSPC donors 341 and 822 are held out"
+}
