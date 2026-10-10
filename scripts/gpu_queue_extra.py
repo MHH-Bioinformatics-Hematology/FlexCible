@@ -400,13 +400,13 @@ def main():
                 del running[n]
         pending = [j for j in all_jobs if j.name not in running and j.name not in failed
                    and not j.done() and not marked(j.name)]
-        if not pending and not running:
-            note("EXTRA_QUEUE_DONE")
-            break
         if RELOAD.exists() and not running:      # touch RELOAD while idle: same PID, new job list
             RELOAD.unlink()
             note("reload requested: re-executing with the current code and job list")
             os.execv(sys.executable, [sys.executable] + sys.argv)
+        if not pending and not running:
+            note("EXTRA_QUEUE_DONE")
+            break
         gpu_busy = any(j.gpu for j in all_jobs if j.name in running)
         opened = gate()
         # strict order; a job claimed by another host is running elsewhere: skip it, re-check later
