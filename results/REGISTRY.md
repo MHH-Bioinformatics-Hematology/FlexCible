@@ -5604,9 +5604,12 @@ donors excluded (`HEALTHY`), patient-disjoint, groups from `results/aml_subtype/
 | 12 | 472 (STAG2), 773 (CEBPA), 1916 (TET2) | 018, 027, 168, 270, 546, 629, 1360 (7) |
 
 Every fold tests one TET2 patient; RUNX1 and KMT2B are tested in two folds, STAG2, CEBPA and FLT3-ITD only once; the two
-patients without CTCF CUT&Tag (1360, 1916) are in different folds. 3 to 4 test patients per fold. Patients 168 and 496
-(possible duplicate donor, check in progress) cannot be split: 496 has no CUT&Tag and is in no fold or reference. The
-check may still show 168 (or another test patient) to duplicate a training patient; if so, the fold needs reassigning.
+patients without CTCF CUT&Tag (1360, 1916) are in different folds. 3 to 4 test patients per fold. Same donors (section 54): 168 and 496 are
+one donor, 260 and 424 probably one (`SAME_DONOR` in aml_train.py). 496, 260 and 424 have no CUT&Tag and are in no fold
+or training reference; `assert_same_donor_together` checks that no pair is split across train and test (no fold
+reassignment was needed). The evaluation baselines (`amlclean_lopo_xu_<p>`, `amlclean_all`, from `baseline_labels`)
+exclude the test patient's same-donor partner (the baseline of test patient 168 has no 496) and count every other
+donor once (the second sample of each pair, 496 and 424, is dropped); 22 maps per leave-one-out baseline.
 HSPC donors 050 and 213 and MOLM-13 train in every fold, U-937 WT and HSPC donors 341 and 822 are held out as before.
 
 References: the AML reference of a fold is the mean proper O/E of the fold's training AML patients (leave-one-out for a

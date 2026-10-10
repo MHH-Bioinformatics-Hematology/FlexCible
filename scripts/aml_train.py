@@ -83,10 +83,11 @@ N_FOLDS = 3
 HEALTHY = ["103", "673", "576"]          # healthy PBMC donors (registry section 50), never AML
 NEW_FOLD_MIN = 10                        # fold ids >= 10: split_v2, healthy donors excluded
 AML_PATIENTS = [p for p in PATIENTS if p not in HEALTHY]
-# patients that are the same donor must stay on one side of a split (patient 496 has no CUT&Tag
-# and is not in PATIENTS, so the pair 168/496 constrains nothing here; extend after the
-# duplicate-patient check)
-SAME_DONOR = [("168", "496")]
+# patients that are the same donor (registry section 54): they stay on one side of a split, and
+# a baseline mean for a test patient excludes the patient's partners and counts a donor once.
+# 496 and 260/424 have no CUT&Tag, so they are in no fold; they only matter for the Hi-C-only
+# baseline means (168/496: two samples of one leukaemia, certain; 260/424: probable)
+SAME_DONOR = [("168", "496"), ("260", "424")]
 # test patients of the folds 10 to 12: TET2 once per fold, RUNX1 and KMT2B in two folds,
 # CEBPA, STAG2 and FLT3-ITD only once, 3 to 4 test patients per fold
 V2_FOLDS = {"10": ["018", "027", "270"], "11": ["168", "546", "629", "1360"],
@@ -151,6 +152,32 @@ def make_split() -> dict:
                     "held out in every fold"}
 
 
+def donor_group(p: str) -> set:
+    """p and its same-donor partners."""
+    g = {p}
+    for a, b in SAME_DONOR:
+        if p in (a, b):
+            g |= {a, b}
+    return g
+
+
+def baseline_labels(all_labels: list[str], test_patient: str | None) -> list[str]:
+    """Maps of a baseline mean for a test patient: no healthy donor, no map of the test
+    patient's donor, and the second sample of every other same-donor pair dropped (a donor
+    counts once)."""
+    excl = {label(x) for x in donor_group(test_patient)} if test_patient else set()
+    second = {label(b) for _, b in SAME_DONOR}
+    bad = {label(h) for h in HEALTHY}
+    return [x for x in all_labels if x not in excl and x not in second and x not in bad]
+
+
+def assert_same_donor_together(fold: int) -> None:
+    test = set(test_patients(fold))
+    train = set(train_patients(fold))
+    for a, b in SAME_DONOR:
+        assert not ({a, b} & test and {a, b} & train), f"{a}/{b} split across train and test in fold {fold}"
+
+
 def make_split_v2() -> dict:
     """Folds 10 to 12: patient-disjoint folds over the AML patients with CUT&Tag, healthy
     donors excluded, subtype groups (consensus mutation group of Xu 2022 Fig. 1c) spread."""
@@ -169,6 +196,7 @@ def make_split_v2() -> dict:
     for a, b in SAME_DONOR:
         side = {f for f, ps in V2_FOLDS.items() if a in ps or b in ps}
         assert len(side) <= 1, f"{a} and {b} are the same donor"
+        assert not ({a, b} & set(HEALTHY))
     return {"patients": rows, "folds": V2_FOLDS, "healthy_excluded": HEALTHY,
             "hspc_train": HSPC_TRAIN, "hspc_test": HSPC_TEST,
             "note": "fold f (10 to 12) is the test set of the run suffixed _f<f>; the other folds' "
@@ -212,19 +240,18 @@ def ref_path(fold: int, res: int, patient: str | None) -> Path:
 
 
 def clean_lopo(p: str | None, res: int) -> Path:
-    """Baseline of folds >= 10: mean of the AML patients other than p (patient p None: all AML
-    patients), healthy donors excluded."""
+    """Baseline of folds >= 10: mean of the AML patients other than p and p's same-donor
+    partners (patient p None: all AML patients), healthy donors excluded, each donor once."""
     tag = f"lopo_xu_{p}" if p else "all"
     return CONS_DIR / f"amlclean_{tag}_{res // 1000}kb.cool"
 
 
 def build_clean_baselines(fold: int, res: int) -> None:
     import aml_primary as ap
-    bad = {label(h) for h in HEALTHY}
-    allp = [x for x in ap.aml_patients(res) if x not in bad]
+    assert_same_donor_together(fold)
+    allp = ap.aml_patients(res)
     for p in [None] + test_patients(fold):
-        ap.build_aml_consensus(res, None, labs=[x for x in allp if x != (label(p) if p else None)],
-                               out=clean_lopo(p, res))
+        ap.build_aml_consensus(res, None, labs=baseline_labels(allp, p), out=clean_lopo(p, res))
 
 
 def build_refs(fold: int, res: int) -> None:

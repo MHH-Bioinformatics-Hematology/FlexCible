@@ -107,3 +107,17 @@ queue then skips them, because dedicated_done() sees the finished run on the sha
   1200 val windows loaded in under 10 s; 25 kb cache 395 MB, 10 kb cache 2.8 GB (31 s cold read,
   about 97 MB/s).
 - GPU training smoke not done: the sequence CNN was at 93 to 95 percent GPU utilization.
+
+## Runners added 2026-10-10 (all started with `setsid nohup ~/hicenv/bin/python <file> > <file>.out 2>&1 &` in ~/hic-multiome-unet)
+
+- aml_prep.py: CPU preparation (references, caches, hard split) of the AML folds 10, 11, 12 (registry 52).
+- remote_queue_aml.py (PID file remote_queue_aml.pid): waits for the CNN and the earlier runners, 60-step smoke, then per fold the
+  trainings all12aml_{refin,honest}_drop_f<N> at 25 and 10 kb and `aml_train_eval.py --fold N` (HICMULTI_GPUS=0), results copied to
+  runs/aml_train_remote/fold<N>/. Done marker REMOTE_QUEUE_AML_DONE in remote_queue.log.
+- remote_queue_cohesin.py (PID file remote_queue_cohesin.pid): waits for remote_queue_aml.py (PID file gone and done marker, or all
+  AML jobs finished or claimed), the CNN and 2 quiet GPU minutes; 60-step smoke on the 25 kb config; then all12cohfix_refres_drop 25 kb,
+  10 kb, all12cohfixna_refres_drop 25 kb, 10 kb (each train then `--stage eval`; a job whose cache manifest or operator is missing is
+  retried after the others), then the CPU prediction stages perturb_validate predict/predict_chip, washout predict, aml_eval predict on
+  the share (scoring stays on the local machine). Done marker REMOTE_QUEUE_COHESIN_DONE.
+All runners log to remote_queue.log, claim jobs by run name in runs/multicell_reference/claims/ and stop after 2 consecutive failures.
+Stop one with `kill $(cat <runner>.pid)`.
