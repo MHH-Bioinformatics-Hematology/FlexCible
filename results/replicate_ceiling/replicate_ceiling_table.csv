@@ -1,0 +1,69 @@
+cell,name,group,shared_inputs_with,res_kb,model_refin_drop,n_regions,consensus_alone,consensus_kind,model_refres_drop,honest_drop_no_consensus,replicate_r,rep_contacts_M,rep_kind,target_kind,rep_proxy,ceiling_sqrt_single,ceiling_sb_merged,ceiling,deep_pair,deep_replicate_r,ceiling_deep_pair_sb,ratio_refin_drop,ratio_refres_drop,gap_refin_drop,gap_refres_drop,ratio_refin_drop_deep_pair,gap_refin_drop_deep_pair,model_minus_replicate_r
+gm12878,GM12878,training,,25,0.9361,413,0.8819,leave-one-out,0.9313,0.8096,0.9380,138/230,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.9685,0.9839,0.9839,ENCSR965OVH,0.9680,0.9918,0.9514,0.9466,0.0478,0.0525,0.9438,0.0557,-0.0019
+gm12878,GM12878,training,,10,0.9334,413,0.8577,leave-one-out,0.9299,0.8148,0.7790,138/230,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.8826,0.9358,0.9358,ENCSR965OVH,0.8740,0.9658,0.9974,0.9937,0.0024,0.0059,0.9665,0.0324,0.1544
+gm12878,GM12878,training,,5,0.9108,413,0.8214,leave-one-out,0.9135,0.7994,0.5890,138/230,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.7675,0.8610,0.8610,ENCSR965OVH,0.7440,0.9237,1.0579,1.0610,-0.0498,-0.0525,0.9861,0.0128,0.3218
+gm12878,GM12878,training,,2,0.7905,413,0.6607,leave-one-out,0.7944,0.6689,0.3860,138/230,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.6213,0.7463,0.7463,ENCSR965OVH,0.5210,0.8277,1.0592,1.0644,-0.0442,-0.0481,0.9551,0.0372,0.4045
+imr90,IMR-90,training,,25,0.9483,413,0.9278,leave-one-out,0.9533,0.8576,0.9590,166/199,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.9793,0.9895,0.9895,,,,0.9584,0.9634,0.0412,0.0362,,,-0.0107
+imr90,IMR-90,training,,10,0.9465,413,0.9030,leave-one-out,0.9446,0.8557,0.8670,166/199,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.9311,0.9637,0.9637,,,,0.9821,0.9802,0.0172,0.0191,,,0.0795
+imr90,IMR-90,training,,5,0.9089,413,0.8574,leave-one-out,0.9099,0.8090,0.7120,166/199,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.8438,0.9120,0.9120,,,,0.9966,0.9977,0.0031,0.0021,,,0.1969
+imr90,IMR-90,training,,2,0.7996,413,0.7411,leave-one-out,0.8026,0.6823,0.5010,166/199,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.7078,0.8170,0.8170,,,,0.9787,0.9823,0.0174,0.0145,,,0.2986
+hct116,HCT116,training,,25,0.9471,413,0.9319,leave-one-out,0.9467,0.8227,,,none,deep merged map,False,,,,,,,,,,,,,
+hct116,HCT116,training,,10,0.9438,413,0.9105,leave-one-out,0.9415,0.8290,,,none,deep merged map,False,,,,,,,,,,,,,
+hct116,HCT116,training,,5,0.9095,413,0.8607,leave-one-out,0.9084,0.7802,,,none,deep merged map,False,,,,,,,,,,,,,
+hct116,HCT116,training,,2,0.7567,413,0.6852,leave-one-out,0.7597,0.6318,,,none,deep merged map,False,,,,,,,,,,,,,
+hff,HFF,training,,25,0.9592,413,0.9325,leave-one-out,0.9585,0.8766,,,none,deep merged map,False,,,,,,,,,,,,,
+hff,HFF,training,,10,0.9526,413,0.9166,leave-one-out,0.9536,0.8650,,,none,deep merged map,False,,,,,,,,,,,,,
+hff,HFF,training,,5,0.9352,413,0.8903,leave-one-out,0.9328,0.8230,,,none,deep merged map,False,,,,,,,,,,,,,
+hff,HFF,training,,2,0.8668,413,0.7898,leave-one-out,0.8651,0.7447,,,none,deep merged map,False,,,,,,,,,,,,,
+h1,H1,training,,25,0.9333,413,0.9118,leave-one-out,0.9344,0.8011,,,none,deep merged map,False,,,,,,,,,,,,,
+h1,H1,training,,10,0.9233,413,0.8857,leave-one-out,0.9244,0.8227,,,none,deep merged map,False,,,,,,,,,,,,,
+h1,H1,training,,5,0.8878,413,0.8345,leave-one-out,0.8866,0.7674,,,none,deep merged map,False,,,,,,,,,,,,,
+h1,H1,training,,2,0.7647,413,0.6992,leave-one-out,0.7654,0.6636,,,none,deep merged map,False,,,,,,,,,,,,,
+hepg2,HepG2,training,,25,0.9320,413,0.9057,leave-one-out,0.9325,0.8077,,,none,deep merged map,False,,,,,,,,,,,,,
+hepg2,HepG2,training,,10,0.9147,413,0.8738,leave-one-out,0.9187,0.8239,,,none,deep merged map,False,,,,,,,,,,,,,
+hepg2,HepG2,training,,5,0.8718,413,0.8216,leave-one-out,0.8700,0.7608,,,none,deep merged map,False,,,,,,,,,,,,,
+hepg2,HepG2,training,,2,0.7555,413,0.6919,leave-one-out,0.7580,0.6298,,,none,deep merged map,False,,,,,,,,,,,,,
+a549,A549,training,,25,0.9486,413,0.9461,leave-one-out,0.9450,0.8436,,,none,deep merged map,False,,,,,,,,,,,,,
+a549,A549,training,,10,0.9299,413,0.9132,leave-one-out,0.9297,0.8292,,,none,deep merged map,False,,,,,,,,,,,,,
+a549,A549,training,,5,0.8827,413,0.8453,leave-one-out,0.8821,0.7805,,,none,deep merged map,False,,,,,,,,,,,,,
+a549,A549,training,,2,0.7645,413,0.6864,leave-one-out,0.7644,0.6618,,,none,deep merged map,False,,,,,,,,,,,,,
+nhek,NHEK,training,,25,0.9363,413,0.9267,leave-one-out,0.9371,0.7910,,,none,deep merged map,False,,,,,,,,,,,,,
+nhek,NHEK,training,,10,0.9137,413,0.8877,leave-one-out,0.9135,0.7756,,,none,deep merged map,False,,,,,,,,,,,,,
+nhek,NHEK,training,,5,0.8474,413,0.8112,leave-one-out,0.8438,0.6885,,,none,deep merged map,False,,,,,,,,,,,,,
+nhek,NHEK,training,,2,0.6872,413,0.6128,leave-one-out,0.6874,0.5567,,,none,deep merged map,False,,,,,,,,,,,,,
+gm23248,GM23248,training,,25,0.9440,413,0.9394,leave-one-out,0.9450,0.7783,,,none,deep merged map,False,,,,,,,,,,,,,
+gm23248,GM23248,training,,10,0.9423,413,0.9250,leave-one-out,0.9404,0.7470,,,none,deep merged map,False,,,,,,,,,,,,,
+gm23248,GM23248,training,,5,0.9172,413,0.8840,leave-one-out,0.9127,0.7109,,,none,deep merged map,False,,,,,,,,,,,,,
+gm23248,GM23248,training,,2,0.7943,413,0.7525,leave-one-out,0.7967,0.5926,,,none,deep merged map,False,,,,,,,,,,,,,
+mcf7,MCF-7,training,,25,0.9292,413,0.9179,leave-one-out,0.9260,0.8202,,,none,deep merged map,False,,,,,,,,,,,,,
+mcf7,MCF-7,training,,10,0.9009,413,0.8789,leave-one-out,0.9014,0.8067,,,none,deep merged map,False,,,,,,,,,,,,,
+mcf7,MCF-7,training,,5,0.8463,413,0.8022,leave-one-out,0.8444,0.7338,,,none,deep merged map,False,,,,,,,,,,,,,
+mcf7,MCF-7,training,,2,0.7279,413,0.6080,leave-one-out,0.7292,0.6496,,,none,deep merged map,False,,,,,,,,,,,,,
+cd14mono,CD14 mono,training,,25,0.8766,413,0.6683,leave-one-out,0.8704,0.7865,,,none,deep merged map,False,,,,,,,,,,,,,
+cd14mono,CD14 mono,training,,10,0.8372,413,0.6261,leave-one-out,0.8454,0.7564,,,none,deep merged map,False,,,,,,,,,,,,,
+cd14mono,CD14 mono,training,,5,0.7689,413,0.5673,leave-one-out,0.7752,0.6567,,,none,deep merged map,False,,,,,,,,,,,,,
+cd14mono,CD14 mono,training,,2,0.6218,413,0.4160,leave-one-out,0.6224,0.5563,,,none,deep merged map,False,,,,,,,,,,,,,
+pc9,PC9,training,,25,0.9120,413,0.9069,leave-one-out,0.9091,0.8048,,,none,deep merged map,False,,,,,,,,,,,,,
+pc9,PC9,training,,10,0.8817,413,0.8517,leave-one-out,0.8846,0.7700,,,none,deep merged map,False,,,,,,,,,,,,,
+pc9,PC9,training,,5,0.8259,413,0.7695,leave-one-out,0.8192,0.6966,,,none,deep merged map,False,,,,,,,,,,,,,
+pc9,PC9,training,,2,0.7099,413,0.5702,leave-one-out,0.7089,0.6214,,,none,deep merged map,False,,,,,,,,,,,,,
+k562,K562,held-out,,25,0.9262,413,0.8972,consensus12,0.9213,0.7988,0.9370,144/210,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.9680,0.9836,0.9836,ENCSR676BEP,0.9900,0.9975,0.9417,0.9367,0.0574,0.0623,0.9286,0.0713,-0.0108
+k562,K562,held-out,,10,0.9047,413,0.8586,consensus12,0.9053,0.7647,0.7640,144/210,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.8741,0.9307,0.9307,ENCSR676BEP,0.9540,0.9882,0.9721,0.9727,0.0260,0.0254,0.9156,0.0834,0.1407
+k562,K562,held-out,,5,0.8335,413,0.7853,consensus12,0.8329,0.6842,0.5250,144/210,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.7246,0.8298,0.8298,ENCSR676BEP,0.8650,0.9631,1.0045,1.0038,-0.0037,-0.0032,0.8654,0.1296,0.3085
+k562,K562,held-out,,2,0.6772,413,0.6288,consensus12,0.6713,0.5443,0.3590,144/210,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,False,0.5992,0.7269,0.7269,ENCSR676BEP,0.6500,0.8876,0.9317,0.9235,0.0497,0.0556,0.7629,0.2104,0.3182
+hmec,HMEC,held-out,hmec_deep,25,0.8903,413,0.8977,consensus12,0.8836,0.7112,0.9410,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.9701,0.9847,0.9701,,,,0.9178,0.9109,0.0797,0.0865,,,-0.0507
+hmec,HMEC,held-out,hmec_deep,10,0.8032,413,0.8094,consensus12,0.8089,0.6565,0.7800,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.8832,0.9362,0.8832,,,,0.9095,0.9159,0.0799,0.0743,,,0.0232
+hmec,HMEC,held-out,hmec_deep,5,0.6011,413,0.6143,consensus12,0.5954,0.4891,0.5520,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.7430,0.8434,0.7430,,,,0.8090,0.8014,0.1419,0.1475,,,0.0491
+hmec,HMEC,held-out,hmec_deep,2,0.3365,413,0.3546,consensus12,0.3332,0.2743,0.3170,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.5630,0.6938,0.5630,,,,0.5976,0.5919,0.2266,0.2298,,,0.0195
+hmec_deep,HMEC deep,held-out,hmec,25,0.9237,413,0.9324,consensus12,0.9149,0.7517,0.9410,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.9701,0.9847,0.9847,,,,0.9380,0.9291,0.0610,0.0698,,,-0.0173
+hmec_deep,HMEC deep,held-out,hmec,10,0.9076,413,0.9065,consensus12,0.9081,0.7609,0.7800,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.8832,0.9362,0.9362,,,,0.9695,0.9700,0.0285,0.0281,,,0.1276
+hmec_deep,HMEC deep,held-out,hmec,5,0.8577,413,0.8512,consensus12,0.8555,0.7077,0.5520,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.7430,0.8434,0.8434,,,,1.0170,1.0143,-0.0143,-0.0121,,,0.3057
+hmec_deep,HMEC deep,held-out,hmec,2,0.7095,413,0.6869,consensus12,0.7040,0.5549,0.3170,170/167,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.5630,0.6938,0.6938,,,,1.0226,1.0146,-0.0157,-0.0101,,,0.3925
+huvec,HUVEC,held-out,huvec_deep,25,0.8876,413,0.8869,consensus12,0.8802,0.7750,0.8960,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.9466,0.9722,0.9466,,,,0.9377,0.9298,0.0589,0.0664,,,-0.0084
+huvec,HUVEC,held-out,huvec_deep,10,0.7846,413,0.7689,consensus12,0.7840,0.6711,0.6970,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.8349,0.9063,0.8349,,,,0.9398,0.9391,0.0502,0.0508,,,0.0876
+huvec,HUVEC,held-out,huvec_deep,5,0.4905,413,0.4955,consensus12,0.5056,0.4320,0.4550,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.6745,0.7908,0.6745,,,,0.7272,0.7495,0.1840,0.1690,,,0.0355
+huvec,HUVEC,held-out,huvec_deep,2,0.2634,413,0.2707,consensus12,0.2707,0.1811,0.3320,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",single replicate (rep1),False,0.5762,0.7060,0.5762,,,,0.4571,0.4699,0.3128,0.3055,,,-0.0686
+huvec_deep,HUVEC deep,held-out,huvec,25,0.9137,413,0.9159,consensus12,0.9072,0.8115,0.8960,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.9466,0.9722,0.9722,,,,0.9399,0.9331,0.0585,0.0650,,,0.0177
+huvec_deep,HUVEC deep,held-out,huvec,10,0.9028,413,0.8836,consensus12,0.8972,0.7921,0.6970,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.8349,0.9063,0.9063,,,,0.9961,0.9899,0.0035,0.0092,,,0.2058
+huvec_deep,HUVEC deep,held-out,huvec,5,0.8302,413,0.8205,consensus12,0.8362,0.7157,0.4550,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.6745,0.7908,0.7908,,,,1.0497,1.0573,-0.0393,-0.0454,,,0.3752
+huvec_deep,HUVEC deep,held-out,huvec,2,0.7039,413,0.6587,consensus12,0.6889,0.5745,0.3320,112/117,"independent ENCODE biological replicates, one lane each (single-lane)",deep merged map,True,0.5762,0.7060,0.7060,,,,0.9969,0.9757,0.0022,0.0171,,,0.3719

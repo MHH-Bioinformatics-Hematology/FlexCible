@@ -5434,3 +5434,103 @@ methylation and 10 bp bin means differ in scale. The figures `fig_auroc_by_featu
 
 Reproduce: `python scripts/ctcf_site_exclusion.py --stage bg labels coverage models exclusion patients hic figures`
 (python env with scikit-learn, pyBigWig, matplotlib; CPU).
+
+## 49. Model against the replicate noise ceiling, per cell and resolution (FINAL; section 48 was the last number when this was written)
+
+`scripts/replicate_ceiling_table.py` (CPU, reads existing tables only). Output in `results/replicate_ceiling/`:
+`replicate_ceiling_table.csv` (full table, 17 cells x 4 resolutions), `replicate_ceiling_summary.csv`,
+`replicate_ceiling_table.md` (compact), `replicate_ceiling.png`.
+
+Metric: median per-region Pearson on the upper triangle (k >= 2) of the proper O/E map, the 413 Akita GM12878
+test regions applied to every cell. Model: all12refin_drop (all12refres_drop in the CSV; within 0.01 of it),
+per-region values of `runs/multicell_reference/<run>/crosscell/predict_<cell>.csv`; the medians reproduce
+`reference_summary.csv` (25 kb: 0.9362 training, 0.9137 held-out). Consensus alone: leave-one-out consensus
+(training cells) and consensus12 (held-out cells). No consensus: all12honest_drop. Replicates: rep1 vs rep2 of
+`replicates/replicate_corr.csv` (section 7: ENCODE in situ Hi-C, two independent biological replicates, one
+sequencing lane each, 110 to 230 M contacts, regridded to the nominal 5 and 25 kb grid) for GM12878, IMR-90,
+K562, HMEC and HUVEC; the other 10 cells have no replicate pair (ceiling NA, no imputation). HMEC deep and
+HUVEC deep have no pair of their own and use the HMEC and HUVEC single-lane pair as a proxy (different
+experiment from the deep target; HUVEC deep is intact Hi-C). HMEC / HMEC deep and HUVEC / HUVEC deep share
+their inputs and their predictions are the same model on the same tracks; they differ in the target only
+(HMEC and HUVEC are scored against the single-lane rep1 map, the deep cells against the deep merged map).
+
+Ceiling formula. A predictor that knows the true signal correlates with a noisy target at sqrt(reliability of
+the target) (sections 12, 18, 29c). The reliability is the replicate agreement r_rep. Target a single replicate
+(HMEC, HUVEC): ceiling = sqrt(r_rep). Target a deep merged map: Spearman-Brown for the mean of two replicates,
+r_full = 2 r_rep / (1 + r_rep), ceiling = sqrt(r_full); the deep targets hold 5 to 40 times the contacts of a
+single-lane replicate, so this is a LOWER BOUND of their ceiling. ratio = model / ceiling, gap = ceiling -
+model. For GM12878 (ENCSR965OVH) and K562 (ENCSR676BEP) the deepest intact pair (section 12) gives a second,
+stricter ceiling (`ceiling_deep_pair_sb`).
+
+Medians over cells (refin_drop; ceiling statistics over the cells with a replicate pair: 2 training cells,
+GM12878 and IMR-90; 5 held-out cells):
+
+| res | set | median model | median consensus | median no consensus | median ceiling | median model / ceiling | cells >= 95% | cells within 0.01 |
+|---|---|---|---|---|---|---|---|---|
+| 25 kb | training (12) | 0.936 | 0.922 | 0.809 | 0.987 | 0.955 | 2/2 | 0/2 |
+| 25 kb | held-out (5) | 0.914 | 0.898 | 0.775 | 0.972 | 0.938 | 0/5 | 0/5 |
+| 10 kb | training | 0.927 | 0.887 | 0.819 | 0.950 | 0.990 | 2/2 | 1/2 |
+| 10 kb | held-out | 0.903 | 0.859 | 0.761 | 0.906 | 0.970 | 3/5 | 1/5 |
+| 5 kb | training | 0.885 | 0.828 | 0.764 | 0.887 | 1.027 | 2/2 | 2/2 |
+| 5 kb | held-out | 0.830 | 0.785 | 0.684 | 0.791 | 1.004 | 3/5 | 3/5 |
+| 2 kb | training | 0.761 | 0.686 | 0.641 | 0.782 | 1.019 | 2/2 | 1/2 |
+| 2 kb | held-out | 0.677 | 0.629 | 0.544 | 0.694 | 0.932 | 2/5 | 2/5 |
+
+Per cell with a ceiling (model / ceiling; 25, 10, 5, 2 kb):
+
+| cell | target | 25 kb | 10 kb | 5 kb | 2 kb |
+|---|---|---|---|---|---|
+| GM12878 (training) | deep | 0.936 / 0.984 | 0.933 / 0.936 | 0.911 / 0.861 | 0.791 / 0.746 |
+| IMR-90 (training) | deep | 0.948 / 0.989 | 0.946 / 0.964 | 0.909 / 0.912 | 0.800 / 0.817 |
+| K562 (held out) | deep | 0.926 / 0.984 | 0.905 / 0.931 | 0.834 / 0.830 | 0.677 / 0.727 |
+| HMEC deep (held out) | deep | 0.924 / 0.985 | 0.908 / 0.936 | 0.858 / 0.843 | 0.710 / 0.694 |
+| HUVEC deep (held out) | deep | 0.914 / 0.972 | 0.903 / 0.906 | 0.830 / 0.791 | 0.704 / 0.706 |
+| HMEC (held out) | rep1 | 0.890 / 0.970 | 0.803 / 0.883 | 0.601 / 0.743 | 0.336 / 0.563 |
+| HUVEC (held out) | rep1 | 0.888 / 0.947 | 0.785 / 0.835 | 0.491 / 0.675 | 0.263 / 0.576 |
+
+Stricter ceiling from the deepest intact pair: GM12878 model / ceiling 0.936 / 0.992, 0.933 / 0.966, 0.911 /
+0.924, 0.791 / 0.828 (ratios 0.94, 0.97, 0.99, 0.96); K562 0.926 / 0.997, 0.905 / 0.988, 0.834 / 0.963, 0.677 /
+0.888 (ratios 0.93, 0.92, 0.87, 0.76).
+
+Reading.
+- 25 kb: the model sits 0.04 to 0.08 below the ceiling in all 7 cells with a pair (GM12878 and IMR-90 at
+  0.95 and 0.96 of it, held-out 0.92 to 0.94); no cell is within 0.01. The model is above the consensus alone in
+  all training cells; it is above the raw rep1-vs-rep2 agreement in none of the training cells (0.936 against
+  0.938, 0.948 against 0.959) and in 1 of 5 held-out cells (HUVEC deep).
+- 10 kb: at replicate level for the training cells (0.98 and 1.00 of the ceiling) and for K562, HMEC deep and HUVEC
+  deep (0.97, 0.97, 1.00); not for the single-lane-target HMEC and HUVEC (0.91 and 0.94).
+- 5 and 2 kb: ratios of 1.00 to 1.06 for the deep targets reflect the lower-bound ceiling (single-lane pairs of
+  0.32 to 0.59 agreement against a target 5 to 40 times deeper), not super-replicate accuracy; the stricter
+  deep-pair ceiling gives 0.99 and 0.96 for GM12878 but 0.87 and 0.76 for K562. The correctly specified rows are
+  those whose target is the single replicate itself (HMEC, HUVEC): there the model reaches 0.81 and 0.73 of the
+  ceiling at 5 kb and 0.60 and 0.46 at 2 kb. The same predictions score 0.86 and 0.83 (5 kb) and 0.71 and 0.70
+  (2 kb) against the deep maps, so the shallow-target score is dominated by target noise and the shortfall to
+  its ceiling is larger than the deep-target ratios suggest.
+- At 25 kb the consensus alone is 0.01 below to 0.05 below the model (CD14 mono 0.21 below, consensus 0.668; HMEC,
+  HMEC deep and HUVEC deep 0.001 to 0.009 above it); the no-consensus model is 0.08 to 0.18 below the model.
+
+Verdict for the sentence "accuracy basically at biological replicate level": supported at 10 kb for the training
+cells and for the held-out cells scored on deep maps (K562, HMEC deep, HUVEC deep), and at 5 kb for GM12878 and
+IMR-90 (K562 at 5 kb only against the lower-bound ceiling: 0.87 against the deep-pair ceiling); at 25 kb the model is 0.04 to 0.08 below the replicate ceiling even on the training cells (ratio 0.95 to
+0.96, gap 0.04) and 0.92 to 0.94 on the held-out cells, and the claim fails at 2 kb for K562 and for the
+single-lane-target HMEC and HUVEC. Without a replicate pair 10 of 12 training cells cannot be placed against a
+ceiling; the claim is a statement about the 2 training and 5 held-out cells that have one. The better wording is
+"at or near replicate agreement at 5 to 10 kb on cells with a replicate pair, 0.04 to 0.08 below the ceiling at 25 kb,
+and below it on held-out cells at 2 kb".
+
+Limits. (1) Replicate pairs are single-lane (110 to 230 M contacts per replicate) while the targets hold 0.9 to
+4.0 billion; a half-depth pair underestimates the ceiling of the merged map, so ratios above 1 occur (GM12878
+5 and 2 kb, 1.06) and mean a too low ceiling; the deep-pair ceilings (GM12878, K562 only) are 0.01 to 0.16
+higher. (2) The Spearman-Brown step assumes two exchangeable replicates of equal depth and treats the
+per-region Pearson of O/E maps as a reliability; k = 2 is used for every deep target. (3) The replicate maps went
+through a regridding from 4 and 24 kb to 5 and 25 kb (section 7; averaging smooths and raised the agreement by
+0.023 to 0.026 at 5 kb and 0.003 to 0.008 at 25 kb), so the 5 and 25 kb replicate agreement carries a small
+smoothing bonus. (4) HMEC deep and HUVEC deep use the single-lane HMEC and HUVEC pair as a proxy, and HMEC /
+HMEC deep and HUVEC / HUVEC deep are one set of inputs, not four independent cells; the held-out n is effectively
+3 cell types. (5) The 413 regions are Akita's GM12878 test regions applied to all cells; the per-region
+replicate agreement differs by region (section 18) and the medians are over regions, not over the cell's
+genome. (6) Ceilings exist for only 2 of 12 training cells; the training median of ratios is a median of two.
+(7) The consensus-alone column for training cells is the leave-one-out consensus; the no-consensus column is
+all12honest_drop (not all12honest of `reference_summary.csv`, which has 0.828 at 25 kb).
+
+Reproduce: `python scripts/replicate_ceiling_table.py` (CPU, seconds).
