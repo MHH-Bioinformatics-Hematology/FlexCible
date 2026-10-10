@@ -5716,3 +5716,73 @@ disk (`hmec_rep1.hic` as ENCFF943JRY) relies on the md5 check noted in `encode_e
 mix pipelines (see above); the 4DN portal gives no contact counts. (f) `hmec_rep1.hic` versus `hmec_rep2.hic` was compared on
 the head and tail only. (g) The size of the bias in item 3 (noise-floor fractions, `rep_dev_r`) was not quantified.
 Source: ENCODE REST and 4DN REST responses of 2026-10-10 (cached JSON in the session scratchpad, not in the repo).
+
+
+## 54. Are Xu et al. patients 168 and 496 the same donor? (FINAL; section 53 was the last number when this was written)
+
+`scripts/aml_duplicate_check.py` (CPU), tables in `results/aml_duplicate_check/`, figure `duplicate_check.png`. Unit of
+comparison is the sample pair: 231 pairs of the 22 patients with SVs in Suppl. Table 5, 378 pairs of the 28 patient Hi-C
+samples (3 of them healthy donors; with the 4 HSPC donors 496 pairs in `hic_scc_chrom.csv`), 190 pairs of the 20 WGBS samples.
+
+**Verdict: the same donor (two samples of one patient). Strong evidence from structural variants and copy number; Hi-C and
+methylation similarity is consistent with it but not decisive alone; a germline genotype comparison is out of reach.**
+
+| Evidence | 168 vs 496 | all other pairs |
+|---|---|---|
+| SV endpoints equal to the base pair | 20 | median 2, max 8.5 |
+| SVs matched at both ends within 100 kb (of 30 and 36 SVs) | 11.5 | median 1.75, max 10 (504 vs 798, both inv(16)) |
+| SV endpoints within 100 kb | 27 (45% of the smaller call set) | median 4, max 20.5 |
+| CNV segment edges within 500 kb | 10 of 10 segments | max 2.5 |
+| CNV 500 kb altered-bin state Jaccard / log2 profile r | 0.85 / 0.944 | Jaccard max 0.75 (673 vs 1324, one segment each), r max 0.853, median 0.14 |
+| Hi-C SCC (100 kb, up to 10 Mb, mean over chr1 to 22) | 0.810 (rank 2 of 378; first on 10 of 22 chromosomes) | median 0.56; 260 vs 424 0.814, 103 vs 576 0.800 |
+| WGBS, 100 kb windows, cohort-centred r (raw r) | 0.783 (0.958) | median -0.02, max 0.569 (103 vs 673); raw max 0.950 |
+| Patient-specific loops, Suppl. Table 1 (exact 10 kb anchors) | 16 shared, Jaccard 0.038 | median 0.002, max 0.018 |
+| Stripe anchors, Suppl. Table 4 | 333 shared, Jaccard 0.219 | median 0.049, max 0.183 (424 vs 933) |
+| Sex | both female: chrX cis density 1.146 and 1.129 of autosomal (males 0.49 to 0.60); chrY-end pairs 232 and 204 per million (male controls 027 3594, 270 3526) | consistent, uninformative |
+
+**Breakpoints** (`sv_breakpoints_168_496.csv`, `cnv_segments_168_496.csv`). 30 of the 60 endpoints of 168 and 24 of the 72 of
+496 lie within 100 kb of an endpoint of the partner; apart from the BCR-ABL1 translocation none lies within 100 kb of any of the
+20 other patients (private to the pair). Base-pair identical coordinates in both: dup chr1:31,002,710 to 63,329,421 and t(1;5)
+chr1:57,739,716 to chr5:107,483,785; the same 10 kb coordinates in both: del chr1:56.09 to 195.22 Mb, del chr13 from 86.89 Mb,
+inv chr3:125.73 to 130.04 Mb, del chr4:29.95 to 32.96 Mb, del chr11 from 96.49 Mb, del chr1 from 68.62 Mb. Recurrent across
+patients, not evidence: t(9;22) BCR-ABL1 (168 and 496 coincide at 10 kb, 027 is 60 kb away), chr16:34.57 to 46.39 Mb dup/inv
+(also 027 and 424; the pericentromeric hg38 region) and chr8:8.14 to 12.5 Mb inv (also 027; the 8p23 inversion polymorphism).
+CNV: del(5q) chr5:107.5 to 181.5 Mb, chr1:70 to 121.5 Mb (102 bins in both), chr1:63.5 to 68.5 Mb, chr4:30 to 33 Mb and the
+chr1q gain block (195.5 to 246.5 Mb) have the same edges within 500 kb; 496 additionally has chr1:0.5 to 3.5 Mb and chr7:56.5
+to 64 Mb losses, 168 additionally a chr1:38.5 to 47 Mb gain. 48 of the 72 endpoints of 496 and 30 of the 60 of 168 are not in the
+partner (mostly translocations). The differences are those of two samples of one genome with clonal changes, not of two
+leukaemias. MOESM12 b gives CN > 2 / CN < 2 bin counts of 9483 / 13630 (168) and 9733 / 13618 (496).
+
+**Metadata.** GEO titles `168_Hi-C` (GSM4604288, submitted 2020-06-09, BioSample SAMN15192043) and `496_Hi-C` (GSM5688518,
+submitted 2021-11-12, SAMN23102357), both series GSE152135 and GSE152136, both source "Primary AML", cell type "Selected PBMC or BM
+cells", NovaSeq 6000. Source: `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM5688518&targ=self&form=text&view=full`
+and the same URL with acc=GSM4604288; the HTML page returned an NCBI bot check, the text record was used and the titles quoted
+from the raw text (saved by WebFetch). 496 belongs to the 2021 addition of 8 patients (1071, 1324, 424, 496, 504, 798, 838,
+933), which have Hi-C, RNA-seq and WGBS but no CUT&Tag. The supplementary tables of the paper (MOESM10 to 13) hold no timepoint,
+pairing or clinical annotation.
+
+**Out of reach.** Germline SNP concordance: the repository and the downloaded GEO files hold no BAM, VCF or read sequence
+(pairs files carry coordinates only, the WGBS is a 10 bp processed bigWig, the mcool files lack chrY). It needs the SRA reads of
+the two Hi-C runs and would be the decisive test. CUT&Tag cannot be compared (496 has none).
+
+**Second pair found by the same screen: 260 and 424.** Base-pair identical private translocations t(2;3) chr2:159,292,423 to
+chr3:58,786,722 and t(4;20) chr4:13,783,536 to chr20:30,377,207 (no other patient within 100 kb); t(19;22) within 9 bp (also
+018 and 629 near it), Hi-C SCC 0.814 (the highest of all pairs), WGBS cohort-centred r 0.535 (third). 260 lists 6 SVs and 424
+11, so the evidence is smaller than for 168/496 but the two private events are the same kind. Probably one donor. Both are
+WGBS-only (no CUT&Tag) and are in no AML training fold.
+
+**Affected analyses and fix.**
+1. AML-inclusive training (section 36, `results/aml_train/split.json`, 12 patients): 496 has no CUT&Tag and is in no fold, 168 is
+   a test patient of fold 1, so no copy of 168 trains; the split is clean. `aml_train.SAME_DONOR` asserts 168 and 496 on one side
+   for the v2 folds 10 to 12 (section 52); add ("260", "424"). The AML consensus reference is contaminated: `amlcons_lopo_xu_168_*`
+   leaves out 168 only and still averages 496, so the consensus-based references and scores of 168 are optimistic (the 496 map
+   is 0.81 SCC to 168); same for 260 and 424. Fix: rebuild the leave-out consensus of 168 without both 168 and 496 (and 260 / 424).
+2. Loop classifier (section 47, 18 patients incl. 168 and 496): LOPO and plain LOPO test 168 while 496 (same loop anchors, 16 exact
+   loop and 333 stripe anchors shared) trains, which inflates the AUROC for those two and 260 / 424; the locus-disjoint filter
+   (training anchors within 2 bins of a test anchor dropped) removes the shared loci only. Leave-subtype-out is unaffected
+   (BCR-ABL1 {027, 168, 496} is one group). Fix: one fold unit for {168, 496} and {260, 424} in `make_folds`, or drop 496 and 424
+   (the WGBS-only copies) and report 16 patients.
+3. CTCF methylation (section 46, 9 patients with CTCF CUT&Tag and WGBS): 496, 260 and 424 are absent, no duplicate inside the 9;
+   unaffected.
+4. AML-sites figures (`aml_sites_figures.py`): use patients with CUT&Tag; 496, 260 and 424 are not among them; unaffected, but any
+   "n patients" statement for Hi-C or WGBS counts samples, which overstate the number of donors by 2.
