@@ -6697,3 +6697,153 @@ included; the partition still uses `seq`, `seq_meth`, `meth`),
 `GB_both` and `ceiling_loo`), `diag_prediction_bias.csv` (y_mean, p_mean, sds,
 slope, R2, R2 after removing the offset, Pearson per model, cell and mark). The
 section 42 files stay in `results/seq_cnn/`.
+
+## 60. Do CNN-predicted ChIP tracks help the track-dropout Hi-C model when measured tracks are missing? (FINAL; section 59 was the last number when this was written)
+
+Question: when ChIP tracks are absent, does replacing them by tracks that the sequence
++ methylation CNN predicts (sections 42 and 59, variant `seq_meth_aug`) improve the
+existing track-dropout Hi-C model over leaving them absent? Inference only; no Hi-C
+training.
+
+### Method
+
+- Hi-C model: `all12refres_drop_meth_10kb` (13 ChIP tracks + Meth input, residual on the
+  consensus, track dropout 0.5; the model with Meth; `all12refin_drop_10kb` has no Meth
+  input and was not run). 413 Akita test regions at 10 kb, `crosscell_predict.py` with
+  TTA, median per-region Pearson on the upper triangle k >= 2 (column `model`), plus the
+  structure metrics of section 35. Consensus: leave-one-out for the training cells,
+  consensus12 for K562 and HMEC (HMEC deep, same ChIP and Meth inputs as HMEC).
+- Stage 1: `seq_meth_aug` checkpoint (`ckpt_best.pt`, copied to
+  `/mnt/processed/wolffjoa/hic-multiome/runs/seq_cnn_twostage/`) predicts the 13 marks at
+  10 kb for the bins of every 192-bin Hi-C window (and the bins 1 Mb downstream for the
+  control), with reverse-complement averaging. K562 and HMEC are unseen by the CNN; the
+  seven training cells gm12878, imr90, h1, hepg2, a549, gm23248, cd14mono were fitted by
+  it, on the odd chromosomes. Of the 413 regions, 169 lie on the CNN test chromosomes
+  (chr6, 8, 10, ..., 22; held out of CNN training and validation) and the rest on odd
+  chromosomes (CNN training sequence) or chr2 and chr4 (CNN validation). Both the 413 and
+  the 169 are reported; for the training cells only the 169 are free of in-sample
+  chromosomes.
+- Scale: the CNN output z is converted to log1p signal units with the pooled training
+  statistics (z*sd + mu, `D.mu`, `D.sd`, global target normalisation), then to the Hi-C
+  input by the Hi-C model's own `norm_tracks.json` (log1p, per-track z-score, no
+  smoothing): both models use the same log1p of the 10 kb bin mean. No per-cell scaling,
+  no measured ChIP of the evaluated cell. Check on cells with measured tracks
+  (`scale_check.csv`, CNN test chromosomes, windows of the evaluation regions, Hi-C z
+  units, mean over marks): imputed mean minus measured mean is -0.26 for K562 (K562
+  CTCF -0.25, H3K27ac -0.49, RAD21 -0.52), +0.01 for HMEC and between -0.08 and +0.07 for
+  the seven training cells; the SD of the imputed track is 0.74 to 0.91 times the
+  measured SD (K562 0.83, HMEC 0.84; per mark 0.56 to 1.47) as expected from a
+  regression predictor; Pearson of imputed with measured 0.68 (K562), 0.64 (HMEC),
+  0.70 to 0.77 (training cells).
+- Scenarios (set kept; every other track absent or imputed): `all13` (every mark the cell
+  has; HMEC lacks RAD21 and SMC3, which stay absent), `meth` (Meth only), `none` (no ChIP,
+  no Meth), `ctcf`, `ctcf_h3k27ac`, `five` (CTCF, H3K27ac, H3K4me3, H3K27me3, H3K36me3),
+  each with Meth given to the Hi-C model (`+meth`, `meth`) and without. Variants:
+  absent, `@imp` (CNN prediction for every mark not kept), `@shuf` (the CNN prediction
+  of the bin 100 positions (1 Mb) downstream on the same chromosome: right cell and
+  scale, wrong locus). Paired differences use a region bootstrap (2000 resamples) of the
+  median.
+- Code: `scripts/twostage_cnn_imputation.py` (stages `cnn distribution predict summary`),
+  `scripts/crosscell_predict.py` gets `--impute name=npz` and keep sets named
+  `<set>@<name>`.
+
+### Results
+
+Median per-region Pearson, 413 regions (set with Meth given; `none` has no Meth):
+
+| cell | scenario | absent | CNN-imputed | shuffled | consensus |
+|---|---|---|---|---|---|
+| K562 | all13 (upper bound) | 0.906 | 0.906 | 0.906 | 0.859 |
+| K562 | meth only | 0.869 | 0.878 | 0.772 | 0.859 |
+| K562 | none (no Meth) | 0.855 | 0.869 | 0.716 | 0.859 |
+| K562 | CTCF + Meth | 0.878 | 0.878 | 0.775 | 0.859 |
+| K562 | CTCF + H3K27ac + Meth | 0.896 | 0.886 | 0.819 | 0.859 |
+| K562 | 5 marks + Meth | 0.892 | 0.888 | 0.839 | 0.859 |
+| HMEC | all13 (upper bound) | 0.905 | 0.905 | 0.905 | 0.907 |
+| HMEC | meth only | 0.903 | 0.898 | 0.851 | 0.907 |
+| HMEC | none (no Meth) | 0.904 | 0.896 | 0.833 | 0.907 |
+| HMEC | CTCF + Meth | 0.900 | 0.900 | 0.856 | 0.907 |
+| HMEC | CTCF + H3K27ac + Meth | 0.903 | 0.908 | 0.889 | 0.907 |
+| HMEC | 5 marks + Meth | 0.906 | 0.907 | 0.894 | 0.907 |
+
+Paired difference imputed minus absent (median per region, 95% region bootstrap
+interval, regions improved of 413; `paired_differences.csv`):
+
+| cell | scenario | difference | interval | improved |
+|---|---|---|---|---|
+| K562 | meth only | +0.005 | 0.003 to 0.009 | 246 |
+| K562 | none | +0.012 | 0.007 to 0.018 | 256 |
+| K562 | CTCF + Meth | +0.000 | -0.003 to 0.003 | 210 |
+| K562 | CTCF + H3K27ac + Meth | -0.006 | -0.009 to -0.005 | 138 |
+| K562 | 5 marks + Meth | -0.005 | -0.006 to -0.004 | 162 |
+| HMEC | meth only | -0.003 | -0.005 to 0.000 | 183 |
+| HMEC | none | -0.003 | -0.007 to 0.000 | 180 |
+| HMEC | CTCF + Meth | -0.001 | -0.004 to 0.002 | 201 |
+| HMEC | CTCF + H3K27ac + Meth | +0.002 | -0.001 to 0.004 | 219 |
+| HMEC | 5 marks + Meth | +0.000 | -0.002 to 0.002 | 205 |
+
+On the 169 CNN-test-chromosome regions the picture is the same (K562 meth only +0.006,
+none +0.014, CTCF + H3K27ac + Meth -0.007; HMEC meth only -0.005, none -0.006).
+Median over the seven training cells (169 regions, in-distribution cells; CNN-fitted):
+meth only +0.012, none +0.029, CTCF + Meth +0.011, CTCF only +0.023, CTCF + H3K27ac +
+Meth +0.000, 5 marks + Meth -0.002; one cell dominates (cd14mono, whose consensus is
+0.626: meth only +0.090, CTCF + Meth +0.053, but CTCF + H3K27ac + Meth -0.022 and 5 marks
++ Meth -0.027).
+Structure metrics (`scenario_medians.csv`): small and mixed. K562 meth only:
+compartment 0.903 to 0.914, eigenvector 0.953 to 0.960, SCC 0.860 to 0.865, loop APA
+0.629 to 0.681, insulation 0.946 to 0.940; the median boundary F1 falls from 1.000 to
+0.667 for K562 CTCF + Meth and 5 marks + Meth. HMEC is unchanged within 0.01 except loop
+APA (+-0.02 to 0.03). The all13 rows are identical in the three variants because no mark
+is left to impute (HMEC keeps its two missing cohesin marks absent).
+
+Shuffled control: replacing the CNN tracks by their 1 Mb shifted copies lowers every
+scenario in which a mark is replaced below absent (K562 meth only 0.772, none 0.716;
+HMEC meth only 0.851, none 0.833; K562 -0.05 to -0.14, HMEC -0.01 to -0.07 against
+absent) and below imputed in all of them. The Hi-C model reads the imputed tracks locus
+by locus; wrong-locus tracks are actively harmful, so the locus information in the CNN
+prediction is what carries the small gain, and the neutral absent value is the safer
+fallback when the CNN is unsure.
+
+### Verdict
+
+Imputation helps only where almost nothing is measured, and by little. On K562
+the paired median difference is +0.005 (meth only; +0.009 in medians, a quarter of the
+0.037 gap from meth only to all marks) and +0.012 (neither Meth nor ChIP) over absent,
+against a 0.047 gap of the full model over the consensus; on HMEC, where the model equals the
+consensus within 0.002 at full input, it changes nothing within +-0.005. Once CTCF and
+H3K27ac or five marks are measured, imputing the rest is neutral to harmful on K562
+(-0.005 to -0.006, intervals exclude 0). The CNN route to Meth is also redundant: the
+model with the imputed tracks and no Meth input (K562 none 0.869) equals the model
+with Meth and absent tracks (0.869). The gains stay well below the 0.016 to 0.05
+model-vs-consensus gaps; imputing all 13 marks gives about what one measured CTCF track
+gives (K562 absent: CTCF + Meth over meth only +0.009, CTCF over none +0.011).
+
+### Caveats
+
+- Two independent unseen cells (K562, HMEC); medians of two cells have no interval, and
+  the bootstrap resamples regions of one cell, not cells.
+- The CNN variant `seq_meth_aug` was selected on K562 and HMEC (section 59), so the
+  imputed tracks of these two cells are optimistic; the Hi-C scenario gain is bounded by
+  that optimism and is still small.
+- The Hi-C model also receives the consensus, so the gains are on top of it; where the
+  consensus is already near the model (HMEC) there is nothing to gain.
+- The imputed tracks of the seven training cells are in-sample for the CNN (cell and
+  odd chromosomes; even test chromosomes are held-out in position, not in cell); they
+  serve as contrast, not evidence for unseen cells. For unseen cells, 244 of the 413
+  regions lie on CNN training or validation chromosomes (sequence seen in other cells);
+  the 169-region subset agrees.
+- K562 imputed tracks are shifted by -0.26 z (mean over marks; -0.5 for H3K27ac and
+  RAD21), the known K562 failure of section 59; no per-cell rescaling was tried, since a
+  correction would need measured K562 ChIP.
+- One Hi-C model, one seed. The seed noise of the median Pearson is 0.013 (section 15);
+  the paired differences share the model and regions, so the intervals above exclude
+  seed variation, and most differences are smaller than that noise.
+
+### Files
+
+`scripts/twostage_cnn_imputation.py`; `scripts/crosscell_predict.py` (`--impute`);
+`results/twostage_cnn/scenario_medians.csv` (all metrics, subsets all413 and clean169),
+`paired_differences.csv`, `scenario_table_pearson.csv`, `scale_check.csv`,
+`per_region_scores.csv.gz`, `twostage_cnn.png`. CNN checkpoint, caches, track dumps
+(`pred/`) and per-set Hi-C predictions under
+`/mnt/processed/wolffjoa/hic-multiome/runs/seq_cnn_twostage/`.

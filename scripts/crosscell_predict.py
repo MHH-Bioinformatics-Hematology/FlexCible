@@ -120,6 +120,13 @@ def main():
                     help="several keep sets in one pass, each name=TRACK,TRACK (name= for "
                          "none): one output folder <out-dir>/<name> per set; --save-pred "
                          "then needs a {set} placeholder")
+    ap.add_argument("--impute", nargs="*", default=[],
+                    help="name=npz: imputed ChIP tracks (scripts/twostage_cnn_imputation.py; "
+                         "arrays <chrom> of shape (marks, bins) in log1p signal units, key "
+                         "'marks' lists the track names, NaN = no imputation). A keep set "
+                         "named <set>@<name> gets those tracks in place of the absent value "
+                         "for every imputable track it does not keep (also tracks the cell "
+                         "lacks); the other tracks behave as in <set>")
     ap.add_argument("--cohesin-unknown", choices=["auto", "0", "1"], default="auto",
                     help="models trained with data.cohesin_unknown: 'auto' sets the "
                          "indicator to 1 where no cohesin track (RAD21, SMC3) is given "
@@ -185,6 +192,20 @@ def main():
                 nomm_sets.add(nm)
         if a.save_pred and "{set}" not in a.save_pred:
             raise SystemExit("--keep-sets with --save-pred needs a {set} placeholder")
+    imp_files = {}
+    for kv in a.impute:
+        k, v = kv.split("=", 1)
+        imp_files[k] = np.load(v)
+    if imp_files:
+        assert track_norm.transform == "log1p" and not track_norm.smooth_bins, \
+            "--impute expects log1p track statistics without smoothing"
+    imp_drop = {}          # keep set -> (imputation name, tracks taken from it)
+    for nm, drop in list(sets.items()):
+        if "@" in nm:
+            base, _, var = nm.partition("@")
+            kp = {t.strip().upper() for t in dict(i.partition("=")[::2] for i in a.keep_sets)[nm].split(",") if t.strip()}
+            marks_ = [str(x) for x in imp_files[var]["marks"]]
+            imp_drop[nm] = (var, [t for t in channels["tracks"] if t in marks_ and t.upper() not in kp])
     sample.missing_tracks = list(missing)        # declared absent -> raw zero -> absent value
     coh_i = None                                 # cohesin-unknown indicator row (full sym rows)
     if "cohesin_unknown" in channels["seq_features"]:
@@ -254,14 +275,33 @@ def main():
         for t in missing:
             sym_full[row_of[t]] = absent[row_of[t]]
         sym_sets, coh_report = {}, {}
+        imp_z = {}
+        for var, f in imp_files.items():
+            key = match_name(sname, [x for x in f.files if x != "marks"])
+            L = f[key] if key is not None else None
+            marks_ = [str(x) for x in f["marks"]]
+            z = np.full((len(marks_), nb), np.nan, np.float32)
+            if L is not None:
+                n = min(nb, L.shape[1])
+                for j, t in enumerate(marks_):
+                    if t in row_of:
+                        z[j, :n] = ((L[j, :n] - track_norm.mean[row_of[t]])
+                                    / track_norm.std[row_of[t]])
+            imp_z[var] = (marks_, z)
         for k, drop in sets.items():
             sy = sym_full.copy() if (drop or coh_i is not None or frac_i is not None
-                                     or k in nomm_sets) else sym_full
+                                     or k in nomm_sets or k in imp_drop) else sym_full
             if frac_i is not None:
                 mf = re.search(r"_f(\d+(?:\.\d+)?)$", k)
                 sy[frac_i] = frac_z(float(mf.group(1)) if mf else a.cohesin_fraction)
             for t in drop:
                 sy[row_of[t]] = absent[row_of[t]]
+            if k in imp_drop:
+                var, take = imp_drop[k]
+                marks_, z = imp_z[var]
+                for t in take:
+                    zt = z[marks_.index(t)]
+                    sy[row_of[t]] = np.where(np.isfinite(zt), zt, absent[row_of[t]])
             if mm_rows is not None and ("Meth" in drop or k in nomm_sets):
                 mm.drop_methylation(sy, track_norm, mm_rows)      # motif planes lose it too
             if coh_i is not None:
