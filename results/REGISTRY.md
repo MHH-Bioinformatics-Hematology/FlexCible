@@ -6071,3 +6071,192 @@ experiments now rest on 16 donors. The remaining limit is the "probably" for 260
 
 Reproduce: `python scripts/aml_loop_classifier.py --stage hic tracks motifs stripes_hic build subtypes model figures --jobs 4
 --workers 4 --null-reps-lr 20 --null-reps-gb 10` (hicdiff env).
+
+## 58. Chromosome-held-out comparison at 25 kb, competitor resolutions, and the 5 kb plan (FINAL for 25 kb; 5 kb PENDING; section 57 was the last number when this was written)
+
+Question: how do the chromosome-held-out final models of section 37 compare
+with each published predictor at 25 kb, which competitor supports which
+resolution, and what is needed to repeat the comparison at 5 kb?
+
+Inventory of the competitor predictions on disk (none was rerun; checked from
+the cooler headers and file lists on 2026-10-10):
+
+| competitor | native grid and reach | predictions on disk | held out by the competitor | 25 kb | 10 kb | 5 kb |
+|---|---|---|---|---|---|---|
+| C.Origami | 8192 bp bins, 2 097 152 bp window, hg38, released IMR-90 model | `C.Origami/testNovember/IMR90/chr2.cool`, `chr3.cool` | chr2 (test), chr3 (validation) | sampled from 8192 bp | sampled (section 37) | sampled (up-sampling) |
+| Epiphany | 10 kb bins, 990 kb reach, hg38, released GM12878 weights | `epiphany_pretrained/assemble_matrix_chr{2,3,11,17}.cool` | chr3, 11, 17 | sampled from 10 kb | native (section 37) | sampled (up-sampling) |
+| HiC-Reg | 5 kb bins, 1 Mb reach, hg19 | published GM12878 chr1 to 22 (`Gm12878_chr<N>_RF_tree20_prediction_predicted_coords.cool`, 5 kb, and a `_25kb.cool` sum); released text predictions for GM12878 and K562, chr14 and chr17: CV, cross-chromosome (WINDOW, MULTICELL), cross-cell (`home_offload/HiC-Reg`) | cross-chromosome: chr14 (model of chr17) and chr17 (model of chr14) | native by summing 5 kb counts | native by summing 5 kb counts | native, not yet converted (`hicreg_audit.variants()` covers 25 and 10 kb) |
+| Hi-cGAN | per-resolution Zenodo records: 2 kb (Akita regions), 5 kb (GM12878 only, best_plus_two RAD21, H3K4me3, SMC3), 10 kb and 25 kb (GM12878 whole genome and 25 cross-cell-type sets: the GM12878, HMEC, HUVEC, IMR-90 and K562 models on each cell's inputs) | `zenodo_records/02_best_models`, `04_sweep_5kb`, `05_sweep_10kb`, `06_sweep_25kb` | trained on odd chromosomes, even held out | native | native | native, GM12878 only, no cross-cell set |
+| Akita | 2048 bp bins, 448-bin (917 kb) crop of a 1 Mb window, 413 test regions | released predictions in `akita_testset_rasters.npz` (GM12878, HFF) | all 413 regions are excluded from our training | none | none | none |
+
+C.Origami and Epiphany have no native 25 kb output. Their O/E maps are read
+at the 25 kb bin centres by the code path of the 10 kb blocks
+(`benchmark_blocks.sample_competitor`, bilinear in (bin, bin) space, a pixel
+kept when all four neighbours exist), so the 8192 bp and 10 kb values are read
+at points and keep structure finer than a 25 kb bin. HiC-Reg's 25 kb maps are
+sums of its 5 kb counts. Akita has no whole-chromosome output and no 25 kb
+score exists (the 2 kb comparison is section 18, block A). Hi-cGAN has no
+IMR-90 prediction in the 25 kb chrho blocks of section 37; the record 06 sets
+`pred_imr90_on_imr90` and `pred_gm12878_on_imr90` were converted with
+`oe_proper.py` for this section (`BENCH_HICGAN_IMR90_25KB=1`).
+
+Scoring is the section 37 procedure at 25 kb (`scripts/hic_measures.py --stage
+chrho_score chrho_report --chrho-25kb-comps`): chr2, 3, 11, 14, 17 absent
+from the data of every cell, whole-chromosome tiling, identical pixels within
+a block (finite in the target and in every source), band cut to the shortest
+reach (C.Origami 2 Mb, Epiphany 39 bins = 975 kb, HiC-Reg 1 Mb, Hi-cGAN 2 Mb).
+The HiC-Reg and Hi-cGAN blocks are the 25 kb rows of section 37 (identical
+files); the C.Origami blocks (chr2, chr3), the Epiphany blocks (chr3, 11, 17)
+and the Hi-cGAN IMR-90 rows (chr2 only: chr3 is one of its training
+chromosomes) are new. Mean over the chromosomes of a block; compartment r is
+the compartment preference correlation of section 31; the APA ratio equals 1
+for the measured map.
+
+| block | source | Pearson | tile median | SCC | insulation r | boundary recall | loop recall | APA ratio | compartment r | HiCRep |
+|---|---|---|---|---|---|---|---|---|---|---|
+| C.Origami, IMR-90 chr2, chr3 | all12refin_drop_chrho | 0.940 | 0.961 | 0.941 | 0.943 | 0.817 | 0.349 | 1.038 | 0.958 | 0.947 |
+|  | all12honest_drop_chrho (ChIP only) | 0.804 | 0.864 | 0.800 | 0.775 | 0.647 | 0.206 | 0.541 | 0.862 | 0.795 |
+|  | consensus of the other cells | 0.877 | 0.932 | 0.872 | 0.817 | 0.788 | 0.374 | 0.855 | 0.885 | 0.844 |
+|  | C.Origami | 0.942 | 0.922 | 0.933 | 0.898 | 0.752 | 0.313 | 2.930 | 0.980 | 0.950 |
+| C.Origami block, chr2 only | all12refin_drop_chrho | 0.945 | 0.962 | 0.946 | 0.941 | 0.803 | 0.336 | 1.030 | 0.960 | 0.952 |
+|  | all12honest_drop_chrho (ChIP only) | 0.806 | 0.855 | 0.799 | 0.767 | 0.616 | 0.197 | 0.556 | 0.856 | 0.798 |
+|  | C.Origami | 0.944 | 0.921 | 0.935 | 0.899 | 0.751 | 0.283 | 2.924 | 0.980 | 0.952 |
+|  | Hi-cGAN IMR-90 model | 0.808 | 0.924 | 0.792 | 0.630 | 0.618 | 0.258 | 0.714 | 0.945 | 0.845 |
+|  | Hi-cGAN GM12878 model | 0.335 | 0.592 | 0.349 | 0.443 | 0.309 | 0.075 | 0.217 | 0.739 | 0.483 |
+| Epiphany, GM12878 chr3, 11, 17 | all12refin_drop_chrho | 0.917 | 0.944 | 0.913 | 0.900 | 0.827 | 0.453 | 0.786 | 0.948 | 0.928 |
+|  | all12honest_drop_chrho (ChIP only) | 0.754 | 0.788 | 0.739 | 0.668 | 0.608 | 0.241 | 0.353 | 0.846 | 0.773 |
+|  | consensus of the other cells | 0.841 | 0.887 | 0.832 | 0.804 | 0.805 | 0.456 | 0.765 | 0.878 | 0.843 |
+|  | Epiphany | 0.518 | 0.672 | 0.501 | 0.377 | 0.437 | 0.254 | 1.513 | 0.775 | 0.640 |
+| HiC-Reg, GM12878 chr14, chr17 | all12refin_drop_chrho | 0.931 | 0.950 | 0.925 | 0.905 | 0.833 | 0.396 | 0.792 | 0.953 | 0.935 |
+|  | all12honest_drop_chrho (ChIP only) | 0.782 | 0.798 | 0.763 | 0.674 | 0.608 | 0.191 | 0.319 | 0.867 | 0.791 |
+|  | consensus of the other cells | 0.868 | 0.901 | 0.853 | 0.804 | 0.805 | 0.396 | 0.818 | 0.894 | 0.857 |
+|  | HiC-Reg cross-chromosome WINDOW | 0.579 | 0.620 | 0.538 | 0.447 | 0.322 | 0.032 | -0.002 | 0.846 | 0.668 |
+|  | HiC-Reg cross-chromosome MULTICELL | 0.615 | 0.634 | 0.567 | 0.455 | 0.345 | 0.038 | -0.032 | 0.856 | 0.692 |
+|  | HiC-Reg CV (within-chromosome) | 0.908 | 0.964 | 0.870 | 0.677 | 0.723 | 0.323 | 0.764 | 0.987 | 0.915 |
+| HiC-Reg, K562 chr14, chr17 | all12refin_drop_chrho | 0.897 | 0.928 | 0.889 | 0.857 | 0.738 | 0.347 | 0.843 | 0.927 | 0.904 |
+|  | all12honest_drop_chrho (ChIP only) | 0.730 | 0.777 | 0.711 | 0.622 | 0.568 | 0.125 | 0.187 | 0.834 | 0.748 |
+|  | consensus of the other cells | 0.857 | 0.905 | 0.853 | 0.839 | 0.769 | 0.333 | 0.876 | 0.887 | 0.868 |
+|  | HiC-Reg cross-chromosome WINDOW | 0.736 | 0.820 | 0.696 | 0.484 | 0.523 | 0.038 | 0.292 | 0.927 | 0.797 |
+|  | HiC-Reg cross-chromosome MULTICELL | 0.740 | 0.819 | 0.700 | 0.500 | 0.519 | 0.030 | 0.260 | 0.927 | 0.800 |
+|  | HiC-Reg CV (within-chromosome) | 0.888 | 0.950 | 0.864 | 0.670 | 0.688 | 0.178 | 0.698 | 0.973 | 0.923 |
+| Hi-cGAN, GM12878 chr2, chr14 | all12refin_drop_chrho | 0.934 | 0.949 | 0.929 | 0.901 | 0.808 | 0.405 | 0.810 | 0.959 | 0.933 |
+|  | all12honest_drop_chrho (ChIP only) | 0.796 | 0.824 | 0.778 | 0.698 | 0.616 | 0.200 | 0.323 | 0.883 | 0.773 |
+|  | consensus of the other cells | 0.860 | 0.899 | 0.848 | 0.784 | 0.777 | 0.389 | 0.841 | 0.897 | 0.835 |
+|  | Hi-cGAN GM12878 model | 0.221 | 0.485 | 0.225 | 0.237 | 0.218 | 0.048 | 0.051 | 0.644 | 0.322 |
+| Hi-cGAN, K562 chr2, chr14 | all12refin_drop_chrho | 0.904 | 0.935 | 0.896 | 0.843 | 0.727 | 0.356 | 0.851 | 0.941 | 0.891 |
+|  | all12honest_drop_chrho (ChIP only) | 0.765 | 0.826 | 0.743 | 0.657 | 0.550 | 0.141 | 0.193 | 0.854 | 0.721 |
+|  | consensus of the other cells | 0.853 | 0.909 | 0.849 | 0.816 | 0.718 | 0.350 | 0.840 | 0.895 | 0.850 |
+|  | Hi-cGAN GM12878 model | 0.143 | 0.479 | 0.147 | 0.218 | 0.213 | 0.050 | 0.156 | 0.655 | 0.220 |
+
+
+Replicate ceilings at 25 kb (same blocks): IMR-90 Pearson 0.976, SCC 0.979;
+GM12878 0.941 to 0.947; K562 0.936 (`chrho_25kb_competitors.csv`).
+
+Verdict per competitor at 25 kb, ours = all12refin_drop_chrho (reference
+map as input) and all12honest_drop_chrho (ChIP only, no consensus); "level"
+is a difference within 0.01 of the mean over the block's chromosomes
+(`chrho_25kb_vs_competitor.csv`, with per-chromosome win counts):
+
+- C.Origami (IMR-90, chr2 and chr3, resampled from 8192 bp). The reference-map
+  model is level on Pearson (0.940 against 0.942; higher on 1 of 2
+  chromosomes), SCC (0.941 against 0.933) and HiCRep (0.947 against 0.950),
+  ahead on the 1 Mb tile median (0.961 against 0.922), insulation r (0.943
+  against 0.898), boundary recall (0.817 against 0.752) and loop recall (0.349
+  against 0.313), each on both chromosomes, and behind on compartment r (0.958
+  against 0.980, 0 of 2). C.Origami's APA ratio is 2.93, the model's 1.04.
+  The ChIP-only model is behind on every measure (Pearson 0.804, SCC 0.800,
+  tile median 0.864, insulation 0.775, boundary recall 0.647, loop recall
+  0.206). At 10 kb (section 37) the corresponding values are 0.926 against
+  0.920 Pearson and 0.162 loop recall for C.Origami.
+- Epiphany (GM12878, chr3, 11, 17, resampled from 10 kb). The reference-map
+  model is ahead on all measures on all three chromosomes (Pearson 0.917
+  against 0.518, SCC 0.913 against 0.501, insulation 0.900 against 0.377,
+  loop recall 0.453 against 0.254); the ChIP-only model leads by 0.24
+  Pearson (0.754) and 0.24 SCC, with loop recall 0.241 against 0.254. The
+  Epiphany APA ratio is 1.51 and the model's 0.79 (ChIP only 0.35).
+- Hi-cGAN (GM12878 and K562 chr2, chr14; native 25 kb). Ahead on every
+  measure on every chromosome: Pearson 0.934 (ChIP only 0.796) against
+  0.221 on GM12878 and 0.904 (0.765) against 0.143 on K562. On IMR-90 chr2,
+  Hi-cGAN's IMR-90 model (trained on IMR-90, odd chromosomes) scores 0.808
+  Pearson, 0.792 SCC, 0.924 tile median, 0.630 insulation r, 0.618 boundary
+  recall, 0.258 loop recall: the reference-map model is ahead on every
+  measure (Pearson 0.945, difference 0.136); the ChIP-only model (0.806) is
+  level on Pearson and SCC, ahead on insulation (0.767 against 0.630) and
+  behind on the tile median (0.855), loop recall (0.197) and compartment r
+  (0.856 against 0.945). The GM12878 Hi-cGAN model applied to IMR-90 scores
+  0.335.
+- HiC-Reg, cross-chromosome (leak-free; native 25 kb sum; chr14, chr17).
+  GM12878: the reference-map model is ahead on every measure (Pearson 0.931
+  against 0.579 WINDOW and 0.615 MULTICELL) and the ChIP-only model too
+  (0.783). K562: reference-map model ahead on every measure (0.897 against
+  0.736 and 0.740); the ChIP-only model is level on Pearson (0.730, -0.006
+  and -0.010), ahead on SCC (0.711 against 0.696 and 0.700), insulation
+  (0.622 against 0.484 and 0.500), boundary recall and loop recall (0.125
+  against 0.038 and 0.030), behind on the tile median (0.777 against 0.820
+  and 0.819), compartment r (0.834 against 0.927) and HiCRep (0.748 against
+  0.797 and 0.800).
+- HiC-Reg, published within-chromosome CV maps (not a held-out score). The
+  reference-map model is ahead on Pearson on GM12878 (0.931 against 0.908)
+  and level on K562 (0.897 against 0.888), ahead on SCC, insulation r,
+  boundary and loop recall in both cells, ahead on HiCRep on GM12878 (0.935
+  against 0.915) and behind on K562 (0.904 against 0.923), and behind on the
+  tile median (0.950 against 0.964; 0.928 against 0.950) and compartment r
+  (0.953 against 0.987; 0.927 against 0.973); the ChIP-only model is behind
+  on every measure except insulation r on GM12878 (level, 0.674 against
+  0.677); Pearson 0.783 and 0.730.
+- Akita: no 25 kb score exists.
+
+Limits. (i) The competitors differ in training data and inputs from our
+12-cell models; the comparison states what each released prediction scores on
+chromosomes it did not train on, not a comparison of architectures
+. (ii) Leakage status: C.Origami chr2 (test) and chr3 (validation) are
+unseen by C.Origami and by our chrho models, and both saw IMR-90 Hi-C on
+other chromosomes (ours: 17 chromosomes of IMR-90 and 11 further cells;
+C.Origami: IMR-90 only); Epiphany chr3, 11, 17 unseen by both; HiC-Reg
+cross-chromosome files are leak-free (model trained on the other of chr14 and
+chr17, both absent from our data), HiC-Reg CV files are within-chromosome
+interpolation (section 18); Hi-cGAN GM12878 and K562 on the even chromosomes
+chr2 and chr14 (K562 was never a Hi-cGAN training cell; IMR-90 chr2 for the
+IMR-90 model). The reference-map model reads the leave-one-out consensus of
+the other cells' measured maps on the held-out chromosomes as input (its
+intended use; the ChIP-only model reads none). (iii) The resampled
+C.Origami and Epiphany maps are read at points on the 25 kb grid, and the
+insulation, boundary and loop measures are defined in bins of the grid; the
+competitor scores differ between 10 and 25 kb (C.Origami: loop recall 0.313
+at 25 kb, 0.162 at 10 kb; boundary recall 0.752 and 0.474), so the margins
+are specific to the grid. (iv) Chromosome counts are small (2 to 3 per
+block); the win counts in `chrho_25kb_vs_competitor.csv` are per chromosome,
+not per region. (v) The C.Origami APA ratio of 2.9 is an over-enrichment of
+loop signal against the measured map, which the loop recall does not show.
+(vi) The consensus of the other cells has a higher boundary recall than the
+reference-map model in the K562 HiC-Reg block (0.769 against 0.738). The
+refres model is in the csv files and equals refin within 0.01 on Pearson in
+every block.
+
+5 kb (PENDING). No chrho model exists at 5 kb (only 25 and 10 kb, section
+37); the 5 kb models of section 33 trained on chr2, 3, 11, 14, 17. Competitors
+with 5 kb output: Hi-cGAN (GM12878 only; chr2 and chr14 shared with us),
+HiC-Reg (native; GM12878 and K562, chr14 and chr17); C.Origami and Epiphany
+would be up-sampled from 8192 bp and 10 kb. Prepared, not run:
+`results/benchmark/REMOTE_JOB_chrho_5kb.md` holds the job specification
+(`all12refin_drop_chrho_5kb`, `all12honest_drop_chrho_5kb`, optionally
+`all12refres_drop_chrho_5kb`; `scripts/multicell_expanded.py --res 5000`,
+single remote 4090 through `scripts/run_single_gpu.py`), the evaluation steps
+(`scripts/hic_measures.py` needs the 5 kb parameters listed there) and the
+GPU estimate: about 1.7 h (1.3 to 2.2 h) for the two required runs, about 3.3
+h (2.5 to 4.2 h) with the refres run, from the measured remote 10 kb run
+(22 min), the 5 kb/10 kb per-window cost ratio of the local runs (1.46) and
+the 0.674 training-window ratio of the chrho caches. The CPU caches
+`mc_all12ref_chrho_5kb` and `mc_all12chrho_5kb` are built locally (nice 19,
+2 workers; the existing full 5 kb caches hold the held-out chromosomes and
+cannot be reused); state in the job file.
+
+Files: `results/benchmark/chrho_25kb_competitors.csv` (every source per block,
+every measure), `chrho_25kb_vs_competitor.csv` (differences, win counts,
+verdicts), `chrho_25kb_table.md`; `results/hic_measures_chrho/chrho_25kb_summary.csv`
+and `chrho_25kb_per_block.csv` (the scorer's output, 22 blocks).
+Reproduce (hicdiff env):
+
+    BENCH_HICGAN_IMR90_25KB=1 python scripts/benchmark_competitors.py --stage oe --names hicgan_imr90_on_imr90_25kb hicgan_gm12878_on_imr90_25kb
+    python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-25kb-comps --jobs 1 --threads 4
+    python scripts/chrho_25kb_table.py

@@ -1980,6 +1980,9 @@ REFERENCE_FREE |= {"all12honest_drop_chrho"}
 CHRHO_CELLS = ["gm12878", "imr90", "k562"]
 
 
+CHRHO_25KB_COMPS = False      # --chrho-25kb-comps: C.Origami and Epiphany resampled onto the 25 kb grid
+
+
 def chrho_blocks() -> list[dict]:
     """(set, cell, res, chrom, band bins or None for the model window, competitors).
     Every block holds the chromosomes the competitor left out of its training;
@@ -2001,6 +2004,19 @@ def chrho_blocks() -> list[dict]:
         for c in ("chr2", "chr14"):                     # Hi-cGAN held out the even chromosomes
             rows.append(("chrho_hicgan", "gm12878", res, c, None, [f"hicgan_gm12878_{k}kb"]))
             rows.append(("chrho_hicgan", "k562", res, c, None, [f"hicgan_gm12878_on_k562_{k}kb"]))
+    if CHRHO_25KB_COMPS:
+        # the 10 kb blocks of C.Origami (8192 bp, 2 Mb) and Epiphany (10 kb, 990 kb)
+        # on the 25 kb grid: the competitor O/E is sampled bilinearly at the 25 kb
+        # bin centres (benchmark_blocks.sample_competitor, the 10 kb code path);
+        # band 2 Mb (C.Origami) and 39 bins = 975 kb (Epiphany, 990 kb reach)
+        # Hi-cGAN IMR-90 and GM12878 models on IMR-90 (record 06): chr2 only, chr3 is a
+        # training chromosome of Hi-cGAN
+        rows.append(("chrho_corigami", "imr90", 25000, "chr2", None,
+                     ["corigami_imr90_8kb", "hicgan_imr90_on_imr90_25kb",
+                      "hicgan_gm12878_on_imr90_25kb"]))
+        rows.append(("chrho_corigami", "imr90", 25000, "chr3", None, ["corigami_imr90_8kb"]))
+        for c in ("chr3", "chr11", "chr17"):
+            rows.append(("chrho_epiphany", "gm12878", 25000, c, 39, ["epiphany_gm12878_10kb"]))
     out = []
     for set_, cell, res, ch, D, comps in rows:
         b = dict(set=set_, cell=cell, res=res, chrom=ch, D=D if D else WINDOW[res] - 1,
@@ -2094,20 +2110,25 @@ CHRHO_COLS = ["oe_pearson", "oe_pearson_tile_median", "oe_scc", "insulation_r", 
 
 def chrho_report() -> None:
     chrho_use_root()
-    fs = sorted((OUT / "blocks").glob("chrho_*/measures.csv"))
+    ids = {b["id"] for b in chrho_blocks()}
+    fs = [f for f in sorted((OUT / "blocks").glob("chrho_*/measures.csv")) if f.parent.name in ids]
     if not fs:
         return
     D = pd.concat([pd.read_csv(f) for f in fs], ignore_index=True)
     D = D[D.kind.isin(["model", "cool", "competitor", "measured"])]
     cols = [c for c in CHRHO_COLS if c in D.columns]
+    tag = "chrho"
+    if CHRHO_25KB_COMPS:                       # the 25 kb grid, all competitors, own files
+        D = D[D.res == 25000]
+        tag = "chrho_25kb"
     CHRHO_TABLES.mkdir(parents=True, exist_ok=True)
-    D.to_csv(CHRHO_TABLES / "chrho_per_block.csv", index=False, float_format="%.4f")
+    D.to_csv(CHRHO_TABLES / f"{tag}_per_block.csv", index=False, float_format="%.4f")
     g = (D.groupby(["set", "cell", "res", "source", "flag"], dropna=False)[cols].mean()
          .reset_index())
     n = D.groupby(["set", "cell", "res", "source", "flag"], dropna=False).chrom.nunique() \
         .reset_index(name="n_chromosomes")
     g = g.merge(n, on=["set", "cell", "res", "source", "flag"])
-    g.to_csv(CHRHO_TABLES / "chrho_summary.csv", index=False, float_format="%.4f")
+    g.to_csv(CHRHO_TABLES / f"{tag}_summary.csv", index=False, float_format="%.4f")
     log(f"[chrho report] {len(fs)} blocks")
 
 
@@ -2122,9 +2143,16 @@ def main():
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--only", nargs="*", default=None, help="regexes of block ids")
     ap.add_argument("--gpu", default="", help="predict: GPU index for this worker (default CPU)")
+    ap.add_argument("--chrho-25kb-comps", action="store_true",
+                    help="chrho_score/chrho_report: add the C.Origami and Epiphany blocks on the "
+                         "25 kb grid (default off; the default tables are unchanged)")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
+    global CHRHO_25KB_COMPS
+    CHRHO_25KB_COMPS = a.chrho_25kb_comps
+    if a.chrho_25kb_comps:               # registers the 25 kb Hi-cGAN IMR-90 competitors
+        os.environ["BENCH_HICGAN_IMR90_25KB"] = "1"
     for st in a.stage:
         if st == "predict":
             stage_predict(a.threads, 1 if a.gpu else max(1, min(a.jobs, a.threads)), a.gpu)

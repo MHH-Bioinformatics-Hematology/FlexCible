@@ -121,7 +121,9 @@ COMPETITORS = {
 # another cell's inputs; the IMR-90 model on IMR-90 for block D
 for _res, _dir in ((10000, HICGAN_X10), (25000, HICGAN_X25)):
     pairs = [("gm12878", "k562"), ("gm12878", "hmec"), ("gm12878", "huvec")]
-    if _res == 10000:
+    if _res == 10000 or os.environ.get("BENCH_HICGAN_IMR90_25KB") == "1":
+        # the 25 kb IMR-90 pairs exist in the same record (06_sweep_25kb); they are
+        # registered only on request so that the default competitor list is unchanged
         pairs += [("gm12878", "imr90"), ("imr90", "imr90")]
     for _m, _c in pairs:
         COMPETITORS[f"hicgan_{_m}_on_{_c}_{_res // 1000}kb"] = dict(
@@ -395,6 +397,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True)
     ap.add_argument("--cells", nargs="*", default=None)
+    ap.add_argument("--names", nargs="*", default=None,
+                    help="oe stage: only these competitor names (default all)")
     a = ap.parse_args()
     for st in a.stage:
         if st == "extract":
@@ -409,6 +413,8 @@ def main():
                 calls(c, r)
         elif st == "oe":
             for n, spec in COMPETITORS.items():
+                if a.names and n not in a.names:
+                    continue
                 run_oe(n, spec)
         elif st == "predict":
             predict_akita_space()
