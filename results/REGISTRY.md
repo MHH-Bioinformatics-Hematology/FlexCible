@@ -3665,7 +3665,7 @@ only; C.Origami and the other predictions on chr2 and chr3. Rescoring with
 all12refres_drop_chrho in every block runs (`runs/hic_measures_chrho`,
 earlier blocks kept in `blocks_norefres`); its rows follow when it finishes.
 
-## 38. AML-inclusive training with the methylation channel (PENDING)
+## 38. AML-inclusive training with the methylation channel (FINAL for fold 0; folds 1 and 2 not run)
 
 Recipe of section 36 (patients, HSPC donors, MOLM-13, AML windows x3, lab
 indicator, AML reference of the training patients, input-reference model,
@@ -3689,7 +3689,140 @@ the mean of the other patients; Xu loops and stripes at 10 kb; the standard
 413-region evaluation of the non-AML cells), the test patients with WGBS
 additionally summarised alone.
 
-Results: pending (queued after the 5 kb block).
+Results, fold 0 (`results/aml_train/eval_f0_summary.csv`, `eval_f0_patients.csv`,
+`eval_f0_features.csv`; file mtimes used 2026-10-06 02:44 for summary and
+patients, 02:49 for features; the AML residual run of section 45 may rewrite
+these files later).
+
+Training. all12aml_meth_refin_drop_25kb stopped at epoch 60 (best hard-
+validation Pearson 0.7493) and _10kb at epoch 60 (0.5332), against epoch 33
+(0.7330) and epoch 34 (0.5240) for all12aml_refin_drop without the channel.
+Normal accuracy on the 413 Akita test regions (median over cells;
+`reference_summary.csv`, 12 training cells / 5 held-out cells): 25 kb
+0.9295 / 0.9115 against 0.9288 / 0.9060 without the channel; 10 kb 0.9230 /
+0.8952 against 0.9227 / 0.8887.
+
+Held-out patients 027, 270, 773, 1916 (median over the four patients of the
+per-patient median on the 413 regions; Pearson, SCC and structure
+correlations are Pearson-type scores of `crosscell_predict --structure`; the
+last column is the Pearson on the 30 to 53 patient-specific regions per
+patient of section 29, where both deviation scores of the patient are in its
+top 20%). Patient 1916 has no WGBS, so its Meth conditions equal the
+conditions without Meth.
+
+| 25 kb, model | input | Pearson | SCC | insulation | loop enrichment | compartment | patient-specific |
+|---|---|---|---|---|---|---|---|
+| AML reference alone | | 0.912 | | | | | 0.751 |
+| mean of the 11 other patients | | 0.922 | | | | | |
+| all12aml_refin_drop | marks | 0.900 | 0.895 | 0.958 | 0.803 | 0.920 | 0.755 |
+| all12aml_refin_drop | no input | 0.898 | 0.894 | 0.956 | 0.796 | 0.915 | 0.730 |
+| all12aml_meth_refin_drop | marks | 0.904 | 0.894 | 0.959 | 0.801 | 0.922 | 0.752 |
+| all12aml_meth_refin_drop | marks + Meth | 0.905 | 0.893 | 0.960 | 0.802 | 0.920 | 0.751 |
+| all12aml_meth_refin_drop | Meth only | 0.898 | 0.892 | 0.958 | 0.796 | 0.919 | 0.736 |
+| all12aml_meth_refin_drop | no input | 0.897 | 0.893 | 0.957 | 0.793 | 0.916 | 0.738 |
+
+| 10 kb, model | input | Pearson | SCC | insulation | loop enrichment | compartment | patient-specific |
+|---|---|---|---|---|---|---|---|
+| AML reference alone | | 0.802 | | | | | 0.541 |
+| mean of the 11 other patients | | 0.814 | | | | | |
+| all12aml_refin_drop | marks | 0.818 | 0.806 | 0.962 | 0.440 | 0.874 | 0.592 |
+| all12aml_refin_drop | no input | 0.805 | 0.793 | 0.960 | 0.432 | 0.867 | 0.560 |
+| all12aml_meth_refin_drop | marks | 0.815 | 0.801 | 0.966 | 0.441 | 0.874 | 0.576 |
+| all12aml_meth_refin_drop | marks + Meth | 0.816 | 0.804 | 0.965 | 0.445 | 0.871 | 0.586 |
+| all12aml_meth_refin_drop | Meth only | 0.807 | 0.796 | 0.963 | 0.433 | 0.872 | 0.563 |
+| all12aml_meth_refin_drop | no input | 0.809 | 0.793 | 0.963 | 0.433 | 0.868 | 0.575 |
+
+The three test patients with WGBS (027, 270, 773; median):
+
+| model, input | Pearson 25 kb | patient-specific 25 kb | Pearson 10 kb | patient-specific 10 kb |
+|---|---|---|---|---|
+| AML reference alone | 0.897 | 0.692 | 0.773 | 0.453 |
+| all12aml_refin_drop, marks | 0.893 | 0.702 | 0.791 | 0.528 |
+| all12aml_refin_drop, no input | 0.888 | 0.667 | 0.771 | 0.479 |
+| all12aml_meth_refin_drop, marks | 0.892 | 0.692 | 0.788 | 0.506 |
+| all12aml_meth_refin_drop, marks + Meth | 0.894 | 0.697 | 0.790 | 0.526 |
+| all12aml_meth_refin_drop, Meth only | 0.886 | 0.678 | 0.772 | 0.476 |
+| all12aml_meth_refin_drop, no input | 0.884 | 0.678 | 0.776 | 0.490 |
+
+Residual correlation corr(P - AML reference, T - AML reference), all regions /
+patient-specific regions (four patients):
+
+| model, input | 25 kb | 10 kb |
+|---|---|---|
+| all12aml_refin_drop, marks | 0.167 / 0.274 | 0.234 / 0.268 |
+| all12aml_refin_drop, no input | 0.023 / 0.105 | 0.164 / 0.223 |
+| all12aml_meth_refin_drop, marks | 0.106 / 0.219 | 0.269 / 0.274 |
+| all12aml_meth_refin_drop, marks + Meth | 0.134 / 0.279 | 0.271 / 0.289 |
+| all12aml_meth_refin_drop, Meth only | -0.002 / 0.170 | 0.235 / 0.246 |
+| all12aml_meth_refin_drop, no input | -0.034 / 0.107 | 0.218 / 0.237 |
+
+Xu et al.'s AML-specific loops (592) and stripes (481), 10 kb, four test
+patients: the measured loop enrichment lies 0.307 log2 units above the AML
+reference at the loop pixel (stripes 0.210). Prediction minus AML reference,
+fraction of the loops (stripes) above the reference, and correlation with the
+measured gain:
+
+| model, input | loops: difference | above reference | correlation | stripes: difference | above reference | correlation |
+|---|---|---|---|---|---|---|
+| all12aml_refin_drop, marks | -0.015 | 0.41 | 0.14 | -0.033 | 0.37 | 0.34 |
+| all12aml_refin_drop, no input | -0.034 | 0.29 | 0.16 | -0.079 | 0.06 | -0.07 |
+| all12aml_meth_refin_drop, marks | -0.008 | 0.46 | 0.17 | -0.015 | 0.46 | 0.41 |
+| all12aml_meth_refin_drop, marks + Meth | -0.004 | 0.47 | 0.18 | 0.014 | 0.53 | 0.42 |
+| all12aml_meth_refin_drop, Meth only | -0.009 | 0.43 | 0.13 | 0.032 | 0.66 | 0.23 |
+| all12aml_meth_refin_drop, no input | -0.019 | 0.39 | 0.14 | 0.015 | 0.61 | 0.11 |
+
+Held-out HSPC donors and U-937 WT (Meth absent for both; Pearson with marks /
+no input): HSPC 25 kb 0.926 / 0.928 (all12aml_refin_drop 0.926 / 0.929), 10 kb
+0.828 / 0.829 (0.827 / 0.829); U-937 25 kb 0.858 / 0.862 (0.857 / 0.863), 10 kb
+0.859 / 0.825 (0.852 / 0.826).
+
+Reading. The channel does not change what the AML-trained model predicts for
+the held-out patients at the level that the data resolve. With the patient's
+marks the Pearson differs from the model without the channel by +0.004 (25 kb,
+0.904 against 0.900) and -0.003 (10 kb, 0.815 against 0.818), and without ChIP
+by -0.001 and +0.005, all inside the 0.013 seed noise of the median Pearson;
+per patient the marks difference is +0.003, +0.008, -0.003, -0.001 at 25 kb
+(027, 1916, 270, 773) and -0.004, +0.004, -0.002, -0.004 at 10 kb. Giving the
+meth model the patient's Meth on top of the marks changes the Pearson by
++0.001 at both resolutions; per patient with WGBS between -0.003 and +0.002.
+Meth alone equals no input (0.898 against 0.897 at 25 kb, 0.807 against 0.809
+at 10 kb). At 25 kb the models stay below the AML reference in all four
+patients (0.904 against 0.912), at 10 kb all four are above it with either
+model (0.815 against 0.802), and (meth model, marks) above the mean of the other eleven patients
+only for 270. The patient-specific regions show the one visible effect: at 10
+kb adding Meth to the marks raises the patient-specific Pearson from 0.576 to
+0.586 over the four patients and from 0.506 to 0.526 over the three with WGBS
+(per patient +0.001, +0.020, +0.024 for 027, 270, 773), but the meth model with
+marks (0.576) stays below the model without the channel (0.592), and at 25 kb
+the per-patient changes are -0.008, +0.013, -0.018. The residual correlation
+with the AML reference rises at 10 kb with the channel in the model (0.269
+against 0.234 with marks, 0.218 against 0.164 without input), but at 25 kb it
+falls with marks (0.106 against 0.167). At the loops and stripes the meth
+model with marks correlates with the measured gain at 0.17 and 0.41 against
+0.14 and 0.34, but the loop enrichment stays 0.008 below the AML reference
+where the measured loops lie 0.307 above it, so the gain at the paper's
+loops is not reproduced. Methylation as an input therefore does not give the AML-trained
+model information about the patient that the marks and the AML reference do
+not already carry; a patient-specific effect of a few thousandths to 0.02 in
+Pearson on 30 to 53 regions per patient is within what the checkpoint choice
+and the seed move (below).
+
+Limitations. Fold 0 only (folds 1 and 2 not run), four test patients of which
+three have WGBS; the medians over three or four patients move with a single
+patient. One training run per model: the seed noise of the median Pearson
+(0.013, section 15) was measured on the non-AML models and is the only noise
+estimate, and no noise estimate exists for the patient-specific, residual,
+loop and stripe columns. The two models differ in training length (60 epochs
+against 33 and 34; the early stopping with patience 10 fired later), so the
+comparison mixes the channel with a longer training; the hard-validation
+Pearson is higher with the channel (0.7493 against 0.7330 at 25 kb, 0.5332
+against 0.5240 at 10 kb) while the test scores are not. Meth is absent in
+training for patient 1360, MOLM-13, the HSPC donors and, among the non-AML
+cells, NHEK and PC-9, so the model sees the absent state often; the test
+patients' WGBS comes from the same lab and protocol as the training patients'
+WGBS. The HSPC and U-937 rows test only the absent state. The CSVs have been
+rewritten by later jobs before; the numbers above are from the files with the
+mtimes given.
 
 
 ## 39. Across-cell variability as a predictor of the consensus error (FINAL, 25 and 10 kb)
@@ -4325,7 +4458,7 @@ images was declined during this analysis): `fig_variance_partition.png`,
 `fig_ctcf_height_vs_motif_strength_by_methylation.png`. Every number above
 was read from the CSV tables.
 
-## 42. How much of ChIP height DNA sequence and methylation explain (PENDING)
+## 42. How much of ChIP height DNA sequence and methylation explain (FINAL for v1; a per-cell methylation normalisation run is in progress)
 
 Question. How much of the ChIP-seq peak height of the 13 marks (CTCF, RAD21,
 SMC3, H3K27ac, H3K27me3, H3K36me3, H3K4me1, H3K4me2, H3K4me3, H3K79me2, H3K9ac,
@@ -4404,9 +4537,152 @@ What answers what.
   B: whether a sequence CNN improves on hand-made features.
 - seen_cell against unseen_cell with `--holdout-cell`: the cost of an unseen
   cell.
-Status PENDING: smoke test passed on CPU; no training result yet.
+Results of the v1 run (`results/seq_cnn/seq_cnn_results.csv`,
+`seq_cnn_summary.csv`, `seq_cnn_partition.csv`, copied from the GPU machine, run
+log `run_20261009_165303.log` there; RTX 4090, 2026-10-09 16:53 to 18:49; 20000
+steps per mode, 9.27 M parameters, 93,428 test bins per cell and mark). Modes
+`seq`, `seq_meth` and `meth` were trained once each; best validation Pearson
+(chr2 and chr4 of the training cells) 0.5511 (seq), 0.7879 (seq_meth), 0.7237
+(meth). The cell-embedding, hold-out-cell and 1 kb variants were not run.
 
-## 43. Methylation-aware directed CTCF motif planes (PENDING, queued)
+Seen cells (odd-chromosome training, test chr6 to chr22 even, seven training
+cells; R2, median over cells; ceilings are the cell-agnostic across-cell mean of
+the training cells including (incl) or excluding (loo) the scored cell; GBM =
+gradient boosting of section 41 with the extended sequence set, seen_cell,
+median over cells of all even chromosomes):
+
+| mark | cells | CNN seq | CNN meth | CNN seq+meth | ceiling incl | ceiling loo | GBM seq | GBM meth | GBM seq+meth |
+|---|---|---|---|---|---|---|---|---|---|
+| CTCF | 6 | 0.28 | 0.34 | 0.44 | 0.77 | 0.67 | 0.26 | 0.24 | 0.38 |
+| RAD21 | 5 | 0.34 | 0.40 | 0.53 | 0.82 | 0.72 | 0.26 | 0.28 | 0.42 |
+| SMC3 | 4 | 0.39 | 0.51 | 0.62 | 0.76 | 0.58 | 0.28 | 0.28 | 0.39 |
+| H3K27ac | 7 | 0.28 | 0.60 | 0.69 | 0.54 | 0.37 | 0.13 | 0.46 | 0.47 |
+| H3K27me3 | 7 | 0.35 | 0.55 | 0.65 | 0.59 | 0.45 | 0.20 | 0.36 | 0.46 |
+| H3K36me3 | 7 | 0.39 | 0.62 | 0.73 | 0.71 | 0.60 | 0.16 | 0.51 | 0.55 |
+| H3K4me1 | 7 | 0.25 | 0.62 | 0.70 | 0.54 | 0.37 | 0.15 | 0.40 | 0.45 |
+| H3K4me2 | 7 | 0.48 | 0.74 | 0.82 | 0.71 | 0.60 | 0.32 | 0.55 | 0.61 |
+| H3K4me3 | 7 | 0.57 | 0.77 | 0.87 | 0.77 | 0.68 | 0.35 | 0.52 | 0.62 |
+| H3K79me2 | 7 | 0.43 | 0.61 | 0.70 | 0.76 | 0.68 | 0.20 | 0.45 | 0.50 |
+| H3K9ac | 7 | 0.51 | 0.75 | 0.82 | 0.75 | 0.65 | 0.32 | 0.64 | 0.67 |
+| H3K9me3 | 7 | 0.19 | 0.44 | 0.52 | 0.55 | 0.39 | 0.09 | 0.15 | 0.29 |
+| H4K20me1 | 7 | 0.34 | 0.43 | 0.61 | 0.66 | 0.54 | 0.22 | 0.25 | 0.35 |
+| median over marks | | 0.35 | 0.60 | 0.69 | 0.71 | 0.60 | 0.22 | 0.40 | 0.46 |
+
+Pearson, median over marks: seq 0.63 (0.50 H3K9me3 to 0.80 H3K4me3), meth 0.78,
+seq_meth 0.83 (0.67 CTCF to 0.93 H3K4me3), ceiling incl 0.89.
+
+Partition into shared, unique sequence and unique methylation (seen cells,
+median over cells; shared = R2 seq + R2 meth - R2 seq+meth, unique seq = R2
+seq+meth - R2 meth, unique meth = R2 seq+meth - R2 seq):
+
+| mark | R2 seq | R2 meth | R2 seq+meth | shared | unique seq | unique meth | unexplained |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.28 | 0.34 | 0.44 | 0.16 | 0.10 | 0.17 | 0.56 |
+| RAD21 | 0.34 | 0.40 | 0.53 | 0.22 | 0.12 | 0.22 | 0.47 |
+| SMC3 | 0.39 | 0.51 | 0.62 | 0.29 | 0.11 | 0.23 | 0.38 |
+| H3K27ac | 0.28 | 0.60 | 0.69 | 0.24 | 0.06 | 0.46 | 0.31 |
+| H3K27me3 | 0.35 | 0.55 | 0.65 | 0.16 | 0.11 | 0.40 | 0.35 |
+| H3K36me3 | 0.39 | 0.62 | 0.73 | 0.28 | 0.10 | 0.31 | 0.27 |
+| H3K4me1 | 0.25 | 0.62 | 0.70 | 0.16 | 0.09 | 0.45 | 0.30 |
+| H3K4me2 | 0.48 | 0.74 | 0.82 | 0.39 | 0.07 | 0.33 | 0.18 |
+| H3K4me3 | 0.57 | 0.77 | 0.87 | 0.54 | 0.07 | 0.25 | 0.13 |
+| H3K79me2 | 0.43 | 0.61 | 0.70 | 0.30 | 0.08 | 0.25 | 0.30 |
+| H3K9ac | 0.51 | 0.75 | 0.82 | 0.46 | 0.06 | 0.31 | 0.18 |
+| H3K9me3 | 0.19 | 0.44 | 0.52 | 0.10 | 0.09 | 0.39 | 0.48 |
+| H4K20me1 | 0.34 | 0.43 | 0.61 | 0.22 | 0.14 | 0.21 | 0.39 |
+| median over marks | 0.35 | 0.60 | 0.69 | 0.24 | 0.09 | 0.31 | 0.31 |
+
+Unseen cells K562 and HMEC (never in training; R2 and Pearson r, median over the
+cells that have the mark, i.e. the mean of K562 and HMEC; the GBM columns are the
+section 41 mean of the two held-out cells):
+
+| mark | cells | seq R2 | seq r | seq+meth R2 | seq+meth r | meth R2 | meth r | ceiling R2 | ceiling r | GBM seq R2 | GBM seq+meth R2 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| CTCF | 2 | 0.19 | 0.46 | -0.19 | 0.44 | -4.87 | 0.07 | 0.68 | 0.83 | 0.16 | 0.12 |
+| RAD21 | 1 | 0.30 | 0.57 | -1.38 | 0.43 | -84.14 | -0.19 | 0.61 | 0.82 | 0.24 | -0.44 |
+| SMC3 | 1 | 0.44 | 0.67 | -3.69 | 0.34 | -11.63 | -0.19 | 0.62 | 0.79 | 0.36 | -0.04 |
+| H3K27ac | 2 | 0.23 | 0.56 | -7.07 | 0.37 | -7.93 | 0.31 | 0.39 | 0.71 | 0.08 | 0.15 |
+| H3K27me3 | 2 | 0.24 | 0.53 | -1.75 | 0.24 | -18.66 | 0.45 | 0.47 | 0.71 | 0.17 | 0.28 |
+| H3K36me3 | 2 | 0.38 | 0.62 | 0.16 | 0.68 | -7.34 | 0.73 | 0.69 | 0.84 | 0.17 | 0.54 |
+| H3K4me1 | 2 | 0.21 | 0.57 | -5.19 | 0.70 | -47.91 | 0.19 | 0.38 | 0.74 | 0.07 | -0.33 |
+| H3K4me2 | 2 | 0.53 | 0.74 | -18.02 | 0.44 | -94.32 | 0.28 | 0.69 | 0.83 | 0.33 | 0.59 |
+| H3K4me3 | 2 | 0.24 | 0.72 | -23.92 | 0.40 | -85.62 | 0.28 | 0.38 | 0.84 | -0.02 | -0.26 |
+| H3K79me2 | 2 | 0.43 | 0.68 | -0.67 | 0.60 | -33.74 | 0.12 | 0.73 | 0.87 | 0.20 | 0.39 |
+| H3K9ac | 2 | 0.45 | 0.70 | -15.80 | 0.35 | -39.22 | 0.23 | 0.64 | 0.82 | 0.23 | 0.48 |
+| H3K9me3 | 2 | 0.12 | 0.43 | -8.96 | 0.33 | -30.19 | 0.20 | 0.28 | 0.66 | 0.15 | -0.34 |
+| H4K20me1 | 2 | 0.13 | 0.56 | -0.46 | 0.43 | -31.41 | 0.02 | 0.32 | 0.70 | 0.12 | -0.09 |
+
+Per cell, median over marks (Pearson): seq 0.66 (K562) and 0.58 (HMEC), seq_meth
+0.34 and 0.74, meth -0.20 and 0.67; the seven seen cells reach 0.57 to 0.65 (seq),
+0.80 to 0.86 (seq_meth) and 0.68 to 0.81 (meth). R2 per mark and held-out cell,
+seq_meth: K562 -0.20 (H4K20me1) to -45.7 (H3K4me3), HMEC 0.16 (CTCF) to 0.58
+(H3K79me2) for nine of eleven marks, H3K4me3 -2.18 and H4K20me1 -0.71; meth
+alone: K562 -9.7 to -189, HMEC -3.90 (H3K4me3) and -2.21 (H4K20me1) for two
+marks and -0.10 to 0.57 for the other nine.
+
+Reading. Sequence alone: the CNN explains more than the hand-made features in
+every mark on the seen cells (R2 median over marks 0.35 against 0.22; 13 of 13
+marks) and in 12 of 13 on K562 and HMEC (all but H3K9me3; median 0.24 against
+0.17). It reaches 0.34 (H3K9me3) to 0.75 (H3K4me3) of the R2 of the
+cell-agnostic ceiling on seen cells, so about half of the cell-agnostic part of
+ChIP height is a function of the sequence in a 131 kb window, and the
+sequence-only prediction of a new cell reaches R2 0.12 to 0.53 and Pearson 0.43
+to 0.74. Methylation: with both inputs the seen-cell R2 is 0.44 (CTCF) to 0.87
+(H3K4me3), median 0.69 against 0.46 for boosting, and it exceeds the
+cell-agnostic ceiling for seven marks (H3K27ac, H3K27me3, H3K36me3, H3K4me1,
+H3K4me2, H3K4me3, H3K9ac), i.e. the methylation channel carries cell-specific
+height beyond the across-cell mean there. The partition on seen cells gives
+unique methylation 0.17 to 0.46 (median 0.31), unique sequence 0.06 to 0.14
+(median 0.09) and shared 0.10 to 0.54 (median 0.24); section 41 found unique
+methylation 0.11 to 0.39 and unique sequence 0.02 to 0.14, so the CNN raises the
+shared and the unique methylation parts and leaves the unique sequence part at
+about the boosting size. CTCF, H4K20me1, RAD21 and SMC3 have the smallest unique
+methylation part (0.17 to 0.23); the unexplained part is largest for CTCF
+(0.56), H3K9me3 (0.48) and RAD21 (0.47) and smallest for H3K4me3, H3K4me2 and
+H3K9ac (0.13 to 0.18).
+
+On the unseen cells the methylation modes fail. seq_meth reaches a positive R2
+only for H3K36me3 (0.16), meth alone for none (-4.9 to -94), against boosting
+with 7 of 13 positive for seq+meth (e.g. H3K4me2 0.59, H3K36me3 0.54, H3K9ac
+0.48); the CNN's seq_meth is below the boosting value in 13 of 13 marks on the
+mean of the two cells, and below the sequence-only CNN in 13 of 13 marks. The
+Pearson shows where: on HMEC seq_meth keeps 0.74 median over marks (above seq
+0.58; R2 above seq in 8 of 11 marks, tied in 1, below in 2) and on K562 it
+collapses to 0.34 (meth alone -0.20; seq_meth correlates negatively for 3 of
+13 marks and between 0 and 0.1 for 3 more, meth alone negatively for 11 of 13),
+so the summary over two cells is dominated by K562. A cell-agnostic
+sequence model therefore transfers to new cells, and the methylation inputs of
+this v1 model do not transfer to K562; the cause was not diagnosed in this run
+(the two cells are the only evidence; K562 is a leukaemia line and its
+methylation distribution may lie outside the seven training cells, which was not
+tested). A follow-up run is in progress that normalises the methylation inputs
+per cell.
+
+Limitations. (1) The number of independent cells is 2 for the unseen scheme
+(K562, HMEC), 1 for RAD21 and SMC3 (HMEC lacks them), and 7 for the seen scheme
+(CTCF 6, RAD21 5, SMC3 4, where GM23248, CD14+ monocyte or H1 lack the track);
+no interval over cells can be given. The `n_cells` and `n_independent_cells`
+columns of `seq_cnn_summary.csv` show 7 and 2 for every mark because they count
+the empty rows of cells without the track (n_bins 0); the medians skip those
+rows, the counts above are from the non-empty rows. (2) No ENCODE blacklist was
+used (the run logged a warning that no blacklist file was present; only bins with
+an N were excluded), against the method text above that excludes blacklisted
+bins; blacklisted regions with extreme signal remain in training and test. (3)
+One training run per mode, no seed repeat and no interval; the validation
+Pearson of the seq mode swings between 0.41 and 0.55 in the first 9000 steps and
+stays at 0.535 to 0.549 from step 10000 on, and the checkpoint is chosen on it
+(best 0.5511 at step 8000), so single-run differences of a few hundredths in R2
+are not resolved.
+(4) The CNN is scored on chr6, 8, 10, 12, 14, 16, 18, 20, 22, section 41 on all
+even chromosomes (chr2 and chr4 are the CNN's validation chromosomes), so the
+CNN and boosting columns are not on identical bins. (5) The seen-cell scores
+use cells whose other chromosomes were trained on; the scheme tests new
+positions, not new cells. (6) R2 on unseen cells contains the cell-specific
+scale and bias (section 41, part 4); the Pearson columns are given for that
+reason. (7) Only the v1 model was run: no cell embedding, no hold-out of a
+training cell, no 1 kb resolution, and no Poisson loss.
+
+## 43. Methylation-aware directed CTCF motif planes (FINAL for all-track input; sparse input in section 44)
 
 Question. Section 41 found that CpG methylation inside the CTCF motif lowers the
 CTCF ChIP height beyond the motif score (partial Spearman -0.46 to -0.68 with the
@@ -4470,7 +4746,82 @@ Runs (scheduler-style names, `scripts/multicell_expanded.py`):
 consensus, track dropout 0.5, the 12 training cells, the nine WGBS cells carry
 Meth and CpG as in all12refres_drop_meth), caches `mc_all12refres_drop_motifmeth_<k>kb`,
 queued in `scripts/gpu_queue_extra.py` (block a) with the standard evaluation, so
-the rows land in `reference_summary.csv`. Results: pending.
+the rows land in `reference_summary.csv`.
+
+Results (`/mnt/processed/wolffjoa/hic-multiome/runs/multicell_reference/
+reference_summary.csv` and `reference_compare.csv`, read 2026-10-10; the copies
+in `results/multicell_reference/` predate these runs). Training stopped at
+epoch 49 (best validation Pearson 0.9380) at 25 kb against epoch 62 (0.9401) for
+all12refres_drop_25kb, and at epoch 72 (0.9126) at 10 kb against epoch 69
+(0.9123) for all12refres_drop_10kb and 69 (0.9125) for all12refres_drop_meth_10kb.
+Median Pearson on the 413 Akita test regions over the 12 training cells and
+over the five held-out cells (K562, HMEC, HUVEC, and the deeper maps HMEC deep
+and HUVEC deep, scored as separate cells):
+
+| res | model | 12 training cells | 5 held-out cells | held-out cells above the consensus |
+|---|---|---|---|---|
+| 25 kb | consensus alone | 0.9223 | 0.8977 | |
+| 25 kb | all12refin_drop | 0.9362 | 0.9137 | 2/5 |
+| 25 kb | all12refres_drop | 0.9358 | 0.9072 | 1/5 |
+| 25 kb | all12refres_drop_motifmeth | 0.9322 | 0.8949 | 1/5 |
+| 10 kb | consensus alone | 0.8867 | 0.8586 | |
+| 10 kb | all12refin_drop | 0.9266 | 0.9028 | 4/5 |
+| 10 kb | all12refres_drop | 0.9270 | 0.8972 | 4/5 |
+| 10 kb | all12refres_drop_meth (Meth track only) | 0.9270 | 0.8834 | 2/5 |
+| 10 kb | all12refres_drop_motifmeth | 0.9307 | 0.8870 | 4/5 |
+
+No 25 kb model with the Meth track alone exists (section 35), so at 25 kb the
+comparison is with the model without any methylation input.
+
+Held-out cells, median Pearson per cell (25 kb: consensus / all12refres_drop /
+motifmeth; 10 kb: consensus / all12refres_drop / meth / motifmeth):
+
+| cell | 25 kb | 10 kb |
+|---|---|---|
+| K562 | 0.8972 / 0.9213 / 0.9246 | 0.8586 / 0.9053 / 0.9064 / 0.9071 |
+| HMEC | 0.8977 / 0.8836 / 0.8853 | 0.8094 / 0.8089 / 0.8019 / 0.8082 |
+| HMEC deep | 0.9324 / 0.9149 / 0.9192 | 0.9065 / 0.9081 / 0.9048 / 0.9113 |
+| HUVEC | 0.8869 / 0.8802 / 0.8651 | 0.7689 / 0.7840 / 0.7765 / 0.7755 |
+| HUVEC deep | 0.9159 / 0.9072 / 0.8949 | 0.8836 / 0.8972 / 0.8834 / 0.8870 |
+
+Reading. With all 13 ChIP tracks present the planes do not improve the
+prediction. Against the model without them the held-out median is lower by
+0.0123 at 25 kb and 0.0102 at 10 kb, the training-cell median lower by 0.0036
+at 25 kb and higher by 0.0037 at 10 kb, all about the size of the seed noise of
+the median Pearson (0.013, section 15) or smaller. Against the model with the
+Meth track alone (10 kb) the planes add 0.0036 on the held-out median and
+0.0037 on the training cells. Split by whether the cell has a CpG table (the
+nine WGBS cells: seven training cells, K562, HMEC and HMEC deep), the change
+against the model without planes is median +0.0033 (range +0.0017 to +0.0043)
+at 25 kb and +0.0018 (-0.0007 to +0.0032) at 10 kb on the three held-out cells
+with CpG data, and -0.0137 and -0.0094 on HUVEC and HUVEC deep, which have no
+CpG table and see the unmodified planes with the covered row at 0; on the
+training cells the change is -0.0010 (CpG, 7 cells) and -0.0037 (no CpG, 5
+cells) at 25 kb and +0.0024 and -0.0001 at 10 kb. The held-out median is
+therefore lowered by the two HUVEC maps, in a cell that cannot use the new
+input, while the cells that can use it move by +0.002 to +0.003 at the median.
+Against the Meth track alone (10 kb) the planes change the cells with CpG data
+by +0.0063 (held-out, range +0.0007 to +0.0065) and +0.0028 (training, +0.0004
+to +0.0056). The gains on the CpG cells are below the 0.013 seed noise; the
+HUVEC loss (-0.0151 and -0.0123 at 25 kb, -0.0085 and -0.0102 at 10 kb) is
+above it at 25 kb only. The test of the planes where the
+ChIP tracks are absent is section 44 (pending); the dropout coupling is built
+for that case.
+
+Limitations. One training run per model and resolution, so no estimate of the
+seed noise of these specific differences. The standard evaluation reports the
+Pearson only; no structure measure (insulation, loops, compartments) was
+computed for these two models, so a gain in structure at equal Pearson is not
+excluded. The five held-out cells are three biological cells (K562, HMEC,
+HUVEC), HMEC and HUVEC each counted twice through their deeper maps; the
+CpG-cell subsets have two or three entries per resolution. Only the
+presence of the CpG table separates the HUVEC loss from the planes' effect on
+the other cells in this comparison, not an ablation: no run tests the trained
+model with the planes replaced by the unmodified pair at inference, so the
+data do not show how much the network uses the methylation weighting. The
+10 kb comparison with the Meth track alone is the only one that holds the
+rest of the recipe fixed; the 25 kb baseline has no Meth track, so that
+difference combines the Meth track and the planes.
 
 ## 44. Sparse input sets without the consensus, with and without Meth (PENDING, queued)
 
