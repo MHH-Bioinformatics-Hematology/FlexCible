@@ -1,0 +1,10 @@
+term,weight,run,combined_rank_score,pearson,scc,insulation_corr,boundary_f1,loop_enrich_corr,loop_apa_ratio,compartment_corr,eigenvector_abs_corr
+insul,0.1000,all12refin_drop_insul_w0p1_25kb,1.0000,0.9433,0.9386,0.9670,1.0000,0.9011,0.8676,0.9517,0.9772
+insul,0.3000,all12refin_drop_insul_w0p3_25kb,0.0000,0.9392,0.9341,0.9660,1.0000,0.8953,0.8301,0.9483,0.9752
+insul,1.0000,all12refin_drop_insul_w1_25kb,0.5000,0.9397,0.9351,0.9665,1.0000,0.8952,0.8401,0.9468,0.9758
+donut,0.1000,all12refin_drop_donut_w0p1_25kb,0.1250,0.9414,0.9366,0.9646,1.0000,0.8970,0.8638,0.9502,0.9763
+donut,0.3000,all12refin_drop_donut_w0p3_25kb,0.6250,0.9432,0.9390,0.9665,1.0000,0.9019,0.8857,0.9507,0.9767
+donut,1.0000,all12refin_drop_donut_w1_25kb,0.7500,0.9437,0.9399,0.9674,1.0000,0.9055,0.8299,0.9516,0.9768
+compart,0.1000,all12refin_drop_compart_w0p1_25kb,0.6250,0.9400,0.9351,0.9654,1.0000,0.8973,0.8855,0.9484,0.9763
+compart,0.3000,all12refin_drop_compart_w0p3_25kb,0.8750,0.9414,0.9374,0.9670,1.0000,0.8976,0.8874,0.9510,0.9772
+compart,1.0000,all12refin_drop_compart_w1_25kb,0.0000,0.9358,0.9284,0.9613,1.0000,0.8887,0.8641,0.9474,0.9750
