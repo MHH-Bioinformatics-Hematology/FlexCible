@@ -71,11 +71,21 @@ CT_PATIENTS = ["018", "027", "168", "270", "472", "546", "629", "773", "1360", "
 CTCF_PATIENTS = ["018", "027", "168", "270", "472", "546", "629", "773"]   # CTCF + K27ac + me3 + WGBS
 WGBS_ONLY = ["1071", "1324", "260", "424", "496", "504", "566", "798", "838", "933"]
 LOOP_PATIENTS = CT_PATIENTS + WGBS_ONLY
+# Registry sections 50 and 54: xu_103, xu_673, xu_576 are healthy PBMC donors; 168/496 are two samples of
+# one leukaemia and 260/424 probably too (results/aml_duplicate_check/). Both corrections are on by default
+# (--exclude-healthy, --group-donors); the opposite flags reproduce section 47.
+HEALTHY = ["103", "673", "576"]
+DONOR_GROUPS = {"168": "168+496", "496": "168+496", "260": "260+424", "424": "260+424"}
 MARKS = ["H3K27ac", "H3K27me3", "CTCF"]
 CHROMS = [f"chr{i}" for i in range(1, 23)] + ["chrX"]
 SEED = 0
 E_MIN = 0.6            # log2 donut enrichment of a shared loop in the patient and in the HSPC consensus
 MOTIF_FRAC = 0.70      # CTCF PWM hit threshold (fraction of the maximal log-odds score)
+
+
+def donor_of(p: str, group: bool = True) -> str:
+    """Donor unit of a sample: the two samples of one leukaemia share a label (fold unit)."""
+    return DONOR_GROUPS.get(p, p) if group else p
 
 
 def log(msg: str) -> None:
@@ -1113,10 +1123,14 @@ def run_experiment(F, sub, name, kind, negset, pats, desc, args):
     if d.empty:
         return None
     y = d.y.values.astype(int)
-    pt = d.patient.values
+    pt = np.array([donor_of(p, args.group_donors) for p in d.patient.values])   # fold and bootstrap unit
     n_pos, n_neg = int(y.sum()), int((1 - y).sum())
-    log(f"[model] {name}: {len(pats)} patients, {n_pos} positives, {n_neg} negatives, {len(cols)} features")
-    gmap = dict(zip(sub.patient, sub.subtype))
+    log(f"[model] {name}: {len(pats)} patients, {len(np.unique(pt))} donor units, {n_pos} positives, {n_neg} negatives, {len(cols)} features")
+    gmap = {}
+    for q, st in zip(sub.patient, sub.subtype):        # subtype per fold unit (donor); a unit takes the
+        u = donor_of(q, args.group_donors)             # first recognised fusion among its samples
+        if u not in gmap or (gmap[u].startswith("unclassified") and not st.startswith("unclassified")):
+            gmap[u] = st if not st.startswith("unclassified") else f"unclassified_{u}"
     keys = row_keys(d)
     folds = {"lopo": make_folds(pt, keys=keys), "lopo_plain": make_folds(pt), "lso": make_folds(pt, gmap, keys=keys)}
     X = d[cols].values.astype(float)
@@ -1144,7 +1158,7 @@ def run_experiment(F, sub, name, kind, negset, pats, desc, args):
             rng = np.random.default_rng(5)
             dd = np.array([np.nanmean([pf[q] - pdist[q] for q in rng.choice(up, len(up))]) for _ in range(args.boot)])
             rec = {"experiment": name, "kind": kind, "negatives": negset, "model": model, "cv": cv,
-                   "n_patients": len(pats), "n_pos": n_pos, "n_neg": n_neg, "n_features": len(cols),
+                   "n_patients": len(pats), "n_donors": len(np.unique(pt)), "n_pos": n_pos, "n_neg": n_neg, "n_features": len(cols),
                    **{k: v for k, v in m.items() if k != "per_patient"},
                    "dist_auroc_macro": md["auroc_macro"], "dist_auroc_pooled": md["auroc_pooled"],
                    "shuffle_macro_mean": float(nl[:, 0].mean()), "shuffle_macro_p97.5": float(np.percentile(nl[:, 0], 97.5)),
@@ -1234,6 +1248,7 @@ def run_experiment(F, sub, name, kind, negset, pats, desc, args):
             uni.append({"experiment": name, "feature": c, "group": group_of(c), "mean_patient_auroc": float(pa.mean()),
                         "n_patients": len(pa), "n_patients_above_half": int((pa > 0.5).sum())})
     pr = d[["patient", "pair_id", "set", "y", "pair_type"]].copy()
+    pr.insert(1, "donor", pt)
     for (mname, cv), sc in preds.items():
         pr[f"{mname}_{cv}"] = sc
     pr.insert(0, "experiment", name)
@@ -1244,10 +1259,14 @@ def stage_model(args) -> None:
     F = pd.read_csv(OUT / "features.csv.gz", low_memory=False, dtype={"patient": str})
     sub = pd.read_csv(OUT / "subtypes.csv", dtype={"patient": str})
     names = set(args.experiments) if args.experiments else None
+    OUT.mkdir(parents=True, exist_ok=True)
     S, P, I, T, U, PR, CB = [], [], [], [], [], [], []
     for name, kind, negset, pats, desc in EXPERIMENTS:
         if names and name not in names:
             continue
+        if args.exclude_healthy:
+            pats = [p for p in pats if p not in HEALTHY]
+        assert not (args.exclude_healthy and set(F[F.patient.isin(HEALTHY)].patient)), "healthy donor in features"
         r = run_experiment(F, sub, name, kind, negset, pats, desc, args)
         if r is None:
             continue
@@ -1354,7 +1373,20 @@ def main():
     ap.add_argument("--null-reps-lr", type=int, default=30)
     ap.add_argument("--null-reps-gb", type=int, default=15)
     ap.add_argument("--experiments", nargs="*", default=None)
+    ap.add_argument("--exclude-healthy", action=argparse.BooleanOptionalAction, default=True,
+                    help="drop the healthy PBMC donors 103, 673, 576 from every patient list")
+    ap.add_argument("--group-donors", action=argparse.BooleanOptionalAction, default=True,
+                    help="folds and bootstrap over donor units: {168, 496} and {260, 424} are one unit")
+    ap.add_argument("--out", default=None, help="output folder (default results/aml_loop_classifier_v2, "
+                    "_legacy suffix when a flag is switched off; the section 47 folder is never the default)")
     a = ap.parse_args()
+    global OUT
+    OUT = REPO / "results" / (a.out or ("aml_loop_classifier_v2" if a.exclude_healthy and a.group_donors
+                                         else "aml_loop_classifier_v2_legacy"))
+    if a.exclude_healthy:
+        for lst in (CT_PATIENTS, CTCF_PATIENTS, WGBS_ONLY, LOOP_PATIENTS):
+            lst[:] = [p for p in lst if p not in HEALTHY]
+        a.patients = [p for p in a.patients if p not in HEALTHY]
     if "hic" in a.stage:
         stage_hic(a.patients, a.workers)
     if "tracks" in a.stage:

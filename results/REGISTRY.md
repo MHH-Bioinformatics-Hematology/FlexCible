@@ -6008,3 +6008,66 @@ computed). Limits (i) to (viii) of section 46 apply unchanged.
 
 Figures `fig_q1_partial_spearman.png` (103 in blue), `fig_q2_precision_sensitivity.png` (103 last) and
 `fig_q3_insulation.png` (primary variant) in `results/aml_ctcf_methylation_aml_only/`.
+
+
+## 57. Loop classifier of section 47 without healthy donors and with leave-one-donor-out folds (FINAL; recomputation of section 47; section 56 was the last number when this was written)
+
+`scripts/aml_loop_classifier.py` got two flags, `--exclude-healthy` (drops xu_103, xu_673, xu_576 from every patient list)
+and `--group-donors` (folds, bootstrap and per-patient AUROC run over donor units; {168, 496} and {260, 424} are one
+unit; leave-subtype-out unchanged, the subtype of a unit is that of its samples). Both are on by default, the opposite
+flags (`--no-exclude-healthy --no-group-donors`) reproduce section 47 (checked: loops_meth_Ahspc gives 0.820454 and
+plain 0.848212 as in section 47). Output goes to `results/aml_loop_classifier_v2/` (default; `_legacy` suffix when a
+flag is off; the section 47 folder is not touched). All 14 experiments of section 47 were re-run (all stages: the Hi-C and
+track caches are per patient and unchanged, features rebuilt; gradient boosting and logistic regression, locus-disjoint LOPO,
+plain LOPO, LSO, shuffle controls (20 and 10 repetitions), group importance, increments, univariate, pair types, figures).
+
+### Findings about the data
+- The healthy donors never entered section 47's loop and stripe patient lists (103, 673, 576 have no rows in Suppl.
+  Tables 1 and 4; the lists are the 20 AML patients). Rebuilt `features.csv.gz` is identical to section 47's (26,352 rows,
+  `DataFrame.equals` True). The healthy flag is therefore a guard (the model stage asserts that no healthy donor is in the
+  features) and changes no number.
+- 168 and 496 enter the same experiment only in the 18-patient (WGBS) experiments; the 8- and 10-patient experiments contain
+  168 without 496 (496 has no CUT&Tag), 260 and 424 are only in the 18-patient set. The donor grouping therefore changes
+  only `loops_meth_*` (18 samples, 16 donor units, held-out unit = both samples). All other numbers are identical to
+  section 47 to the last digit.
+
+### Before / after (gradient boosting, LOPO locus-disjoint, macro AUROC; patient bootstrap over donor units now)
+| quantity | section 47 | this section |
+|---|---|---|
+| loops all data, A_do, 8 patients (8 donors) | 0.880 | 0.880 [0.853, 0.902] |
+| loops all data, A_full | 0.874 | 0.874 [0.841, 0.903] |
+| loops all data, A_hspc | 0.837 | 0.837 [0.805, 0.865] |
+| loops all data, B_rand | 0.792 | 0.792 [0.760, 0.826] |
+| 10 patients K27ac+K27me3, A_hspc | 0.833 | 0.833 |
+| 18 samples methylation/motif/gene, A_hspc (16 donors) | 0.820 [0.802, 0.840] | 0.822 [0.802, 0.844] |
+| 18 samples, A_do | 0.875 | 0.875 [0.857, 0.891] |
+| 18 samples, B_rand | 0.703 | 0.701 |
+| increment over HSPC state, A_hspc, + own marks (8) | +0.023 | +0.023 [0.018, 0.028] |
+| increment, A_full | +0.015 | +0.015 |
+| increment, A_do | +0.006 | +0.006 [-0.001, 0.012] |
+| increment, 10 patients, A_hspc | +0.015 | +0.015 |
+| increment, 18 samples, methylation + motif, no own marks, A_hspc | +0.007 [0.004, 0.009] | +0.006 [0.003, 0.009] |
+| H3K27ac patient-minus-HSPC, univariate AUROC (A_hspc) | 0.617, 8/8 patients above 0.5 | 0.617, 8/8 donors above 0.5 |
+| pair types A_hspc (pooled): P-E-like / P-S-like | 0.864 / 0.741 | 0.864 / 0.741 |
+| stripes A_hspc / A_full / B_rand | 0.608 / 0.674 / 0.810 | 0.608 / 0.674 / 0.810 |
+| plain LOPO, 18 samples A_hspc (inflated by the partner in training) | 0.848 | 0.850 (still plain patient-wise folds, over donor units) |
+| held-out 168 (A_hspc, 18 samples): sample alone / donor unit | 0.857 (496: 0.787) | 0.822 (unit 168+496) |
+| held-out 260 / 424 (A_hspc): alone / donor unit | 0.755 / 0.798 | 0.766 (unit 260+424) |
+| units remaining | 18 patients | 18 AML samples = 16 donor units (8 and 10 in the CUT&Tag sets, unchanged); 0 healthy donors |
+
+Controls unchanged (distance only 0.50, shuffled labels 0.50). The plain-LOPO row differs from the locus-disjoint row for the
+reason in section 47 (locus memorisation); with the donor unit held out the partner leak is removed in the locus-disjoint
+and in the plain folds alike (plain folds now also hold out both samples; they still allow shared loci of other donors).
+
+### Verdict
+No conclusion of section 47 changes. The headline 8-patient numbers, the increments over the HSPC state (+0.023, +0.015,
++0.006), the gain-of-H3K27ac signal (0.617, 8 of 8) and the pair-type and stripe numbers were never affected: the healthy
+donors were not in the data, and the duplicate pairs were never together in an 8- or 10-sample experiment. Only the
+18-sample methylation experiments were exposed to the partner leak, and they move by at most 0.003 (A_hspc 0.820 to 0.822, A_do
+0.875 to 0.875, B_rand 0.703 to 0.701; plain folds 0.848 to 0.850, 0.905 to 0.903, 0.712 to 0.709). The held-out 168/496 unit scores 0.822
+where 168 alone had 0.857 and 496 0.787, so the single-sample numbers were higher than the unit number. Pooled over units the
+change is negligible because the locus-disjoint folds already removed most shared-anchor information the partner carried. The 18-sample
+experiments now rest on 16 donors. The remaining limit is the "probably" for 260 and 424 (section 54).
+
+Reproduce: `python scripts/aml_loop_classifier.py --stage hic tracks motifs stripes_hic build subtypes model figures --jobs 4
+--workers 4 --null-reps-lr 20 --null-reps-gb 10` (hicdiff env).
