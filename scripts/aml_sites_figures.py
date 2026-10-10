@@ -27,6 +27,17 @@ reference map); GM12878 predicted by the AML-trained model from its own ChIP
 with its leave-one-out consensus.
 
     python scripts/aml_sites_figures.py --stage select predict figures
+
+Version 2 (--v2): adds the AML-inclusive model with the methylation channel
+(all12aml_meth_refin_drop, section 38, Meth the 14th track) as a further
+predicted column, written to figures_v2/ (the figures above stay). Patient Meth
+is the Xu WGBS bigWig (aml/primary/meth/xu_<patient>); where a patient has
+none, the Meth channel is absent (the model was trained with track dropout)
+and the column equals a prediction from the marks alone. A control column
+"AML+Meth model, Meth absent" (same model, Meth withheld) is written for every
+patient, so that the effect of the channel itself is separated from the effect
+of retraining. Prediction needs a GPU (--stage predict --v2); figures need no
+GPU. The v1 outputs are unchanged by this flag.
 """
 from __future__ import annotations
 
@@ -50,6 +61,9 @@ RES = 10000
 WIN = 80
 OUT = mx.HM / "runs/aml_sites"
 FIG = OUT / "figures"
+FIG2 = OUT / "figures_v2"
+METH_RUN = "all12aml_meth_refin_drop_10kb"
+GM_METH = mx.HM / "meth" / "gm12878"
 REPO = ap.REPO
 GAIN = 0.8
 ABSENT = 0.5
@@ -264,7 +278,8 @@ def patient_ref(p: str) -> Path:
 
 
 def run_predict(tag: str, run: str, cell: str, bw: Path, ref: Path, lab: str | None,
-                regions: Path, assay: str, device: str, target: Path) -> Path:
+                regions: Path, assay: str, device: str, target: Path,
+                extra_bw: Path | None = None) -> Path:
     out = OUT / "pred" / tag
     f = out / "w.npz"
     if f.exists():
@@ -278,6 +293,8 @@ def run_predict(tag: str, run: str, cell: str, bw: Path, ref: Path, lab: str | N
            "--save-pred", str(f)]
     if lab is not None:
         cmd += ["--lab", lab]
+    if extra_bw is not None:
+        cmd += ["--extra-bigwig-dir", str(extra_bw)]
     env = dict(os.environ, OMP_NUM_THREADS="3", CUDA_VISIBLE_DEVICES=device)
     with open(out / "run.log", "w") as fh:
         rc = subprocess.run(cmd, cwd=REPO, env=env, stdout=fh, stderr=subprocess.STDOUT).returncode
@@ -289,6 +306,27 @@ def run_predict(tag: str, run: str, cell: str, bw: Path, ref: Path, lab: str | N
 def window_of(r) -> tuple[str, int, int]:
     s = int(r.centre) - WIN // 2 * RES
     return r.chrom, max(0, s), max(0, s) + WIN * RES
+
+
+def patient_meth(p: str) -> Path | None:
+    return at.patient_meth_dir(at.guard(p))
+
+
+def stage_predict_v2(L: pd.DataFrame, device: str) -> None:
+    """AML+Meth model: marks + the patient's WGBS Meth (when it has one), the
+    same model with Meth withheld (control), GM12878 with its Meth."""
+    for p, g in L.groupby("patient"):
+        reg = OUT / "pred" / f"regions_{p}.tsv"
+        if not reg.exists():
+            raise FileNotFoundError(reg)
+        bw, ref, tgt = ap.INP / f"xu_{p}", patient_ref(p), ap.map_path(f"xu_{p}", RES)
+        run_predict(f"meth_{p}", METH_RUN, at.guard(p), bw, ref, "xu", reg, "hic", device, tgt,
+                    extra_bw=patient_meth(p))
+        run_predict(f"methabs_{p}", METH_RUN, at.guard(p), bw, ref, "xu", reg, "hic", device, tgt)
+    reg = OUT / "pred" / "regions_gm12878.tsv"
+    run_predict("meth_gm12878", METH_RUN, "gm12878", mx.CELLS["gm12878"][1],
+                mx.consensus_loo("gm12878", RES), "", reg, "hic", device, GM, extra_bw=GM_METH)
+    log("[predict v2] done")
 
 
 def stage_predict(L: pd.DataFrame, device: str) -> None:
@@ -359,7 +397,7 @@ def band_mean(M, r0, r1, c0, c1) -> float:
     return float(np.nanmean(b)) if b.size and np.isfinite(b).any() else np.nan
 
 
-def locus_data(r, tss_names: str) -> dict | None:
+def locus_data(r, tss_names: str, v2: bool = False) -> dict | None:
     """All panels and numbers of one locus (regular loops and stripes)."""
     import cooler
     from aml_eval import loop_params, pred_matrix
@@ -373,7 +411,11 @@ def locus_data(r, tss_names: str) -> dict | None:
            "hspc": win_matrix(C(ax.hspc_consensus_path(RES)), chrom, s, e),
            "pat_meas": win_matrix(C(ap.map_path(lab, RES)), chrom, s, e),
            "ref": win_matrix(C(patient_ref(p)), chrom, s, e)}
-    for nm, tag in (("pat_aml", f"aml_{p}"), ("pat_base", f"base_{p}"), ("gm_pred", "aml_gm12878")):
+    tags = [("pat_aml", f"aml_{p}"), ("pat_base", f"base_{p}"), ("gm_pred", "aml_gm12878")]
+    if v2:
+        tags += [("pat_meth", f"meth_{p}"), ("pat_methabs", f"methabs_{p}"),
+                 ("gm_pred_meth", "meth_gm12878")]
+    for nm, tag in tags:
         z = np.load(OUT / "pred" / tag / "w.npz")
         if key not in z.files:
             return None
@@ -382,6 +424,8 @@ def locus_data(r, tss_names: str) -> dict | None:
         return None
     pan["diff_meas"] = pan["pat_meas"] - pan["gm_meas"]
     pan["diff_pred"] = pan["pat_aml"] - pan["gm_pred"]
+    if v2:
+        pan["diff_pred_meth"] = pan["pat_meth"] - pan["gm_pred_meth"]
     i = (int(r.a1) - s) // RES
     if r.kind == "loop":
         j = (int(r.a2) - s) // RES
@@ -397,10 +441,14 @@ def locus_data(r, tss_names: str) -> dict | None:
         fn = lambda M: band_mean(M, r0, r1, c0, c1)                     # noqa: E731
         mark = {"kind": "stripe", "r0": r0, "r1": r1, "c0": c0, "c1": c1}
     st = {k: fn(pan[k]) for k in ("pat_meas", "hspc", "gm_meas", "ref", "pat_aml", "pat_base",
-                                  "gm_pred")}
+                                  "gm_pred", *(("pat_meth", "pat_methabs", "gm_pred_meth") if v2 else ()))}
     iu = np.triu_indices(WIN, 2)
     q98 = float(np.nanpercentile(np.abs(pan["pat_meas"][iu]), 98))
     return {"key": key, "pan": pan, "mark": mark, "stat": st, "q98": q98, "s": s, "e": e}
+
+
+def _has_meth(p: str) -> bool:
+    return patient_meth(p) is not None
 
 
 def draw_marks(ax_, mark):
@@ -415,7 +463,7 @@ def draw_marks(ax_, mark):
             ax_.add_patch(mp.Rectangle((cc - 0.5, rr - 0.5), w, h, fill=False, ec="k", lw=0.9))
 
 
-def fig_locus(n: int, r, d: dict, title: str, out: Path) -> dict:
+def fig_locus(n: int, r, d: dict, title: str, out: Path, v2: bool = False) -> dict:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -429,8 +477,17 @@ def fig_locus(n: int, r, d: dict, title: str, out: Path) -> dict:
     ref_for = {"gm_meas": "pat_meas", "hspc": "pat_meas", "pat_aml": "pat_meas",
                "pat_base": "pat_meas", "ref": "pat_meas", "gm_pred": "gm_meas",
                "diff_pred": "diff_meas"}
-    fig = plt.figure(figsize=(27, 9.6))
-    gs = GridSpec(3, 9, height_ratios=[4, 2.6, 1.7], hspace=0.55, wspace=0.12, figure=fig)
+    ncol = 9
+    if v2:
+        meth_note = "" if _has_meth(r.patient) else " (no Meth input: channel absent)"
+        cols = (cols[:5] + [("pat_meth", f"patient, AML+Meth model{meth_note}")] + cols[5:7]
+                + [("gm_pred_meth", "GM12878, AML+Meth model")] + cols[7:]
+                + [("diff_pred_meth", "patient minus GM12878,\npredicted, AML+Meth model")])
+        ref_for.update({"pat_meth": "pat_meas", "gm_pred_meth": "gm_meas",
+                        "diff_pred_meth": "diff_meas"})
+        ncol = 12
+    fig = plt.figure(figsize=(27 * ncol / 9, 9.6))
+    gs = GridSpec(3, ncol, height_ratios=[4, 2.6, 1.7], hspace=0.55, wspace=0.12, figure=fig)
     rvals = {}
     for k, (nm, ti) in enumerate(cols):
         a = fig.add_subplot(gs[0, k])
@@ -445,7 +502,7 @@ def fig_locus(n: int, r, d: dict, title: str, out: Path) -> dict:
         else:
             a.set_xlabel(f"colour scale +/-{q:.2f}", fontsize=8)
     # tracks
-    sub = gs[1, 0:4].subgridspec(5, 1, hspace=0.15)
+    sub = gs[1, 0:4 + (v2 * 1)].subgridspec(5, 1, hspace=0.15)
     chrom, s, e = r.chrom, d["s"], d["e"]
     tracks = [("patient H3K27ac", ap.INP / f"xu_{r.patient}" / "H3K27ac.bigwig"),
               ("patient H3K27me3", ap.INP / f"xu_{r.patient}" / "H3K27me3.bigwig"),
@@ -473,10 +530,13 @@ def fig_locus(n: int, r, d: dict, title: str, out: Path) -> dict:
             a.set_xticklabels([f"{(s + t * RES) / 1e6:.2f}" for t in (0, 20, 40, 60, 79)], fontsize=6)
             a.set_xlabel(f"{chrom} (Mb), 10 kb bins, log1p of the track on its own scale", fontsize=6)
     # per-distance strip
-    ad = fig.add_subplot(gs[1, 4:7])
-    for nm, ti, col, ls in (("pat_aml", "AML-trained", "#2a78d6", "-"), ("pat_base", "no AML data", "#eb6834", "-"),
-                            ("ref", "AML reference", "#e87ba4", "--"), ("hspc", "HSPC", "#52514e", ":"),
-                            ("gm_meas", "GM12878", "#1baf7a", ":")):
+    ad = fig.add_subplot(gs[1, 4 + v2 * 2:7 + v2 * 2])
+    curves = [("pat_aml", "AML-trained", "#2a78d6", "-"), ("pat_base", "no AML data", "#eb6834", "-"),
+              ("ref", "AML reference", "#e87ba4", "--"), ("hspc", "HSPC", "#52514e", ":"),
+              ("gm_meas", "GM12878", "#1baf7a", ":")]
+    if v2:
+        curves.insert(2, ("pat_meth", "AML+Meth", "#7b3fb0", "-"))
+    for nm, ti, col, ls in curves:
         x, y = dist_curve(pan[nm], pan["pat_meas"])
         ad.plot(x, y, color=col, ls=ls, lw=1.3, label=ti)
     ad.set_xlabel("distance (kb)", fontsize=7)
@@ -486,7 +546,7 @@ def fig_locus(n: int, r, d: dict, title: str, out: Path) -> dict:
     ad.legend(fontsize=6, frameon=False, ncol=2)
     ad.grid(alpha=0.25, lw=0.5)
     # numbers
-    at_ = fig.add_subplot(gs[1, 7:9])
+    at_ = fig.add_subplot(gs[1, 7 + v2 * 2:ncol])
     at_.axis("off")
     st = d["stat"]
     unit = "log2 donut enrichment at the loop pixel" if r.kind == "loop" else "mean log O/E of the stripe band"
@@ -498,11 +558,22 @@ def fig_locus(n: int, r, d: dict, title: str, out: Path) -> dict:
            f"predicted minus AML reference: AML-trained {st['pat_aml'] - st['ref']:.2f}, "
            f"no AML data {st['pat_base'] - st['ref']:.2f}\n"
            f"GM12878 predicted {st['gm_pred']:.2f}")
+    if v2:
+        txt += (f"\nAML+Meth model: predicted gain over HSPC {st['pat_meth'] - st['hspc']:.2f}, "
+                f"minus AML reference {st['pat_meth'] - st['ref']:.2f}\n"
+                f"  Meth withheld (control): gain {st['pat_methabs'] - st['hspc']:.2f}; "
+                f"GM12878 predicted {st['gm_pred_meth']:.2f}\n"
+                f"  patient Meth input: {'WGBS present' if _has_meth(r.patient) else 'ABSENT'}")
     at_.text(0, 1, txt, va="top", fontsize=8, family="monospace")
     fig.suptitle(title, fontsize=11, y=0.985)
     fig.savefig(out, dpi=110, bbox_inches="tight")
     plt.close(fig)
     arrs = {f"map_{k}": v.astype(np.float32) for k, v in pan.items()}
+    if v2:
+        meth_bw = patient_meth(r.patient)
+        mv = track_vals(meth_bw / "Meth.bigwig", chrom, s, e) if meth_bw is not None else None
+        if mv is not None:
+            tvals["patient Meth (log1p)"] = mv
     arrs.update({f"track_{k}": v for k, v in tvals.items()})
     arrs.update({"q98": np.array(q), "window": np.array([chrom, s, e], dtype=object)})
     np.savez_compressed(out.with_suffix(".npz"), **arrs, allow_pickle=True)
@@ -555,7 +626,7 @@ def sv_locus() -> dict:
     return {"crop": crop, "q98": q, "pix": (ie, ig)}
 
 
-def fig_sv(out: Path) -> dict:
+def fig_sv(out: Path, v2: bool = False) -> dict:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -567,7 +638,8 @@ def fig_sv(out: Path) -> dict:
              ("hspc", "HSPC consensus measured\n(no inversion; junction block not defined)"),
              ("pat_meas", "patient 629 measured\n(derivative allele coordinates)"),
              ("pat_pred", "patient 629 predicted by the model\nwithout AML data, derivative allele"),
-             (None, "AML-trained model\nnot run on derivative alleles")]
+             (None, ("AML-trained and AML+Meth models\nnot run on derivative alleles" if v2
+                     else "AML-trained model\nnot run on derivative alleles"))]
     r_all = r_x = np.nan
     for a, (k, ti) in zip(axes, items):
         a.set_xticks([]); a.set_yticks([])
@@ -609,18 +681,23 @@ def fig_sv(out: Path) -> dict:
             "neoloop_pred_honest": float(jn.loc["all12honest_drop_10kb", "neoloop_pred_enrich_median"])}
 
 
-def fig_summary(rows: pd.DataFrame, out: Path) -> None:
+def fig_summary(rows: pd.DataFrame, out: Path, v2: bool = False) -> pd.DataFrame:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.6))
-    lim = (rows[["gain_meas", "gain_aml", "gain_base"]].min().min() - 0.2,
-           rows[["gain_meas", "gain_aml", "gain_base"]].max().max() + 0.2)
-    for a, col, ti in ((axes[0], "gain_aml", "AML-trained model"), (axes[1], "gain_base", "model without AML data")):
+    panels = [("gain_aml", "AML-trained model"), ("gain_base", "model without AML data")]
+    if v2:
+        panels.append(("gain_meth", "AML+Meth model"))
+    cc = ["gain_meas"] + [c for c, _ in panels]
+    fig, axes = plt.subplots(1, len(panels), figsize=(5 * len(panels), 4.6))
+    lim = (rows[cc].min().min() - 0.2, rows[cc].max().max() + 0.2)
+    stats = []
+    for a, (col, ti) in zip(np.atleast_1d(axes), panels):
         for r in rows.itertuples():
             a.scatter(r.gain_meas, getattr(r, col), s=60,
                       c="#2a78d6" if r.kind == "loop" else "#eb6834",
-                      marker="o" if r.heldout else "s", ec="k", lw=0.5)
+                      marker="o" if r.heldout else "s", ec="k", lw=0.5,
+                      hatch=None if (not v2 or getattr(r, "has_meth", True)) else "///")
             a.annotate(r.name, (r.gain_meas, getattr(r, col)), fontsize=6, xytext=(3, 3),
                        textcoords="offset points")
         a.plot(lim, lim, "k:", lw=0.8)
@@ -632,21 +709,29 @@ def fig_summary(rows: pd.DataFrame, out: Path) -> None:
         rho = np.corrcoef(rows.gain_meas[ok], rows[col][ok])[0, 1] if ok.sum() > 3 else np.nan
         a.set_title(f"{ti} (r = {rho:.2f}, n = {int(ok.sum())})", fontsize=9)
         a.grid(alpha=0.25, lw=0.5)
+        stats.append({"model": col, "pearson_r": rho,
+                      "spearman_rho": float(rows.gain_meas[ok].rank().corr(rows[col][ok].rank())),
+                      "n": int(ok.sum()), "mean_pred_gain": float(rows[col][ok].mean()),
+                      "mean_meas_gain": float(rows.gain_meas[ok].mean()),
+                      "rmse": float(np.sqrt(((rows[col][ok] - rows.gain_meas[ok]) ** 2).mean()))})
     fig.suptitle("Seven AML-specific loops and stripes: measured against predicted gain. "
                  "Blue loops, orange stripes; circles held-out patients, squares training patients",
                  fontsize=8)
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     plt.close(fig)
+    return pd.DataFrame(stats)
 
 
-def stage_figures() -> None:
-    FIG.mkdir(parents=True, exist_ok=True)
+def stage_figures(v2: bool = False) -> None:
+    fig_dir = FIG2 if v2 else FIG
+    sfx = "_v2" if v2 else ""
+    fig_dir.mkdir(parents=True, exist_ok=True)
     P = pd.read_csv(OUT / "chosen.csv", dtype={"patient": str})
     P["genes"] = P.genes.fillna("")
     rows = []
     for n, r in enumerate(P.itertuples(), 1):
-        d = locus_data(r, r.genes)
+        d = locus_data(r, r.genes, v2)
         if d is None:
             log(f"[skip] locus {n}")
             continue
@@ -659,20 +744,28 @@ def stage_figures() -> None:
                  f"{tier}; GM12878 predictions come from a training cell")
         name = (f"{n:02d}_{r.slot.replace(' ', '_')}_{gene}_xu{r.patient}"
                 .replace(";", "_").replace(" ", "_").replace(":", ""))
-        rec = fig_locus(n, r, d, title, FIG / f"{name}.png")
+        rec = fig_locus(n, r, d, title, fig_dir / f"{name}.png", v2)
         st = d["stat"]
         rec.update({"name": f"{gene} ({r.patient})", "slot": r.slot, "kind": r.kind, "patient": r.patient,
                     "heldout": held, "gene": gene, "chrom": r.chrom, "a1": r.a1, "a2": r.a2,
                     "gain_meas": st["pat_meas"] - st["hspc"], "gain_aml": st["pat_aml"] - st["hspc"],
                     "gain_base": st["pat_base"] - st["hspc"], "gain_aml_over_ref": st["pat_aml"] - st["ref"],
                     "gain_base_over_ref": st["pat_base"] - st["ref"], "tier": getattr(r, "tier", 1)})
+        if v2:
+            rec.update({"gain_meth": st["pat_meth"] - st["hspc"],
+                        "gain_methabs": st["pat_methabs"] - st["hspc"],
+                        "gain_meth_over_ref": st["pat_meth"] - st["ref"],
+                        "gm_pred_meth_minus_gm_pred": st["gm_pred_meth"] - st["gm_pred"],
+                        "has_meth": _has_meth(r.patient)})
         rows.append(rec)
         log(f"[figure] {name}")
     R = pd.DataFrame(rows)
-    sv = fig_sv(FIG / "08_SV_expected_to_fail_HSF4_inv16_xu629.png")
-    R.to_csv(ap.RES_DIR / "sites_loci.csv", index=False)
-    pd.DataFrame([sv]).to_csv(ap.RES_DIR / "sites_sv_locus.csv", index=False)
-    fig_summary(R, FIG / "summary_measured_vs_predicted_gain.png")
+    sv = fig_sv(fig_dir / "08_SV_expected_to_fail_HSF4_inv16_xu629.png", v2)
+    R.to_csv(ap.RES_DIR / f"sites_loci{sfx}.csv", index=False)
+    pd.DataFrame([sv]).to_csv(ap.RES_DIR / f"sites_sv_locus{sfx}.csv", index=False)
+    C = fig_summary(R, fig_dir / "summary_measured_vs_predicted_gain.png", v2)
+    if v2:
+        C.to_csv(ap.RES_DIR / "sites_gain_corr_v2.csv", index=False)
     log("[figures] done")
 
 
@@ -681,15 +774,18 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--stage", nargs="+", required=True, choices=["select", "predict", "figures"])
     a.add_argument("--device", default="0")
+    a.add_argument("--v2", action="store_true",
+                   help="add the AML+Meth model column (predict: only the new predictions; "
+                        "figures: written to figures_v2/ and sites_*_v2.csv)")
     a = a.parse_args()
     if "select" in a.stage:
         D = stage_select()
         choose(D).to_csv(OUT / "chosen.csv", index=False)
     if "predict" in a.stage:
         P = pd.read_csv(OUT / "chosen.csv", dtype={"patient": str})
-        stage_predict(P, a.device)
+        stage_predict_v2(P, a.device) if a.v2 else stage_predict(P, a.device)
     if "figures" in a.stage:
-        stage_figures()
+        stage_figures(a.v2)
 
 
 if __name__ == "__main__":

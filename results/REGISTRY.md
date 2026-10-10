@@ -3543,6 +3543,45 @@ Three of the seven sites are in held-out patients (773, 270) and four in
 training patients (168, 629, 546); GM12878 predictions come from a training
 cell.
 
+#### 36b-v2. The AML+Meth model as a further predicted column (2026-10-10)
+
+`python scripts/aml_sites_figures.py --stage predict --v2` (inference of all12aml_meth_refin_drop_10kb
+of section 38 on the 80-bin windows of the 5 site patients and GM12878; run on the remote RTX 4090,
+under 1 GB of GPU memory) and `--stage figures --v2` (figures in
+`/mnt/processed/wolffjoa/hic-multiome/runs/aml_sites/figures_v2/`, same file names as the published
+ones; the published figures are unchanged; numbers in `results/aml_primary/sites_loci_v2.csv`,
+`sites_sv_locus_v2.csv`, `sites_gain_corr_v2.csv`). The old columns reproduce the published values
+exactly (maximum difference 0.0). All five site patients (773, 168, 629, 546, 270) have the Xu WGBS Meth
+bigWig, so the Meth channel is present for every site; a control with Meth withheld (same model, the
+channel absent as in training under track dropout; column gain_methabs) separates the channel from
+retraining. GM12878 is predicted with its own Meth. The SV locus is not rerun (no derivative-allele
+prediction with this model).
+
+Gain over HSPC (log2 donut enrichment, or mean log O/E for stripes):
+
+| site | measured | AML-trained | no AML | AML+Meth | AML+Meth, Meth withheld |
+|---|---|---|---|---|---|
+| CIP2A (773, held-out) | 1.03 | 0.56 | 0.58 | 0.44 | 0.40 |
+| CLEC4O (773, held-out) | 0.80 | 0.02 | -0.05 | -0.01 | -0.02 |
+| CLECL1 (168) | 1.21 | 0.29 | 0.34 | 0.42 | 0.27 |
+| KLF4 (629) | 0.90 | 0.35 | 0.38 | 0.36 | 0.34 |
+| LNX2 (546) | 1.02 | 0.17 | 0.16 | 0.17 | 0.15 |
+| stripe chr13 31.44-31.76 Mb (270, held-out) | 0.89 | 0.17 | 0.19 | 0.49 | 0.39 |
+| stripe chr11 75.88-76.16 Mb (270, held-out) | 0.61 | 0.09 | 0.07 | 0.10 | 0.07 |
+| mean over the 7 | 0.92 | 0.24 | 0.24 | 0.28 | 0.23 |
+
+Pearson r of measured against predicted gain over the 7 sites: AML-trained 0.555, no AML 0.606, AML+Meth
+0.578, Meth withheld 0.511 (Spearman 0.71, 0.71, 0.54); RMSE 0.71, 0.70, 0.66. The methylation variant
+moves the predicted gain by more than 0.1 at three sites (stripe chr13 +0.32, CLECL1 +0.13, CIP2A -0.12 against
+the AML-trained model) and by 0.02 or less at the other four; it leaves the under-prediction of the
+gains unchanged (all models predict about a quarter of the measured gain). GM12878 prediction at the
+loop or stripe differs by at most 0.12 between the AML-trained and the AML+Meth model. Limits: 7 sites
+(r differences of 0.03 to 0.1 are far inside the noise), 3 held-out patients but only 773 and 270 contribute
+5 of the 7 sites, 4 sites are in training patients, GM12878 is a training cell, the sites were chosen
+for AML specificity and strong gain, the stripe gain is a band mean and not a pixel, and the SV
+case (inv(16), HSF4) is expected to fail and is not rerun. The v2 figures were viewed (stripe 6 and
+the summary).
+
 ## 37. Chromosome-held-out final models (FINAL for refin_drop and honest_drop; refres_drop rescoring running)
 
 Question: how do the headline recipes compare with the published predictors
