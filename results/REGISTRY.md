@@ -5858,3 +5858,153 @@ Status: operators fitted, 25 kb cache built, 60-step CPU smoke on the real 25 kb
 windows augmented), unit tests `tests/test_cohesin_fix.py` (8) and the full suite (187 passed) pass; 10 kb
 cache in progress. Trainings are queued as `results/cohesin_fix/REMOTE_JOB.md` (0.6 GPU hours for the two
 main runs, 1.2 with the ablation) and wait for the GPU. Results: pending.
+
+## 56. CTCF binding, motif methylation and insulation in the Xu et al. AML patients without the healthy donor (FINAL; recomputation of section 46; section 55 was the last number when this was written)
+
+`scripts/aml_ctcf_methylation.py` with the new flag `--exclude-healthy` (default) and
+`--include-healthy` (original section 46 behaviour), tables and figures in
+`results/aml_ctcf_methylation_aml_only/` (CPU only; `results/aml_ctcf_methylation/` is untouched).
+Reason: section 50 found that xu_103 is a healthy PBMC donor (also xu_576 and xu_673; 673 has no
+CUT&Tag), so section 46 pooled 8 AML patients plus one healthy donor. All stages (q1, q2, q3) were
+rerun with every definition and sensitivity setting of section 46 (same thresholds, same 18-definition
+grid, same coverage filters, same control matching, same bootstrap sizes) over the 8 AML patients
+018, 027, 168, 270, 472, 546, 629, 773. Sample 103 is a separate healthy-donor row in the per-sample
+tables and enters no pooled number. `--include-healthy --out <dir>` reproduces every number of
+section 46 exactly (all q1, q2 and q3 tables compared, maximum difference 0.0, including the bootstrap
+intervals).
+
+### 1. Before and after (even chromosomes for q1; all autosomes for q2 and q3)
+
+Before = section 46 tables (9 samples incl. 103), after = this section (8 AML patients). Intervals are
+chromosome bootstrap 95 percent intervals. The pre-set insulation interval is quoted from
+`q3_insulation_summary.csv` (-0.0016), section 46 text rounded it to -0.003.
+
+| quantity | before (9 incl. 103) | after (8 AML) |
+|---|---|---|
+| pooled median partial Spearman, given strength | -0.37 (-0.40 to -0.33) | -0.32 (-0.35 to -0.29) |
+| same, mean over samples | -0.36 | -0.36 |
+| + H3K27ac / + flank | -0.30 / -0.14 | -0.25 / -0.13 |
+| without 773, given strength | -0.32 (-0.35 to -0.30) | -0.27 (-0.31 to -0.24), 7 patients |
+| relative risk, definition A | 2.19 (1.80 to 2.52) | 2.13 (1.75 to 2.45) |
+| relative risk, definition B | 2.91 (2.39 to 3.44) | 2.89 (2.38 to 3.41) |
+| precision A / B | 0.43 / 0.47 | 0.44 / 0.48 |
+| sensitivity A / B | 0.063 / 0.082 | 0.067 / 0.089 |
+| relative risk A without 773 / B without 773 | 2.07 / 2.57 | 2.00 / 2.54 |
+| gain-and-lost sites A / B (pooled) | 208 / 226 | 204 / 223 |
+| gain-kept A (pooled) | 274 | 265 |
+| 18-definition grid: relative risk range; sensitivity range; gain-and-lost range | 1.92 to 4.08; 0.045 to 0.11; 80 to 511 | 1.90 to 4.03; 0.047 to 0.12; 78 to 497 |
+| reference depth >= 20 / >= 40 reads, relative risk (gain sites) | 2.60 (84) / 4.35 (6) | 2.52 (83) / 4.34 (6) |
+| lost sites with no motif CpG; testable; testable with gain (A) | 26,809 of 38,441; 3,299; 208 (6.3 %) | 23,890 of 34,476; 3,043; 204 (6.7 %) |
+| same-assay check (vs other patients), pooled relative risk | 1.33 | 1.29 |
+| insulation, A, w = 10: test sites; paired difference | 195; +0.028 (-0.002 to +0.058) | 191; +0.027 (-0.003 to +0.057) |
+| same, controls also matched on baseline insulation | 190; +0.028 (+0.003 to +0.053) | 186; +0.026 (+0.001 to +0.052) |
+| insulation, B, w = 10 | 216; +0.026 (-0.002 to +0.053) | 213; +0.025 (-0.003 to +0.052) |
+| insulation, A, w = 5; matched; B | +0.032 (-0.001 to +0.062); +0.035 (+0.010 to +0.059); +0.033 (+0.004 to +0.063) | +0.030 (-0.004 to +0.061); +0.032 (+0.006 to +0.057); +0.032 (+0.003 to +0.061) |
+| against gain-kept controls, A, w = 10 / w = 5 | +0.023 / +0.001 | +0.023 (-0.011 to +0.057) / -0.001 |
+| lost without gain (A, w = 10) | -0.005 (-0.016 to +0.006), 2,688 sites | -0.003 (-0.014 to +0.007), 2,470 sites |
+| gain with CTCF kept (A, w = 10) | -0.028 (-0.042 to -0.012) | -0.028 (-0.042 to -0.012) |
+
+Per patient values of section 46 for the 8 AML patients are unchanged (q1 given strength 018 -0.18, 027
+-0.58, 168 -0.27, 270 -0.18, 472 -0.25, 546 -0.51, 629 -0.37, 773 -0.52; relative risk A 027 9.9, 773
+6.7, 546 5.7, 629 3.3, 472 1.7, 018 1.7, 168 1.5, 270 1.2; insulation A w = 10 546 +0.076, 018 +0.065,
+773 +0.032, 027 +0.019, 168 +0.017, 629 -0.024, 472 -0.035, 270 -0.057). The pooled median drops by 0.05
+because 103 (-0.39) was above the middle of the nine values; the median of eight is the mean of the
+fourth and fifth value. All eight intervals exclude 0 (formerly nine). Against the non-AML cells
+(-0.60) the gap widens from 0.23 to 0.28.
+
+### 2. Healthy donor 103 as a separate row (same definitions, CD14+ / CD34+ references)
+
+| quantity | 103 | AML pooled |
+|---|---|---|
+| partial Spearman given strength (even chr) | -0.395 (-0.42 to -0.36) | median -0.32 |
+| median log1p CTCF height, motif methylation < 0.2 / > 0.8 | 0.87 / 0.33 | 027 1.87 / 0.31, 018 0.47 / 0.42 |
+| gain-and-lost sites A / B | 4 / 3 | 204 / 223 |
+| relative risk A / B | 2.19 (0.0 to 4.09) / 1.75 (0.0 to 3.63) | 2.13 / 2.89 |
+| sensitivity A / B | 0.02 / 0.01 | 0.067 / 0.089 |
+| testable lost sites with a methylation gain (A) | 4 of 256 (1.6 %) | 204 of 3,043 (6.7 %) |
+| same-assay relative risk vs median of the 8 AML | 2.40 (10 gain-and-lost) | 1.29 |
+| insulation gain-and-lost vs no-gain, A, w = 10 | +0.082 (4 sites, no interval) | +0.027 |
+
+In the normal cell the methylation-CTCF association is as strong as in the AML patients with moderate
+CUT&Tag quality (-0.39), but the number of sites that gain methylation relative to monocytes and lose
+CTCF is 4, so the 2x2 and insulation numbers of 103 carry no information.
+
+### 3. Is the healthy reference (CD14+ WGBS, CD34+ CTCF ChIP-seq) still appropriate, and is 103 better matched?
+
+Rank agreement between each AML patient and each candidate reference (even chromosomes,
+`refcheck_*.csv`, descriptive).
+
+| comparison | result |
+|---|---|
+| CTCF height of patient vs CD34+ ChIP-seq (Spearman, 35,205 sites) | 0.15 to 0.52, median 0.27 |
+| CTCF height of patient vs 103 CUT&Tag | 0.18 to 0.34, median 0.25 |
+| CTCF height of patient vs median of the other AML patients | 0.25 to 0.57 |
+| 103 CUT&Tag vs CD34+ ChIP-seq | 0.33 |
+| motif methylation of patient vs CD14+ WGBS (1,810 to 1,824 sites) | 0.82 to 0.87 |
+| motif methylation of patient vs 103 WGBS (6.1 thousand sites) | 0.83 to 0.86 |
+| 103 WGBS vs CD14+ WGBS (1,828 shared sites) | 0.87; mean difference -0.003; 3.9 % differ by >= 0.3 |
+| insulation profile Pearson r (w = 10) patient vs HSPC mean / PBMC mean (576, 673, 103) / 576 alone | 0.77 to 0.92 / 0.77 to 0.86 / 0.76 to 0.84 |
+| HSPC mean vs PBMC mean insulation profile | r = 0.84 (w = 10), 0.80 (w = 5) |
+
+For methylation the two references agree (103 and CD14+ are interchangeable at the motif CpGs); 103
+covers 3.4 times more motif sites because the CD14+ table is restricted to >= 10 reads, but 103 has no read
+counts either. For CTCF, the CD34+ ChIP-seq predicts the patient CTCF rank at least as well as 103 and
+clearly better for the three patients with good CUT&Tag (027 0.52 vs 0.34, 546 0.46 vs 0.33, 773 0.47
+vs 0.32); the other five patients are equal within 0.05. 103 is a single donor of a lymphocyte-dominated
+mixture, so site-specific donor and lineage differences cannot be separated from noise. The same
+laboratory and assay does not make 103 the better CTCF reference, the CTCF height of 103 has the same
+low signal-to-noise as the weak patients (height vs strength 0.22). Conclusion: CD14+ / CD34+ stays the
+primary reference; 103 is reported as a labelled variant. For insulation the HSPC maps are closer to 6 of
+the 8 patients at both window sizes (PBMC closer only for 270 and 629), so HSPC stays the Hi-C baseline;
+the healthy PBMC Hi-C maps (GSM4604271 = xu_576, GSM4604272/73 = xu_103 and xu_673) exist in
+`aml/oe/` and are used as extra baseline variants (for patient 103 itself the baseline is 576 and 673).
+
+Variants (all labelled `variant` in the tables; 8 AML patients pooled; `q2_variant_d103_*.csv`,
+`q3_insulation_summary.csv`):
+
+| variant | gain-and-lost A / B | relative risk A | relative risk B | sensitivity A / B | grid relative risk range |
+|---|---|---|---|---|---|
+| primary: CD14+ methylation, CD34+ CTCF | 204 / 223 | 2.13 (1.75 to 2.45) | 2.89 (2.38 to 3.41) | 0.067 / 0.089 | 1.90 to 4.03 |
+| d103: 103 WGBS and 103 CUT&Tag | 757 / 573 | 1.63 (1.42 to 1.84) | 1.92 (1.63 to 2.17) | 0.075 / 0.087 | 1.50 to 2.29 |
+| d103ctcf_cd14meth: 103 CUT&Tag, CD14+ WGBS | 215 / 170 | 2.01 (1.70 to 2.32) | 2.43 (1.98 to 3.08) | 0.067 / 0.080 | 1.73 to 2.73 |
+
+Per patient relative risk A with d103: 027 2.94, 546 2.73, 773 2.69, 629 2.29, 270 1.64, 472 1.62, 168
+1.39, 018 1.25 (interval of 018 reaches 0.98); the same three patients lead, the spread is compressed.
+The d103 variant calls 3.7 times more gain-and-lost sites (the methylation reference covers more motif
+sites and 103 is a noisier CTCF reference), and the association stays above 1 in every definition.
+
+Insulation, pooled paired difference, gain-and-lost vs no-gain controls (A, w = 10; matched on
+baseline insulation; w = 5):
+
+| sites | Hi-C baseline | test sites | A w = 10 | A w = 10 matched | A w = 5 matched |
+|---|---|---|---|---|---|
+| primary | HSPC (4 donors) | 191 | +0.027 (-0.003 to +0.057) | +0.026 (+0.001 to +0.052) | +0.032 (+0.006 to +0.057) |
+| primary | PBMC (576, 673, 103) | 191 | +0.025 (-0.011 to +0.062) | +0.031 (-0.002 to +0.068) | +0.043 (+0.008 to +0.081) |
+| primary | 576 (GSM4604271) alone | 190 | +0.009 (-0.023 to +0.045) | +0.011 (-0.021 to +0.042) | +0.019 (-0.017 to +0.056) |
+| d103 | HSPC | 709 | +0.001 (-0.026 to +0.021) | +0.004 (-0.026 to +0.024) | +0.010 (-0.005 to +0.024) |
+| d103 | PBMC | 709 | +0.007 (-0.015 to +0.027) | +0.018 (-0.001 to +0.037) | +0.019 (+0.001 to +0.039) |
+
+### 4. Change in conclusions
+
+Directions and the qualitative conclusions of section 46 hold with the 8 AML patients: methylation at the
+motif is negatively associated with CTCF height beyond motif strength in every patient (all 8 intervals
+exclude 0, carried most by 027, 546, 773), sites that gain methylation lose CTCF about twice as often as
+others (relative risk 2.1 for A, 2.9 for B, interval above 1 in all four pooled rows), motif
+hypermethylation accounts for a small share of the lost sites (6.7 percent of the testable lost sites,
+0.6 percent of all lost sites), and the insulation difference is about 0.03 weaker at gain-and-lost
+sites with an interval that touches 0 for the pre-set matching. Changes: the pooled median partial
+correlation is -0.32 instead of -0.37 and the AML-to-non-AML gap is larger; relative risks fall by 0.06
+(A) and 0.02 (B); counts of gain-and-lost sites fall by 4 and 3; the insulation estimates move by at most
+0.003. Added qualifications: the insulation effect depends on the reference (+0.001 with the 103
+reference, +0.009 against the single PBMC map 576, +0.025 against the PBMC mean, +0.027 against HSPC), all
+five estimates are positive (+0.001 to +0.027) but the size is not established and only the HSPC and PBMC
+baselines with the primary sites give intervals that exclude 0 after insulation matching; the methylation-CTCF relative risk is
+1.6 to 2.9 in every reference variant.
+
+Limits added: 103 is one donor with unknown WGBS coverage (no read counts); the PBMC baselines have only
+three maps (576, 673, 103) of which two have no CUT&Tag; the insulation profile similarity compares each
+patient with the baselines, not the baselines among themselves for noise (HSPC donor to donor was not
+computed). Limits (i) to (viii) of section 46 apply unchanged.
+
+Figures `fig_q1_partial_spearman.png` (103 in blue), `fig_q2_precision_sensitivity.png` (103 last) and
+`fig_q3_insulation.png` (primary variant) in `results/aml_ctcf_methylation_aml_only/`.

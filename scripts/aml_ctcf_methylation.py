@@ -29,7 +29,23 @@ stages
             control sites; paired difference with chromosome bootstrap.
   figures
 
-    python scripts/aml_ctcf_methylation.py --stage sites q1 q2 q3 figures
+    python scripts/aml_ctcf_methylation.py --stage sites q1 q2 q3 refcheck figures
+
+healthy donors (registry section 50: xu_103, xu_576, xu_673 are healthy PBMC donors, not AML)
+  --exclude-healthy (default)  the AML analysis is over the AML patients only; 103 (the only
+                    healthy donor with CTCF CUT&Tag and WGBS) is reported as a separate
+                    healthy-donor row and never enters a pooled number.
+                    Output: results/aml_ctcf_methylation_aml_only/
+  --include-healthy reproduces the original section 46 run (103 counted as a patient).
+                    Output: results/aml_ctcf_methylation/ (pass --out to write elsewhere)
+  Extra variants (AML-only mode), each labelled in the output tables:
+    d103                 gain/loss against the healthy PBMC donor 103 (same lab, same assays):
+                         methylation reference = 103 WGBS, CTCF reference = 103 CUT&Tag.
+    d103ctcf_cd14meth    CTCF reference = 103 CUT&Tag, methylation reference = CD14+ monocytes.
+    Hi-C baseline variants for the insulation test: HSPC (primary), healthy PBMC maps
+    (576 = GSM4604271, 673, and 103 for the other patients), 576 alone.
+  refcheck stage: how well each candidate reference predicts the patients (rank agreement of
+  CTCF height and of motif methylation, insulation profile similarity).
 """
 from __future__ import annotations
 
@@ -51,6 +67,10 @@ OE_DIR = HM / "aml" / "oe"
 S41 = HM / "runs" / "chip_meth_rel" / "sites"
 WORK = HM / "runs" / "aml_ctcf_meth"
 OUT = REPO / "results" / "aml_ctcf_methylation"
+OUT_AML_ONLY = REPO / "results" / "aml_ctcf_methylation_aml_only"
+EXCLUDE_HEALTHY = True       # set from the command line
+HEALTHY = {"103", "576", "673"}      # healthy PBMC donors of GSE152135 (registry section 50)
+PBMC_HIC = ["576", "673", "103"]     # healthy PBMC Hi-C maps (GSM4604271 = 576, GSM4604272/73 = 103, 673)
 FASTA = Path.home() / "data/hic-multiome/genome/hg38.fa"
 HSPC_CTCF_BW = HM / "aml" / "bw" / "SRX037935.bw"
 CHROMS = [f"chr{i}" for i in range(1, 23)]
@@ -88,9 +108,24 @@ def cuttag_files() -> dict[tuple[str, str], Path]:
     return out
 
 
-def both_patients() -> list[str]:
+def all_with_both() -> list[str]:
     w, c = wgbs_files(), cuttag_files()
     return sorted(p for p in w if (p, "CTCF") in c)
+
+
+def both_patients() -> list[str]:
+    """Patients that enter the AML analysis and every pooled number."""
+    a = all_with_both()
+    return [p for p in a if p not in HEALTHY] if EXCLUDE_HEALTHY else a
+
+
+def healthy_patients() -> list[str]:
+    """Healthy donors with CTCF CUT&Tag and WGBS, reported as separate rows (empty with --include-healthy)."""
+    return [p for p in all_with_both() if p in HEALTHY] if EXCLUDE_HEALTHY else []
+
+
+def grp(p: str) -> str:
+    return "healthy donor" if p in HEALTHY and EXCLUDE_HEALTHY else "AML"
 
 
 # ------------------------------------------------------------------ base site table
@@ -260,8 +295,9 @@ def stage_q1():
     import chip_seq_meth_relationships as csm
     rng = np.random.default_rng(SEED)
     pats = both_patients()
+    hp = healthy_patients()
     frames = {}
-    for p in pats:
+    for p in pats + hp:
         frames[p] = q1_frame(load_patient(p), "h_CTCF", "m_motif", "m_flank", "h_H3K27ac")
     for c in S41_CELLS:
         t = load_s41(c)
@@ -280,12 +316,13 @@ def stage_q1():
                 use = dd if kind == "rho_strength" else sub
                 v = pstat(use, kind)
                 lo, hi = csm.chrom_bootstrap(use, lambda x, k=kind: pstat(x, k), rng, B=300)
-                rows.append({"sample": key, "scope": scope, "statistic": kind, "value": v, "ci_lo": lo,
+                rows.append({"sample": key, "group": "non-AML" if key.startswith("s41_") else grp(key),
+                             "scope": scope, "statistic": kind, "value": v, "ci_lo": lo,
                              "ci_hi": hi, "n_sites": len(use), "n_chrom": use.chrom.nunique()})
         log(f"q1 {key}")
     R = pd.DataFrame(rows)
     R.to_csv(OUT / "q1_partial_spearman.csv", index=False, float_format="%.5f")
-    R[(R.scope == "even") & (R.statistic == "partial_strength") & R["sample"].isin(pats)].to_csv(
+    R[(R.scope == "even") & (R.statistic == "partial_strength") & R["sample"].isin(pats + hp)].to_csv(
         OUT / "q1_per_patient_even.csv", index=False, float_format="%.5f")
 
     # pooled: the same chromosomes are resampled in every sample; median and mean over samples
@@ -306,7 +343,7 @@ def stage_q1():
         return float(np.median(vs)), float(np.mean(vs))
 
     prow = []
-    groups = {"AML all 9": pats, "AML without 773": [p for p in pats if p != "773"],
+    groups = {f"AML all {len(pats)}": pats, "AML without 773": [p for p in pats if p != "773"],
               "non-AML 8 cells": ["s41_" + c for c in S41_CELLS]}
     for g, keys in groups.items():
         for scope in ("even", "all"):
@@ -323,13 +360,13 @@ def stage_q1():
 
     # CTCF height by motif methylation level
     lv = []
-    for key in pats + ["s41_" + c for c in S41_CELLS]:
+    for key in pats + hp + ["s41_" + c for c in S41_CELLS]:
         d = frames[key]
         d = d[d.chrom.isin(EVEN)]
         z = (d.h - d.h.mean()) / d.h.std()
         for name, (a, b) in {"low": (0, 0.2), "mid": (0.2, 0.8), "high": (0.8, 1.01)}.items():
             s = d[(d.m >= a) & (d.m < b)]
-            lv.append({"sample": key, "level": name, "n_sites": len(s), "median_log1p_height": s.h.median(),
+            lv.append({"sample": key, "group": "non-AML" if key.startswith("s41_") else grp(key), "level": name, "n_sites": len(s), "median_log1p_height": s.h.median(),
                        "median_z": z[s.index].median()})
     pd.DataFrame(lv).to_csv(OUT / "q1_height_by_methylation_level.csv", index=False, float_format="%.4f")
 
@@ -406,20 +443,111 @@ def rates(a, b, c, e):
             "rel_risk": prec / base if base > 0 else np.nan}
 
 
+def sites_file(variant: str) -> Path:
+    tag = "aml_only" if EXCLUDE_HEALTHY else "with_healthy"
+    return WORK / "tables" / f"q2_sites_{tag}_{variant}.csv.gz"
+
+
+def q2_variants(allp: dict, t103: pd.DataFrame, R: pd.DataFrame):
+    """Variant: the healthy PBMC donor 103 (same laboratory, same CUT&Tag and WGBS assays) as the healthy
+    reference in place of CD14+ monocyte WGBS and CD34+ CTCF ChIP-seq. The CTCF reference percentile and the
+    HSPC-bound set come from the 103 CUT&Tag height (column h_hspc_CTCF is overwritten with it, so annotate()
+    and the q3 matching run unchanged); the methylation reference is the 103 motif methylation."""
+    rng = np.random.default_rng(SEED + 1)
+    PRIM = {"A": PRIMARY, "B": (REL_Q, PRIMARY[1])}
+    R103 = pd.DataFrame({"ref_m": t103.m_motif, "ref_cov": t103.n_motif_bins, "ref_h_CTCF": t103.h_CTCF})
+    variants = {"d103": R103, "d103ctcf_cd14meth": R}
+    pats = list(allp)
+    grid, pool_rows = [], []
+    for vname, Rv in variants.items():
+        tabs0 = {}
+        for p, t0 in allp.items():
+            t1 = t0.copy()
+            t1["h_hspc_CTCF"] = t103.h_CTCF.to_numpy()
+            tabs0[p] = t1
+        for mode, drops in (("A", (0.2, 0.3, 0.4)), ("B", (0.15, 0.25, 0.35))):
+            for p, t1 in tabs0.items():
+                for drop in drops:
+                    for bound in (0.7, 0.8, 0.9):
+                        r = tab(annotate(t1, Rv, drop, bound, mode))
+                        r.update({"variant": vname, "mode": mode, "patient": p, "drop": drop, "bound": bound})
+                        grid.append(r)
+
+        def pooled_vals(tabs, chs):
+            acc = np.zeros(4, int)
+            for t in tabs.values():
+                r = tab(pd.concat([t[t.chrom == c] for c in chs]))
+                acc += [r["gain_lost"], r["gain_kept"], r["nogain_lost"], r["nogain_kept"]]
+            r = rates(*acc)
+            return [r["precision"], r["sensitivity"], r["rel_risk"]], acc
+
+        for (mode, name), keep in {("A", f"all {len(pats)}"): pats, ("A", "without 773"): [p for p in pats if p != "773"],
+                                   ("B", f"all {len(pats)}"): pats, ("B", "without 773"): [p for p in pats if p != "773"]}.items():
+            tabs = {p: annotate(tabs0[p], Rv, *PRIM[mode], mode) for p in keep}
+            v0, acc = pooled_vals(tabs, CHROMS)
+            bs = np.array([pooled_vals(tabs, list(rng.choice(CHROMS, len(CHROMS), replace=True)))[0] for _ in range(200)])
+            q = np.nanpercentile(bs, [2.5, 97.5], axis=0)
+            pool_rows.append({"variant": vname, "mode": mode, "group": name, "patients": len(keep),
+                              "gain_lost": acc[0], "gain_kept": acc[1], "nogain_lost": acc[2], "nogain_kept": acc[3],
+                              "precision": v0[0], "precision_lo": q[0, 0], "precision_hi": q[1, 0],
+                              "sensitivity": v0[1], "sens_lo": q[0, 1], "sens_hi": q[1, 1],
+                              "rel_risk": v0[2], "rr_lo": q[0, 2], "rr_hi": q[1, 2]})
+            log(f"q2 variant {vname} pooled {mode} {name}")
+        # per-patient primary rows with intervals
+        for mode in "AB":
+            for p in pats:
+                t = annotate(tabs0[p], Rv, *PRIM[mode], mode)
+                r = tab(t)
+                q = boot_tab(t, rng)
+                r.update({"variant": vname, "mode": mode, "patient": p, "precision_lo": q[0, 0],
+                          "precision_hi": q[1, 0], "sens_lo": q[0, 1], "sens_hi": q[1, 1], "rr_lo": q[0, 2],
+                          "rr_hi": q[1, 2]})
+                grid.append({**r, "primary": True})
+        if vname == "d103":
+            lst = []
+            for p in pats:
+                t = annotate(tabs0[p], Rv, *PRIMARY, "A")
+                tb = annotate(tabs0[p], Rv, *PRIM["B"], "B")
+                t["lost_B"] = tb.lost
+                t["gain_lost"] = t.gain & t.lost
+                t["gain_lost_B"] = t.gain & t.lost_B
+                t["group"] = "AML"
+                lst.append(t[["patient", "group", "chrom", "pos", "frac", "score", "h_CTCF", "h_hspc_CTCF", "pct_pat",
+                              "pct_hspc", "m_motif", "ref_m", "dm", "bound_h", "lost", "lost_B", "gain", "gain_lost",
+                              "gain_lost_B", "n_cpg_motif", "n_motif_bins", "n_flank_bins"]])
+            S = pd.concat(lst)
+            S.to_csv(sites_file("d103"), index=False)
+    G = pd.DataFrame(grid)
+    G.to_csv(OUT / "q2_variant_d103_grid_and_primary.csv", index=False, float_format="%.4f")
+    gp = []
+    for (v, m, d, b_), g in G[G.primary.isna()].groupby(["variant", "mode", "drop", "bound"]):
+        r = rates(*[int(g[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")])
+        r.update({"variant": v, "mode": m, "drop": d, "bound": b_, "gain_lost": int(g.gain_lost.sum()),
+                  "gain_kept": int(g.gain_kept.sum()), "nogain_lost": int(g.nogain_lost.sum()),
+                  "nogain_kept": int(g.nogain_kept.sum())})
+        gp.append(r)
+    pd.DataFrame(gp).to_csv(OUT / "q2_variant_d103_grid_pooled.csv", index=False, float_format="%.4f")
+    pd.DataFrame(pool_rows).to_csv(OUT / "q2_variant_d103_pooled.csv", index=False, float_format="%.4f")
+    log("q2 variants done")
+
+
 def stage_q2():
     rng = np.random.default_rng(SEED)
     R = ref_table()
     pats = both_patients()
+    hp = healthy_patients()
     allp = {p: load_patient(p) for p in pats}
+    allh = {p: load_patient(p) for p in hp}          # separate healthy-donor rows, never pooled
+    both = {**allp, **allh}
     PRIM = {"A": PRIMARY, "B": (REL_Q, PRIMARY[1])}
     grid = []
     for mode, drops in (("A", (0.2, 0.3, 0.4)), ("B", (0.15, 0.25, 0.35))):
-        for p, t0 in allp.items():
+        for p, t0 in both.items():
             for drop in drops:
                 for bound in (0.7, 0.8, 0.9):
                     t = annotate(t0, R, drop, bound, mode)
                     r = tab(t)
-                    r.update({"mode": mode, "patient": p, "drop": drop, "bound": bound})
+                    r.update({"mode": mode, "patient": p, "group": grp(p), "drop": drop, "bound": bound})
                     if (drop, bound) == PRIM[mode]:
                         q = boot_tab(t, rng)
                         r.update({"precision_lo": q[0, 0], "precision_hi": q[1, 0], "sens_lo": q[0, 1],
@@ -430,7 +558,7 @@ def stage_q2():
     pm = pd.concat([G[(G["mode"] == m) & (G["drop"] == PRIM[m][0]) & (G.bound == PRIM[m][1])] for m in "AB"])
     pm.to_csv(OUT / "q2_2x2_primary.csv", index=False, float_format="%.4f")
     gp = []
-    for (m, d, b), g in G.groupby(["mode", "drop", "bound"]):
+    for (m, d, b), g in G[G.group == "AML"].groupby(["mode", "drop", "bound"]):
         r = rates(*[int(g[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")])
         r.update({"mode": m, "drop": d, "bound": b, "gain_lost": int(g.gain_lost.sum()),
                   "gain_kept": int(g.gain_kept.sum()), "nogain_lost": int(g.nogain_lost.sum()),
@@ -448,8 +576,8 @@ def stage_q2():
         return [r["precision"], r["sensitivity"], r["rel_risk"]], acc
 
     pool_rows = []
-    for (mode, name), keep in {("A", "all 9"): pats, ("A", "without 773"): [p for p in pats if p != "773"],
-                               ("B", "all 9"): pats, ("B", "without 773"): [p for p in pats if p != "773"]}.items():
+    for (mode, name), keep in {("A", f"all {len(pats)}"): pats, ("A", "without 773"): [p for p in pats if p != "773"],
+                               ("B", f"all {len(pats)}"): pats, ("B", "without 773"): [p for p in pats if p != "773"]}.items():
         tabs = {p: annotate(allp[p], R, *PRIM[mode], mode) for p in keep}
         v0, acc = pooled_vals(tabs, CHROMS)
         bs = np.array([pooled_vals(tabs, list(rng.choice(CHROMS, len(CHROMS), replace=True)))[0] for _ in range(200)])
@@ -463,10 +591,10 @@ def stage_q2():
 
     # how many lost sites (including those without any motif CpG) are explained
     ex = []
-    for (mode, p), t0 in [((m, p), allp[p]) for m in "AB" for p in pats]:
+    for (mode, p), t0 in [((m, p), both[p]) for m in "AB" for p in pats + hp]:
         t = annotate(t0, R, *PRIM[mode], mode)
         lost = t[t.lost]
-        ex.append({"mode": mode, "patient": p, "lost_sites": len(lost),
+        ex.append({"mode": mode, "patient": p, "group": grp(p), "lost_sites": len(lost),
                    "lost_no_motif_cpg": int((lost.n_cpg_motif == 0).sum()),
                    "lost_cpg_patient_uncovered": int(((lost.n_cpg_motif > 0) & lost.m_motif.isna()).sum()),
                    "lost_cpg_ref_uncovered": int(((lost.n_cpg_motif > 0) & lost.m_motif.notna() & lost.ref_m.isna()).sum()),
@@ -478,7 +606,7 @@ def stage_q2():
 
     # coverage dependence
     cov_rows = []
-    for p, t0 in allp.items():
+    for p, t0 in both.items():
         t = annotate(t0, R, *PRIMARY, "A")
         med = float(t.n_flank_bins[t.n_flank_bins > 0].median())
         for name, mask in {
@@ -491,12 +619,12 @@ def stage_q2():
             "patient motif value neither 0 nor 1": t.m_motif.between(0.001, 0.999),
         }.items():
             r = tab(t[mask.fillna(False)])
-            r.update({"patient": p, "filter": name})
+            r.update({"patient": p, "group": grp(p), "filter": name})
             cov_rows.append(r)
     C = pd.DataFrame(cov_rows)
     C.to_csv(OUT / "q2_coverage_dependence.csv", index=False, float_format="%.4f")
     cs = []
-    for name, g in C.groupby("filter", sort=False):
+    for name, g in C[C.group == "AML"].groupby("filter", sort=False):
         a, b, c, e = [int(g[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")]
         r = rates(a, b, c, e)
         r.update({"filter": name, "patients": g.patient.nunique(), "gain_lost": a, "gain_kept": b,
@@ -506,11 +634,11 @@ def stage_q2():
 
     # same-assay check: patient against the median of the other patients (CUT&Tag and WGBS)
     same = []
-    Hm = pd.DataFrame({p: pct(allp[p].h_CTCF) for p in pats})
-    Mm = pd.DataFrame({p: allp[p].m_motif for p in pats})
-    for p in pats:
-        others = [q for q in pats if q != p]
-        t = allp[p].copy()
+    Hm = pd.DataFrame({p: pct(both[p].h_CTCF) for p in pats + hp})
+    Mm = pd.DataFrame({p: both[p].m_motif for p in pats + hp})
+    for p in pats + hp:
+        others = [q for q in pats if q != p]          # healthy donors are never part of the AML median
+        t = both[p].copy()
         t["pct_pat"] = Hm[p]
         t["pct_oth"] = Hm[others].median(axis=1)
         t["m_oth"] = Mm[others].median(axis=1)
@@ -523,30 +651,34 @@ def stage_q2():
         a = int((d.gain & d.lost).sum()); b = int((d.gain & ~d.lost).sum())
         c = int((~d.gain & d.lost).sum()); e = int((~d.gain & ~d.lost).sum())
         r = rates(a, b, c, e)
-        r.update({"patient": p, "n_testable": len(d), "gain_lost": a, "gain_kept": b, "nogain_lost": c,
+        r.update({"patient": p, "group": grp(p), "n_testable": len(d), "gain_lost": a, "gain_kept": b, "nogain_lost": c,
                   "nogain_kept": e})
         same.append(r)
     Sm = pd.DataFrame(same)
-    tot = rates(*[int(Sm[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")])
-    tot.update({"patient": "pooled", "n_testable": int(Sm.n_testable.sum()),
-                **{k: int(Sm[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")}})
+    Sa = Sm[Sm.group == "AML"]
+    tot = rates(*[int(Sa[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")])
+    tot.update({"patient": "pooled", "group": "AML", "n_testable": int(Sa.n_testable.sum()),
+                **{k: int(Sa[k].sum()) for k in ("gain_lost", "gain_kept", "nogain_lost", "nogain_kept")}})
     pd.concat([Sm, pd.DataFrame([tot])]).to_csv(OUT / "q2_same_assay_vs_other_patients.csv", index=False,
                                                 float_format="%.4f")
 
     lst = []
-    for p, t0 in allp.items():
+    for p, t0 in both.items():
         t = annotate(t0, R, *PRIMARY, "A")
         tb = annotate(t0, R, *PRIM["B"], "B")
         t["lost_B"] = tb.lost
         t["gain_lost"] = t.gain & t.lost
         t["gain_lost_B"] = t.gain & t.lost_B
-        lst.append(t[["patient", "chrom", "pos", "frac", "score", "h_CTCF", "h_hspc_CTCF", "pct_pat", "pct_hspc",
+        t["group"] = grp(p)
+        lst.append(t[["patient", "group", "chrom", "pos", "frac", "score", "h_CTCF", "h_hspc_CTCF", "pct_pat", "pct_hspc",
                       "m_motif", "ref_m", "dm", "bound_h", "lost", "lost_B", "gain", "gain_lost", "gain_lost_B",
                       "n_cpg_motif", "n_motif_bins", "n_flank_bins"]])
     S = pd.concat(lst)
-    S.to_csv(WORK / "tables" / "q2_sites.csv.gz", index=False)
+    S.to_csv(sites_file("primary"), index=False)
     S[S.gain_lost | S.gain_lost_B].to_csv(OUT / "q2_gain_and_lost_sites.csv.gz", index=False, float_format="%.4f")
     log("q2 done")
+    if EXCLUDE_HEALTHY and "103" in allh:
+        q2_variants(allp, allh["103"], R)
 
 
 # ------------------------------------------------------------------ q3
@@ -582,92 +714,191 @@ def ins_job(args):
     return label
 
 
+def hic_baseline(kind: str, p: str) -> list[str]:
+    if kind == "hspc":
+        return HSPC_DONORS
+    if kind == "pbmc":                       # healthy PBMC maps; a donor never serves as its own baseline
+        return [x for x in PBMC_HIC if x != p]
+    if kind == "p576":                       # GSM4604271 alone
+        return ["576"]
+    raise KeyError(kind)
+
+
 def stage_q3(workers):
     from scipy.spatial import cKDTree
-    rng = np.random.default_rng(SEED)
     pats = both_patients()
-    jobs = [(x, w) for x in pats + HSPC_DONORS for w in (INS_W, 5)]
+    hp = healthy_patients()
+    # (variant label, sites table, Hi-C baseline)
+    variants = [("primary", "primary", "hspc")]
+    if EXCLUDE_HEALTHY:
+        variants += [("hic_pbmc", "primary", "pbmc"), ("hic_576", "primary", "p576")]
+        if sites_file("d103").exists():
+            variants += [("d103", "d103", "hspc"), ("d103_hic_pbmc", "d103", "pbmc")]
+    labels = pats + hp + HSPC_DONORS + (PBMC_HIC if EXCLUDE_HEALTHY else [])
+    labels = list(dict.fromkeys(labels))
+    jobs = [(x, w) for x in labels for w in (INS_W, 5)]
     with ProcessPoolExecutor(min(workers, 4)) as ex:
         list(ex.map(ins_job, jobs))
-    S = pd.read_csv(WORK / "tables" / "q2_sites.csv.gz", dtype={"patient": str})
     cnv = pd.read_csv(REPO / "results/aml_primary/explain_cnv_segments.csv")
     pairs = []
-    for w in (INS_W, 5):
-        prof = {x: np.load(WORK / "ins" / f"{x}_w{w}.npz") for x in pats + HSPC_DONORS}
-        for p in pats:
-            t = S[S.patient == p].reset_index(drop=True)
-            t["bin"] = (t.pos + L // 2) // 10_000
-            ip = np.full(len(t), np.nan); ih = np.full(len(t), np.nan)
-            for ch in CHROMS:
-                sel = np.where(t.chrom.to_numpy() == ch)[0]
-                b = t.bin.to_numpy()[sel]
-                n = len(prof[p][ch])
-                ok = b < n
-                ip[sel[ok]] = prof[p][ch][b[ok]]
-                ih[sel[ok]] = np.nanmean(np.stack([prof[h][ch][b[ok]] for h in HSPC_DONORS]), axis=0)
-            t["ins_pat"], t["ins_hspc"] = ip, ih
-            t["d_ins"] = t.ins_pat - t.ins_hspc          # > 0: more cross-boundary contact = weaker insulation
-            for _, r in cnv[cnv.patient == "xu_" + p].iterrows():
-                t.loc[(t.chrom == r.chrom) & (t.pos >= r.start) & (t.pos < r.end), "d_ins"] = np.nan
-            t = t.dropna(subset=["d_ins", "ins_hspc", "dm"])
-            t = t.sort_values("h_hspc_CTCF", ascending=False).drop_duplicates(["chrom", "bin"])
-            pool = t[(t.dm < 0.1) & t.bound_h]          # methylation covered, no gain, bound in HSPC
-            for mode, lc, glc in (("A", "lost", "gain_lost"), ("B", "lost_B", "gain_lost_B")):
-              for name, tst, ctl in (
-                    (f"{mode}:gain_lost_vs_nogain", t[t[glc]], pool),
-                    (f"{mode}:gain_lost_vs_nogain_kept", t[t[glc]], pool[~pool[lc]]),
-                    (f"{mode}:lost_nogain_vs_nogain", t[t[lc] & (t.dm < 0.1)], pool[~pool[lc]]),
-                    (f"{mode}:gain_kept_vs_nogain", t[t.gain & ~t[lc]], pool),
-                    (f"{mode}:gain_lost_vs_gain_kept", t[t[glc]], t[t.gain & ~t[lc] & t.bound_h])):
-                if len(tst) == 0 or len(ctl) < MATCH_K:
-                    continue
-                for sfx, scale in (("", None), ("_matched_hspc_ins", 0.05)):
-                    X = [ctl.frac.to_numpy() / 0.02, ctl.h_hspc_CTCF.to_numpy() / 0.25]
-                    Y = [tst.frac.to_numpy() / 0.02, tst.h_hspc_CTCF.to_numpy() / 0.25]
-                    if scale:
-                        X.append(ctl.ins_hspc.to_numpy() / scale); Y.append(tst.ins_hspc.to_numpy() / scale)
-                    dist, nn = cKDTree(np.c_[tuple(X)]).query(np.c_[tuple(Y)], k=MATCH_K, p=np.inf)
-                    ok = dist <= 1.0                     # caliper: |dPWM fraction| <= 0.02, |d log1p height| <= 0.25
-                    dc = np.where(ok, ctl.d_ins.to_numpy()[np.minimum(nn, len(ctl) - 1)], np.nan)
-                    keep = ok.sum(1) >= 1
-                    if keep.sum() == 0:
+    for vname, sname, bkind in variants:
+        S = pd.read_csv(sites_file(sname), dtype={"patient": str})
+        for w in (INS_W, 5):
+            prof = {x: np.load(WORK / "ins" / f"{x}_w{w}.npz") for x in labels}
+            for p in pats + (hp if sname == "primary" else []):
+                base = hic_baseline(bkind, p)
+                t = S[S.patient == p].reset_index(drop=True)
+                t["bin"] = (t.pos + L // 2) // 10_000
+                ip = np.full(len(t), np.nan); ih = np.full(len(t), np.nan)
+                for ch in CHROMS:
+                    sel = np.where(t.chrom.to_numpy() == ch)[0]
+                    b = t.bin.to_numpy()[sel]
+                    n = len(prof[p][ch])
+                    ok = b < n
+                    ip[sel[ok]] = prof[p][ch][b[ok]]
+                    ih[sel[ok]] = np.nanmean(np.stack([prof[h][ch][b[ok]] for h in base]), axis=0)
+                t["ins_pat"], t["ins_hspc"] = ip, ih
+                t["d_ins"] = t.ins_pat - t.ins_hspc          # > 0: more cross-boundary contact = weaker insulation
+                for _, r in cnv[cnv.patient == "xu_" + p].iterrows():
+                    t.loc[(t.chrom == r.chrom) & (t.pos >= r.start) & (t.pos < r.end), "d_ins"] = np.nan
+                t = t.dropna(subset=["d_ins", "ins_hspc", "dm"])
+                t = t.sort_values("h_hspc_CTCF", ascending=False).drop_duplicates(["chrom", "bin"])
+                pool = t[(t.dm < 0.1) & t.bound_h]          # methylation covered, no gain, bound in the reference
+                for mode, lc, glc in (("A", "lost", "gain_lost"), ("B", "lost_B", "gain_lost_B")):
+                  for name, tst, ctl in (
+                        (f"{mode}:gain_lost_vs_nogain", t[t[glc]], pool),
+                        (f"{mode}:gain_lost_vs_nogain_kept", t[t[glc]], pool[~pool[lc]]),
+                        (f"{mode}:lost_nogain_vs_nogain", t[t[lc] & (t.dm < 0.1)], pool[~pool[lc]]),
+                        (f"{mode}:gain_kept_vs_nogain", t[t.gain & ~t[lc]], pool),
+                        (f"{mode}:gain_lost_vs_gain_kept", t[t[glc]], t[t.gain & ~t[lc] & t.bound_h])):
+                    if len(tst) == 0 or len(ctl) < MATCH_K:
                         continue
-                    cm = np.nanmean(np.where(keep[:, None], dc, np.nan), axis=1)
-                    tt = tst[keep].copy()
-                    tt["ctrl_d_ins"] = cm[keep]
-                    tt["paired_diff"] = tt.d_ins - tt.ctrl_d_ins
-                    tt["n_ctrl"] = ok.sum(1)[keep]
-                    tt["contrast"] = name + sfx
-                    tt["w"] = w
-                    tt["n_test_before_match"] = len(tst)
-                    pairs.append(tt[["patient", "chrom", "pos", "w", "contrast", "d_ins", "ctrl_d_ins", "paired_diff",
-                                     "ins_pat", "ins_hspc", "frac", "h_hspc_CTCF", "dm", "n_ctrl",
-                                     "n_test_before_match"]])
-        log(f"q3 matched w={w}")
+                    for sfx, scale in (("", None), ("_matched_hspc_ins", 0.05)):
+                        X = [ctl.frac.to_numpy() / 0.02, ctl.h_hspc_CTCF.to_numpy() / 0.25]
+                        Y = [tst.frac.to_numpy() / 0.02, tst.h_hspc_CTCF.to_numpy() / 0.25]
+                        if scale:
+                            X.append(ctl.ins_hspc.to_numpy() / scale); Y.append(tst.ins_hspc.to_numpy() / scale)
+                        dist, nn = cKDTree(np.c_[tuple(X)]).query(np.c_[tuple(Y)], k=MATCH_K, p=np.inf)
+                        ok = dist <= 1.0                     # caliper: |dPWM fraction| <= 0.02, |d log1p height| <= 0.25
+                        dc = np.where(ok, ctl.d_ins.to_numpy()[np.minimum(nn, len(ctl) - 1)], np.nan)
+                        keep = ok.sum(1) >= 1
+                        if keep.sum() == 0:
+                            continue
+                        cm = np.nanmean(np.where(keep[:, None], dc, np.nan), axis=1)
+                        tt = tst[keep].copy()
+                        tt["ctrl_d_ins"] = cm[keep]
+                        tt["paired_diff"] = tt.d_ins - tt.ctrl_d_ins
+                        tt["n_ctrl"] = ok.sum(1)[keep]
+                        tt["contrast"] = name + sfx
+                        tt["w"] = w
+                        tt["variant"] = vname
+                        tt["group"] = grp(p)
+                        tt["n_test_before_match"] = len(tst)
+                        pairs.append(tt[["variant", "group", "patient", "chrom", "pos", "w", "contrast", "d_ins",
+                                         "ctrl_d_ins", "paired_diff", "ins_pat", "ins_hspc", "frac", "h_hspc_CTCF",
+                                         "dm", "n_ctrl", "n_test_before_match"]])
+            log(f"q3 {vname} matched w={w}")
     P = pd.concat(pairs, ignore_index=True)
     P.to_csv(OUT / "q3_paired_sites.csv.gz", index=False, float_format="%.5f")
 
-    def boot(df, B):
-        chs = df.chrom.unique()
-        gp = {c: df.paired_diff.to_numpy()[(df.chrom == c).to_numpy()] for c in chs}
-        vals = [np.mean(np.concatenate([gp[c] for c in rng.choice(chs, len(chs), replace=True)])) for _ in range(B)]
-        return np.percentile(vals, [2.5, 97.5])
-
     summ = []
-    for (w, con), g in P.groupby(["w", "contrast"]):
-        for p, gg in list(g.groupby("patient")) + [("pooled", g)]:
-            if len(gg) < 5:
-                continue
-            lo, hi = boot(gg, 2000 if p == "pooled" else 1000)
-            summ.append({"w": w, "contrast": con, "patient": p, "n_test_sites": len(gg),
-                         "n_test_before_match": int(gg.n_test_before_match.iloc[0]) if p != "pooled"
-                         else int(gg.groupby("patient").n_test_before_match.first().sum()),
-                         "mean_d_ins_test": gg.d_ins.mean(), "mean_d_ins_ctrl": gg.ctrl_d_ins.mean(),
-                         "paired_diff_mean": gg.paired_diff.mean(), "ci_lo": lo, "ci_hi": hi,
-                         "paired_diff_median": gg.paired_diff.median(),
-                         "frac_weaker": float((gg.paired_diff > 0).mean())})
+    for vname, _, _ in variants:
+        rng = np.random.default_rng(SEED if vname == "primary" else SEED + 2)
+
+        def boot(df, B):
+            chs = df.chrom.unique()
+            gp = {c: df.paired_diff.to_numpy()[(df.chrom == c).to_numpy()] for c in chs}
+            vals = [np.mean(np.concatenate([gp[c] for c in rng.choice(chs, len(chs), replace=True)])) for _ in range(B)]
+            return np.percentile(vals, [2.5, 97.5])
+
+        Pv = P[P.variant == vname]
+        for (w, con), g in Pv.groupby(["w", "contrast"]):
+            ga = g[g.group == "AML"]
+            for p, gg in list(ga.groupby("patient")) + [("pooled", ga)] + list(g[g.group != "AML"].groupby("patient")):
+                if len(gg) < 5 and not (p != "pooled" and gg.group.iloc[0] != "AML"):
+                    continue
+                if len(gg) >= 5:
+                    lo, hi = boot(gg, 2000 if p == "pooled" else 1000)
+                else:
+                    lo = hi = np.nan                      # healthy-donor row with too few sites for an interval
+                summ.append({"variant": vname, "w": w, "contrast": con, "patient": p,
+                             "group": "AML" if p == "pooled" else gg.group.iloc[0], "n_test_sites": len(gg),
+                             "n_test_before_match": int(gg.n_test_before_match.iloc[0]) if p != "pooled"
+                             else int(gg.groupby("patient").n_test_before_match.first().sum()),
+                             "mean_d_ins_test": gg.d_ins.mean(), "mean_d_ins_ctrl": gg.ctrl_d_ins.mean(),
+                             "paired_diff_mean": gg.paired_diff.mean(), "ci_lo": lo, "ci_hi": hi,
+                             "paired_diff_median": gg.paired_diff.median(),
+                             "frac_weaker": float((gg.paired_diff > 0).mean())})
     pd.DataFrame(summ).to_csv(OUT / "q3_insulation_summary.csv", index=False, float_format="%.5f")
     log("q3 done")
+
+
+# ------------------------------------------------------------------ refcheck
+def stage_refcheck():
+    """Which healthy reference matches the patients better? Rank agreement of CTCF height and of motif
+    methylation between each AML patient and each candidate reference, and the similarity of the genome-wide
+    insulation profile to the HSPC and the healthy PBMC Hi-C baselines. Descriptive; even chromosomes for the
+    site statistics, all autosomes for insulation."""
+    from scipy.stats import spearmanr
+    pats = both_patients()
+    t103 = load_patient("103")
+    R = ref_table()
+    rows = []
+    hs = pd.read_csv(WORK / "tables" / "h_hspc_CTCF.csv.gz").h.to_numpy()
+    ev = base_table().chrom.isin(EVEN).to_numpy()
+    cd = R.ref_m.to_numpy(); m103 = t103.m_motif.to_numpy(); h103 = t103.h_CTCF.to_numpy()
+    cdh = R.ref_h_CTCF.to_numpy()
+    # reference against reference
+    def sp(a, b, mask):
+        k = mask & np.isfinite(a) & np.isfinite(b)
+        return float(spearmanr(a[k], b[k])[0]), int(k.sum())
+    r, n = sp(h103, hs, ev); rows.append({"comparison": "CTCF height: 103 CUT&Tag vs HSPC CD34+ ChIP-seq", "rho": r, "n": n})
+    r, n = sp(h103, cdh, ev); rows.append({"comparison": "CTCF height: 103 CUT&Tag vs CD14+ ChIP-seq (section 41)", "rho": r, "n": n})
+    r, n = sp(m103, cd, ev); rows.append({"comparison": "motif methylation: 103 WGBS vs CD14+ WGBS", "rho": r, "n": n})
+    k = ev & np.isfinite(m103) & np.isfinite(cd)
+    rows.append({"comparison": "motif methylation: mean (103 minus CD14+), sites covered in both", "rho": float(np.mean(m103[k] - cd[k])), "n": int(k.sum())})
+    rows.append({"comparison": "motif methylation: share |103 minus CD14+| >= 0.3", "rho": float(np.mean(np.abs(m103[k] - cd[k]) >= 0.3)), "n": int(k.sum())})
+    pd.DataFrame(rows).to_csv(OUT / "refcheck_reference_vs_reference.csv", index=False, float_format="%.4f")
+    # each AML patient against each candidate reference
+    pr = []
+    allm = pd.DataFrame({p: load_patient(p).m_motif for p in pats})
+    allh = pd.DataFrame({p: load_patient(p).h_CTCF for p in pats})
+    for p in pats:
+        tp = load_patient(p)
+        h, m = tp.h_CTCF.to_numpy(), tp.m_motif.to_numpy()
+        others = [q for q in pats if q != p]
+        ho = allh[others].median(axis=1).to_numpy(); mo = allm[others].median(axis=1).to_numpy()
+        row = {"patient": p}
+        for name, ref in (("HSPC CD34+ ChIP", hs), ("103 CUT&Tag", h103), ("median other AML", ho)):
+            row["h_rho_" + name], row["h_n_" + name] = sp(h, ref, ev)
+        for name, ref in (("CD14+ WGBS", cd), ("103 WGBS", m103), ("median other AML", mo)):
+            row["m_rho_" + name], row["m_n_" + name] = sp(m, ref, ev)
+        pr.append(row)
+    PR = pd.DataFrame(pr)
+    PR.to_csv(OUT / "refcheck_patient_vs_reference.csv", index=False, float_format="%.4f")
+    # insulation profile similarity: Pearson over all bins with data
+    ir = []
+    for w in (INS_W, 5):
+        prof = {x: np.load(WORK / "ins" / f"{x}_w{w}.npz") for x in pats + HSPC_DONORS + PBMC_HIC}
+        def vec(label_or_list):
+            ls = [label_or_list] if isinstance(label_or_list, str) else label_or_list
+            return np.concatenate([np.nanmean(np.stack([prof[x][ch] for x in ls]), axis=0) for ch in CHROMS])
+        hs_v = vec(HSPC_DONORS); pb_v = vec(PBMC_HIC); p576 = vec("576")
+        def corr(a, b):
+            k = np.isfinite(a) & np.isfinite(b)
+            return float(np.corrcoef(a[k], b[k])[0, 1]), float(np.mean(np.abs(a[k] - b[k])))
+        for p in pats:
+            v = vec(p)
+            vb = vec([x for x in PBMC_HIC if x != p]) if p in PBMC_HIC else pb_v
+            row = {"w": w, "patient": p}
+            for name, ref in (("HSPC mean of 4", hs_v), ("PBMC mean (576, 673, 103)", vb), ("576 (GSM4604271)", p576)):
+                row["r_" + name], row["mad_" + name] = corr(v, ref)
+            ir.append(row)
+        row = {"w": w, "patient": "HSPC mean vs PBMC mean"}
+        row["r_HSPC mean of 4"], row["mad_HSPC mean of 4"] = corr(hs_v, pb_v)
+        ir.append(row)
+    pd.DataFrame(ir).to_csv(OUT / "refcheck_insulation_profiles.csv", index=False, float_format="%.4f")
+    log("refcheck done")
 
 
 # ------------------------------------------------------------------ figures
@@ -677,17 +908,18 @@ def stage_figures():
     import matplotlib.pyplot as plt
     plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False})
     pats = both_patients()
+    hp = healthy_patients()
     if (OUT / "q1_partial_spearman.csv").exists():
         R = pd.read_csv(OUT / "q1_partial_spearman.csv")
         R = R[(R.scope == "even") & (R.statistic == "partial_strength")]
         fig, ax = plt.subplots(figsize=(7, 5))
-        keys = ["s41_" + c for c in S41_CELLS] + pats
-        labels = [S41_NAMES[c] for c in S41_CELLS] + [f"AML {p}" for p in pats]
+        keys = ["s41_" + c for c in S41_CELLS] + pats + hp
+        labels = [S41_NAMES[c] for c in S41_CELLS] + [f"AML {p}" for p in pats] + [f"healthy donor {p}" for p in hp]
         for i, k in enumerate(keys):
             r = R[R["sample"] == k]
             if r.empty:
                 continue
-            col = "#999999" if k.startswith("s41_") else "#D55E00"
+            col = "#999999" if k.startswith("s41_") else ("#0072B2" if k in hp else "#D55E00")
             ax.errorbar(r.value, i, xerr=[r.value - r.ci_lo, r.ci_hi - r.value], fmt="o", color=col, ms=4, lw=1)
         ax.set_yticks(range(len(keys))); ax.set_yticklabels(labels, fontsize=7)
         ax.axvline(0, color="k", lw=0.5)
@@ -698,6 +930,7 @@ def stage_figures():
     if (OUT / "q2_2x2_primary.csv").exists():
         S = pd.read_csv(OUT / "q2_2x2_primary.csv")
         S = S[S["mode"] == "A"]
+        S = pd.concat([S[S.group == "AML"], S[S.group != "AML"]]) if "group" in S else S
         fig, axs = plt.subplots(1, 2, figsize=(9, 3.8))
         x = np.arange(len(S))
         axs[0].bar(x - 0.2, S.precision, 0.4, label="P(CTCF lost | methylation gain)", color="#D55E00")
@@ -712,7 +945,7 @@ def stage_figures():
         Q = pd.read_csv(OUT / "q3_insulation_summary.csv")
         cons = ["A:gain_lost_vs_nogain", "A:gain_lost_vs_nogain_kept", "A:lost_nogain_vs_nogain", "A:gain_kept_vs_nogain",
                 "A:gain_lost_vs_gain_kept", "B:gain_lost_vs_nogain", "B:gain_lost_vs_gain_kept"]
-        Q = Q[(Q.w == INS_W) & Q.contrast.isin(cons)]
+        Q = Q[(Q.w == INS_W) & Q.contrast.isin(cons) & (Q.variant == "primary")]
         fig, ax = plt.subplots(figsize=(7.5, 4.5))
         cols = ["#D55E00", "#E69F00", "#0072B2", "#999999", "#CC79A7", "#009E73", "#56B4E9"]
         pl = sorted(Q.patient.unique(), key=lambda s: (s == "pooled", s))
@@ -733,9 +966,18 @@ def stage_figures():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage", nargs="+", required=True, choices=["sites", "q1", "q2", "q3", "figures"])
+    ap.add_argument("--stage", nargs="+", required=True, choices=["sites", "q1", "q2", "q3", "refcheck", "figures"])
     ap.add_argument("--workers", type=int, default=4)
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--exclude-healthy", dest="exclude_healthy", action="store_true", default=True,
+                   help="AML patients only; the healthy donor 103 as a separate row (default)")
+    g.add_argument("--include-healthy", dest="exclude_healthy", action="store_false",
+                   help="original section 46 behaviour: 103 counted as a patient")
+    ap.add_argument("--out", type=Path, default=None, help="output folder (default depends on the mode)")
     a = ap.parse_args()
+    global EXCLUDE_HEALTHY, OUT
+    EXCLUDE_HEALTHY = a.exclude_healthy
+    OUT = a.out if a.out else (OUT_AML_ONLY if EXCLUDE_HEALTHY else OUT)
     OUT.mkdir(parents=True, exist_ok=True)
     WORK.mkdir(parents=True, exist_ok=True)
     if "sites" in a.stage:
@@ -746,6 +988,8 @@ def main():
         stage_q2()
     if "q3" in a.stage:
         stage_q3(a.workers)
+    if "refcheck" in a.stage:
+        stage_refcheck()
     if "figures" in a.stage:
         stage_figures()
 

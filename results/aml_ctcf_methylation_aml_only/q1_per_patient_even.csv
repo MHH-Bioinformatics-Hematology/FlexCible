@@ -1,0 +1,10 @@
+sample,group,scope,statistic,value,ci_lo,ci_hi,n_sites,n_chrom
+018,AML,even,partial_strength,-0.17681,-0.20352,-0.14810,6122,11
+027,AML,even,partial_strength,-0.57638,-0.61017,-0.52388,6138,11
+168,AML,even,partial_strength,-0.27301,-0.30430,-0.23707,6131,11
+270,AML,even,partial_strength,-0.18068,-0.20738,-0.14754,6138,11
+472,AML,even,partial_strength,-0.25267,-0.28466,-0.21663,6162,11
+546,AML,even,partial_strength,-0.50693,-0.54640,-0.44748,6133,11
+629,AML,even,partial_strength,-0.37271,-0.40498,-0.32950,6199,11
+773,AML,even,partial_strength,-0.52062,-0.55765,-0.47545,6165,11
+103,healthy donor,even,partial_strength,-0.39495,-0.42336,-0.36159,6205,11

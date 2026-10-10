@@ -1,0 +1,6 @@
+comparison,rho,n
+CTCF height: 103 CUT&Tag vs HSPC CD34+ ChIP-seq,0.3320,35205
+CTCF height: 103 CUT&Tag vs CD14+ ChIP-seq (section 41),0.2664,35205
+motif methylation: 103 WGBS vs CD14+ WGBS,0.8664,1828
+"motif methylation: mean (103 minus CD14+), sites covered in both",-0.0032,1828
+motif methylation: share |103 minus CD14+| >= 0.3,0.0388,1828
