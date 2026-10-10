@@ -5620,3 +5620,99 @@ reproduces and verifies the old split.json), `fold_of` accepts two-digit folds, 
 10 kb (single GPU on the remote 4090, doubled per-rank batch, scripts/run_single_gpu.py), then `aml_train_eval.py --fold N`
 with the results copied to `runs/aml_train_remote/fold<N>/`. Expected about 13 min per 25 kb and 30 min per 10 kb run
 (measured 10 and 23 min for the 12-cell runs times 1.3), 40 to 80 min evaluation per fold. Results: PENDING.
+
+## 53. Independence of the replicate pairs from each other and from the deep target maps (FINAL, metadata check; section 52 was the last number when this was written)
+
+Question: for each cell of section 49, are rep1 and rep2 independent biological replicates, technical replicates or
+half-splits, and are the replicates parts of the deep target map they are compared with. Method: ENCODE REST
+(`/files/<ACC>/`, `/experiments/<ACC>/`, frame=embedded, retrieved 2026-10-10), 4DN REST (`/files-processed/<ACC>/`,
+`/experiment-set-replicates/<ACC>/`, `/experiments-hi-c/<ACC>/`) and the repo's `scripts/replicates_all_cells.py` (`REPS`),
+`scripts/encode_expand.py` (`HIC`, `PAIRS`, `LOCAL`). All accessions and fields: `results/replicate_independence/replicate_metadata.csv`
+(one row per file, one per target; source URL per row). Nothing was recomputed; section 49 is unchanged.
+
+Replicate pairs (section 7 / 49; fastq accession pairs R1 and R2, the lane pair that went through minibwa and hicBuildMatrix):
+
+| cell | experiment | rep1: files, ENCODE rep, library, biosample | rep2: files, ENCODE rep, library(ies), biosample | relation of rep1 and rep2 |
+|---|---|---|---|---|
+| GM12878 | ENCSR410MDC, in situ Hi-C MboI | ENCFF991GHV + ENCFF075YWD, 1_8, ENCLB239DIW (HIC008), ENCBS386THJ (culture 2012-10-30, harvest 2012-11-02) | ENCFF416CVP + ENCFF997OUB, 2_1, ENCLB420YBU (HIC019), ENCBS538MCC (harvest 2013-01-05) | independent biological replicates: separate cultures of one cell line (donor record ENCDO000AAK), different libraries, no shared reads |
+| IMR-90 | ENCSR852KQC, in situ Hi-C MboI | ENCFF346EOS + ENCFF983FKT, 1_5, ENCLB995LGB (HIC054), ENCBS532ZGJ (culture 2012-11-02, harvest 2012-12-03, passage 4) | ENCFF110XAL + ENCFF490HFV, 2_2, ENCLB126OSS (HIC056), ENCBS361XFK (culture 2013-07-17, harvest 2013-07-22, passage 4) | independent biological replicates (cultures 8 months apart, one donor record ENCDO000AAX) |
+| K562 | ENCSR545YBD, in situ Hi-C MboI | ENCFF245VNR + ENCFF887BPM, 1_1, ENCLB941YRT (HIC069), ENCBS122OOP (culture 2013-03-20) | 8 lane pairs ENCFF017YRC/ENCFF740JAL, ENCFF077DJW/ENCFF942LOO, ENCFF299EZU/ENCFF272RRK, ENCFF307HYX/ENCFF570ZJK, ENCFF402DLV/ENCFF403MXC, ENCFF416MGD/ENCFF749NNL, ENCFF681AQK/ENCFF375MOP, ENCFF825VCF/ENCFF991GET; ENCODE 2_1 to 2_4, 4 libraries ENCLB243GST, ENCLB598XMB, ENCLB127KCJ, ENCLB463ZSY (HIC071 to 074), one biosample ENCBS037RBR (culture 2014-05-15) | independent biological replicates; rep2 is 4 technical libraries (8 lanes, 317.6 M read pairs) of one culture, rep1 one library (262.9 M read pairs) |
+| HMEC | ENCSR711AVS, in situ Hi-C MboI | ENCFF055UHA + ENCFF416YDZ, 1_5, ENCLB179MJQ (iHIC6018), ENCBS240JYJ (culture 2017-01-10 to 2017-01-19) | ENCFF126WCO + ENCFF244GNV, 2_4, ENCLB145ZQA (iHIC6019), ENCBS544EML (culture 2017-01-19 to 2017-01-25) | independent cultures (two biosample accessions, 9 days apart) of one donor lot (ENCDO935FXX, Lonza lot 0000525584), different libraries |
+| HUVEC | ENCSR855CCB, in situ Hi-C | ENCFF678PIY + ENCFF411KFA, 1_1, ENCLB655WVT (iHIC4925), ENCBS257NSY (culture 2017-03-06 to 2017-03-10) | ENCFF765YLB + ENCFF544HRQ, 2_1, ENCLB292XDZ (HIC080), ENCBS718VOW (culture 2012-10-31 to 2012-11-09) | independent cultures 4.4 years apart of one donor lot (ENCDO080ZCD, Lonza lot 7F3239) |
+
+No pair is a technical replicate, a same-library pair or a half-split of one map. The ENCODE replicate numbers differ
+(1 against 2) and so do the biosample accessions in all five pairs. The biological variation covered is culture to culture
+(cell lines) and culture to culture within one donor lot (HMEC, HUVEC); donor-to-donor variation is not covered. Section 49
+and 7 say "one sequencing lane each"; this holds for four pairs. K562 rep2 pools 8 lanes of 4 libraries (section 7 script docstring),
+so the K562 pair is unequal in depth (144 M against 210 M contacts) and in composition, and the Spearman-Brown step
+(equal-depth replicates) is approximate there.
+
+Deep targets and what they contain:
+
+| cell | deep target | what it merges | replicate libraries inside | replicate share of the target |
+|---|---|---|---|---|
+| GM12878 | 4DNFIXP4QG5B (mcool, 4.010e9 contacts at the 10 Mb level), set 4DNES3JX38V5 | 27 4DN experiments: HIC003 to 018, 021 to 029, 048, 049 (Rao 2014 in situ Hi-C) | rep1 library HIC008 yes; rep2 library HIC019 no | rep1: 138 M / 4010 M = 3.4% of contacts (4.6% of raw fastq bytes); rep2: 0% |
+| IMR-90 | 4DNFIJTOIGOI (identified by the exact file size of `hyperparameter_publication/imr90.mcool`, 8,307,947,968 B; 1.083e9 contacts), set 4DNES1ZEJNRU | 7 experiments HIC050 to 056 (ENCSR852KQC bio 1 libraries 1_1 to 1_5 and bio 2 libraries 2_1, 2_2) | rep1 HIC054 and rep2 HIC056 both yes | rep1 165.5 M / 1082.5 M = 15.3%, rep2 18.3%, together 33.6% (fastq bytes 37.1%) |
+| K562 | 4DNFI18UHVRO (0.907e9 contacts), set 4DNESI7DEJTM | 6 experiments HIC069 to 074 (ENCSR545YBD bio 1 and bio 2 completely; the 4DN records carry ENCODE:ENCLB and the rep2 fastq accessions ENCFF077DJW etc.) | rep1 and all 4 rep2 libraries yes | rep1 143.6 M / 907.1 M = 15.8%, rep2 23.2%, together 39.0% |
+| HMEC deep | ENCFF943JRY (ENCSR711AVS, merged_all, biological_replicates [1, 2], 9 technical replicates 1_1 to 1_5 and 2_1 to 2_4; 1.260e9 contacts, 1.931e9 read pairs) | the whole experiment | rep1 (1_5) and rep2 (2_4) both yes | read pairs 243.5 M + 232.9 M = 476.4 M of 1931.2 M = 24.7% (12.6% and 12.1%); contacts 170.5 M + 166.7 M of 1260.3 M = 26.8% |
+| HUVEC deep | ENCFF783KQI (ENCSR788FBI, intact Hi-C MNase, unreplicated, libraries 1_1 to 1_4; 1.107e9 contacts) | another experiment | no | 0%: other experiment, other donor record (ENCDO628LXZ, Lonza C2517A_0000300102, against ENCDO080ZCD of the pair), other assay |
+
+The contact ratios divide our own hicBuildMatrix 25 kb totals (section 7) by the target totals of the 4DN or ENCODE
+pipelines; the filters differ, so the ratios are accurate to a few percentage points (the fastq-byte shares bracket them for
+GM12878 and IMR-90; for K562 bytes per read differ 4-fold between libraries and give 36% and 18%, contacts are used).
+The HMEC read-pair ratio uses ENCODE `read_count` values of the fastqs and is the cleanest of the five.
+In GM12878 the target also holds 16 of its 27 libraries (55% of the raw bytes) from rep1's biosample ENCBS386THJ (HIC003 to
+018); rep2's biosample contributes nothing, so rep1 versus target shares a culture and rep2 versus target does not.
+
+The deep intact pairs of section 12 and the `ceiling_deep_pair_sb` column: GM12878 ENCSR965OVH (ENCFF159BIG, rep 75_3,
+ENCLB853FDT, ENCBS150RYT; ENCFF389TAA, rep 76_1, ENCLB562BJE, ENCBS649DHT) and K562 ENCSR676BEP (ENCFF740BHI, 5_3, ENCLB844LOP,
+ENCBS846SIL; ENCFF891MHD, 7_4, ENCLB957WME, ENCBS418ZPY; DNaseI + MNase intact Hi-C) are independent biological replicates
+(different biosamples, different libraries) of intact Hi-C experiments. They are not sources of the in situ 4DN targets.
+The other three GM12878/K562 intact pairs in `PAIRS` (ENCSR653JLK, ENCSR946AKI, ENCSR178ENS) are likewise distinct
+biosamples and libraries (rows in the CSV).
+
+Consequences for section 49.
+
+1. All five single-lane pairs are valid independent biological-replicate estimates of reliability. HMEC and HUVEC scored
+   against their own rep1 (target = one member of the pair, the other member independent of it): ceiling sqrt(r_rep) is valid.
+2. GM12878: the target holds 3.4% of rep1 and none of rep2. The ceiling is the cleanest in the table. Its deep-pair
+   ceiling (intact, ENCSR965OVH) is independent of the target.
+3. IMR-90, K562 and HMEC deep: both replicates are parts of the target (27% to 39% of its contacts or reads). The ceiling
+   formula uses only rep1 versus rep2, so its value does not rise from the overlap, and the Spearman-Brown projection
+   from the parts to a whole 2.6 to 3.7 times deeper than the pair stays a lower bound. The ceiling is then a split-half
+   estimate of the target's reliability, not an independent-replicate bound; model-versus-target and rep-versus-rep agreement
+   (`model_minus_replicate_r`) are compared at different depth and should be read as such. Quantities that correlate a
+   replicate with the deep target are inflated by the shared reads and need the same caveat: the noise-floor fractions of the
+   residual (section 39, "(rep1 - rep2)^2 / 2" against the target residual, K562 and HMEC deep) and `rep_dev_r`
+   of `hard_split.py` (section 24; Pearson of R1 - C and R2 - C for IMR-90 and HMEC deep, where C holds the replicates; shared reads
+   push the two deviations apart, so the filter drops windows more often for these cells). Neither was recomputed.
+4. HMEC deep uses its own constituents as the pair (same experiment, donor, lot): the proxy is exact in biosample terms.
+   HUVEC deep uses a pair from another donor (ENCDO080ZCD) and another assay (in situ MboI) than the target (ENCDO628LXZ,
+   intact MNase): its ceiling is a proxy for a different measurement and carries that mismatch.
+5. Independent samples. HMEC and HMEC deep are one biological sample: same donor lot, same experiment, the deep target
+   contains the HMEC target (rep1) and rep2. HUVEC and HUVEC deep share inputs (same ChIP tracks and model predictions) but their
+   targets come from two donor records and two experiments, so they are two independent target measurements on one set of
+   inputs. For held-out cells the effective n is 3 cell types (K562, HMEC, HUVEC) with 4 independent targets (K562, HMEC,
+   HUVEC donor 1, HUVEC donor 2); the 5 rows of section 49 are not 5 independent samples.
+6. For K562 the "one lane each" description of the pair should read "rep1 one library, rep2 four libraries pooled".
+
+Also found: `crosscell_hic/hmec_rep1.hic` and `hmec_rep2.hic` have the identical size (19,932,447,443 B, the size of
+ENCFF943JRY) and identical first 300 MB and last 100 MB; both are copies of the merged deep file, not replicates. The
+section 49 replicate maps are the minibwa/hicBuildMatrix maps of `replicates_all_cells.py`, not these files.
+
+Replicate files outside section 49 (`scripts/all_replicate_scc.sh`): 4DN `track_and_facet_info.replicate_info` gives
+HFFc6 DpnII in situ Hi-C 4DNFINU26HEQ (Biorep 1, Techrep 1) and 4DNFIVTQ72WM (Biorep 2, Techrep 1): biological; GM12878
+HindIII dilution Hi-C (Selvaraj 2013) 4DNFII7498B3 and 4DNFIV6HB4VT (Biorep 1 and 2): biological; H1 DpnII in situ Hi-C
+4DNFI29JL6ZO (Biorep 1, Techrep 1) and 4DNFIKTHE2OT (Biorep 1, Techrep 2): technical replicates of one biological replicate.
+GSE155971 (HCT116 MCM2-AID, G1 DMSO and AUX rep1, rep2): the series lists lane-level samples G1_DMSO_1 to 4 and G1_DMSO_r2_1 to 4
+without stating how the repo's rep1 and rep2 files map to them.
+
+Not retrieved or not verified.
+(a) The identity of the on-disk replicate cools with the accessions rests on the `REPS` dictionary and the download log; the
+cools were not re-derived from their contents. (b) The ENCSR855CCB restriction enzyme (MboI) is taken from the script docstring;
+the portal field was not read. (c) IMR-90 deep = 4DNFIJTOIGOI follows from the exact byte size and the 4DN date
+(2018-03-05) of the file; the 4DN file record itself does not name the cell in the fields read. (d) The HMEC deep file on
+disk (`hmec_rep1.hic` as ENCFF943JRY) relies on the md5 check noted in `encode_expand.py`; not repeated. (e) Contact ratios
+mix pipelines (see above); the 4DN portal gives no contact counts. (f) `hmec_rep1.hic` versus `hmec_rep2.hic` was compared on
+the head and tail only. (g) The size of the bias in item 3 (noise-floor fractions, `rep_dev_r`) was not quantified.
+Source: ENCODE REST and 4DN REST responses of 2026-10-10 (cached JSON in the session scratchpad, not in the repo).
