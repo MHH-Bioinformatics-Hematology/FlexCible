@@ -5561,3 +5561,25 @@ test group without a training patient, section 36 shows no headroom over the ref
 as a group-matched reference (Hi-C only, leave-one-patient-out over 24 patients, 0 GPU h); MYCN-loop presence (TET2/FLT3-ITD,
 CEBPA, STAG2/KRAS/NRAS versus RUNX1, KMT2B) is a 5 against 5 test among the CUT&Tag AML with minimal exact p 0.004 for one
 locus (0.17 in fold 0 alone). Details in FEASIBILITY.md.
+
+## 51. Number audit: which cited numbers come from honest validation (FINAL; section 50 was the last number when this was written)
+
+`results/number_audit/` (CPU only, no training): `audit_table.csv` (89 claims of the progress page and of the chat
+summaries with source, status and replacement), `AUDIT.md` (summary and ordered problem list),
+`run_honesty_scan.csv` (524 training logs: yaml `val_exclude_overlap`, honest-split log line, verdict; script
+`scan_runs.py`), `split_disjoint_5kb_2kb.csv` (no training window of the 5 and 2 kb 12-cell caches overlaps an
+Akita test region or test window; the 25 and 10 kb caches are in `runs/multicell_reference/split_disjoint.csv`).
+
+Counts: 41 HONEST, 23 LEAKY, 18 AFFECTED (depend on the healthy donors xu_103 and xu_673 counted as AML patients,
+section 50), 7 UNVERIFIABLE. Main findings: (1) the page headline U-Net numbers (0.652, 68%, SCC row, scatter, seven
+example panels, summary row 1) come from the overlapping-validation section 1 model; honest values 0.640, 66%,
+Pearson 0.647 and SCC 0.611 on the 448-bin grid. (2) The resolution chart model series, the K562 cell-count curve,
+three held-out "without consensus" dots and the four-motif row come from sections 8, 11 and 13 (overlapping
+validation); honest all12honest values 0.6576 / 0.7857 / 0.8299 / 0.8277 and 0.771 / 0.735 / 0.805. (3) The seed
+noise 0.013 is a section 8 number; honest two-seed spreads are 0.0002 to 0.0062 for consensus-input models and 0.004
+to 0.028 without consensus. (4) "Beats Akita in 69%" is the overlapping model (honest 66%); "Hi-cGAN 0.196" has no
+source (0.238 on 411 regions, 0.220 on 222). (5) Stale values: replicate agreement at 5 and 25 kb before the grid
+correction, "0.822" in summary row 5 (12-cell median 0.828). The consensus-input claims 0.914 / 0.903 / 0.830 / 0.677,
+consensus alone 0.898 / 0.859 / 0.785 / 0.629, honest_drop 0.775 / 0.761 / 0.684 / 0.544, 0.828 to 0.939, the Akita
+region numbers (n = 411), the chromosome-held-out comparisons and sections 39, 40, 41, 48 are honest. Sections 29, 36,
+38, 46 and 47 AML numbers need recomputing without xu_103 and xu_673 (not done here).
