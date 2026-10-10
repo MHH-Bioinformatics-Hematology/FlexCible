@@ -3576,8 +3576,8 @@ moves the predicted gain by more than 0.1 at three sites (stripe chr13 +0.32, CL
 the AML-trained model) and by 0.02 or less at the other four; it leaves the under-prediction of the
 gains unchanged (all models predict about a quarter of the measured gain). GM12878 prediction at the
 loop or stripe differs by at most 0.12 between the AML-trained and the AML+Meth model. Limits: 7 sites
-(r differences of 0.03 to 0.1 are far inside the noise), 3 held-out patients but only 773 and 270 contribute
-5 of the 7 sites, 4 sites are in training patients, GM12878 is a training cell, the sites were chosen
+(r differences of 0.03 to 0.1 are far inside the noise), 4 sites are in the held-out patients 773 and 270,
+3 sites are in training patients (168, 629, 546), GM12878 is a training cell, the sites were chosen
 for AML specificity and strong gain, the stripe gain is a band mean and not a pixel, and the SV
 case (inv(16), HSF4) is expected to fail and is not rerun. The v2 figures were viewed (stripe 6 and
 the summary).
