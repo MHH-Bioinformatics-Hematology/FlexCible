@@ -30,12 +30,14 @@ import torch.nn.functional as F
 
 REQUIRED = ("cell", "kind", "role", "set", "pair_id", "chrom", "a_start", "a_end", "b_start", "b_end")
 KINDS = ("loop", "stripe")
-ROLE_POS, ROLE_CTRL = 1, 2
+ROLE_POS, ROLE_CTRL, ROLE_WEAK = 1, 2, 3
 
 
 # --------------------------------------------------------------------------- table
-def load_objects(path: str, samples, controls=("A_hspc",)) -> pd.DataFrame:
-    """Objects of the table whose set is 'pos' or one of `controls`. Raises when an object
+def load_objects(path: str, samples, controls=("A_hspc",), weak=()) -> pd.DataFrame:
+    """Objects of the table whose set is 'pos', one of `controls` (role 2: sampling, ranking, all
+    terms) or one of `weak` (role 3: the neighbourhood and enrichment terms only, at a reduced weight;
+    never ranked, never oversampled). Raises when an object
     belongs to a cell that is not among `samples` (the config's training samples): a table of
     another fold, or one that carries test-patient objects, cannot be used by this run."""
     df = pd.read_csv(path, dtype={"patient": str})
@@ -49,8 +51,9 @@ def load_objects(path: str, samples, controls=("A_hspc",)) -> pd.DataFrame:
     unknown = sorted(set(df.kind) - set(KINDS))
     if unknown:
         raise ValueError(f"{path}: unknown kinds {unknown}")
-    df = df[df["set"].isin(["pos", *controls])].reset_index(drop=True)
-    df["role_id"] = np.where(df["set"] == "pos", ROLE_POS, ROLE_CTRL)
+    df = df[df["set"].isin(["pos", *controls, *weak])].reset_index(drop=True)
+    df["role_id"] = np.where(df["set"] == "pos", ROLE_POS,
+                             np.where(df["set"].isin(list(controls)), ROLE_CTRL, ROLE_WEAK))
     return df
 
 
@@ -109,7 +112,10 @@ def row_roles(row_objs) -> np.ndarray:
     for i, o in enumerate(row_objs):
         if not o:
             continue
-        out[i] = ROLE_POS if any(x[1] == ROLE_POS for x in o) else ROLE_CTRL
+        if any(x[1] == ROLE_POS for x in o):
+            out[i] = ROLE_POS
+        elif any(x[1] == ROLE_CTRL for x in o):
+            out[i] = ROLE_CTRL
     return out
 
 
@@ -205,14 +211,20 @@ class Geometry:
         self.loops = loops                # (b, i, j, role) int64 tensors, or None
         self.stripes = stripes            # list of (b, a0, a1, b0, b1, role)
 
+    def has_pairs(self) -> bool:
+        """The batch holds an AML-specific and a control object of one kind (a ranking pair)."""
+        rl = [] if self.loops is None else self.loops[3].tolist()
+        rs = [t[5] for t in self.stripes]
+        return any(ROLE_POS in r and ROLE_CTRL in r for r in (rl, rs))
+
     @property
     def n_objects(self) -> int:
         return (0 if self.loops is None else int(self.loops[0].numel())) + len(self.stripes)
 
 
-def batch_geometry(objs_per_window, rev, window: int, outer: int, device) -> Geometry:
+def batch_geometry(objs_per_window, rev, window: int, outer: int, device, weak_weight: float = 0.2) -> Geometry:
     """`objs_per_window`: per batch element the tuples of rows_of_objects; `rev`: per element
-    True when the window was reversed (or None)."""
+    True when the window was reversed (or None). Weak objects (role 3) enter the mask at `weak_weight`."""
     B = len(objs_per_window)
     mask = torch.zeros(B, window, window)
     lb, li, lj, lr = [], [], [], []
@@ -222,19 +234,20 @@ def batch_geometry(objs_per_window, rev, window: int, outer: int, device) -> Geo
             if rev is not None and rev[b]:
                 o = flip_object(o, window)
             k, role, a0, a1, b0, b1, _ = o
+            mv = weak_weight if role == ROLE_WEAK else 1.0
             if k == 0:                                 # loop: pixel (a0, b0)
                 i, j = a0, b0
                 lb.append(b), li.append(i), lj.append(j), lr.append(role)
                 r0, r1 = max(0, i - outer), min(window, i + outer + 1)
                 c0, c1 = max(0, j - outer), min(window, j + outer + 1)
-                mask[b, r0:r1, c0:c1] = 1.0
-                mask[b, c0:c1, r0:r1] = 1.0
+                mask[b, r0:r1, c0:c1] = torch.clamp(mask[b, r0:r1, c0:c1], min=mv)
+                mask[b, c0:c1, r0:r1] = torch.clamp(mask[b, c0:c1, r0:r1], min=mv)
             else:                                      # stripe rectangle, one bin of flank
                 stripes.append((b, a0, a1, b0, b1, role))
                 r0, r1 = max(0, a0 - 1), min(window, a1 + 1)
                 c0, c1 = max(0, b0 - 1), min(window, b1 + 1)
-                mask[b, r0:r1, c0:c1] = 1.0
-                mask[b, c0:c1, r0:r1] = 1.0
+                mask[b, r0:r1, c0:c1] = torch.clamp(mask[b, r0:r1, c0:c1], min=mv)
+                mask[b, c0:c1, r0:r1] = torch.clamp(mask[b, c0:c1, r0:r1], min=mv)
     loops = None
     if lb:
         loops = tuple(torch.tensor(v, dtype=torch.long, device=device) for v in (lb, li, lj, lr))
@@ -283,27 +296,55 @@ def object_scores(maps: torch.Tensor, geo: Geometry, inner: int, outer: int, spa
 
 
 class ObjectLoss:
-    """weight * (neighbourhood L1 + object enrichment L1) + rank * pairwise ranking.
+    """weight * (neighbourhood L1 + object enrichment L1) + rank * pairwise ranking
+    + marks_margin * marks-dependence margin.
 
     pred, tgt, ref: (B, W, W) maps of the Hi-C channel in the encoded space; the residual
     (pred - ref) against (tgt - ref) is what the terms see (rank_space "residual"; "full" scores
     the maps themselves). The ranking term is a logistic loss on the score difference between
-    every AML-specific object and every control object of the same kind in the batch:
+    every AML-specific object and every control object (role 2) of the same kind in the batch:
     softplus(-(s_pos - s_ctrl) / temp); with `consistent`, only pairs whose measured scores
-    point the same way (target score of the AML-specific object above the control's) count."""
+    point the same way (target score of the AML-specific object above the control's) count.
+    Weak controls (role 3, shared loops) enter the neighbourhood and enrichment terms at
+    `weak_weight` and never the ranking.
+
+    Marks dependence (registry section 70): `pred_none` is the prediction of the same windows with the
+    sample's own marks replaced by the 'absent' encoding (no gradient). The pair margin without marks,
+    d_none = s_pos - s_ctrl of that pass, must stay below the margin with marks by `delta`:
+    relu(d_none - d_with + delta) over the ranking pairs, weighted by `marks_margin`. A margin that the
+    reference / HSPC shortcut produces alone is the same in both passes and is penalised; only the part
+    that needs the marks passes. The mean gap d_with - d_none is logged (obj_gap) whenever pred_none is given."""
 
     def __init__(self, weight=0.0, rank=0.0, temp=0.05, consistent=True, space="residual",
-                 donut=(1, 4)):
+                 donut=(1, 4), weak_weight=0.2, marks_margin=0.0, delta=0.02):
         if space not in ("residual", "full"):
             raise ValueError(f"unknown aml_object_rank_space {space!r}")
         self.weight, self.rank, self.temp = float(weight), float(rank), float(temp)
         self.consistent, self.space = bool(consistent), space
         self.inner, self.outer = int(donut[0]), int(donut[1])
+        self.weak_weight, self.marks_margin, self.delta = float(weak_weight), float(marks_margin), float(delta)
         self.last: dict = {}
 
-    def __call__(self, pred, tgt, ref, geo: Geometry):
+    def _pair_terms(self, A, Tm, geo):
+        """Per kind (score matrix of pairs, measured pair weights) of the maps A against the target Tm."""
+        lp, sp = object_scores(A, geo, self.inner, self.outer)
+        lt, st = object_scores(Tm.detach(), geo, self.inner, self.outer)
+        roles_l = geo.loops[3] if geo.loops is not None else A.new_zeros(0).long()
+        roles_s = torch.tensor([s[5] for s in geo.stripes], dtype=torch.long, device=A.device)
+        out = []
+        for s, t, r in ((lp, lt, roles_l), (sp, st, roles_s)):
+            pos, ctl = r == ROLE_POS, r == ROLE_CTRL
+            if not pos.any() or not ctl.any():
+                continue
+            d = s[pos][:, None] - s[ctl][None, :]
+            w = ((t[pos][:, None] - t[ctl][None, :]) > 0).to(d.dtype) if self.consistent else torch.ones_like(d)
+            out.append((d, w))
+        return out
+
+    def __call__(self, pred, tgt, ref, geo: Geometry, pred_none=None):
         zero = pred.new_zeros(())
-        self.last = {"obj_pix": 0.0, "obj_enr": 0.0, "obj_rank": 0.0, "obj_n": float(geo.n_objects)}
+        self.last = {"obj_pix": 0.0, "obj_enr": 0.0, "obj_rank": 0.0, "obj_margin": 0.0, "obj_gap": 0.0,
+                     "obj_n": float(geo.n_objects)}
         if geo.n_objects == 0:
             return zero
         P, T = pred - ref, tgt - ref
@@ -313,28 +354,36 @@ class ObjectLoss:
             pix = ((P - T).abs() * m).sum() / m.sum().clamp(min=1.0)
             lp, sp = object_scores(P, geo, self.inner, self.outer)
             lt, st = object_scores(T.detach(), geo, self.inner, self.outer)
+            roles = torch.cat([geo.loops[3] if geo.loops is not None else pred.new_zeros(0).long(),
+                               torch.tensor([x[5] for x in geo.stripes], dtype=torch.long, device=pred.device)])
+            wt = torch.where(roles == ROLE_WEAK, torch.full_like(roles, self.weak_weight, dtype=pred.dtype),
+                             torch.ones_like(roles, dtype=pred.dtype))
             diffs = torch.cat([(lp - lt).abs(), (sp - st).abs()])
-            enr = diffs.mean() if diffs.numel() else zero
+            enr = (diffs * wt).sum() / wt.sum().clamp(min=1e-6) if diffs.numel() else zero
             total = total + self.weight * (pix + enr)
             self.last["obj_pix"], self.last["obj_enr"] = float(pix.detach()), float(enr.detach())
-        if self.rank > 0:
+        if self.rank > 0 or pred_none is not None:
             A, Tm = (P, T) if self.space == "residual" else (pred, tgt)
-            lp, sp = object_scores(A, geo, self.inner, self.outer)
-            lt, st = object_scores(Tm.detach(), geo, self.inner, self.outer)
-            roles_l = geo.loops[3] if geo.loops is not None else pred.new_zeros(0).long()
-            roles_s = torch.tensor([s[5] for s in geo.stripes], dtype=torch.long, device=pred.device)
-            terms = []
-            for s, t, r in ((lp, lt, roles_l), (sp, st, roles_s)):
-                pos, ctl = r == ROLE_POS, r == ROLE_CTRL
-                if not pos.any() or not ctl.any():
-                    continue
-                d = s[pos][:, None] - s[ctl][None, :]
-                w = ((t[pos][:, None] - t[ctl][None, :]) > 0).to(d.dtype) if self.consistent \
-                    else torch.ones_like(d)
-                if w.sum() > 0:
-                    terms.append((F.softplus(-d / self.temp) * w).sum() / w.sum())
-            if terms:
-                rk = torch.stack(terms).mean()
+            pairs = self._pair_terms(A, Tm, geo)
+            if self.rank > 0 and pairs:
+                rk = torch.stack([(F.softplus(-d / self.temp) * w).sum() / w.sum()
+                                  for d, w in pairs if w.sum() > 0] or [zero]).mean()
                 total = total + self.rank * rk
                 self.last["obj_rank"] = float(rk.detach())
+            if pred_none is not None and pairs:
+                An = (pred_none - ref) if self.space == "residual" else pred_none
+                with torch.no_grad():
+                    none_pairs = self._pair_terms(An, Tm, geo)
+                gaps, mg = [], []
+                for (d, w), (dn, _) in zip(pairs, none_pairs):
+                    if w.sum() <= 0:
+                        continue
+                    gaps.append(((d - dn) * w).sum() / w.sum())
+                    mg.append((F.relu(dn - d + self.delta) * w).sum() / w.sum())
+                if gaps:
+                    self.last["obj_gap"] = float(torch.stack(gaps).mean().detach())
+                    if self.marks_margin > 0:
+                        mm = torch.stack(mg).mean()
+                        total = total + self.marks_margin * mm
+                        self.last["obj_margin"] = float(mm.detach())
         return total

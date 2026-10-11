@@ -584,9 +584,10 @@ def _aml_object_rows(cfg: Config, ds, ti, os_idx, data, is_main: bool):
     coords = ([ch[i] for i in rows_ti], st[rows_ti], [sm[i] for i in rows_ti])
     train_samples = {s.name for s in cfg.data.samples}
     paths = object_tables(cfg)
-    objs = ao.load_objects(paths[0], train_samples, tuple(tc.aml_object_controls))
+    weak = tuple(tc.aml_object_weak_controls)
+    objs = ao.load_objects(paths[0], train_samples, tuple(tc.aml_object_controls), weak)
     if len(paths) > 1:         # train.object_scope "all": the cell-line table beside the AML one
-        objs = pd.concat([objs] + [ao.load_objects(q, train_samples, tuple(tc.aml_object_controls))
+        objs = pd.concat([objs] + [ao.load_objects(q, train_samples, tuple(tc.aml_object_controls), weak)
                                    for q in paths[1:]], ignore_index=True)
     objs = ao.to_bins(objs, int(cfg.data.resolution))
     margin = int(tc.aml_object_donut[1]) + 1
@@ -1014,10 +1015,11 @@ def train(cfg: Config):
         obj_rows = [obj_rows[i] for i in range(rank, n_even, world)]
         obj_roles = obj_roles[rank:n_even:world]
         tc = cfg.train
-        if tc.aml_object_weight > 0 or tc.aml_object_rank > 0:
+        if tc.aml_object_weight > 0 or tc.aml_object_rank > 0 or tc.aml_object_marks_pass:
             obj_loss = ObjectLoss(tc.aml_object_weight, tc.aml_object_rank, tc.aml_object_rank_temp,
                                   tc.aml_object_rank_consistent, tc.aml_object_rank_space,
-                                  tc.aml_object_donut)
+                                  tc.aml_object_donut, tc.aml_object_weak_weight,
+                                  tc.aml_object_marks_margin, tc.aml_object_marks_delta)
 
     tr_coords = val_coords = None
     if use_seq:
@@ -1317,9 +1319,22 @@ def train(cfg: Config):
                         ref_b = torch.where(m1, torch.flip(ref_b, dims=[-1, -2]), ref_b)
                     if prior_b is not None:
                         prior_b = torch.where(m1, torch.flip(prior_b, dims=[-1, -2]), prior_b)
+            geo = None
+            full_marks = False
+            if obj_loss is not None:
+                from .aml_objects import batch_geometry
+                geo = batch_geometry([obj_rows[i] for i in idx.tolist()],
+                                     rev_mask.tolist() if rev_mask is not None else None,
+                                     W, obj_loss.outer, device, obj_loss.weak_weight)
+                # batches with a ranking pair see all of the sample's marks (and a marks-free partner pass)
+                full_marks = bool(cfg.train.aml_object_marks_pass and absent_t is not None
+                                  and geo.has_pairs())
+                if full_marks and (coh is not None or mmc is not None):
+                    raise NotImplementedError("train.aml_object_marks_pass with cohesin_unknown / motif_meth")
             if aug is not None:
                 cond_b, tgt, n_a = aug(cond_b, tgt, win_scale[idx])
                 n_aug_epoch += n_a
+            cond_pre = cond_b
             if absent_t is not None:
                 if cfg.train.track_dropout_mode == "uniform_count":
                     # per window keep k ~ Uniform{1..n_chip} tracks, drop the rest:
@@ -1333,6 +1348,8 @@ def train(cfg: Config):
                 if coh is not None:
                     for q in coh[1]:             # SMC3 follows the RAD21 draw
                         drop[:, q] = drop[:, coh[0]]
+                if full_marks:
+                    drop = torch.zeros_like(drop)
                 if drop.any():
                     cond_b = cond_b.clone()
                     cond_b[:, :n_chip] = torch.where(
@@ -1367,6 +1384,15 @@ def train(cfg: Config):
                                 enabled=amp_dtype is not None):
                 pred = model(cond_b, pairs, planes, seq_oh, ref_b, prior=prior_b)
             pred = pred.float()
+            pred_none = None
+            if full_marks:
+                # the same windows without the sample's marks (the 'absent' encoding, as track dropout), no gradient
+                cn = cond_pre.clone()
+                cn[:, :n_chip] = absent_t[None, :, None].expand(bs, n_chip, cn.shape[-1])
+                if dcp is not None:
+                    apply_diff_drop(cn, torch.ones(bs, n_chip, dtype=torch.bool, device=device), dcp)
+                with torch.no_grad(), torch.autocast("cuda", dtype=amp_dtype, enabled=amp_dtype is not None):
+                    pred_none = model(cn, pairs, planes, seq_oh, ref_b, prior=prior_b).float()
             pwb = None
             if pw_map is not None:
                 pwb = pw_map[pw_pos[idx]]
@@ -1384,11 +1410,8 @@ def train(cfg: Config):
             loss = hic_loss(pred[:, 0], tgt[:, 0], pwb) if pwb is not None else \
                 hic_loss(pred[:, 0], tgt[:, 0])
             if obj_loss is not None:
-                from .aml_objects import batch_geometry
-                geo = batch_geometry([obj_rows[i] for i in idx.tolist()],
-                                     rev_mask.tolist() if rev_mask is not None else None,
-                                     W, obj_loss.outer, device)
-                loss = loss + obj_loss(pred[:, 0], tgt[:, 0], ref_b, geo)
+                loss = loss + obj_loss(pred[:, 0], tgt[:, 0], ref_b, geo,
+                                       pred_none[:, 0] if pred_none is not None else None)
                 for tn_, tv_ in obj_loss.last.items():
                     ep_terms[tn_] = ep_terms.get(tn_, 0.0) + tv_
             if cap_w > 0:

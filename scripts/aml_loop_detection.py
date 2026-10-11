@@ -31,6 +31,8 @@ shared 1, private 0. n_train counts the donors of the fold's training set (the r
     python scripts/aml_loop_detection.py --stage windows predict score stats inc figure --gpu 0
     python scripts/aml_loop_detection.py --recipe loopfocus --stage predict score stats inc criteria --gpu 0
     python scripts/aml_loop_detection.py --recipe diff_loopfocus --stage predict score stats inc criteria --gpu 0
+    python scripts/aml_loop_detection.py --recipe loopfocus2 --stage predict score --only 018 027 270 --gpu 0   # registry 70
+    python scripts/aml_loop_detection.py --stage criteria2 --scores results/aml_loop_detection_loopfocus2/object_scores_partial.csv.gz --tag f10_loopfocus2
 Run with the hicdiff conda env.
 
 --recipe loopfocus (registry section 63) adds the loop-centric model all12aml_loopfocus_refres_drop_f<N>
@@ -81,7 +83,11 @@ NBOOT = 2000
 # mark channels with all-cell objects, and its ablations)
 DIFF_LABELS = ("aml_diff_loopfocus", "aml_diff", "aml_diffhspc", "aml_diff_loopfocusaml", "aml_allobj",
                "aml_diffmeth_loopfocus")
-EXTRA_LABELS = ("aml_loopfocus", *DIFF_LABELS)
+# section 70: controls matched on the reference / HSPC enrichment, shared loops weak, marks-dependence margin
+LOOP2_LABELS = ("aml_loopfocus2",)
+DIFF2_LABELS = ("aml_diff_loopfocus2", "aml_diff_loopfocus2aml", "aml_diffmeth_loopfocus2",
+                "aml_diffhspc_loopfocus2")
+EXTRA_LABELS = ("aml_loopfocus", *LOOP2_LABELS, *DIFF_LABELS, *DIFF2_LABELS)
 ITEMS = RES_OUT / "items.csv.gz"     # objects and windows (always the section 62 table)
 
 
@@ -1052,17 +1058,21 @@ def main():
     ap.add_argument("--tag", default="", help="criteria2: prefix of the output tables")
     ap.add_argument("--nboot", type=int, default=1000, help="criteria2: bootstrap replicates")
     ap.add_argument("--only", nargs="*", help="test patients to predict (default all ten)")
-    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus"],
+    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus", "loopfocus2", "diff_loopfocus2"],
                     help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus; "
                          "diff_loopfocus (registry section 66): add the differential-mark models "
                          f"{', '.join(DIFF_LABELS)} (those whose runs are finished) and the loop-centric "
                          "model, tables in results/aml_loop_detection_diff_loopfocus")
     a = ap.parse_args()
     global RES_OUT
-    if a.recipe in ("loopfocus", "diff_loopfocus"):
+    if a.recipe:
         RUNS.append(("aml_loopfocus", ["marks", "none"]))
+        if a.recipe.endswith("loopfocus2"):
+            RUNS.extend((lab, ["marks", "none"]) for lab in LOOP2_LABELS)
         if a.recipe == "diff_loopfocus":
             RUNS.extend((lab, ["marks", "none"]) for lab in DIFF_LABELS)
+        if a.recipe == "diff_loopfocus2":
+            RUNS.extend((lab, ["marks", "none"]) for lab in DIFF2_LABELS)
         RES_OUT = REPO / f"results/aml_loop_detection_{a.recipe}"
         RES_OUT.mkdir(parents=True, exist_ok=True)
         if "windows" in a.stage or "figure" in a.stage:

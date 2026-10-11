@@ -100,7 +100,12 @@ DIFF_MODELS = [("aml_diff_loopfocus", "all12diff_loopfocus_refres_drop", False),
                ("aml_diffhspc", "all12diffhspc_refres_drop", False),
                ("aml_diff_loopfocusaml", "all12diff_loopfocusaml_refres_drop", False),
                ("aml_allobj", "all12allobj_refres_drop", False),
-               ("aml_diffmeth_loopfocus", "all12diffmeth_loopfocus_refres_drop", True)]
+               ("aml_diffmeth_loopfocus", "all12diffmeth_loopfocus_refres_drop", True),
+               # section 70: A_refrand controls, weak shared loops, marks-dependence margin
+               ("aml_diff_loopfocus2", "all12diff_loopfocus2_refres_drop", False),
+               ("aml_diff_loopfocus2aml", "all12diff_loopfocus2aml_refres_drop", False),
+               ("aml_diffmeth_loopfocus2", "all12diffmeth_loopfocus2_refres_drop", True),
+               ("aml_diffhspc_loopfocus2", "all12diffhspc_loopfocus2_refres_drop", False)]
 
 
 def diff_group_of(s: dict) -> str:
@@ -135,6 +140,9 @@ def models(fold: int, res: int) -> list[dict]:
                    "lab": True})
     if extra:                         # the loop-centric recipe (registry section 63)
         ms.append({"label": "aml_loopfocus", "run": f"all12aml_loopfocus_refres_drop{sfx}_{k}kb",
+                   "ref": "aml", "lab": True})
+    if extra:                         # reference/HSPC-matched controls, marks margin (registry section 70)
+        ms.append({"label": "aml_loopfocus2", "run": f"all12aml_loopfocus2_refres_drop{sfx}_{k}kb",
                    "ref": "aml", "lab": True})
     if extra:                         # differential mark channels and all-cell objects (section 66)
         for lab, run, meth in DIFF_MODELS:

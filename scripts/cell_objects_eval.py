@@ -49,6 +49,7 @@ MODELS = {
     **{f"diff_f{f}": f"all12diff_refres_drop_f{f}_10kb" for f in (10, 11, 12)},
     **{f"allobj_f{f}": f"all12allobj_refres_drop_f{f}_10kb" for f in (10, 11, 12)},
     **{f"diffmeth_loopfocus_f{f}": f"all12diffmeth_loopfocus_refres_drop_f{f}_10kb" for f in (10, 11, 12)},
+    **{f"diff_loopfocus2_f{f}": f"all12diff_loopfocus2_refres_drop_f{f}_10kb" for f in (10, 11, 12)},
 }
 
 

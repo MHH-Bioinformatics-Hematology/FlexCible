@@ -143,17 +143,18 @@ BASELINE_MAPS = [c for c in CELLS if c not in ("hmec", "huvec")]
 DIFF_KINDS = {"diff": ("mean_aml", False), "diffmeth": ("mean_aml", True), "diffhspc": ("hspc", False),
               "diffcells": ("consensus", False)}
 DIFF_FAMILY = {f"all12{k}{o}_refres_drop{f}" for k in DIFF_KINDS if k != "diffcells"
-               for o in ("", "_loopfocus", "_loopfocusaml") for f in ("_f10", "_f11", "_f12")}
+               for o in ("", "_loopfocus", "_loopfocusaml", "_loopfocus2", "_loopfocus2aml")
+               for f in ("_f10", "_f11", "_f12")}
 # the 12 cell lines alone (no AML sample, no fold): a cheap pilot of the differential channels and of the
 # cell objects on the cell-line evaluation (12-cell runs: about 10 min at 25 kb, 23 min at 10 kb)
-DIFFCELL_FAMILY = {f"all12diffcells{o}_refres_drop" for o in ("", "_loopfocus")}
+DIFFCELL_FAMILY = {f"all12diffcells{o}_refres_drop" for o in ("", "_loopfocus", "_loopfocus2")}
 ALLOBJ_FAMILY = {f"all12allobj_refres_drop{f}" for f in ("_f10", "_f11", "_f12")}
 DIFF_SCALES = [0, 20000, 100000]            # bp radius: the 10 kb bin, +-20 kb, +-100 kb
 
 
 def diff_parts(base: str):
     """(reference kind, with Meth) of a diff-marks run base name, else None."""
-    m = re.fullmatch(r"all12(diff|diffmeth|diffhspc|diffcells)(?:_loopfocus(?:aml)?)?_refres_drop(?:_f\d+)?", base)
+    m = re.fullmatch(r"all12(diff|diffmeth|diffhspc|diffcells)(?:_loopfocus2?(?:aml)?)?_refres_drop(?:_f\d+)?", base)
     return DIFF_KINDS[m.group(1)] if m else None
 
 
@@ -219,6 +220,9 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # train.aml_object_* (window oversampling of AML-specific loop / stripe windows and matched
     # shared-control windows, object-neighbourhood loss, pairwise ranking), folds 10 to 12
     **{f"all12aml_loopfocus_refres_drop{f}": (TRAIN12, None) for f in ("_f10", "_f11", "_f12")},
+    # registry section 70: the same recipe with controls matched on the reference and HSPC enrichment
+    # (A_refrand), shared loops only as a weak term, and the marks-dependence margin
+    **{f"all12aml_loopfocus2_refres_drop{f}": (TRAIN12, None) for f in ("_f10", "_f11", "_f12")},
     # differential mark channels and all-cell objects (registry section 66): see DIFF_FAMILY
     **{n: (TRAIN12, None) for n in sorted(DIFF_FAMILY | ALLOBJ_FAMILY | DIFFCELL_FAMILY)},
     # the recipe with the reference as residual (model.reference "residual": the
@@ -329,7 +333,11 @@ CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")} | DIFF_FAMILY | ALLOBJ_FAMILY
 LOOPFOCUS_RUNS = {k for k in AML_RUNS if "loopfocus" in k} | ALLOBJ_FAMILY
 # *_loopfocusaml: the loop-centric recipe with the AML objects only (object_scope aml), no cell-line objects
-OBJECT_ALL_RUNS = {k for k in DIFF_FAMILY if "loopfocus" in k and "loopfocusaml" not in k} | ALLOBJ_FAMILY
+OBJECT_ALL_RUNS = {k for k in DIFF_FAMILY if "loopfocus" in k and "loopfocusaml" not in k
+                   and "loopfocus2aml" not in k} | ALLOBJ_FAMILY
+# registry section 70: the *_loopfocus2* runs (AML table version 2 with A_refrand; the cell-line table version 2
+# where the scope is all)
+LOOP2_RUNS = {k for k in AML_RUNS | DIFFCELL_FAMILY if "loopfocus2" in k}
 
 
 def loopfocus_train(res: int) -> dict:
@@ -342,6 +350,17 @@ def loopfocus_train(res: int) -> dict:
             "aml_object_rank_temp": 0.05, "aml_object_rank_consistent": True,
             "aml_object_rank_space": "residual",
             "aml_object_donut": [1, 4] if res <= 10000 else [1, 3]}
+
+
+def loopfocus2_train(res: int) -> dict:
+    """train.aml_object_* of the recipe of registry section 70: ranking, sampling and the main object terms on
+    A_refrand controls only (matched on reference and HSPC enrichment, distance and orientation); shared loops
+    (A_hspc / A_ref) as a weak control at weight 0.2 in the neighbourhood and enrichment terms, never ranked;
+    object batches with a ranking pair see all marks and are repeated without the marks (no gradient), the
+    margin with marks must exceed the margin without by 0.02 (weight 0.5)."""
+    return {**loopfocus_train(res), "aml_object_controls": ["A_refrand"],
+            "aml_object_weak_controls": ["A_hspc", "A_ref"], "aml_object_weak_weight": 0.2,
+            "aml_object_marks_pass": True, "aml_object_marks_margin": 0.5, "aml_object_marks_delta": 0.02}
 
 
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS | DIFFCELL_FAMILY})
@@ -412,6 +431,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12aml_refres_drop": "residual",
             **{f"all12aml_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
             **{f"all12aml_loopfocus_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
+            **{f"all12aml_loopfocus2_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
             **{n: "residual" for n in DIFF_FAMILY | ALLOBJ_FAMILY | DIFFCELL_FAMILY},
             "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
@@ -674,21 +694,25 @@ def run_config(name, val_per_cell, patience, max_epochs):
                              "hard_split": str(at.hard_split_path(fold, res))})
         if base in LOOPFOCUS_RUNS:
             import aml_objects_table as aot
-            cfg["data"]["aml_objects_table"] = str(aot.table_path(fold))
-            cfg["train"].update(loopfocus_train(res))
+            cfg["data"]["aml_objects_table"] = str(aot.table_path(fold, 2 if base in LOOP2_RUNS else 1))
+            cfg["train"].update(loopfocus2_train(res) if base in LOOP2_RUNS else loopfocus_train(res))
         if base in OBJECT_ALL_RUNS:
             # objects of every training cell: the cell lines' table beside the fold's AML table
             import cell_objects_table as cot
-            cfg["data"]["cell_objects_table"] = str(cot.table_path())
+            import cell_objects_refrand as cor
+            cfg["data"]["cell_objects_table"] = str(cor.table_path() if base in LOOP2_RUNS else cot.table_path())
             cfg["train"]["object_scope"] = "all"
-            cfg["train"]["aml_object_controls"] = ["A_hspc", "A_ref"]     # AML table: A_hspc, cell table: A_ref
+            if base not in LOOP2_RUNS:
+                cfg["train"]["aml_object_controls"] = ["A_hspc", "A_ref"]     # AML table: A_hspc, cell table: A_ref
     if base in DIFFCELL_FAMILY and "loopfocus" in base:
         # objects of the 12 cell lines alone (section 66 pilot): the cell table, no AML table
         import cell_objects_table as cot
-        cfg["data"]["cell_objects_table"] = str(cot.table_path())
-        cfg["train"].update(loopfocus_train(res))
+        import cell_objects_refrand as cor
+        cfg["data"]["cell_objects_table"] = str(cor.table_path() if base in LOOP2_RUNS else cot.table_path())
+        cfg["train"].update(loopfocus2_train(res) if base in LOOP2_RUNS else loopfocus_train(res))
         cfg["train"]["object_scope"] = "all"
-        cfg["train"]["aml_object_controls"] = ["A_ref"]
+        if base not in LOOP2_RUNS:
+            cfg["train"]["aml_object_controls"] = ["A_ref"]
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg

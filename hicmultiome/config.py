@@ -490,6 +490,17 @@ class TrainConfig:
     aml_object_rank_consistent: bool = True
     aml_object_rank_space: str = "residual"
     aml_object_donut: list[int] = field(default_factory=lambda: [1, 4])
+    # Registry section 70 (loopfocus2). aml_object_weak_controls: table sets that enter only the
+    # neighbourhood / enrichment terms at aml_object_weak_weight (shared loops), never the ranking or the
+    # oversampling. aml_object_marks_pass: object batches with a ranking pair see all of the sample's marks
+    # (no random track dropout) and are run a second time without the marks (no gradient);
+    # aml_object_marks_margin * relu(margin without marks - margin with marks + aml_object_marks_delta) is
+    # added to the loss (weight 0 = the gap is only logged as obj_gap). Needs train.track_dropout > 0.
+    aml_object_weak_controls: list[str] = field(default_factory=list)
+    aml_object_weak_weight: float = 0.2
+    aml_object_marks_pass: bool = False
+    aml_object_marks_margin: float = 0.0
+    aml_object_marks_delta: float = 0.02
     # Whose objects the recipe above uses (registry section 66): "aml" = data.aml_objects_table
     # only (previous behaviour); "all" = that table plus data.cell_objects_table, the cell-specific
     # loops and stripes of every training cell line, with the same oversampling, batches and losses.
@@ -769,7 +780,7 @@ class Config:
         from .diffmarks import validate as _validate_diff
         _validate_diff(self)
         if (t.aml_object_oversample > 1 or t.aml_object_weight > 0 or t.aml_object_rank > 0
-                or t.aml_object_pair_batches):
+                or t.aml_object_pair_batches or t.aml_object_marks_pass or t.aml_object_marks_margin > 0):
             if not self.data.aml_objects_table and not (
                     t.object_scope == "all" and self.data.cell_objects_table):
                 raise ValueError("train.aml_object_* needs data.aml_objects_table")
@@ -785,6 +796,11 @@ class Config:
                 raise ValueError("train.aml_object_* needs train.val_regions")
             if t.stream:
                 raise ValueError("train.aml_object_* is not implemented for train.stream")
+            if (t.aml_object_marks_pass or t.aml_object_marks_margin > 0) and t.track_dropout <= 0:
+                raise ValueError("train.aml_object_marks_pass / aml_object_marks_margin need "
+                                 "train.track_dropout > 0 (the marks-free pass uses the absent encoding)")
+            if t.aml_object_marks_margin > 0 and not t.aml_object_marks_pass:
+                raise ValueError("train.aml_object_marks_margin needs train.aml_object_marks_pass")
         if self.model.reference != "none":
             lack = [s.name for s in self.data.samples
                     if not (s.reference_cool or self.data.reference_cool)]
