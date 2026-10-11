@@ -7197,3 +7197,48 @@ available for models alone.
 `loop_stripe_pooled.csv`, `subtype_per_patient.csv`, `subtype_groups.csv`,
 `old_vs_new_same_patients.csv`, `old_fold0_refres_meth.csv`, `aml_folds_v2.png`.
 Evaluation inputs under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_train_remote/`.
+
+## 62. Loop-level test: does the model predict AML-specific loops and stripes in held-out patients? (FINAL; section 61 was the last number when this was written)
+
+Question: the eight site figures of section 36b-v2 show a predicted but weaker gain over HSPC, the fold analysis of section 61 shows no gain beyond the AML reference. This section tests all AML-specific objects of the ten test donors of folds 10, 11, 12 (018, 027, 270 | 168, 546, 629, 1360 | 472, 773, 1916) at 10 kb.
+
+### Design
+Objects and matched controls are those of the loop classifier (sections 47, 57; `results/aml_loop_classifier/features.csv.gz`, identical sampling): AML-specific loops of Xu et al. Suppl. Table 1 (2276 loops, 193 to 284 per donor) and stripes of Suppl. Table 4 (1075 stripes, at most 150 per donor, span up to 1.5 Mb; 319 wider ones are dropped because they do not fit the 1.92 Mb window); controls: A_hspc, A_full, A_do (shared loops or stripes matched 1:1) and B_rand (random pair or shifted rectangle at the same distance). Every object and control gets a 1.92 Mb window centred on it; the fold's models predict it (own marks, the fold's AML reference): aml_refin with marks and without any ChIP (`none`), aml_refin with the HSPC training reference (`aml_refin@hspc`), and the model trained without AML data (`base_refin@aml`). The reference baseline is the fold's AML reference map itself; measured HSPC is the four-donor HSPC consensus. Loop score: log2 donut enrichment (inner 1, outer 4, as the labels of section 47), maximum over the 3x3 pixels around the annotated pixel; stripe score: mean log O/E of the stripe rectangle. Gain = score minus measured HSPC score. Recurrence: other donors among the 25 AML samples of Suppl. Table 1 and 4 with the same object (loops within one bin in both anchors; stripes overlapping anchor and extent), 168/496 and 260/424 counted once, the donor's own partner excluded: recurrent >= 2 other donors, shared 1, private 0. Intervals: bootstrap over the ten donors (500 to 2000 resamples). 16,466 objects scored. Inference on one local GPU.
+
+Of the loops 1805 are private (79 percent), 278 shared by one other donor, 193 recurrent (8 percent); of the stripes 285 private, 195 shared, 595 recurrent (55 percent). Only 87 loops are present in two or more training donors of the fold (the reference), 195 in one.
+
+### Results, loops (median over objects, log2 enrichment)
+| class | n | measured gain | model gain | reference alone | no marks | no AML training | model minus reference | model minus no marks |
+|---|---|---|---|---|---|---|---|---|
+| all | 2276 | 0.404 [0.355, 0.476] | 0.060 [0.046, 0.070] | 0.096 | 0.037 | 0.079 | -0.034 [-0.043, -0.026] | +0.014 [0.006, 0.020] |
+| recurrent | 193 | 0.450 | 0.163 | 0.219 | 0.146 | 0.204 | -0.045 [-0.063, -0.034] | +0.010 [0.003, 0.028] |
+| shared by 1 | 278 | 0.388 | 0.094 | 0.137 | 0.064 | 0.117 | -0.039 | +0.021 |
+| private | 1805 | 0.401 | 0.045 | 0.081 | 0.025 | 0.063 | -0.032 [-0.040, -0.024] | +0.013 [0.006, 0.019] |
+
+Measured gain over the reference is +0.30 (all), +0.24 (recurrent), +0.32 (private); the model is below the reference in 10/10 donors in every class. Amplitude ratio (model gain / measured gain): 0.15 all, 0.36 recurrent, 0.11 private; the reference alone 0.24, 0.49, 0.20. Predicted gain over the predicted HSPC-input model (`aml_refin@hspc`, which itself sits 0.04 below measured HSPC): 0.083 all, 0.248 recurrent, 0.069 private. Promoter-enhancer-like loops (n=301): measured 0.368, model 0.080, reference 0.100; promoter-repressive-like (n=103): 0.375, 0.046, 0.098.
+
+Predicted against measured gain (Spearman, pooled, donor bootstrap): model 0.28 [0.19, 0.35] (Pearson 0.26 [0.17, 0.36]; median per donor 0.31, positive in 10/10), reference alone 0.29 [0.22, 0.36], no AML training 0.30, no marks 0.25. Recurrent loops: model 0.34, reference 0.46 [0.34, 0.56]. Private: model 0.25, reference 0.25. Against the deviation from the reference (what the model adds): model 0.18 [0.09, 0.26] (recurrent 0.10, includes zero), no marks 0.12.
+
+Separation of AML-specific loops from matched shared loops (AUROC, A_hspc controls):
+| score | measured | model | no marks | no AML | reference |
+|---|---|---|---|---|---|
+| gain over HSPC, all | 0.834 [0.820, 0.860] | 0.621 [0.580, 0.663] | 0.625 | 0.661 | 0.585 [0.541, 0.618] |
+| gain, recurrent | 0.848 | 0.771 [0.718, 0.819] | 0.775 | 0.806 | 0.771 |
+| gain, private | 0.835 | 0.594 [0.549, 0.636] | 0.599 | 0.635 | 0.551 |
+| enrichment, all (A_hspc) | 0.199 | 0.086 | 0.075 | 0.098 | 0.062 |
+| enrichment, all (B_rand) | 0.890 | 0.807 | 0.791 | 0.795 | 0.758 |
+Fraction of AML-specific loops above the 90th percentile of the matched controls (gain; chance 0.10): measured 0.50, model 0.153 [0.120, 0.194], reference 0.170, no AML 0.215; recurrent 0.575 / 0.446 / 0.492; private 0.500 / 0.111 [0.094, 0.143] / 0.122. A_full and A_do give the same picture (model gain AUROC 0.568 with A_full). The shared controls are selected for enrichment >= 0.6 in both patient and HSPC, so their enrichment exceeds that of AML-specific loops by construction (AUROC of raw enrichment far below 0.5 in measured data too); the gain is the discriminating score, and against random pairs the raw enrichment separates the loops (measured 0.89, model 0.81, recurrent 0.95).
+
+### Results, stripes
+Measured gain 0.221 (mean log O/E), model 0.044 [0.017, 0.064], reference 0.044, no marks 0.044, no AML 0.027; model minus reference +0.003 [-0.014, 0.022], model minus no marks +0.003. Amplitude ratio 0.20 (recurrent 0.22, private 0.22). Spearman of predicted and measured gain 0.50 [0.42, 0.58] (reference 0.46, no marks 0.44); against the deviation from the reference 0.28 (no marks 0.10). AUROC against matched shared stripes (A_hspc, gain): measured 0.63, model 0.52 [0.49, 0.56], reference 0.46, no AML 0.56; enhancer-like stripes (n=326) model 0.61 (measured 0.63, reference 0.53), repressive-like (n=442) 0.49 (measured 0.64), other 0.48. Enhancer-like stripes are the one class where the own-marks model is above the reference (+0.018 [0.001, 0.039], above the no-marks model by +0.021 [0.004, 0.041]); private stripes +0.026 [0.009, 0.041] over the reference. Fraction above the control p90: measured 0.25, model 0.16, reference 0.12.
+
+### Verdict
+(a) Against healthy cells the model predicts a gain at AML-specific loops, with the right sign in 10/10 donors, 15 percent of the measured amplitude (median +0.06 against +0.40 log2) and a rank correlation of 0.28 with the measured gain per loop. It separates AML-specific from matched shared loops with AUROC 0.62 (measured 0.83), and 15 percent of AML-specific loops exceed the 90th percentile of the controls (measured 50 percent). Stripes: gain 20 percent of the measured amplitude, AUROC 0.52.
+(b) Recurrent loops (present in at least two other donors) carry the signal: gain 0.16, 36 percent of the measured amplitude, AUROC 0.77, 45 percent above control p90. Private loops: gain 0.045, 11 percent amplitude, AUROC 0.59, 11 percent above control p90 (chance 10 percent).
+(c) The signal comes from the reference. The reference map alone has the same correlation (0.29), the same recurrent AUROC (0.77), and a larger gain (0.096) than the model; the model lies 0.034 log2 below it (10/10 donors), the model trained without AML data is level with it (0.079). Own marks add +0.014 log2 over the no-marks condition (8/10 donors; +0.010 recurrent, +0.021 promoter-enhancer-like and promoter-repressive-like) and +0.02 for enhancer-like stripes; they do not lift AUROC (0.621 against 0.625). Section 61 and the eight sites are consistent: the correlation of 0.55 to 0.61 over seven hand-picked sites is higher than the 0.28 over all loops (the sites were chosen for a clear gain, and most are recurrent), and the model contains no gain beyond the reference (measured +0.30 over the reference, model -0.034).
+(d) Suggested wording: "In the ten held-out patients the model predicts a weaker gain at AML-specific loops than in healthy cells (median +0.06 against +0.40 log2 measured; rank correlation 0.28), almost entirely at loops that recur in other patients and are therefore present in the AML reference (AUROC against matched shared loops 0.77); at loops private to the patient the gain is 0.045 and the separation 0.59. The AML reference map alone gives the same result, and the patient's own marks add 0.014 log2. The model reproduces AML-specific structure that other patients share and does not predict the patient-private loops and stripes."
+
+Caveats. Ten donors, one seed per model; 10 kb only (25 kb not analysed; the loop tables are 10 kb); the matched shared controls are selected for enrichment in both patient and HSPC; recurrence uses a one-bin tolerance; stripe controls are shifted rectangles; the donut maximum over 3x3 pixels favours the sharper measured map slightly (exact-pixel values are in `object_scores.csv.gz`, columns `#px`).
+
+### Files
+`scripts/aml_loop_detection.py`; `results/aml_loop_detection/`: `items.csv.gz` (objects, windows, recurrence), `object_scores.csv.gz`, `levels_by_class.csv`, `increments.csv`, `gain_correlation.csv`, `auroc.csv`, `auroc_by_pair_type.csv`, `per_patient.csv`, `class_sizes.csv`, `levels_by_train_recurrence.csv`, `aml_loop_detection.png`. Predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_loop_detection/`.

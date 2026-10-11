@@ -1,0 +1,7 @@
+kind,class_train,n,measured_gain,aml_refin_gain,aml_refin|none_gain,base_refin@aml_gain,reference_gain,ref_minus_hspc_level
+loop,train2+,87,0.4587,0.2025,0.1977,0.2186,0.2749,0.2749
+loop,train1,195,0.4164,0.1216,0.0892,0.1502,0.1667,0.1667
+loop,train0,1994,0.3987,0.0504,0.0282,0.0679,0.0857,0.0857
+stripe,train2+,323,0.2115,0.0598,0.0781,0.0487,0.0677,0.0677
+stripe,train1,244,0.2201,0.0302,0.0492,0.0113,0.0401,0.0401
+stripe,train0,508,0.2322,0.0401,0.0191,0.0139,0.0236,0.0236
