@@ -128,3 +128,11 @@ Stop one with `kill $(cat <runner>.pid)`.
   all12aml_meth_refin_drop_fN 25 and 10 kb, all12aml_refres_drop_fN 10 kb and `aml_train_eval.py --fold N --variant extra`
   (results eval_fN_extra_*.csv copied to runs/aml_train_remote/fold<N>/). Claims by run name (the local queue takes the same
   B jobs through the same claims). Done marker REMOTE_QUEUE_MORE_DONE.
+
+- remote_queue_loop.py (PID file remote_queue_loop.pid, 2026-10-11): priority runner for the loop-centric AML pilot (registry 63).
+  Replaced remote_queue_more.py between two jobs: the old runner was killed by explicit PID with SIGKILL (no handler, so its
+  running child, an evaluation of all12refin_drop_s1_25kb, continued as an orphan). The new runner waits until no repo
+  training or evaluation process is left and the GPU has been quiet for 2 minutes, smokes the loopfocus config for 60 steps,
+  trains all12aml_loopfocus_refres_drop_f10_10kb (claimed), runs aml_loop_detection.py --recipe loopfocus for the fold-10
+  donors 018 027 270 (predict, score; the partial score table is copied to object_scores.csv.gz; stats, inc, criteria) and
+  copies the tables to runs/aml_loopfocus/*_f10_pilot*, then hands over to remote_queue_more.main() (finished jobs skipped).
