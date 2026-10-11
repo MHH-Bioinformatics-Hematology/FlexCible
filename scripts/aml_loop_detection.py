@@ -39,6 +39,13 @@ objects and windows of results/aml_loop_detection and writes every table to
 results/aml_loop_detection_loopfocus/; stage criteria compares it with aml_refin on the success criteria
 (AUROC of private loops against the matched shared loops >= 0.70, amplitude >= 30 percent of the
 measured gain).
+
+Stage criteria2 (registry section 69, after the section 63 pilot) tests the shortcut that the gain over
+the measured HSPC map allows (shared-loop controls are strong in HSPC and in the reference, so under-
+predicting strong loops alone gives a high AUROC) and judges a run on confound-free criteria. It reads
+any object_scores table of this script and needs only numpy / pandas / scipy:
+    python scripts/aml_loop_detection.py --stage criteria2 --scores <object_scores.csv.gz> --tag <name>
+Tables go to results/aml_loop_detection_criteria2/<tag>_*.csv (see stage_criteria2).
 """
 from __future__ import annotations
 
@@ -611,6 +618,325 @@ def stage_criteria(D: pd.DataFrame) -> pd.DataFrame:
     return R
 
 
+# ===================================================================== criteria2
+CRIT2_OUT = REPO / "results/aml_loop_detection_criteria2"
+CAL_REF, CAL_DIST = 0.15, 0.10        # calipers of the matching: log2 enrichment (reference, HSPC), log10 distance
+
+
+def match_controls(P: pd.DataFrame, C: pd.DataFrame) -> pd.DataFrame:
+    """One-to-one nearest-neighbour matching without replacement within each donor: positives P to
+    candidate controls C on the AML reference enrichment, the measured HSPC enrichment (both within
+    CAL_REF), log10 distance (within CAL_DIST) and CTCF orientation class (exact). Greedy by increasing
+    scaled squared distance. Returns rows (pos, ctl) of integer row labels."""
+    out = []
+    for p, g in P.groupby("patient"):
+        c = C[C.patient == p].drop_duplicates(["chrom", "a_lo", "b_lo"])
+        if c.empty:
+            continue
+        dr = (g.reference.values[:, None] - c.reference.values[None]) / CAL_REF
+        dh = (g.hspc.values[:, None] - c.hspc.values[None]) / CAL_REF
+        dd = (g.dist_log10.values[:, None] - c.dist_log10.values[None]) / CAL_DIST
+        ok = (np.abs(dr) <= 1) & (np.abs(dh) <= 1) & (np.abs(dd) <= 1) & (
+            g._orient.astype(str).to_numpy()[:, None] == c._orient.astype(str).to_numpy()[None])
+        cost = np.where(ok, dr ** 2 + dh ** 2 + dd ** 2, np.inf)
+        used_p, used_c = set(), set()
+        for flat in np.argsort(cost, axis=None):
+            i, j = divmod(int(flat), cost.shape[1])
+            if not np.isfinite(cost[i, j]):
+                break
+            if i in used_p or j in used_c:
+                continue
+            used_p.add(i)
+            used_c.add(j)
+            out.append((g.index[i], c.index[j]))
+    return pd.DataFrame(out, columns=["pos", "ctl"])
+
+
+def _smd(a: np.ndarray, b: np.ndarray) -> float:
+    s = np.sqrt((np.nanvar(a) + np.nanvar(b)) / 2)
+    return float((np.nanmean(a) - np.nanmean(b)) / s) if s > 0 else np.nan
+
+
+def _resid_rank(y: np.ndarray, X: np.ndarray) -> np.ndarray:
+    A = np.column_stack([np.ones(len(y)), X])
+    return y - A @ np.linalg.lstsq(A, y, rcond=None)[0]
+
+
+def _spearman(x, y, covs=None) -> float:
+    from scipy.stats import rankdata
+    ok = np.isfinite(x) & np.isfinite(y)
+    if covs is not None:
+        ok &= np.all(np.isfinite(covs), 1)
+    if ok.sum() < 10:
+        return np.nan
+    rx, ry = rankdata(x[ok]), rankdata(y[ok])
+    if covs is not None:
+        Z = np.column_stack([rankdata(covs[ok, k]) for k in range(covs.shape[1])])
+        rx, ry = _resid_rank(rx, Z), _resid_rank(ry, Z)
+    if rx.std() == 0 or ry.std() == 0:
+        return np.nan
+    return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def stage_criteria2(D: pd.DataFrame, tag: str, nboot: int = 1000) -> None:
+    """Confound-free criteria for the AML-specific loops (registry section 69).
+
+    Why: the success criterion of section 63 scores the gain (model minus the MEASURED HSPC map) of
+    AML-specific (private) loops against shared loops chosen for a strong HSPC signal. The HSPC value alone
+    separates the two classes (AUROC about 0.99), so any model that tracks the HSPC / reference level less
+    closely scores high without patient-specific information. criteria2 therefore
+      1. builds controls matched on the reference and HSPC enrichment: A_ref (shared-loop candidates
+         A_hspc, A_full, A_do pooled) and A_refrand (random distance-matched pairs B_rand, same matching;
+         the only pool that overlaps the positives in reference / HSPC level), and reports the match quality;
+      2. scores level, gain over HSPC and RESIDUAL (model minus the AML reference map, the quantity the
+         residual model learns) with and without the patient's own marks (partner model '<m>|none');
+      3. correlates the predicted with the measured residual among private loops (plain and partial on
+         reference and HSPC ranks) and checks calibration at random pairs.
+    Intervals: donor bootstrap (resampling donors) when >= 6 donors, otherwise resampling objects within
+    donor (ci_mode column). Pass criteria (private loops, per model with a '|none' partner):
+      C1 marks effect  AUROC(residual, A_refrand) with marks minus without >= 0.03 and CI lower bound >= 0
+      C2 AUROC(residual, A_refrand) >= 0.70
+      C3 Spearman(predicted residual, measured residual) among private loops >= 0.20
+      C4 no inflation at random pairs: median(model) - median(measured) at B_rand <= 0.05 and the same for
+         the 90th percentile <= 0.10 (log2 enrichment)
+    The section 63 criterion (gain AUROC vs A_hspc >= 0.70) is reported as C0, not part of the verdict.
+    """
+    from scipy.stats import rankdata
+    D = add_derived(D) if "cls" not in D else D
+    F = pd.read_csv(FEATS, usecols=["patient", "kind", "set", "pair_id", "_orient", "dist_log10"],
+                    dtype={"patient": str})
+    F["patient"] = F.patient.map(lambda x: x.zfill(3) if x.isdigit() and len(x) < 3 else x)
+    D = D.merge(F, on=["patient", "kind", "set", "pair_id"], how="left")
+    CRIT2_OUT.mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(SEED + 3)
+    L = D[D.kind == "loop"].reset_index(drop=True)
+    ST = D[D.kind == "stripe"].reset_index(drop=True)
+    base = [m for m in ["aml_refin", "base_refin@aml", *EXTRA_LABELS] if m in L]
+    models = [m for m in base] + [m + "|none" for m in base if m + "|none" in L] + ["reference"]
+    donors = sorted(L.patient.unique())
+    ci_mode = "donor" if len(donors) >= 6 else "object"
+    log(f"criteria2 '{tag}': {len(donors)} donors, models {models}, CI by {ci_mode}")
+
+    # ---- control sets: (positive row, control row) pairs; unmatched sets use all private positives
+    pos = L[(L.set == "pos") & (L.cls == "private")]
+    sets = {}
+    for nm, ctl_sets in (("A_hspc", ["A_hspc"]), ("B_rand", ["B_rand"])):
+        c = L[L.set.isin(ctl_sets)]
+        sets[nm] = (pos.index.values, c.index.values)
+    mq = []
+    for nm, pool in (("A_ref", ["A_hspc", "A_full", "A_do"]), ("A_refrand", ["B_rand"])):
+        C = L[L.set.isin(pool)]
+        m = match_controls(pos, C)
+        sets[nm] = (m.pos.values, m.ctl.values)
+        pp, cc = L.loc[m.pos], L.loc[m.ctl]
+        full = L[L.set == ("A_hspc" if nm == "A_ref" else "B_rand")]
+        rec = {"tag": tag, "control_set": nm, "pool": "+".join(pool), "n_pos_private": len(pos),
+               "n_matched": len(m), "frac_matched": len(m) / len(pos)}
+        for v in ("reference", "hspc", "dist_log10", "measured"):
+            rec[f"smd_before_{v}"] = _smd(pos[v].values, full[v].values)
+            rec[f"smd_after_{v}"] = _smd(pp[v].values, cc[v].values) if len(m) > 5 else np.nan
+            rec[f"mean_pos_{v}"] = pp[v].mean() if len(m) else np.nan
+            rec[f"mean_ctl_{v}"] = cc[v].mean() if len(m) else np.nan
+        for nm2, v in (("-hspc", -L.hspc), ("-reference", -L.reference)):
+            rec[f"auroc_{nm2}_before"] = auroc(v[pos.index].values, v[full.index].values)
+            rec[f"auroc_{nm2}_after"] = auroc(v[m.pos].values, v[m.ctl].values) if len(m) > 5 else np.nan
+        mq.append(rec)
+    pd.DataFrame(mq).to_csv(CRIT2_OUT / f"{tag}_match_quality.csv", index=False, float_format="%.4f")
+    print(pd.DataFrame(mq).round(3).T.to_string())
+
+    # ---- score vectors
+    score = {}
+    for nm in models:
+        score[(nm, "level")] = L[nm].values
+        score[(nm, "gain")] = (L[nm] - L.hspc).values
+        score[(nm, "resid")] = (L[nm] - L.reference).values
+        if nm + "@hspc" in L:      # the model's own HSPC counterpart (run on HSPC reference, same marks)
+            score[(nm, "gain_modelhspc")] = (L[nm] - L[nm + "@hspc"]).values
+    for nm, v in (("-hspc", -L.hspc), ("-reference", -L.reference), ("-measured", -L.measured)):
+        score[(nm, "level")] = v.values       # trivial baselines: the confound alone
+    pos_idx = pos.index.values
+    cov = L[["reference", "hspc"]].values
+    meas_res = (L.measured - L.reference).values
+    meas_gain = L["gain|measured"].values
+    enh = ST[(ST.set == "pos") & (ST.pair_type == "enh")]
+
+    def by_donor(idx, frame):
+        pdn = frame.patient.values
+        return {d: idx[pdn[idx] == d] for d in np.unique(pdn[idx])}
+
+    pos_by = by_donor(pos_idx, L)
+    set_by = {k: (by_donor(v[0], L), by_donor(v[1], L), v) for k, v in sets.items()}   # pos / ctl per donor
+    enh_by = by_donor(enh.index.values, ST)
+    Sdat = {"level": {}, "resid": {}, "gain": {}}
+    for nm in models:
+        Sdat["resid"][nm] = (ST[nm] - ST.reference).values
+        Sdat["gain"][nm] = (ST[nm] - ST.hspc).values
+    st_meas = {"resid": (ST.measured - ST.reference).values, "gain": ST["gain|measured"].values}
+
+    def draw(mode: str):
+        """Row indices per set and for the private positives under one resample."""
+        if mode == "point":
+            return {k: v[2] for k, v in set_by.items()}, pos_idx, enh.index.values
+        if mode == "donor":
+            pick = rng.choice(donors, len(donors))
+            cat = lambda dct, ds: np.concatenate([dct[d] for d in ds if d in dct])
+            sd = {k: (cat(v[0], pick), cat(v[1], pick)) for k, v in set_by.items()}
+            return sd, cat(pos_by, pick), cat(enh_by, pick) if enh_by else np.array([], int)
+        rs = lambda a: a[rng.integers(0, len(a), len(a))] if len(a) else a
+        sd = {k: (np.concatenate([rs(v[0][d]) for d in v[0]]), np.concatenate([rs(v[1][d]) for d in v[1]]))
+              for k, v in set_by.items()}
+        return sd, np.concatenate([rs(a) for a in pos_by.values()]), \
+            np.concatenate([rs(a) for a in enh_by.values()]) if enh_by else np.array([], int)
+
+    def stats(mode: str) -> dict:
+        sd, pi, ei = draw(mode)
+        r = {}
+        for (nm, sc), v in score.items():
+            for k, (a, b) in sd.items():
+                r[("auroc", nm, sc, k)] = auroc(v[a], v[b])
+        for nm in models:
+            for k in sets:
+                for sc in ("level", "gain", "resid"):
+                    if nm + "|none" in models and not nm.endswith("|none"):
+                        r[("dmarks", nm, sc, k)] = r[("auroc", nm, sc, k)] - r[("auroc", nm + "|none", sc, k)]
+            if nm != "reference":
+                r[("sp_resid", nm, "private", "")] = _spearman(score[(nm, "resid")][pi], meas_res[pi])
+                r[("sp_resid_partial", nm, "private", "")] = _spearman(score[(nm, "resid")][pi], meas_res[pi], cov[pi])
+            r[("sp_gain", nm, "private", "")] = _spearman(score[(nm, "gain")][pi], meas_gain[pi])
+            if len(ei) > 10 and nm in Sdat["gain"]:
+                r[("sp_stripe_gain_enh", nm, "enh", "")] = _spearman(Sdat["gain"][nm][ei], st_meas["gain"][ei])
+                r[("sp_stripe_resid_enh", nm, "enh", "")] = _spearman(Sdat["resid"][nm][ei], st_meas["resid"][ei])
+        for nm in models:
+            if ("sp_stripe_gain_enh", "reference", "enh", "") in r and nm != "reference" and \
+                    ("sp_stripe_gain_enh", nm, "enh", "") in r:
+                r[("d_stripe_gain_enh_vs_reference", nm, "enh", "")] = \
+                    r[("sp_stripe_gain_enh", nm, "enh", "")] - r[("sp_stripe_gain_enh", "reference", "enh", "")]
+        return r
+
+    point = stats("point")
+    boots = {"donor": [], "object": []}
+    for mode in boots:
+        for _ in range(nboot):
+            boots[mode].append(stats(mode))
+    rows = []
+    for key, est in point.items():
+        row = {"tag": tag, "stat": key[0], "model": key[1], "score": key[2], "control_set": key[3], "estimate": est}
+        for mode in boots:
+            v = np.array([b.get(key, np.nan) for b in boots[mode]], float)
+            v = v[np.isfinite(v)]
+            row[f"{mode}_lo"], row[f"{mode}_hi"] = (np.percentile(v, [2.5, 97.5]) if len(v) > 50 else (np.nan, np.nan))
+        row["ci_mode"] = ci_mode
+        row["lo"], row["hi"] = row[f"{ci_mode}_lo"], row[f"{ci_mode}_hi"]
+        rows.append(row)
+    R = pd.DataFrame(rows)
+    R.to_csv(CRIT2_OUT / f"{tag}_stats.csv", index=False, float_format="%.4f")
+
+    # ---- per-donor AUROC with and without marks (paired)
+    pdr = []
+    for nm in base:
+        if nm + "|none" not in L:
+            continue
+        for k, (pd_, cd_, _) in set_by.items():
+            for sc in ("level", "gain", "resid"):
+                for d in donors:
+                    if d in pd_ and d in cd_:
+                        a, b = pd_[d], cd_[d]
+                        w, n0 = auroc(score[(nm, sc)][a], score[(nm, sc)][b]), auroc(score[(nm + "|none", sc)][a], score[(nm + "|none", sc)][b])
+                        pdr.append({"tag": tag, "model": nm, "control_set": k, "score": sc, "donor": d,
+                                    "n_pos": len(a), "n_ctl": len(b), "auroc_marks": w, "auroc_none": n0,
+                                    "delta": w - n0})
+    pd.DataFrame(pdr).to_csv(CRIT2_OUT / f"{tag}_per_donor_marks.csv", index=False, float_format="%.4f")
+
+    # ---- calibration at random pairs and controls
+    inf = []
+    q = lambda x, p: float(np.nanpercentile(x, p))
+    for s_ in ("pos", "A_hspc", "B_rand"):
+        d = L[(L.set == s_) & ((L.cls == "private") if s_ == "pos" else True)]
+        for nm in ["measured", *models]:
+            v = d[nm].values
+            rec = {"tag": tag, "set": s_, "model": nm, "n": len(d), "median_level": np.nanmedian(v),
+                   "p90_level": q(v, 90), "median_minus_hspc": np.nanmedian(v - d.hspc.values),
+                   "median_minus_reference": np.nanmedian(v - d.reference.values)}
+            inf.append(rec)
+    I = pd.DataFrame(inf)
+    I.to_csv(CRIT2_OUT / f"{tag}_calibration.csv", index=False, float_format="%.4f")
+
+    # ---- linear adjustment of the scores for reference / HSPC level (descriptive; the positives and
+    # shared controls barely overlap in these covariates, so A_hspc values extrapolate)
+    adj = []
+    for k in ("A_hspc", "A_refrand", "B_rand"):
+        a, b = sets[k][0], sets[k][1]
+        idx = np.concatenate([np.unique(a), np.unique(b)])
+        X = np.column_stack([L.reference, L.hspc, L.reference ** 2, L.hspc ** 2, L.reference * L.hspc])[idx]
+        lab = np.r_[np.ones(len(np.unique(a))), np.zeros(len(np.unique(b)))]
+        for (nm, sc), v in score.items():
+            y = v[idx]
+            ok = np.isfinite(y) & np.all(np.isfinite(X), 1)
+            if ok.sum() < 20:
+                continue
+            e = _resid_rank(rankdata(y[ok]), X[ok])
+            adj.append({"tag": tag, "control_set": k, "model": nm, "score": sc,
+                        "auroc_raw": auroc(y[ok][lab[ok] == 1], y[ok][lab[ok] == 0]),
+                        "auroc_adjusted": auroc(e[lab[ok] == 1], e[lab[ok] == 0])})
+    pd.DataFrame(adj).to_csv(CRIT2_OUT / f"{tag}_adjusted.csv", index=False, float_format="%.4f")
+
+    # ---- criteria
+    def get(stat, nm, sc, k=""):
+        s_ = R[(R.stat == stat) & (R.model == nm) & (R.score == sc) & (R.control_set == k)]
+        return s_.iloc[0] if len(s_) else None
+
+    out = []
+    for nm in base:
+        rec = {"tag": tag, "model": nm, "n_donors": len(donors), "ci_mode": ci_mode,
+               "n_pos_private": len(pos), "n_matched_A_refrand": len(sets["A_refrand"][0]),
+               "n_matched_A_ref": len(sets["A_ref"][0])}
+        g0 = get("auroc", nm, "gain", "A_hspc")
+        rec["C0_gain_auroc_A_hspc"], rec["C0_pass"] = g0.estimate, bool(g0.estimate >= 0.70)
+        a2 = get("auroc", nm, "resid", "A_refrand")
+        rec["C2_resid_auroc_A_refrand"], rec["C2_lo"], rec["C2_hi"] = a2.estimate, a2.lo, a2.hi
+        rec["C2_pass"] = bool(a2.estimate >= 0.70)
+        a2b = get("auroc", nm, "resid", "A_ref")
+        rec["info_resid_auroc_A_ref_shared"] = a2b.estimate if a2b is not None else np.nan
+        rec["info_level_auroc_B_rand"] = get("auroc", nm, "level", "B_rand").estimate
+        rec["info_level_auroc_B_rand_reference"] = get("auroc", "reference", "level", "B_rand").estimate
+        if nm + "|none" in L:
+            d1 = get("dmarks", nm, "resid", "A_refrand")
+            rec["C1_marks_delta_resid_A_refrand"], rec["C1_lo"], rec["C1_hi"] = d1.estimate, d1.lo, d1.hi
+            rec["C1_pass"] = bool(d1.estimate >= 0.03 and d1.lo >= 0)
+            d0 = get("dmarks", nm, "gain", "A_hspc")
+            rec["info_marks_delta_gain_A_hspc"], rec["info_marks_delta_gain_lo"], rec["info_marks_delta_gain_hi"] = d0.estimate, d0.lo, d0.hi
+            d3 = get("dmarks", nm, "level", "A_hspc")
+            rec["info_marks_delta_level_A_hspc"] = d3.estimate
+            dr = get("dmarks", nm, "resid", "A_hspc")
+            rec["info_marks_delta_resid_A_hspc"] = dr.estimate
+        else:
+            rec["C1_pass"] = np.nan
+        sp = get("sp_resid", nm, "private")
+        rec["C3_resid_spearman"], rec["C3_lo"], rec["C3_hi"] = sp.estimate, sp.lo, sp.hi
+        rec["C3_pass"] = bool(sp.estimate >= 0.20)
+        spp = get("sp_resid_partial", nm, "private")
+        rec["info_resid_spearman_partial"], rec["info_partial_lo"], rec["info_partial_hi"] = spp.estimate, spp.lo, spp.hi
+        ib = I[(I.set == "B_rand") & (I.model == nm)].iloc[0]
+        im = I[(I.set == "B_rand") & (I.model == "measured")].iloc[0]
+        rec["C4_median_excess_B_rand"] = ib.median_level - im.median_level
+        rec["C4_p90_excess_B_rand"] = ib.p90_level - im.p90_level
+        rec["C4_pass"] = bool(rec["C4_median_excess_B_rand"] <= 0.05 and rec["C4_p90_excess_B_rand"] <= 0.10)
+        st = get("sp_stripe_gain_enh", nm, "enh")
+        if st is not None:
+            rec["info_stripe_enh_gain_spearman"] = st.estimate
+            dd = get("d_stripe_gain_enh_vs_reference", nm, "enh")
+            if dd is not None:
+                rec["info_stripe_enh_minus_reference"], rec["info_stripe_lo"], rec["info_stripe_hi"] = dd.estimate, dd.lo, dd.hi
+        flags = [rec.get(c) for c in ("C1_pass", "C2_pass", "C3_pass", "C4_pass")]
+        rec["criteria2_pass"] = bool(all(f is True or f == True for f in flags)) if all(
+            isinstance(f, (bool, np.bool_)) for f in flags) else np.nan
+        out.append(rec)
+    C = pd.DataFrame(out)
+    C.to_csv(CRIT2_OUT / f"{tag}_criteria2.csv", index=False, float_format="%.4f")
+    print(C.round(3).T.to_string())
+    log("criteria2 written")
+
+
 # ===================================================================== figure
 def stage_figure(D: pd.DataFrame) -> None:
     import matplotlib
@@ -722,6 +1048,9 @@ def main():
     ap.add_argument("--stage", nargs="+", default=["windows", "predict", "score", "stats", "inc", "figure"])
     ap.add_argument("--gpu", default="0", help="one local GPU index for inference")
     ap.add_argument("--threads", type=int, default=4)
+    ap.add_argument("--scores", default="", help="criteria2: object_scores table (default: RES_OUT/object_scores.csv.gz)")
+    ap.add_argument("--tag", default="", help="criteria2: prefix of the output tables")
+    ap.add_argument("--nboot", type=int, default=1000, help="criteria2: bootstrap replicates")
     ap.add_argument("--only", nargs="*", help="test patients to predict (default all ten)")
     ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus"],
                     help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus; "
@@ -755,6 +1084,9 @@ def main():
         stage_figure(D)
     if "criteria" in a.stage:
         stage_criteria(pd.read_csv(RES_OUT / "object_scores.csv.gz", dtype={"patient": str}))
+    if "criteria2" in a.stage:
+        src = Path(a.scores) if a.scores else RES_OUT / "object_scores.csv.gz"
+        stage_criteria2(pd.read_csv(src, dtype={"patient": str}), a.tag or src.parent.name, a.nboot)
 
 
 if __name__ == "__main__":
