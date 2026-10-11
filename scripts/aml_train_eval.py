@@ -48,6 +48,8 @@ RES_OUT = REPO / "results/aml_train"
 PY = sys.executable
 RES = [25000, 10000]
 GPUS = os.environ.get("HICMULTI_GPUS", "0,1").split(",")
+VARIANT = ""          # "extra" (folds >= 10): only the Meth and the residual-reference models, tables eval_f<N>_extra_*
+TAG = ""
 
 
 def log(msg):
@@ -107,11 +109,14 @@ def models(fold: int, res: int) -> list[dict]:
         {"label": "base_refin@c12", "run": f"all12refin_drop_{k}kb", "ref": c12, "lab": False},
         {"label": "base_honest", "run": f"all12honest_drop_{k}kb", "ref": None, "lab": False},
     ]
-    if fold == 0:                     # the same recipe with the Meth channel (section 38)
-        ms.append({"label": "aml_meth_refin", "run": f"all12aml_meth_refin_drop_{k}kb",
+    extra = fold >= at.NEW_FOLD_MIN and VARIANT == "extra"
+    if extra:                         # folds >= 10: only the variants, evaluated after the main models
+        ms = []
+    if fold == 0 or extra:            # the same recipe with the Meth channel (section 38)
+        ms.append({"label": "aml_meth_refin", "run": f"all12aml_meth_refin_drop{sfx}_{k}kb",
                    "ref": "aml", "lab": True, "meth": True})
-    if fold == 0:                     # the reference as residual instead of an input plane
-        ms.append({"label": "aml_refres", "run": f"all12aml_refres_drop_{k}kb", "ref": "aml",
+    if fold == 0 or extra:            # the reference as residual instead of an input plane
+        ms.append({"label": "aml_refres", "run": f"all12aml_refres_drop{sfx}_{k}kb", "ref": "aml",
                    "lab": True})
     if fold == 0 and res == 25000:
         ms.append({"label": "aml_refin_nolab", "run": "all12aml_refin_drop_nolab_25kb",
@@ -293,7 +298,7 @@ def stage_score(fold: int):
                     rows.append(rec)
     R = pd.DataFrame(rows)
     RES_OUT.mkdir(parents=True, exist_ok=True)
-    R.to_csv(RES_OUT / f"eval_f{fold}_patients.csv", index=False, float_format="%.4f")
+    R.to_csv(RES_OUT / f"eval_f{fold}{TAG}_patients.csv", index=False, float_format="%.4f")
     log(f"scores: {len(R)} rows")
     return R
 
@@ -394,7 +399,7 @@ def stage_features(fold: int):
                     rec[kk] = float(np.nanmean(band)) if np.isfinite(band).any() else np.nan
             rows.append(rec)
     F = pd.DataFrame(rows)
-    F.to_csv(RES_OUT / f"eval_f{fold}_features_windows.csv", index=False)
+    F.to_csv(RES_OUT / f"eval_f{fold}{TAG}_features_windows.csv", index=False)
     out = []
     for kind, g in F.groupby("kind"):
         meas = g["measured"] - g["aml_reference"]
@@ -409,7 +414,7 @@ def stage_features(fold: int):
                 float(np.corrcoef(d[ok], meas[ok])[0, 1]) if ok.sum() > 10 else np.nan)
         out.append(rec)
     O = pd.DataFrame(out)
-    O.to_csv(RES_OUT / f"eval_f{fold}_features.csv", index=False, float_format="%.4f")
+    O.to_csv(RES_OUT / f"eval_f{fold}{TAG}_features.csv", index=False, float_format="%.4f")
     return O
 
 
@@ -432,7 +437,7 @@ def summary(R: pd.DataFrame, fold: int):
         A["cells"] = lab
         parts.append(A)
     S = pd.concat(parts, ignore_index=True)
-    S.to_csv(RES_OUT / f"eval_f{fold}_summary.csv", index=False, float_format="%.4f")
+    S.to_csv(RES_OUT / f"eval_f{fold}{TAG}_summary.csv", index=False, float_format="%.4f")
     print(S.round(3).to_string(index=False))
 
 
@@ -440,8 +445,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fold", type=int, default=0)
+    ap.add_argument("--variant", default="", choices=["", "extra"],
+                    help="extra: evaluate only the Meth and residual-reference models of a fold >= 10")
     ap.add_argument("--stage", nargs="+", default=["predict", "score", "features"])
     a = ap.parse_args()
+    global VARIANT, TAG
+    VARIANT, TAG = a.variant, ("_" + a.variant if a.variant else "")
     if "predict" in a.stage:
         stage_predict(a.fold)
     if "score" in a.stage:

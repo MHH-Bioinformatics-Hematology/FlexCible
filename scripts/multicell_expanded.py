@@ -184,6 +184,10 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("refin_drop", "honest_drop")
        for f in ("", "_f1", "_f2", "_f10", "_f11", "_f12")},
     "all12aml_refin_drop_nolab": (TRAIN12, None),      # the same without the lab indicator
+    # the Meth and residual-reference variants on the folds without the healthy donors
+    # (registry section 52)
+    **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("meth_refin_drop", "refres_drop")
+       for f in ("_f10", "_f11", "_f12")},
     # the recipe with the reference as residual (model.reference "residual": the
     # network predicts patient minus AML reference) instead of an input plane;
     # same cache as all12aml_refin_drop (mc_all12aml_ref_<k>kb), fold 0
@@ -291,12 +295,14 @@ CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
-METH_RUNS = {"all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
+METH_RUNS = {f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
+             "all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
              "all12refres_drop_motifmeth", "all12honest_drop_meth", "all12honest_drop_meth_s1",
              "all12honest_drop_motifmeth", "all12honest_drop_motifmeth_s1"}
 MOTIFMETH_RUNS = {"all12refres_drop_motifmeth", "all12honest_drop_motifmeth",
                   "all12honest_drop_motifmeth_s1"}
-METH_V2 = {"all12refres_drop_meth_v2", "all12aml_meth_refin_drop", "all12honest_drop_meth",
+METH_V2 = {f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
+           "all12refres_drop_meth_v2", "all12aml_meth_refin_drop", "all12honest_drop_meth",
            "all12honest_drop_meth_s1", "all12honest_drop_motifmeth",
            "all12honest_drop_motifmeth_s1"}
 CNV_RUNS = {"all12refres_drop_cnv"}
@@ -352,6 +358,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             **{r: "input" for r in STRUCT_RUNS},
             **{k: "input" for k in AML_RUNS if "refin" in k},
             "all12aml_refres_drop": "residual",
+            **{f"all12aml_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
             "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
