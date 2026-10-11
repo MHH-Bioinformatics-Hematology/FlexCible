@@ -7558,7 +7558,1491 @@ Controls A_ref; effect = Spearman with the gain, or AUROC against matched shared
 
 ### Transfer (transfer_results.csv, transfer_summary.csv, transfer_paired_differences.csv, fig_transfer_matrix.png (A_full), fig_transfer_matrix_Aref.png)
 Boosted trees (the classifier settings of section 57) on standardised delta (H3K27ac, H3K27me3; 12 features), consensus-state (12) and locus (10) features, trained on whole groups, locus-disjoint (training rows within 2 bins of a test anchor dropped), per-group gain percentile as regression target; mean over test groups [bootstrap CI over groups]. Controls A_full (A_ref in the CSV and `fig_transfer_matrix_Aref.png`).
-- (a) leave-one-cell-out, 14 other cells: loops AUROC 0.69 [0.66, 0.71], gain rho 0.31 [0.25, 0.36] (every cell above 0.5 except pc9 0.49 and nhek 0.51 is not: range 0.45 to 0.79); stripes 0.59 [0.57, 0.60], rho 0.14. Adding CTCF (14 cells): loops 0.82 [0.80, 0.84]. Without consensus-state and locus features (delta + distance + orientation only, RULE): loops 0.62, stripes 0.54; state alone (STATE): 0.67 and 0.58. Block permutation importance (AUROC drop): loops delta 0.054, reference 0.089, locus 0.083; stripes 0.018, 0.065, 0.007.
+- (a) leave-one-cell-out, 14 other cells: loops AUROC 0.69 [0.66, 0.71], gain rho 0.31 [0.25, 0.36] (range 0.49 (PC-9) to 0.79 (HMEC); 14 of 15 cells above 0.5); stripes 0.59 [0.57, 0.60], rho 0.14. Adding CTCF (14 cells): loops 0.82 [0.80, 0.84]. Without consensus-state and locus features (delta + distance + orientation only, RULE): loops 0.62, stripes 0.54; state alone (STATE): 0.67 and 0.58. Block permutation importance (AUROC drop): loops delta 0.054, reference 0.089, locus 0.083; stripes 0.018, 0.065, 0.007.
+- (b) all cells to AML donors: loops 0.70 [0.67, 0.73] (private 0.71; with CTCF, 8 donors, 0.81), gain rho 0.09 [0.04, 0.14]; stripes 0.58 [0.55, 0.61], rho 0.10. RULE only: 0.57 and 0.52 (rho -0.06 loops); STATE alone 0.69 and 0.57. AML-trained within AML (leave-one-donor-out, d_aml_only): loops 0.77 [0.73, 0.80] (private 0.78), rho 0.30; stripes 0.62, rho 0.25.
+- (c) AML donors to cells: loops 0.54 [0.51, 0.57], rho -0.15 [-0.18, -0.11] (with CTCF 0.70 on 14 cells); stripes 0.52, rho -0.01. The gain ranking learned in AML is inverted in cells.
+- (d) held-out donor, AML-only vs AML + all cells: loops AUROC 0.766 vs 0.738 (difference -0.028 [-0.040, -0.016], 0/10 donors better), private loops -0.030 [-0.042, -0.020], gain rho 0.30 vs 0.19 (-0.11 [-0.15, -0.07]); with the AML rows weighted to equal total weight the difference is -0.012 [-0.017, -0.007] (rho -0.04 [-0.07, -0.01]); stripes -0.027 [-0.057, 0.000] and -0.009 [-0.022, 0.005]. Cells added to the AML training do not raise the private-loop AUROC or the gain Spearman. (e) held-out cell, other cells vs other cells + AML: -0.008 [-0.013, -0.004] AUROC (loops), 0.000 for RULE; stripes -0.001.
+- Locus-disjoint caveat: A_full controls are matched on own H3K27ac but not on reference state, so reference-level and locus features carry most of the cross-cell AUROC (STATE-only 0.67 of 0.69 in (a), 0.69 of 0.70 in (b)).
+- Sign / size consistency (lr_coefficients.csv, lr_sign_consistency.csv; per-group logistic regression on the 12 standardised delta features): for loops 5 of 12 features have the same mean sign in cells and AML (e.g. H3K27ac +-100 kb max: positive in 80 percent of cells and of donors). The minimum-over-anchors H3K27ac at 10 kb has coefficient -0.13 in cells (negative in 15/15) and +0.11 in AML (positive in 9/10), and the +-20 kb maximum is +0.15 in cells (14/15) and -0.10 in AML (2/10): opposite signs. For stripes 7 of 12 agree in sign, with small coefficients (|mean| <= 0.15).
+
+### Verdict
+No conclusion of section 47 changes. The headline 8-patient numbers, the increments over the HSPC state (+0.023, +0.015,
++0.006), the gain-of-H3K27ac signal (0.617, 8 of 8) and the pair-type and stripe numbers were never affected: the healthy
+donors were not in the data, and the duplicate pairs were never together in an 8- or 10-sample experiment. Only the
+18-sample methylation experiments were exposed to the partner leak, and they move by at most 0.003 (A_hspc 0.820 to 0.822, A_do
+0.875 to 0.875, B_rand 0.703 to 0.701; plain folds 0.848 to 0.850, 0.905 to 0.903, 0.712 to 0.709). The held-out 168/496 unit scores 0.822
+where 168 alone had 0.857 and 496 0.787, so the single-sample numbers were higher than the unit number. Pooled over units the
+change is negligible because the locus-disjoint folds already removed most shared-anchor information the partner carried. The 18-sample
+experiments now rest on 16 donors. The remaining limit is the "probably" for 260 and 424 (section 54).
+
+Reproduce: `python scripts/aml_loop_classifier.py --stage hic tracks motifs stripes_hic build subtypes model figures --jobs 4
+--workers 4 --null-reps-lr 20 --null-reps-gb 10` (hicdiff env).
+
+## 58. Chromosome-held-out comparison at 25 kb, competitor resolutions, and the 5 kb plan (FINAL for 25 kb and 5 kb; section 57 was the last number when this was written)
+
+Question: how do the chromosome-held-out final models of section 37 compare
+with each published predictor at 25 kb, which competitor supports which
+resolution, and what is needed to repeat the comparison at 5 kb?
+
+Inventory of the competitor predictions on disk (none was rerun; checked from
+the cooler headers and file lists on 2026-10-10):
+
+| competitor | native grid and reach | predictions on disk | held out by the competitor | 25 kb | 10 kb | 5 kb |
+|---|---|---|---|---|---|---|
+| C.Origami | 8192 bp bins, 2 097 152 bp window, hg38, released IMR-90 model | `C.Origami/testNovember/IMR90/chr2.cool`, `chr3.cool` | chr2 (test), chr3 (validation) | sampled from 8192 bp | sampled (section 37) | sampled (up-sampling) |
+| Epiphany | 10 kb bins, 990 kb reach, hg38, released GM12878 weights | `epiphany_pretrained/assemble_matrix_chr{2,3,11,17}.cool` | chr3, 11, 17 | sampled from 10 kb | native (section 37) | sampled (up-sampling) |
+| HiC-Reg | 5 kb bins, 1 Mb reach, hg19 | published GM12878 chr1 to 22 (`Gm12878_chr<N>_RF_tree20_prediction_predicted_coords.cool`, 5 kb, and a `_25kb.cool` sum); released text predictions for GM12878 and K562, chr14 and chr17: CV, cross-chromosome (WINDOW, MULTICELL), cross-cell (`home_offload/HiC-Reg`) | cross-chromosome: chr14 (model of chr17) and chr17 (model of chr14) | native by summing 5 kb counts | native by summing 5 kb counts | native, not yet converted (`hicreg_audit.variants()` covers 25 and 10 kb) |
+| Hi-cGAN | per-resolution Zenodo records: 2 kb (Akita regions), 5 kb (GM12878 only, best_plus_two RAD21, H3K4me3, SMC3), 10 kb and 25 kb (GM12878 whole genome and 25 cross-cell-type sets: the GM12878, HMEC, HUVEC, IMR-90 and K562 models on each cell's inputs) | `zenodo_records/02_best_models`, `04_sweep_5kb`, `05_sweep_10kb`, `06_sweep_25kb` | trained on odd chromosomes, even held out | native | native | native, GM12878 only, no cross-cell set |
+| Akita | 2048 bp bins, 448-bin (917 kb) crop of a 1 Mb window, 413 test regions | released predictions in `akita_testset_rasters.npz` (GM12878, HFF) | all 413 regions are excluded from our training | none | none | none |
+
+C.Origami and Epiphany have no native 25 kb output. Their O/E maps are read
+at the 25 kb bin centres by the code path of the 10 kb blocks
+(`benchmark_blocks.sample_competitor`, bilinear in (bin, bin) space, a pixel
+kept when all four neighbours exist), so the 8192 bp and 10 kb values are read
+at points and keep structure finer than a 25 kb bin. HiC-Reg's 25 kb maps are
+sums of its 5 kb counts. Akita has no whole-chromosome output and no 25 kb
+score exists (the 2 kb comparison is section 18, block A). Hi-cGAN has no
+IMR-90 prediction in the 25 kb chrho blocks of section 37; the record 06 sets
+`pred_imr90_on_imr90` and `pred_gm12878_on_imr90` were converted with
+`oe_proper.py` for this section (`BENCH_HICGAN_IMR90_25KB=1`).
+
+Scoring is the section 37 procedure at 25 kb (`scripts/hic_measures.py --stage
+chrho_score chrho_report --chrho-25kb-comps`): chr2, 3, 11, 14, 17 absent
+from the data of every cell, whole-chromosome tiling, identical pixels within
+a block (finite in the target and in every source), band cut to the shortest
+reach (C.Origami 2 Mb, Epiphany 39 bins = 975 kb, HiC-Reg 1 Mb, Hi-cGAN 2 Mb).
+The HiC-Reg and Hi-cGAN blocks are the 25 kb rows of section 37 (identical
+files); the C.Origami blocks (chr2, chr3), the Epiphany blocks (chr3, 11, 17)
+and the Hi-cGAN IMR-90 rows (chr2 only: chr3 is one of its training
+chromosomes) are new. Mean over the chromosomes of a block; compartment r is
+the compartment preference correlation of section 31; the APA ratio equals 1
+for the measured map.
+
+| block | source | Pearson | tile median | SCC | insulation r | boundary recall | loop recall | APA ratio | compartment r | HiCRep |
+|---|---|---|---|---|---|---|---|---|---|---|
+| C.Origami, IMR-90 chr2, chr3 | all12refin_drop_chrho | 0.940 | 0.961 | 0.941 | 0.943 | 0.817 | 0.349 | 1.038 | 0.958 | 0.947 |
+|  | all12honest_drop_chrho (ChIP only) | 0.804 | 0.864 | 0.800 | 0.775 | 0.647 | 0.206 | 0.541 | 0.862 | 0.795 |
+|  | consensus of the other cells | 0.877 | 0.932 | 0.872 | 0.817 | 0.788 | 0.374 | 0.855 | 0.885 | 0.844 |
+|  | C.Origami | 0.942 | 0.922 | 0.933 | 0.898 | 0.752 | 0.313 | 2.930 | 0.980 | 0.950 |
+| C.Origami block, chr2 only | all12refin_drop_chrho | 0.945 | 0.962 | 0.946 | 0.941 | 0.803 | 0.336 | 1.030 | 0.960 | 0.952 |
+|  | all12honest_drop_chrho (ChIP only) | 0.806 | 0.855 | 0.799 | 0.767 | 0.616 | 0.197 | 0.556 | 0.856 | 0.798 |
+|  | C.Origami | 0.944 | 0.921 | 0.935 | 0.899 | 0.751 | 0.283 | 2.924 | 0.980 | 0.952 |
+|  | Hi-cGAN IMR-90 model | 0.808 | 0.924 | 0.792 | 0.630 | 0.618 | 0.258 | 0.714 | 0.945 | 0.845 |
+|  | Hi-cGAN GM12878 model | 0.335 | 0.592 | 0.349 | 0.443 | 0.309 | 0.075 | 0.217 | 0.739 | 0.483 |
+| Epiphany, GM12878 chr3, 11, 17 | all12refin_drop_chrho | 0.917 | 0.944 | 0.913 | 0.900 | 0.827 | 0.453 | 0.786 | 0.948 | 0.928 |
+|  | all12honest_drop_chrho (ChIP only) | 0.754 | 0.788 | 0.739 | 0.668 | 0.608 | 0.241 | 0.353 | 0.846 | 0.773 |
+|  | consensus of the other cells | 0.841 | 0.887 | 0.832 | 0.804 | 0.805 | 0.456 | 0.765 | 0.878 | 0.843 |
+|  | Epiphany | 0.518 | 0.672 | 0.501 | 0.377 | 0.437 | 0.254 | 1.513 | 0.775 | 0.640 |
+| HiC-Reg, GM12878 chr14, chr17 | all12refin_drop_chrho | 0.931 | 0.950 | 0.925 | 0.905 | 0.833 | 0.396 | 0.792 | 0.953 | 0.935 |
+|  | all12honest_drop_chrho (ChIP only) | 0.782 | 0.798 | 0.763 | 0.674 | 0.608 | 0.191 | 0.319 | 0.867 | 0.791 |
+|  | consensus of the other cells | 0.868 | 0.901 | 0.853 | 0.804 | 0.805 | 0.396 | 0.818 | 0.894 | 0.857 |
+|  | HiC-Reg cross-chromosome WINDOW | 0.579 | 0.620 | 0.538 | 0.447 | 0.322 | 0.032 | -0.002 | 0.846 | 0.668 |
+|  | HiC-Reg cross-chromosome MULTICELL | 0.615 | 0.634 | 0.567 | 0.455 | 0.345 | 0.038 | -0.032 | 0.856 | 0.692 |
+|  | HiC-Reg CV (within-chromosome) | 0.908 | 0.964 | 0.870 | 0.677 | 0.723 | 0.323 | 0.764 | 0.987 | 0.915 |
+| HiC-Reg, K562 chr14, chr17 | all12refin_drop_chrho | 0.897 | 0.928 | 0.889 | 0.857 | 0.738 | 0.347 | 0.843 | 0.927 | 0.904 |
+|  | all12honest_drop_chrho (ChIP only) | 0.730 | 0.777 | 0.711 | 0.622 | 0.568 | 0.125 | 0.187 | 0.834 | 0.748 |
+|  | consensus of the other cells | 0.857 | 0.905 | 0.853 | 0.839 | 0.769 | 0.333 | 0.876 | 0.887 | 0.868 |
+|  | HiC-Reg cross-chromosome WINDOW | 0.736 | 0.820 | 0.696 | 0.484 | 0.523 | 0.038 | 0.292 | 0.927 | 0.797 |
+|  | HiC-Reg cross-chromosome MULTICELL | 0.740 | 0.819 | 0.700 | 0.500 | 0.519 | 0.030 | 0.260 | 0.927 | 0.800 |
+|  | HiC-Reg CV (within-chromosome) | 0.888 | 0.950 | 0.864 | 0.670 | 0.688 | 0.178 | 0.698 | 0.973 | 0.923 |
+| Hi-cGAN, GM12878 chr2, chr14 | all12refin_drop_chrho | 0.934 | 0.949 | 0.929 | 0.901 | 0.808 | 0.405 | 0.810 | 0.959 | 0.933 |
+|  | all12honest_drop_chrho (ChIP only) | 0.796 | 0.824 | 0.778 | 0.698 | 0.616 | 0.200 | 0.323 | 0.883 | 0.773 |
+|  | consensus of the other cells | 0.860 | 0.899 | 0.848 | 0.784 | 0.777 | 0.389 | 0.841 | 0.897 | 0.835 |
+|  | Hi-cGAN GM12878 model | 0.221 | 0.485 | 0.225 | 0.237 | 0.218 | 0.048 | 0.051 | 0.644 | 0.322 |
+| Hi-cGAN, K562 chr2, chr14 | all12refin_drop_chrho | 0.904 | 0.935 | 0.896 | 0.843 | 0.727 | 0.356 | 0.851 | 0.941 | 0.891 |
+|  | all12honest_drop_chrho (ChIP only) | 0.765 | 0.826 | 0.743 | 0.657 | 0.550 | 0.141 | 0.193 | 0.854 | 0.721 |
+|  | consensus of the other cells | 0.853 | 0.909 | 0.849 | 0.816 | 0.718 | 0.350 | 0.840 | 0.895 | 0.850 |
+|  | Hi-cGAN GM12878 model | 0.143 | 0.479 | 0.147 | 0.218 | 0.213 | 0.050 | 0.156 | 0.655 | 0.220 |
+
+
+Replicate ceilings at 25 kb (same blocks): IMR-90 Pearson 0.976, SCC 0.979;
+GM12878 0.941 to 0.947; K562 0.936 (`chrho_25kb_competitors.csv`).
+
+Verdict per competitor at 25 kb, ours = all12refin_drop_chrho (reference
+map as input) and all12honest_drop_chrho (ChIP only, no consensus); "level"
+is a difference within 0.01 of the mean over the block's chromosomes
+(`chrho_25kb_vs_competitor.csv`, with per-chromosome win counts):
+
+- C.Origami (IMR-90, chr2 and chr3, resampled from 8192 bp). The reference-map
+  model is level on Pearson (0.940 against 0.942; higher on 1 of 2
+  chromosomes), SCC (0.941 against 0.933) and HiCRep (0.947 against 0.950),
+  ahead on the 1 Mb tile median (0.961 against 0.922), insulation r (0.943
+  against 0.898), boundary recall (0.817 against 0.752) and loop recall (0.349
+  against 0.313), each on both chromosomes, and behind on compartment r (0.958
+  against 0.980, 0 of 2). C.Origami's APA ratio is 2.93, the model's 1.04.
+  The ChIP-only model is behind on every measure (Pearson 0.804, SCC 0.800,
+  tile median 0.864, insulation 0.775, boundary recall 0.647, loop recall
+  0.206). At 10 kb (section 37) the corresponding values are 0.926 against
+  0.920 Pearson and 0.162 loop recall for C.Origami.
+- Epiphany (GM12878, chr3, 11, 17, resampled from 10 kb). The reference-map
+  model is ahead on all measures on all three chromosomes (Pearson 0.917
+  against 0.518, SCC 0.913 against 0.501, insulation 0.900 against 0.377,
+  loop recall 0.453 against 0.254); the ChIP-only model leads by 0.24
+  Pearson (0.754) and 0.24 SCC, with loop recall 0.241 against 0.254. The
+  Epiphany APA ratio is 1.51 and the model's 0.79 (ChIP only 0.35).
+- Hi-cGAN (GM12878 and K562 chr2, chr14; native 25 kb). Ahead on every
+  measure on every chromosome: Pearson 0.934 (ChIP only 0.796) against
+  0.221 on GM12878 and 0.904 (0.765) against 0.143 on K562. On IMR-90 chr2,
+  Hi-cGAN's IMR-90 model (trained on IMR-90, odd chromosomes) scores 0.808
+  Pearson, 0.792 SCC, 0.924 tile median, 0.630 insulation r, 0.618 boundary
+  recall, 0.258 loop recall: the reference-map model is ahead on every
+  measure (Pearson 0.945, difference 0.136); the ChIP-only model (0.806) is
+  level on Pearson and SCC, ahead on insulation (0.767 against 0.630) and
+  behind on the tile median (0.855), loop recall (0.197) and compartment r
+  (0.856 against 0.945). The GM12878 Hi-cGAN model applied to IMR-90 scores
+  0.335.
+- HiC-Reg, cross-chromosome (leak-free; native 25 kb sum; chr14, chr17).
+  GM12878: the reference-map model is ahead on every measure (Pearson 0.931
+  against 0.579 WINDOW and 0.615 MULTICELL) and the ChIP-only model too
+  (0.783). K562: reference-map model ahead on every measure (0.897 against
+  0.736 and 0.740); the ChIP-only model is level on Pearson (0.730, -0.006
+  and -0.010), ahead on SCC (0.711 against 0.696 and 0.700), insulation
+  (0.622 against 0.484 and 0.500), boundary recall and loop recall (0.125
+  against 0.038 and 0.030), behind on the tile median (0.777 against 0.820
+  and 0.819), compartment r (0.834 against 0.927) and HiCRep (0.748 against
+  0.797 and 0.800).
+- HiC-Reg, published within-chromosome CV maps (not a held-out score). The
+  reference-map model is ahead on Pearson on GM12878 (0.931 against 0.908)
+  and level on K562 (0.897 against 0.888), ahead on SCC, insulation r,
+  boundary and loop recall in both cells, ahead on HiCRep on GM12878 (0.935
+  against 0.915) and behind on K562 (0.904 against 0.923), and behind on the
+  tile median (0.950 against 0.964; 0.928 against 0.950) and compartment r
+  (0.953 against 0.987; 0.927 against 0.973); the ChIP-only model is behind
+  on every measure except insulation r on GM12878 (level, 0.674 against
+  0.677); Pearson 0.783 and 0.730.
+- Akita: no 25 kb score exists.
+
+Limits. (i) The competitors differ in training data and inputs from our
+12-cell models; the comparison states what each released prediction scores on
+chromosomes it did not train on, not a comparison of architectures
+. (ii) Leakage status: C.Origami chr2 (test) and chr3 (validation) are
+unseen by C.Origami and by our chrho models, and both saw IMR-90 Hi-C on
+other chromosomes (ours: 17 chromosomes of IMR-90 and 11 further cells;
+C.Origami: IMR-90 only); Epiphany chr3, 11, 17 unseen by both; HiC-Reg
+cross-chromosome files are leak-free (model trained on the other of chr14 and
+chr17, both absent from our data), HiC-Reg CV files are within-chromosome
+interpolation (section 18); Hi-cGAN GM12878 and K562 on the even chromosomes
+chr2 and chr14 (K562 was never a Hi-cGAN training cell; IMR-90 chr2 for the
+IMR-90 model). The reference-map model reads the leave-one-out consensus of
+the other cells' measured maps on the held-out chromosomes as input (its
+intended use; the ChIP-only model reads none). (iii) The resampled
+C.Origami and Epiphany maps are read at points on the 25 kb grid, and the
+insulation, boundary and loop measures are defined in bins of the grid; the
+competitor scores differ between 10 and 25 kb (C.Origami: loop recall 0.313
+at 25 kb, 0.162 at 10 kb; boundary recall 0.752 and 0.474), so the margins
+are specific to the grid. (iv) Chromosome counts are small (2 to 3 per
+block); the win counts in `chrho_25kb_vs_competitor.csv` are per chromosome,
+not per region. (v) The C.Origami APA ratio of 2.9 is an over-enrichment of
+loop signal against the measured map, which the loop recall does not show.
+(vi) The consensus of the other cells has a higher boundary recall than the
+reference-map model in the K562 HiC-Reg block (0.769 against 0.738). The
+refres model is in the csv files and equals refin within 0.01 on Pearson in
+every block.
+
+5 kb (FINAL). The three chromosome-held-out 5 kb models (`all12refin_drop_chrho_5kb`,
+`all12honest_drop_chrho_5kb` (ChIP only, no consensus), `all12refres_drop_chrho_5kb`;
+chr2, 3, 11, 14, 17 absent from the data of every cell) were trained on the
+remote 4090 and predicted on the five chromosomes on a local GPU (inference only).
+Scoring is the 25 kb procedure on the 5 kb grid (`scripts/hic_measures.py --stage
+chrho_score chrho_report --chrho-res 5000`; 11 blocks), identical pixels within a
+block, same metric set.
+
+5 kb parameters (all behind `--chrho-res 5000`; the 25 and 10 kb code paths are
+unchanged): model window 384 bins (1.92 Mb), insulation square 10 bins (50 kb,
+as 5 bins at 10 kb), loop and APA windows of the 10 kb row doubled in bins
+(donut 2 to 6, loop distance 6 to 200 bins, APA half-width 6, corner 2, NMS 2,
+matching tolerance 2 bins = 10 kb; `benchmark_blocks.params(5000)`), boundary
+matching tolerance 2 bins (10 kb, as the 10 kb row), hicFindTADs depths 3 to 10
+bins as at every resolution, HiCRep h = 5 bins. The reference loops are the 10 kb
+hicDetectLoops calls of the measured map. Bands: C.Origami 383 bins (1.9 Mb),
+Epiphany 198 bins (990 kb), HiC-Reg 200 bins (1 Mb), Hi-cGAN 383 bins (1.9 Mb).
+The count-space Pearson AUC uses min(1 Mb / res, band) distances (the Epiphany band
+is 199 diagonals), a no-op for the existing blocks. Expected-count curves of a band
+wider than 200 diagonals get their own file (`_D383`). Regression check: the 10 kb
+Hi-cGAN GM12878 chr14 block re-scored with the edited code into a scratch folder
+equals the committed `measures.csv` in all 48 columns (exact) except the HiCRep
+value of all12refres_drop_chrho, which is empty in the committed file (that
+tool run failed there) and 0.937 in the re-run.
+
+Competitor conversions (nothing re-run; saved predictions only):
+- Hi-cGAN: the GM12878 5 kb record (`02_best_models/.../5kb/best_plus_two`,
+  RAD21, H3K4me3, SMC3; trained on odd chromosomes) through `oe_proper.py`
+  (chr2, chr14; 2 Mb distance cap). No K562 or IMR-90 5 kb prediction exists
+  (cross-cell sets exist at 10 and 25 kb only), so there is no K562 Hi-cGAN
+  block at 5 kb.
+- HiC-Reg: released 5 kb predictions of GM12878 and K562, chr14 and chr17,
+  WINDOW and MULTICELL, cross-chromosome and CV, native 5 kb (no summing), through
+  `oe_proper.py` (`hicreg_audit.variants()` with `BENCH_5KB=1`).
+- C.Origami (8192 bp, IMR-90 chr2, chr3) and Epiphany (10 kb, GM12878 chr3, 11,
+  17): no native 5 kb output. Their O/E maps (the native-resolution files already
+  made for the 10 and 25 kb blocks) are read at the 5 kb bin centres with the
+  same convention as at 25 kb (bilinear in (bin, bin) space,
+  `benchmark_blocks.sample_competitor`, a pixel kept when all four neighbours
+  exist), an up-sampling: the 5 kb scores of these two carry no information
+  finer than 8192 bp and 10 kb.
+
+Mean over the chromosomes of a block (`chrho_5kb_table.md`, csv files
+`chrho_5kb_competitors.csv`, `chrho_5kb_vs_competitor.csv`):
+
+| block | source | Pearson | tile median | SCC | insulation r | boundary recall | loop recall | APA ratio | compartment r | HiCRep |
+|---|---|---|---|---|---|---|---|---|---|---|
+| C.Origami: IMR-90, chr2, chr3 | all12refin_drop_chrho | 0.882 | 0.904 | 0.884 | 0.936 | 0.547 | 0.302 | 0.806 | 0.964 | 0.909 |
+| C.Origami: IMR-90, chr2, chr3 | all12honest_drop_chrho | 0.756 | 0.788 | 0.760 | 0.834 | 0.462 | 0.177 | 0.558 | 0.893 | 0.769 |
+| C.Origami: IMR-90, chr2, chr3 | all12refres_drop_chrho | 0.878 | 0.899 | 0.880 | 0.928 | 0.555 | 0.319 | 0.954 | 0.961 | 0.906 |
+| C.Origami: IMR-90, chr2, chr3 | consensus | 0.819 | 0.853 | 0.815 | 0.803 | 0.581 | 0.339 | 0.964 | 0.902 | 0.815 |
+| C.Origami: IMR-90, chr2, chr3 | corigami_imr90_8kb | 0.849 | 0.846 | 0.854 | 0.852 | 0.348 | 0.164 | 0.466 | 0.956 | 0.872 |
+| Epiphany: GM12878, chr3, 11, 17 | all12refin_drop_chrho | 0.894 | 0.908 | 0.891 | 0.889 | 0.577 | 0.430 | 0.653 | 0.953 | 0.919 |
+| Epiphany: GM12878, chr3, 11, 17 | all12honest_drop_chrho | 0.737 | 0.752 | 0.734 | 0.726 | 0.472 | 0.222 | 0.403 | 0.844 | 0.762 |
+| Epiphany: GM12878, chr3, 11, 17 | all12refres_drop_chrho | 0.887 | 0.896 | 0.881 | 0.864 | 0.566 | 0.424 | 0.762 | 0.947 | 0.912 |
+| Epiphany: GM12878, chr3, 11, 17 | consensus | 0.793 | 0.820 | 0.790 | 0.784 | 0.560 | 0.416 | 0.936 | 0.876 | 0.831 |
+| Epiphany: GM12878, chr3, 11, 17 | epiphany_gm12878_10kb | 0.523 | 0.612 | 0.504 | 0.310 | 0.133 | 0.043 | 0.142 | 0.770 | 0.634 |
+| Hi-cGAN: GM12878, chr2, chr14 | all12refin_drop_chrho | 0.882 | 0.902 | 0.882 | 0.886 | 0.540 | 0.337 | 0.668 | 0.954 | 0.918 |
+| Hi-cGAN: GM12878, chr2, chr14 | all12honest_drop_chrho | 0.734 | 0.762 | 0.740 | 0.737 | 0.459 | 0.161 | 0.418 | 0.881 | 0.768 |
+| Hi-cGAN: GM12878, chr2, chr14 | all12refres_drop_chrho | 0.873 | 0.893 | 0.873 | 0.851 | 0.547 | 0.318 | 0.751 | 0.953 | 0.907 |
+| Hi-cGAN: GM12878, chr2, chr14 | consensus | 0.791 | 0.819 | 0.792 | 0.759 | 0.538 | 0.319 | 0.930 | 0.882 | 0.831 |
+| Hi-cGAN: GM12878, chr2, chr14 | hicgan_gm12878_5kb | 0.346 | 0.448 | 0.353 | 0.397 | 0.124 | 0.068 | 0.235 | 0.638 | 0.440 |
+| HiC-Reg: GM12878, chr14, chr17 | all12refin_drop_chrho | 0.906 | 0.911 | 0.902 | 0.898 | 0.562 | 0.363 | 0.675 | 0.957 | 0.923 |
+| HiC-Reg: GM12878, chr14, chr17 | all12honest_drop_chrho | 0.749 | 0.758 | 0.749 | 0.741 | 0.455 | 0.188 | 0.385 | 0.871 | 0.770 |
+| HiC-Reg: GM12878, chr14, chr17 | all12refres_drop_chrho | 0.899 | 0.899 | 0.894 | 0.873 | 0.568 | 0.349 | 0.772 | 0.954 | 0.919 |
+| HiC-Reg: GM12878, chr14, chr17 | consensus | 0.821 | 0.842 | 0.817 | 0.798 | 0.556 | 0.354 | 0.946 | 0.885 | 0.853 |
+| HiC-Reg: GM12878, chr14, chr17 | hicregmulticellcrosschrom_gm12878_5kb | 0.626 | 0.519 | 0.571 | 0.525 | 0.195 | 0.000 | 0.035 | 0.890 | 0.611 |
+| HiC-Reg: GM12878, chr14, chr17 | hicregwindowcrosschrom_gm12878_5kb | 0.603 | 0.520 | 0.554 | 0.515 | 0.161 | 0.000 | 0.045 | 0.891 | 0.593 |
+| HiC-Reg: GM12878, chr14, chr17 | hicregwindowcv_gm12878_5kb | 0.893 | 0.898 | 0.859 | 0.647 | 0.252 | 0.020 | 0.398 | 0.992 | 0.922 |
+| HiC-Reg: K562, chr14, chr17 | all12refin_drop_chrho | 0.771 | 0.817 | 0.776 | 0.842 | 0.510 | 0.338 | 0.718 | 0.925 | 0.814 |
+| HiC-Reg: K562, chr14, chr17 | all12honest_drop_chrho | 0.641 | 0.641 | 0.653 | 0.730 | 0.415 | 0.169 | 0.283 | 0.831 | 0.664 |
+| HiC-Reg: K562, chr14, chr17 | all12refres_drop_chrho | 0.784 | 0.812 | 0.789 | 0.869 | 0.509 | 0.338 | 0.689 | 0.922 | 0.829 |
+| HiC-Reg: K562, chr14, chr17 | consensus | 0.673 | 0.777 | 0.685 | 0.810 | 0.505 | 0.323 | 0.818 | 0.875 | 0.727 |
+| HiC-Reg: K562, chr14, chr17 | hicregmulticellcrosschrom_k562_5kb | 0.783 | 0.716 | 0.768 | 0.640 | 0.271 | 0.003 | 0.242 | 0.962 | 0.810 |
+| HiC-Reg: K562, chr14, chr17 | hicregwindowcrosschrom_k562_5kb | 0.774 | 0.703 | 0.755 | 0.599 | 0.226 | 0.003 | 0.261 | 0.959 | 0.790 |
+| HiC-Reg: K562, chr14, chr17 | hicregwindowcv_k562_5kb | 0.845 | 0.814 | 0.840 | 0.728 | 0.282 | 0.005 | 0.441 | 0.978 | 0.899 |
+
+Replicate ceilings at 5 kb are low (IMR-90 Pearson 0.670, GM12878 0.69, K562
+0.706; the single-lane replicate maps are sparse at 5 kb) and are not
+ceilings of what a model can reach against the deep target.
+
+Verdict per competitor at 5 kb (ours = all12refin_drop_chrho, ChIP-only =
+all12honest_drop_chrho; "level" within 0.01; win counts per chromosome in
+`chrho_5kb_vs_competitor.csv`):
+
+- C.Origami (IMR-90, chr2, chr3, up-sampled from 8192 bp). The reference-map
+  model is ahead on Pearson (0.882 against 0.849), tile median (0.904 against
+  0.846), SCC (0.884 against 0.854), insulation r (0.936 against 0.852),
+  boundary recall (0.547 against 0.348), loop recall (0.302 against 0.164) and
+  HiCRep (0.909 against 0.872), on both chromosomes each, and level on
+  compartment r (0.964 against 0.956). The ChIP-only model is behind on
+  Pearson (0.756), tile median, SCC, insulation r, compartment r and HiCRep,
+  ahead on boundary recall (0.462) and, on 1 of 2 chromosomes, loop recall
+  (0.177 against 0.164). At 25 kb the reference-map model was level on
+  Pearson against C.Origami (0.940 against 0.942); at 5 kb it is ahead (0.882
+  against 0.849), C.Origami's score falling by 0.09 from 25 to 5 kb and ours by 0.06.
+- Epiphany (GM12878, chr3, 11, 17, up-sampled from 10 kb). Ahead on every
+  measure on all three chromosomes (Pearson 0.894 against 0.523, SCC 0.891
+  against 0.504, insulation 0.889 against 0.310, loop recall 0.430 against
+  0.043); the ChIP-only model is ahead on all measures too (Pearson 0.737).
+- Hi-cGAN (GM12878, chr2, chr14; native 5 kb). Ahead on every measure on both
+  chromosomes: Pearson 0.882 (ChIP only 0.734) against 0.346, insulation r
+  0.886 against 0.397, loop recall 0.337 against 0.068.
+- HiC-Reg cross-chromosome (leak-free; native 5 kb). GM12878: the
+  reference-map model is ahead on every measure (Pearson 0.906 against 0.603
+  WINDOW and 0.626 MULTICELL); the ChIP-only model too, except compartment r
+  (0.871 against 0.891). K562: Pearson 0.771 against 0.774 WINDOW (level) and
+  0.783 MULTICELL (behind by 0.012); ahead on tile median (0.817 against 0.703
+  and 0.716), insulation, boundary and loop recall, and behind on compartment
+  r (0.925 against 0.959 and 0.962); SCC and HiCRep are level or ahead on
+  1 of 2 chromosomes. The ChIP-only model is behind on Pearson (0.641), SCC,
+  tile median, compartment r and HiCRep, ahead on boundary and loop recall.
+- HiC-Reg within-chromosome CV maps (not a held-out score). GM12878: ahead of
+  CV on Pearson (0.906 against 0.893), SCC, tile median, insulation r,
+  boundary and loop recall, level on HiCRep, behind on compartment r (0.957
+  against 0.992). K562: behind on Pearson (0.771 against 0.845), SCC and HiCRep,
+  level on tile median, ahead on insulation r (0.842 against 0.728), boundary
+  and loop recall, behind on compartment r (0.925 against 0.978).
+- The refres model is within 0.01 of refin on Pearson in 4 of 5 blocks (K562
+  HiC-Reg block: 0.784 against 0.771).
+
+Limits (5 kb). (i) C.Origami and Epiphany have no 5 kb output: the maps are
+up-sampled, the competitors' 5 kb insulation, boundary and loop scores reflect
+a resolution they never produced, and their margins to our native 5 kb output
+are partly a resolution effect. (ii) Few chromosomes per block (2 to 3), 11
+chromosome-blocks in total; win counts are per chromosome. (iii) Loop recall,
+APA and compartment r are noisier at 5 kb: the 5 kb maps are sparser, the
+reference loops are the 10 kb calls (a 5 kb call set does not exist), the loop
+matching tolerance is 10 kb in bp and the C.Origami APA ratio (0.47) and
+the HiC-Reg APA ratios (0.04 to 0.44) are far from 1 while the reference-map
+model gives 0.65 to 0.81. (iv) Leakage status is that of the 25 kb section:
+C.Origami chr2 and chr3, Epiphany chr3, 11, 17, HiC-Reg cross-chromosome
+chr14 and chr17 are unseen by the competitor and by our models; HiC-Reg CV is
+within-chromosome interpolation; Hi-cGAN chr2, chr14 are even chromosomes (held
+out by Hi-cGAN). Hi-cGAN has no 5 kb K562 output. (v) The reference-map
+model reads the leave-one-out consensus of the other cells' 5 kb maps as
+input; the ChIP-only model reads none. (vi) Competitors differ in training
+data and inputs from the 12-cell models (not an architecture comparison).
+(vii) The "replicate" and "best_other_map" rows are weak baselines at 5 kb
+(sparse single-lane maps); the consensus of the other cells has a higher boundary
+and loop recall than the reference-map model in the C.Origami block (0.581 and
+0.339 against 0.547 and 0.302).
+
+Prediction used a local GPU for inference only; the GPU recipe and the
+estimates of `results/benchmark/REMOTE_JOB_chrho_5kb.md` are unchanged.
+
+Reproduce (hicdiff env, `BENCH_5KB=1` registers the 5 kb competitors):
+
+    BENCH_5KB=1 python scripts/benchmark_competitors.py --stage oe --names hicgan_gm12878_5kb
+    BENCH_5KB=1 python scripts/hicreg_audit.py --stage cools
+    python scripts/hic_measures.py --stage chrho_predict --chrho-res 5000 --gpu 1
+    python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-res 5000 --jobs 2 --threads 4
+    python scripts/chrho_5kb_table.py
+
+Files: `results/benchmark/chrho_25kb_competitors.csv` (every source per block,
+every measure), `chrho_25kb_vs_competitor.csv` (differences, win counts,
+verdicts), `chrho_25kb_table.md`; `results/hic_measures_chrho/chrho_25kb_summary.csv`
+and `chrho_25kb_per_block.csv` (the scorer's output, 22 blocks).
+Reproduce (hicdiff env):
+
+    BENCH_HICGAN_IMR90_25KB=1 python scripts/benchmark_competitors.py --stage oe --names hicgan_imr90_on_imr90_25kb hicgan_gm12878_on_imr90_25kb
+    python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-25kb-comps --jobs 1 --threads 4
+    python scripts/chrho_25kb_table.py
+
+
+## 59. Why the sequence + methylation CNN fails on K562 and what fixes it (FINAL; section 58 was the last number when this was written)
+
+Question. In section 42 the sequence + methylation CNN (`seq_meth`) beats gradient
+boosting on the seven training cells but fails on K562 and HMEC, which are in no
+training set (unseen_cell R2 -0.2 to -24 for most marks; K562 median Pearson 0.34
+for `seq_meth` and -0.20 for `meth`; HMEC 0.74 and 0.67), while sequence alone
+generalises (R2 0.12 to 0.53) and the gradient-boosting analysis of section 41
+reaches R2 up to 0.49. Which input property causes this and does a change of the
+Meth input fix it.
+
+Setup. Section 42 model, split, targets and budget unchanged (9.3 M parameters,
+20000 steps, batch 32, one seed, one RTX 4090, about 33 minutes of training and 4
+minutes of evaluation per variant). Test: chr6, 8, ..., 22 of the nine cells.
+Independent cells on unseen_cell: 2 (K562, HMEC); on seen_cell: 7. Median
+"unseen" values below are the median of the two cells (for RAD21 and SMC3 only
+K562 has the track, so that median is one cell). Gradient boosting (`GB_both`) is
+the `both` set of section 41 (extended sequence features + methylation features,
+`partition_fits.csv`, unseen_cell), scored on all even chromosomes (including
+chr2 and chr4, 500,000 training rows); `ceiling_loo` is the across-cell mean of
+the seven training cells scored against the cell (a cell-agnostic prediction, the
+best `seq` can reach).
+
+### Diagnosis (CPU for the distributions, GPU only to dump predictions of the saved section 42 checkpoints)
+
+Meth input (value as the script uses it: methylated fraction of 1 kb bins inside
+valid 10 kb bins, all chromosomes):
+
+| cell | mean | sd | q05 | q25 | q50 | q75 | q95 |
+|---|---|---|---|---|---|---|---|
+| gm12878 | 0.446 | 0.299 | 0.01 | 0.20 | 0.41 | 0.68 | 0.96 |
+| imr90 | 0.691 | 0.216 | 0.25 | 0.65 | 0.66 | 0.86 | 1.00 |
+| h1 | 0.855 | 0.129 | 0.65 | 0.83 | 0.89 | 0.92 | 0.96 |
+| hepg2 | 0.397 | 0.341 | 0.00 | 0.08 | 0.32 | 0.70 | 0.97 |
+| a549 | 0.512 | 0.311 | 0.02 | 0.23 | 0.56 | 0.81 | 0.93 |
+| gm23248 | 0.600 | 0.284 | 0.10 | 0.36 | 0.63 | 0.86 | 0.97 |
+| cd14mono | 0.833 | 0.177 | 0.53 | 0.73 | 0.88 | 0.96 | 1.00 |
+| k562 (unseen) | 0.219 | 0.307 | 0.00 | 0.00 | 0.03 | 0.35 | 0.89 |
+| hmec (unseen) | 0.725 | 0.221 | 0.27 | 0.61 | 0.77 | 0.90 | 0.98 |
+
+The training cells span a genome-wide mean methylation of 0.40 (HepG2) to 0.86
+(H1). K562 has 0.22 and half of its bins below 0.03, outside the training range
+and in the corner of the input space the model never saw (the constant mean
+channel is 0.22 against a training minimum of 0.40). HMEC (0.73) lies inside the
+range. The z-scored targets (training-cell statistics, valid bins, all
+chromosomes) have a per-cell, per-mark mean within +-0.55 of 0 and a standard
+deviation of 0.5 to 1.6 in all cells including K562 (e.g. K562 H3K27ac +0.20 /
+0.67, H3K4me3 +0.09 / 0.86, H3K9ac -0.05 / 0.98); the only larger offsets are
+seen cells (IMR-90 H3K4me3 -0.89). The target scale of K562 and HMEC is thus
+not unusual.
+
+Predictions against targets on the test chromosomes (checkpoints of section 42;
+median over marks; `results/seq_cnn/v2/diag_prediction_bias.csv`, columns y_mean,
+p_mean, slope of y on the prediction, R2 with the offset removed):
+
+| model, cells | abs. offset p_mean - y_mean | sd of prediction (sd of target 0.9) | slope | R2 | R2 after removing the offset | Pearson |
+|---|---|---|---|---|---|---|
+| seq_meth, 7 seen | 0.01 | 0.74 | 0.99 | 0.68 | 0.68 | 0.83 |
+| seq_meth, HMEC | 0.27 | 0.81 | 0.95 | 0.41 | 0.55 | 0.74 |
+| seq_meth, K562 | 1.68 | 0.90 | 0.25 | -3.93 | -1.64 | 0.34 |
+| meth, 7 seen | 0.02 | 0.70 | 0.97 | 0.58 | 0.59 | 0.77 |
+| meth, HMEC | 0.29 | 0.85 | 0.70 | 0.27 | 0.40 | 0.67 |
+| meth, K562 | 5.42 | 2.85 | -0.06 | -60.65 | -16.73 | -0.20 |
+
+Per mark in K562 `seq_meth` predicts offsets up to +5.6 z (H3K4me2, H3K4me3,
+H3K9ac) with prediction sd up to 2.3; `meth` predicts +12 z for H3K4me2. Removing
+the offset still leaves R2 below zero, so K562 has both a level error and a
+ranking error (Pearson -0.2 to 0.6 across marks), and the prediction slope of 0.25
+means the predictions are not a rescaled copy of the truth.
+
+Verdict. Hypothesis 1 (Meth input of the unseen cell outside the training
+distribution) is supported for K562: the failure grows with the distance of the
+input from the training range (HMEC inside the range works, Pearson 0.74; K562
+outside fails; the methylation-only control, which has no sequence to fall back
+on, explodes to offsets of 5 to 12 z). Hypothesis 3 (target scale per cell) is not
+supported: the target means and sds of K562 and HMEC are ordinary; the offset is
+produced by the model, so `--target-norm cell` was implemented but not trained.
+Hypothesis 2 (memorisation of training cells by their methylation fingerprint) is
+weak: removing the cell-mean channel and the per-cell scale (`cellnorm`) leaves
+the seen-cell results unchanged (Pearson 0.82 against 0.83) and does not by itself
+fix K562.
+
+### Fix: flags of `scripts/seq_cnn_chip.py` (defaults keep section 42 reproducible; variant names carry a suffix)
+
+- `--meth-norm cell`: the Meth channel is z-scored with the cell's own mean and sd
+  over its valid bins (statistics from the cell's Meth track only, no ChIP, no
+  label); the constant mean-methylation channel is set to 0. `--meth-norm rank`
+  does the same by quantile normalisation to a standard normal (implemented,
+  smoke-tested, not trained). Variant `*_cellnorm`.
+- `--meth-aug`: training only, random per-window scale U(0.5, 1.5) and shift
+  N(0, 0.5) of the two Meth channels (`--meth-aug-scale`, `--meth-aug-shift`).
+  Variant `*_aug`.
+- `--meth-dropout P`: training only, a whole window gets zeros in both Meth channels
+  with probability P, so the sequence path stays usable. Variant `*_mdropP`.
+- `--target-norm cell`: per-cell, per-mark z-scoring of the targets; test metrics are
+  computed after standardising prediction and target per mark and cell, so R2 is
+  then scale free and Pearson and Spearman stay the main metrics. Variant `*_tcell`,
+  ceilings `ceiling_*_tcell`. Smoke-tested only.
+- `stage_summarize` keeps every variant (old rows unchanged); the partition table
+  still uses `seq`, `seq_meth`, `meth`. CPU smoke tests of all new options passed
+  (`--smoke`, chr21 train, chr22 test).
+
+Commands (remote GPU; `OUT_ROOT` = the section 42 run folder with its cache):
+
+    P="python scripts/seq_cnn_chip.py --config configs/seq_cnn.yaml --stage train eval"
+    $P --mode seq_meth --meth-norm cell
+    $P --mode meth     --meth-norm cell
+    $P --mode seq_meth --meth-aug
+    $P --mode seq_meth --meth-norm cell --meth-aug --meth-dropout 0.2
+    python scripts/seq_cnn_chip.py --config configs/seq_cnn.yaml --stage summarize --results-dir results/seq_cnn/v2
+
+Wall time on the RTX 4090: 4 variants x (33 min training + 4 min evaluation) = 2 h 12 min
+(08:22 to 10:34 on 2026-10-10), plus 5 min per prediction dump.
+
+### Results
+
+Summary (median over marks of the per-mark medians over cells; full per-mark
+values below and in `results/seq_cnn/v2/comparison_by_mark.csv`):
+
+| cells | metric | seq | meth | seq_meth | meth_cellnorm | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|---|---|---|
+| unseen (K562, HMEC) | R2 | 0.24 | -31.41 | -3.69 | -0.64 | -0.70 | 0.34 | -0.24 | 0.12 | 0.61 |
+| unseen | Pearson | 0.57 | 0.20 | 0.43 | 0.51 | 0.58 | 0.73 | 0.70 | 0.64 | 0.82 |
+| unseen | Spearman | 0.50 | 0.11 | 0.31 | 0.47 | 0.41 | 0.60 | 0.49 | 0.51 | 0.64 |
+| K562 | R2 | 0.40 | -60.65 | -3.93 | -0.90 | -1.45 | 0.41 | -0.53 | 0.16 | 0.62 |
+| K562 | Pearson | 0.66 | -0.20 | 0.34 | 0.43 | 0.41 | 0.73 | 0.62 | 0.60 | 0.81 |
+| K562 | Spearman | 0.54 | -0.27 | 0.00 | 0.43 | 0.35 | 0.63 | 0.53 | 0.47 | 0.64 |
+| HMEC | R2 | 0.23 | 0.27 | 0.41 | 0.45 | 0.53 | 0.52 | 0.51 | 0.36 | 0.59 |
+| HMEC | Pearson | 0.58 | 0.67 | 0.74 | 0.69 | 0.75 | 0.72 | 0.74 | 0.64 | 0.79 |
+| HMEC | Spearman | 0.44 | 0.61 | 0.63 | 0.57 | 0.61 | 0.64 | 0.64 | 0.51 | 0.67 |
+| seen (7 cells) | R2 | 0.35 | 0.60 | 0.69 | 0.57 | 0.67 | 0.64 | 0.62 | 0.46 | 0.60 |
+| seen | Pearson | 0.63 | 0.78 | 0.83 | 0.76 | 0.82 | 0.81 | 0.79 | 0.69 | 0.82 |
+| seen | Spearman | 0.57 | 0.69 | 0.75 | 0.67 | 0.74 | 0.72 | 0.72 | 0.61 | 0.69 |
+
+Prediction offset and slope after the fix (same diagnostic, median over marks):
+
+| model | cells | abs. offset | slope | R2 | R2 after removing the offset | Pearson |
+|---|---|---|---|---|---|---|
+| seq_meth_aug | K562 | 0.20 | 0.98 | 0.41 | 0.47 | 0.73 |
+| seq_meth_aug | HMEC | 0.05 | 0.93 | 0.52 | 0.52 | 0.72 |
+| seq_meth_cellnorm | K562 | 0.88 | 0.52 | -1.45 | 0.03 | 0.41 |
+| seq_meth_cellnorm | HMEC | 0.09 | 0.84 | 0.53 | 0.54 | 0.75 |
+| meth_cellnorm | K562 | 0.74 | 0.60 | -0.90 | 0.09 | 0.43 |
+| seq_meth_cellnorm_aug_mdrop0.2 | K562 | 0.60 | 0.51 | -0.53 | 0.02 | 0.62 |
+
+Per-mark tables (median over cells; blank = mark absent in the cell set):
+
+**unseen_median2, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.19 | -0.19 | -0.97 | 0.28 | -0.24 | 0.12 | 0.68 |
+| H3K27ac | 0.23 | -7.07 | -0.14 | 0.36 | 0.07 | 0.15 | 0.39 |
+| H3K27me3 | 0.24 | -1.75 | -1.07 | 0.39 | -0.29 | 0.28 | 0.47 |
+| H3K36me3 | 0.38 | 0.16 | 0.36 | 0.60 | 0.57 | 0.54 | 0.69 |
+| H3K4me1 | 0.21 | -5.19 | -0.70 | 0.09 | -0.30 | -0.33 | 0.38 |
+| H3K4me2 | 0.53 | -18.02 | 0.52 | 0.74 | 0.67 | 0.59 | 0.69 |
+| H3K4me3 | 0.24 | -23.92 | -0.56 | 0.22 | -0.04 | -0.26 | 0.38 |
+| H3K79me2 | 0.43 | -0.67 | 0.53 | 0.58 | 0.55 | 0.39 | 0.73 |
+| H3K9ac | 0.45 | -15.80 | 0.34 | 0.69 | 0.58 | 0.48 | 0.64 |
+| H3K9me3 | 0.12 | -8.96 | -1.95 | 0.02 | -0.82 | -0.34 | 0.28 |
+| H4K20me1 | 0.13 | -0.46 | -0.97 | 0.07 | -0.38 | -0.09 | 0.32 |
+| RAD21 | 0.30 | -1.38 | -3.89 | 0.15 | -1.58 | -0.44 | 0.61 |
+| SMC3 | 0.44 | -3.69 | -2.94 | 0.34 | -1.02 | -0.04 | 0.62 |
+| median over marks | 0.24 | -3.69 | -0.70 | 0.34 | -0.24 | 0.12 | 0.61 |
+
+**unseen_median2, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.46 | 0.44 | 0.40 | 0.56 | 0.48 | 0.48 | 0.83 |
+| H3K27ac | 0.56 | 0.37 | 0.73 | 0.77 | 0.75 | 0.67 | 0.71 |
+| H3K27me3 | 0.53 | 0.24 | 0.49 | 0.66 | 0.49 | 0.57 | 0.71 |
+| H3K36me3 | 0.62 | 0.68 | 0.74 | 0.80 | 0.79 | 0.78 | 0.84 |
+| H3K4me1 | 0.57 | 0.70 | 0.71 | 0.73 | 0.73 | 0.64 | 0.74 |
+| H3K4me2 | 0.74 | 0.44 | 0.79 | 0.87 | 0.86 | 0.79 | 0.83 |
+| H3K4me3 | 0.72 | 0.40 | 0.58 | 0.80 | 0.70 | 0.65 | 0.84 |
+| H3K79me2 | 0.68 | 0.60 | 0.77 | 0.80 | 0.80 | 0.66 | 0.87 |
+| H3K9ac | 0.70 | 0.35 | 0.78 | 0.85 | 0.83 | 0.75 | 0.82 |
+| H3K9me3 | 0.43 | 0.33 | 0.35 | 0.51 | 0.41 | 0.37 | 0.66 |
+| H4K20me1 | 0.56 | 0.43 | 0.41 | 0.58 | 0.46 | 0.38 | 0.70 |
+| RAD21 | 0.57 | 0.43 | 0.35 | 0.64 | 0.49 | 0.49 | 0.82 |
+| SMC3 | 0.67 | 0.34 | 0.29 | 0.66 | 0.45 | 0.44 | 0.79 |
+| median over marks | 0.57 | 0.43 | 0.58 | 0.73 | 0.70 | 0.64 | 0.82 |
+
+**unseen_median2, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.28 | 0.31 | 0.27 | 0.42 | 0.36 | 0.30 | 0.56 |
+| H3K27ac | 0.48 | 0.22 | 0.67 | 0.69 | 0.68 | 0.55 | 0.64 |
+| H3K27me3 | 0.50 | 0.19 | 0.41 | 0.60 | 0.39 | 0.51 | 0.69 |
+| H3K36me3 | 0.49 | 0.51 | 0.68 | 0.66 | 0.69 | 0.59 | 0.68 |
+| H3K4me1 | 0.56 | 0.65 | 0.68 | 0.64 | 0.68 | 0.63 | 0.72 |
+| H3K4me2 | 0.54 | 0.34 | 0.59 | 0.67 | 0.61 | 0.52 | 0.65 |
+| H3K4me3 | 0.37 | 0.23 | 0.31 | 0.50 | 0.43 | 0.20 | 0.52 |
+| H3K79me2 | 0.65 | 0.40 | 0.70 | 0.69 | 0.69 | 0.54 | 0.73 |
+| H3K9ac | 0.54 | 0.16 | 0.62 | 0.68 | 0.66 | 0.55 | 0.66 |
+| H3K9me3 | 0.44 | 0.30 | 0.30 | 0.45 | 0.38 | 0.40 | 0.64 |
+| H4K20me1 | 0.51 | 0.35 | 0.30 | 0.47 | 0.35 | 0.25 | 0.63 |
+| RAD21 | 0.46 | 0.35 | 0.35 | 0.53 | 0.49 | 0.43 | 0.64 |
+| SMC3 | 0.63 | 0.23 | 0.24 | 0.57 | 0.44 | 0.34 | 0.63 |
+| median over marks | 0.50 | 0.31 | 0.41 | 0.60 | 0.49 | 0.51 | 0.64 |
+
+**seen_median7, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.28 | 0.44 | 0.43 | 0.43 | 0.43 | 0.38 | 0.67 |
+| H3K27ac | 0.28 | 0.69 | 0.67 | 0.66 | 0.61 | 0.47 | 0.37 |
+| H3K27me3 | 0.35 | 0.65 | 0.65 | 0.62 | 0.62 | 0.46 | 0.45 |
+| H3K36me3 | 0.39 | 0.73 | 0.73 | 0.68 | 0.68 | 0.55 | 0.60 |
+| H3K4me1 | 0.25 | 0.70 | 0.69 | 0.66 | 0.66 | 0.45 | 0.37 |
+| H3K4me2 | 0.48 | 0.82 | 0.80 | 0.79 | 0.78 | 0.61 | 0.60 |
+| H3K4me3 | 0.57 | 0.87 | 0.84 | 0.82 | 0.83 | 0.62 | 0.68 |
+| H3K79me2 | 0.43 | 0.70 | 0.69 | 0.64 | 0.65 | 0.50 | 0.68 |
+| H3K9ac | 0.51 | 0.82 | 0.78 | 0.77 | 0.76 | 0.67 | 0.65 |
+| H3K9me3 | 0.19 | 0.52 | 0.50 | 0.45 | 0.45 | 0.29 | 0.39 |
+| H4K20me1 | 0.34 | 0.61 | 0.58 | 0.53 | 0.53 | 0.35 | 0.54 |
+| RAD21 | 0.34 | 0.53 | 0.53 | 0.53 | 0.52 | 0.42 | 0.72 |
+| SMC3 | 0.39 | 0.62 | 0.62 | 0.57 | 0.57 | 0.39 | 0.58 |
+| median over marks | 0.35 | 0.69 | 0.67 | 0.64 | 0.62 | 0.46 | 0.60 |
+
+**seen_median7, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.54 | 0.67 | 0.66 | 0.67 | 0.66 | 0.64 | 0.86 |
+| H3K27ac | 0.59 | 0.83 | 0.82 | 0.81 | 0.78 | 0.69 | 0.70 |
+| H3K27me3 | 0.60 | 0.81 | 0.80 | 0.79 | 0.79 | 0.71 | 0.72 |
+| H3K36me3 | 0.69 | 0.86 | 0.85 | 0.83 | 0.83 | 0.76 | 0.83 |
+| H3K4me1 | 0.56 | 0.84 | 0.83 | 0.82 | 0.81 | 0.69 | 0.66 |
+| H3K4me2 | 0.70 | 0.90 | 0.90 | 0.89 | 0.89 | 0.79 | 0.80 |
+| H3K4me3 | 0.80 | 0.93 | 0.92 | 0.91 | 0.91 | 0.80 | 0.87 |
+| H3K79me2 | 0.66 | 0.84 | 0.84 | 0.81 | 0.81 | 0.71 | 0.85 |
+| H3K9ac | 0.74 | 0.90 | 0.89 | 0.88 | 0.88 | 0.82 | 0.85 |
+| H3K9me3 | 0.50 | 0.72 | 0.71 | 0.68 | 0.68 | 0.56 | 0.66 |
+| H4K20me1 | 0.64 | 0.78 | 0.77 | 0.74 | 0.74 | 0.60 | 0.77 |
+| RAD21 | 0.60 | 0.73 | 0.73 | 0.73 | 0.72 | 0.67 | 0.86 |
+| SMC3 | 0.63 | 0.79 | 0.79 | 0.78 | 0.78 | 0.68 | 0.82 |
+| median over marks | 0.63 | 0.83 | 0.82 | 0.81 | 0.79 | 0.69 | 0.82 |
+
+**seen_median7, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.43 | 0.57 | 0.58 | 0.58 | 0.58 | 0.47 | 0.62 |
+| H3K27ac | 0.63 | 0.78 | 0.77 | 0.73 | 0.73 | 0.61 | 0.63 |
+| H3K27me3 | 0.60 | 0.78 | 0.77 | 0.75 | 0.75 | 0.68 | 0.69 |
+| H3K36me3 | 0.57 | 0.80 | 0.76 | 0.73 | 0.73 | 0.60 | 0.68 |
+| H3K4me1 | 0.60 | 0.82 | 0.81 | 0.80 | 0.79 | 0.68 | 0.71 |
+| H3K4me2 | 0.57 | 0.77 | 0.76 | 0.75 | 0.73 | 0.61 | 0.64 |
+| H3K4me3 | 0.39 | 0.59 | 0.61 | 0.61 | 0.60 | 0.40 | 0.51 |
+| H3K79me2 | 0.62 | 0.75 | 0.74 | 0.72 | 0.72 | 0.62 | 0.70 |
+| H3K9ac | 0.68 | 0.82 | 0.81 | 0.82 | 0.81 | 0.66 | 0.77 |
+| H3K9me3 | 0.56 | 0.68 | 0.68 | 0.65 | 0.66 | 0.54 | 0.71 |
+| H4K20me1 | 0.64 | 0.67 | 0.69 | 0.64 | 0.64 | 0.51 | 0.69 |
+| RAD21 | 0.54 | 0.70 | 0.70 | 0.69 | 0.68 | 0.61 | 0.71 |
+| SMC3 | 0.55 | 0.69 | 0.69 | 0.65 | 0.66 | 0.53 | 0.65 |
+| median over marks | 0.57 | 0.75 | 0.74 | 0.72 | 0.72 | 0.61 | 0.69 |
+
+**k562, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.32 | -0.54 | -2.12 | 0.35 | -0.63 | 0.08 | 0.72 |
+| H3K27ac | 0.23 | -14.54 | -0.80 | 0.18 | -0.36 | -0.13 | 0.30 |
+| H3K27me3 | 0.28 | -3.93 | -2.50 | 0.41 | -0.99 | 0.31 | 0.42 |
+| H3K36me3 | 0.43 | -0.21 | 0.18 | 0.68 | 0.56 | 0.57 | 0.72 |
+| H3K4me1 | 0.08 | -10.79 | -1.93 | -0.35 | -1.13 | -1.13 | 0.17 |
+| H3K4me2 | 0.54 | -36.60 | 0.35 | 0.78 | 0.66 | 0.51 | 0.65 |
+| H3K4me3 | 0.63 | -45.66 | -0.91 | 0.62 | 0.04 | 0.47 | 0.77 |
+| H3K79me2 | 0.40 | -1.92 | 0.47 | 0.63 | 0.56 | 0.43 | 0.69 |
+| H3K9ac | 0.53 | -31.97 | 0.07 | 0.73 | 0.50 | 0.51 | 0.68 |
+| H3K9me3 | 0.08 | -18.36 | -4.20 | -0.25 | -1.97 | -0.89 | 0.07 |
+| H4K20me1 | 0.45 | -0.20 | -1.45 | 0.42 | -0.53 | 0.16 | 0.52 |
+| RAD21 | 0.30 | -1.38 | -3.89 | 0.15 | -1.58 | -0.44 | 0.61 |
+| SMC3 | 0.44 | -3.69 | -2.94 | 0.34 | -1.02 | -0.04 | 0.62 |
+| median over marks | 0.40 | -3.93 | -1.45 | 0.41 | -0.53 | 0.16 | 0.62 |
+
+**k562, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.59 | 0.43 | 0.35 | 0.64 | 0.50 | 0.53 | 0.86 |
+| H3K27ac | 0.62 | 0.00 | 0.73 | 0.81 | 0.78 | 0.69 | 0.71 |
+| H3K27me3 | 0.57 | -0.20 | 0.37 | 0.70 | 0.33 | 0.60 | 0.70 |
+| H3K36me3 | 0.67 | 0.59 | 0.72 | 0.87 | 0.81 | 0.83 | 0.86 |
+| H3K4me1 | 0.54 | 0.61 | 0.66 | 0.73 | 0.72 | 0.59 | 0.70 |
+| H3K4me2 | 0.74 | 0.02 | 0.73 | 0.90 | 0.87 | 0.76 | 0.81 |
+| H3K4me3 | 0.79 | 0.08 | 0.41 | 0.82 | 0.62 | 0.69 | 0.88 |
+| H3K79me2 | 0.66 | 0.42 | 0.74 | 0.83 | 0.80 | 0.68 | 0.84 |
+| H3K9ac | 0.73 | -0.09 | 0.77 | 0.89 | 0.85 | 0.77 | 0.82 |
+| H3K9me3 | 0.46 | -0.04 | 0.03 | 0.47 | 0.22 | 0.28 | 0.61 |
+| H4K20me1 | 0.67 | 0.44 | 0.36 | 0.67 | 0.41 | 0.45 | 0.73 |
+| RAD21 | 0.57 | 0.43 | 0.35 | 0.64 | 0.49 | 0.49 | 0.82 |
+| SMC3 | 0.67 | 0.34 | 0.29 | 0.66 | 0.45 | 0.44 | 0.79 |
+| median over marks | 0.66 | 0.34 | 0.41 | 0.73 | 0.62 | 0.60 | 0.81 |
+
+**k562, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.54 | 0.41 | 0.32 | 0.59 | 0.53 | 0.47 | 0.66 |
+| H3K27ac | 0.48 | -0.29 | 0.63 | 0.67 | 0.63 | 0.48 | 0.60 |
+| H3K27me3 | 0.60 | -0.24 | 0.33 | 0.64 | 0.23 | 0.56 | 0.71 |
+| H3K36me3 | 0.50 | 0.26 | 0.61 | 0.63 | 0.63 | 0.47 | 0.63 |
+| H3K4me1 | 0.50 | 0.51 | 0.61 | 0.62 | 0.64 | 0.59 | 0.65 |
+| H3K4me2 | 0.65 | -0.02 | 0.51 | 0.68 | 0.54 | 0.50 | 0.64 |
+| H3K4me3 | 0.41 | -0.01 | 0.12 | 0.37 | 0.25 | 0.22 | 0.49 |
+| H3K79me2 | 0.57 | -0.00 | 0.66 | 0.66 | 0.62 | 0.37 | 0.68 |
+| H3K9ac | 0.61 | -0.29 | 0.63 | 0.73 | 0.67 | 0.59 | 0.70 |
+| H3K9me3 | 0.43 | 0.00 | 0.02 | 0.37 | 0.18 | 0.34 | 0.53 |
+| H4K20me1 | 0.74 | 0.46 | 0.31 | 0.64 | 0.37 | 0.39 | 0.74 |
+| RAD21 | 0.46 | 0.35 | 0.35 | 0.53 | 0.49 | 0.43 | 0.64 |
+| SMC3 | 0.63 | 0.23 | 0.24 | 0.57 | 0.44 | 0.34 | 0.63 |
+| median over marks | 0.54 | 0.00 | 0.35 | 0.63 | 0.53 | 0.47 | 0.64 |
+
+**hmec, r2**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.05 | 0.16 | 0.18 | 0.21 | 0.15 | 0.17 | 0.63 |
+| H3K27ac | 0.23 | 0.40 | 0.53 | 0.54 | 0.51 | 0.43 | 0.49 |
+| H3K27me3 | 0.20 | 0.42 | 0.36 | 0.37 | 0.40 | 0.24 | 0.52 |
+| H3K36me3 | 0.33 | 0.52 | 0.54 | 0.52 | 0.57 | 0.51 | 0.66 |
+| H3K4me1 | 0.34 | 0.41 | 0.53 | 0.52 | 0.54 | 0.47 | 0.59 |
+| H3K4me2 | 0.53 | 0.57 | 0.70 | 0.70 | 0.69 | 0.66 | 0.72 |
+| H3K4me3 | -0.14 | -2.18 | -0.22 | -0.18 | -0.13 | -1.00 | -0.01 |
+| H3K79me2 | 0.46 | 0.58 | 0.60 | 0.54 | 0.54 | 0.36 | 0.78 |
+| H3K9ac | 0.38 | 0.38 | 0.61 | 0.66 | 0.66 | 0.44 | 0.60 |
+| H3K9me3 | 0.15 | 0.43 | 0.30 | 0.29 | 0.33 | 0.21 | 0.48 |
+| H4K20me1 | -0.20 | -0.71 | -0.49 | -0.29 | -0.24 | -0.35 | 0.12 |
+| RAD21 |  |  |  |  |  |  |  |
+| SMC3 |  |  |  |  |  |  |  |
+| median over marks | 0.23 | 0.41 | 0.53 | 0.52 | 0.51 | 0.36 | 0.59 |
+
+**hmec, pearson**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.32 | 0.45 | 0.46 | 0.49 | 0.45 | 0.44 | 0.81 |
+| H3K27ac | 0.50 | 0.74 | 0.73 | 0.73 | 0.72 | 0.66 | 0.70 |
+| H3K27me3 | 0.49 | 0.68 | 0.62 | 0.63 | 0.64 | 0.54 | 0.73 |
+| H3K36me3 | 0.58 | 0.76 | 0.75 | 0.72 | 0.76 | 0.72 | 0.81 |
+| H3K4me1 | 0.60 | 0.79 | 0.76 | 0.72 | 0.74 | 0.69 | 0.79 |
+| H3K4me2 | 0.73 | 0.85 | 0.84 | 0.84 | 0.84 | 0.81 | 0.86 |
+| H3K4me3 | 0.65 | 0.72 | 0.76 | 0.79 | 0.79 | 0.60 | 0.79 |
+| H3K79me2 | 0.70 | 0.79 | 0.80 | 0.78 | 0.79 | 0.64 | 0.91 |
+| H3K9ac | 0.67 | 0.80 | 0.80 | 0.82 | 0.81 | 0.73 | 0.82 |
+| H3K9me3 | 0.40 | 0.70 | 0.67 | 0.54 | 0.61 | 0.46 | 0.70 |
+| H4K20me1 | 0.45 | 0.43 | 0.46 | 0.48 | 0.50 | 0.31 | 0.67 |
+| RAD21 |  |  |  |  |  |  |  |
+| SMC3 |  |  |  |  |  |  |  |
+| median over marks | 0.58 | 0.74 | 0.75 | 0.72 | 0.74 | 0.64 | 0.79 |
+
+**hmec, spearman**
+
+| mark | seq | seq_meth | seq_meth_cellnorm | seq_meth_aug | seq_meth_cellnorm_aug_mdrop0.2 | GB_both | ceiling_loo |
+|---|---|---|---|---|---|---|---|
+| CTCF | 0.03 | 0.21 | 0.22 | 0.25 | 0.20 | 0.13 | 0.45 |
+| H3K27ac | 0.49 | 0.73 | 0.70 | 0.71 | 0.72 | 0.62 | 0.68 |
+| H3K27me3 | 0.41 | 0.63 | 0.49 | 0.56 | 0.56 | 0.47 | 0.66 |
+| H3K36me3 | 0.49 | 0.76 | 0.74 | 0.69 | 0.75 | 0.71 | 0.72 |
+| H3K4me1 | 0.62 | 0.79 | 0.74 | 0.66 | 0.72 | 0.67 | 0.79 |
+| H3K4me2 | 0.42 | 0.70 | 0.67 | 0.66 | 0.67 | 0.53 | 0.67 |
+| H3K4me3 | 0.34 | 0.47 | 0.51 | 0.64 | 0.62 | 0.18 | 0.54 |
+| H3K79me2 | 0.72 | 0.80 | 0.74 | 0.73 | 0.75 | 0.72 | 0.79 |
+| H3K9ac | 0.47 | 0.61 | 0.61 | 0.64 | 0.64 | 0.51 | 0.62 |
+| H3K9me3 | 0.44 | 0.61 | 0.59 | 0.54 | 0.58 | 0.46 | 0.76 |
+| H4K20me1 | 0.28 | 0.24 | 0.29 | 0.31 | 0.33 | 0.11 | 0.52 |
+| RAD21 |  |  |  |  |  |  |  |
+| SMC3 |  |  |  |  |  |  |  |
+| median over marks | 0.44 | 0.63 | 0.61 | 0.64 | 0.64 | 0.51 | 0.67 |
+
+
+### Reading
+
+- The unseen-cell failure is fixed for `seq_meth_aug` (legacy Meth scaling plus
+  random per-window scale and shift): median unseen R2 0.34 (from -3.69),
+  Pearson 0.73 (from 0.43), Spearman 0.60 (from 0.31); K562 Pearson 0.73 (from
+  0.34) and R2 0.41 (from -3.93), prediction offset 0.20 z (from 1.68) and slope
+  0.98 (from 0.25). Marks with a negative R2 remain in single cells (K562
+  H3K4me1 -0.35 and H3K9me3 -0.25; HMEC H3K4me3 -0.18 and H4K20me1 -0.29), the
+  same marks for which `seq` and the ceiling are weak.
+- Per-cell normalisation alone (`seq_meth_cellnorm`, `meth_cellnorm`) improves the
+  ranking on K562 (Pearson 0.34 to 0.41 and -0.20 to 0.43 for meth-only) and HMEC
+  (R2 0.41 to 0.53) but leaves a level error on K562 (offset 0.88 z, R2 -1.45,
+  R2 after removing the offset 0.03), so it does not fix K562 by itself. Adding
+  augmentation and window dropout to it (`seq_meth_cellnorm_aug_mdrop0.2`) gives
+  Pearson 0.70 and R2 -0.24; the augmentation on the legacy scaling is the better
+  variant here. Why the augmented legacy scaling beats the normalised input on
+  K562 was not tested.
+- Against gradient boosting (`GB_both`, section 41) on the two unseen cells the
+  best CNN has R2 0.34 against 0.12, Pearson 0.73 against 0.64, Spearman 0.60
+  against 0.51 (K562: 0.41 / 0.73 / 0.63 against 0.16 / 0.60 / 0.47; HMEC: 0.52 /
+  0.72 / 0.64 against 0.36 / 0.64 / 0.51). The unaugmented `seq_meth` is below
+  gradient boosting on unseen cells. On the seven seen cells all CNN variants
+  except `meth_cellnorm` are above gradient boosting (R2 0.62 to 0.69 against
+  0.46); the augmentation costs 0.05 R2 and 0.02 Pearson there.
+- Against sequence alone (`seq`) the best methylation-aware CNN adds on unseen
+  cells 0.10 R2 (0.34 against 0.24), 0.16 Pearson (0.73 against 0.57) and 0.10
+  Spearman. The gain comes mostly from HMEC (R2 0.52 against 0.23); on K562 R2 is
+  equal (0.41 against 0.40) and only Pearson rises (0.73 against 0.66). The
+  cell-agnostic ceiling (`ceiling_loo`, the mean of the seven measured training
+  tracks, which needs ChIP data of other cells as input) is still above every
+  model on unseen cells (R2 0.61, Pearson 0.82).
+
+### Limitations
+
+- Two independent unseen cells (K562, HMEC); medians of two cells have no
+  interval, and RAD21 and SMC3 exist only for K562. One training run per variant,
+  one seed.
+- The four variants were compared on the same two unseen cells that report the
+  result; there is no validation on an unseen cell, so the choice of
+  `seq_meth_aug` as the best variant is made on the evaluation cells and the
+  size of its advantage is an optimistic estimate. The diagnosis (K562 input
+  outside the training range) rests on the correlation of failure with input
+  distance across two cells and the meth-only control, not on an intervention
+  on K562 (for example shifting its methylation into the training range).
+- Gradient boosting uses all even chromosomes and 500,000 training rows, the CNN the
+  even chromosomes without chr2 and chr4 (validation); the two columns are close
+  but not identical test sets.
+- `--target-norm cell` and `--meth-norm rank` are implemented and smoke-tested only.
+  The remote repository copy of the script differs from the committed one only in the
+  header comment.
+
+### Files
+
+`scripts/seq_cnn_chip.py`; `results/seq_cnn/v2/seq_cnn_results.csv`,
+`seq_cnn_summary.csv`, `seq_cnn_partition.csv` (all variants, section 42 rows
+included; the partition still uses `seq`, `seq_meth`, `meth`),
+`comparison_by_mark.csv` (per mark medians for seen, unseen, K562 and HMEC with
+`GB_both` and `ceiling_loo`), `diag_prediction_bias.csv` (y_mean, p_mean, sds,
+slope, R2, R2 after removing the offset, Pearson per model, cell and mark). The
+section 42 files stay in `results/seq_cnn/`.
+
+## 60. Do CNN-predicted ChIP tracks help the track-dropout Hi-C model when measured tracks are missing? (FINAL; section 59 was the last number when this was written)
+
+Question: when ChIP tracks are absent, does replacing them by tracks that the sequence
++ methylation CNN predicts (sections 42 and 59, variant `seq_meth_aug`) improve the
+existing track-dropout Hi-C model over leaving them absent? Inference only; no Hi-C
+training.
+
+### Method
+
+- Hi-C model: `all12refres_drop_meth_10kb` (13 ChIP tracks + Meth input, residual on the
+  consensus, track dropout 0.5; the model with Meth; `all12refin_drop_10kb` has no Meth
+  input and was not run). 413 Akita test regions at 10 kb, `crosscell_predict.py` with
+  TTA, median per-region Pearson on the upper triangle k >= 2 (column `model`), plus the
+  structure metrics of section 35. Consensus: leave-one-out for the training cells,
+  consensus12 for K562 and HMEC (HMEC deep, same ChIP and Meth inputs as HMEC).
+- Stage 1: `seq_meth_aug` checkpoint (`ckpt_best.pt`, copied to
+  `/mnt/processed/wolffjoa/hic-multiome/runs/seq_cnn_twostage/`) predicts the 13 marks at
+  10 kb for the bins of every 192-bin Hi-C window (and the bins 1 Mb downstream for the
+  control), with reverse-complement averaging. K562 and HMEC are unseen by the CNN; the
+  seven training cells gm12878, imr90, h1, hepg2, a549, gm23248, cd14mono were fitted by
+  it, on the odd chromosomes. Of the 413 regions, 169 lie on the CNN test chromosomes
+  (chr6, 8, 10, ..., 22; held out of CNN training and validation) and the rest on odd
+  chromosomes (CNN training sequence) or chr2 and chr4 (CNN validation). Both the 413 and
+  the 169 are reported; for the training cells only the 169 are free of in-sample
+  chromosomes.
+- Scale: the CNN output z is converted to log1p signal units with the pooled training
+  statistics (z*sd + mu, `D.mu`, `D.sd`, global target normalisation), then to the Hi-C
+  input by the Hi-C model's own `norm_tracks.json` (log1p, per-track z-score, no
+  smoothing): both models use the same log1p of the 10 kb bin mean. No per-cell scaling,
+  no measured ChIP of the evaluated cell. Check on cells with measured tracks
+  (`scale_check.csv`, CNN test chromosomes, windows of the evaluation regions, Hi-C z
+  units, mean over marks): imputed mean minus measured mean is -0.26 for K562 (K562
+  CTCF -0.25, H3K27ac -0.49, RAD21 -0.52), +0.01 for HMEC and between -0.08 and +0.07 for
+  the seven training cells; the SD of the imputed track is 0.74 to 0.91 times the
+  measured SD (K562 0.83, HMEC 0.84; per mark 0.56 to 1.47) as expected from a
+  regression predictor; Pearson of imputed with measured 0.68 (K562), 0.64 (HMEC),
+  0.70 to 0.77 (training cells).
+- Scenarios (set kept; every other track absent or imputed): `all13` (every mark the cell
+  has; HMEC lacks RAD21 and SMC3, which stay absent), `meth` (Meth only), `none` (no ChIP,
+  no Meth), `ctcf`, `ctcf_h3k27ac`, `five` (CTCF, H3K27ac, H3K4me3, H3K27me3, H3K36me3),
+  each with Meth given to the Hi-C model (`+meth`, `meth`) and without. Variants:
+  absent, `@imp` (CNN prediction for every mark not kept), `@shuf` (the CNN prediction
+  of the bin 100 positions (1 Mb) downstream on the same chromosome: right cell and
+  scale, wrong locus). Paired differences use a region bootstrap (2000 resamples) of the
+  median.
+- Code: `scripts/twostage_cnn_imputation.py` (stages `cnn distribution predict summary`),
+  `scripts/crosscell_predict.py` gets `--impute name=npz` and keep sets named
+  `<set>@<name>`.
+
+### Results
+
+Median per-region Pearson, 413 regions (set with Meth given; `none` has no Meth):
+
+| cell | scenario | absent | CNN-imputed | shuffled | consensus |
+|---|---|---|---|---|---|
+| K562 | all13 (upper bound) | 0.906 | 0.906 | 0.906 | 0.859 |
+| K562 | meth only | 0.869 | 0.878 | 0.772 | 0.859 |
+| K562 | none (no Meth) | 0.855 | 0.869 | 0.716 | 0.859 |
+| K562 | CTCF + Meth | 0.878 | 0.878 | 0.775 | 0.859 |
+| K562 | CTCF + H3K27ac + Meth | 0.896 | 0.886 | 0.819 | 0.859 |
+| K562 | 5 marks + Meth | 0.892 | 0.888 | 0.839 | 0.859 |
+| HMEC | all13 (upper bound) | 0.905 | 0.905 | 0.905 | 0.907 |
+| HMEC | meth only | 0.903 | 0.898 | 0.851 | 0.907 |
+| HMEC | none (no Meth) | 0.904 | 0.896 | 0.833 | 0.907 |
+| HMEC | CTCF + Meth | 0.900 | 0.900 | 0.856 | 0.907 |
+| HMEC | CTCF + H3K27ac + Meth | 0.903 | 0.908 | 0.889 | 0.907 |
+| HMEC | 5 marks + Meth | 0.906 | 0.907 | 0.894 | 0.907 |
+
+Paired difference imputed minus absent (median per region, 95% region bootstrap
+interval, regions improved of 413; `paired_differences.csv`):
+
+| cell | scenario | difference | interval | improved |
+|---|---|---|---|---|
+| K562 | meth only | +0.005 | 0.003 to 0.009 | 246 |
+| K562 | none | +0.012 | 0.007 to 0.018 | 256 |
+| K562 | CTCF + Meth | +0.000 | -0.003 to 0.003 | 210 |
+| K562 | CTCF + H3K27ac + Meth | -0.006 | -0.009 to -0.005 | 138 |
+| K562 | 5 marks + Meth | -0.005 | -0.006 to -0.004 | 162 |
+| HMEC | meth only | -0.003 | -0.005 to 0.000 | 183 |
+| HMEC | none | -0.003 | -0.007 to 0.000 | 180 |
+| HMEC | CTCF + Meth | -0.001 | -0.004 to 0.002 | 201 |
+| HMEC | CTCF + H3K27ac + Meth | +0.002 | -0.001 to 0.004 | 219 |
+| HMEC | 5 marks + Meth | +0.000 | -0.002 to 0.002 | 205 |
+
+On the 169 CNN-test-chromosome regions the picture is the same (K562 meth only +0.006,
+none +0.014, CTCF + H3K27ac + Meth -0.007; HMEC meth only -0.005, none -0.006).
+Median over the seven training cells (169 regions, in-distribution cells; CNN-fitted):
+meth only +0.012, none +0.029, CTCF + Meth +0.011, CTCF only +0.023, CTCF + H3K27ac +
+Meth +0.000, 5 marks + Meth -0.002; one cell dominates (cd14mono, whose consensus is
+0.626: meth only +0.090, CTCF + Meth +0.053, but CTCF + H3K27ac + Meth -0.022 and 5 marks
++ Meth -0.027).
+Structure metrics (`scenario_medians.csv`): small and mixed. K562 meth only:
+compartment 0.903 to 0.914, eigenvector 0.953 to 0.960, SCC 0.860 to 0.865, loop APA
+0.629 to 0.681, insulation 0.946 to 0.940; the median boundary F1 falls from 1.000 to
+0.667 for K562 CTCF + Meth and 5 marks + Meth. HMEC is unchanged within 0.01 except loop
+APA (+-0.02 to 0.03). The all13 rows are identical in the three variants because no mark
+is left to impute (HMEC keeps its two missing cohesin marks absent).
+
+Shuffled control: replacing the CNN tracks by their 1 Mb shifted copies lowers every
+scenario in which a mark is replaced below absent (K562 meth only 0.772, none 0.716;
+HMEC meth only 0.851, none 0.833; K562 -0.05 to -0.14, HMEC -0.01 to -0.07 against
+absent) and below imputed in all of them. The Hi-C model reads the imputed tracks locus
+by locus; wrong-locus tracks are actively harmful, so the locus information in the CNN
+prediction is what carries the small gain, and the neutral absent value is the safer
+fallback when the CNN is unsure.
+
+### Verdict
+
+Imputation helps only where almost nothing is measured, and by little. On K562
+the paired median difference is +0.005 (meth only; +0.009 in medians, a quarter of the
+0.037 gap from meth only to all marks) and +0.012 (neither Meth nor ChIP) over absent,
+against a 0.047 gap of the full model over the consensus; on HMEC, where the model equals the
+consensus within 0.002 at full input, it changes nothing within +-0.005. Once CTCF and
+H3K27ac or five marks are measured, imputing the rest is neutral to harmful on K562
+(-0.005 to -0.006, intervals exclude 0). The CNN route to Meth is also redundant: the
+model with the imputed tracks and no Meth input (K562 none 0.869) equals the model
+with Meth and absent tracks (0.869). The gains stay well below the 0.016 to 0.05
+model-vs-consensus gaps; imputing all 13 marks gives about what one measured CTCF track
+gives (K562 absent: CTCF + Meth over meth only +0.009, CTCF over none +0.011).
+
+### Caveats
+
+- Two independent unseen cells (K562, HMEC); medians of two cells have no interval, and
+  the bootstrap resamples regions of one cell, not cells.
+- The CNN variant `seq_meth_aug` was selected on K562 and HMEC (section 59), so the
+  imputed tracks of these two cells are optimistic; the Hi-C scenario gain is bounded by
+  that optimism and is still small.
+- The Hi-C model also receives the consensus, so the gains are on top of it; where the
+  consensus is already near the model (HMEC) there is nothing to gain.
+- The imputed tracks of the seven training cells are in-sample for the CNN (cell and
+  odd chromosomes; even test chromosomes are held-out in position, not in cell); they
+  serve as contrast, not evidence for unseen cells. For unseen cells, 244 of the 413
+  regions lie on CNN training or validation chromosomes (sequence seen in other cells);
+  the 169-region subset agrees.
+- K562 imputed tracks are shifted by -0.26 z (mean over marks; -0.5 for H3K27ac and
+  RAD21), the known K562 failure of section 59; no per-cell rescaling was tried, since a
+  correction would need measured K562 ChIP.
+- One Hi-C model, one seed. The seed noise of the median Pearson is 0.013 (section 15);
+  the paired differences share the model and regions, so the intervals above exclude
+  seed variation, and most differences are smaller than that noise.
+
+### Files
+
+`scripts/twostage_cnn_imputation.py`; `scripts/crosscell_predict.py` (`--impute`);
+`results/twostage_cnn/scenario_medians.csv` (all metrics, subsets all413 and clean169),
+`paired_differences.csv`, `scenario_table_pearson.csv`, `scale_check.csv`,
+`per_region_scores.csv.gz`, `twostage_cnn.png`. CNN checkpoint, caches, track dumps
+(`pred/`) and per-set Hi-C predictions under
+`/mnt/processed/wolffjoa/hic-multiome/runs/seq_cnn_twostage/`.
+
+## 61. AML-inclusive cross-validation without healthy donors: pooled ten test patients and the section 36 claims re-tested (FINAL; section 60 was the last number when this was written)
+
+Question: with the rebuilt folds (sections 50, 52, 54; healthy PBMC donors 103,
+673, 576 removed, same-donor pairs 168/496 and 260/424 kept together, three
+patient-disjoint folds over the ten AML patients with Hi-C and CUT&Tag; test
+patients fold 10: 018, 027, 270; fold 11: 168, 546, 629, 1360; fold 12: 472,
+773, 1916), do the section 36 findings (other-patient mean beats every model at
+25 kb; model beats it at 10 kb; patient-specific gain; marks +0.013 / +0.032;
+AML-specific loops and stripes not reproduced; lab indicator no help) hold?
+
+Method. `scripts/aml_folds_v2_summary.py` pools `eval_f10/11/12_*.csv` from
+`/mnt/processed/wolffjoa/hic-multiome/runs/aml_train_remote/fold10..12`
+(scored by `scripts/aml_train_eval.py --fold N`, 413 Akita test regions, 25 and
+10 kb). The unit is the donor (10 donors; 168 stands for 168+496, the 260/424
+pair is in no test set). Pooled value = median over the ten patients, interval
+= 95% percentile bootstrap over donors (10000 resamples, seed 0). Paired
+differences are patient-wise. Two other-patient references exist: `ref_other_patients`
+= mean of the fold's training patients (7 or 6 patients; the map the models
+receive as input) and `ref_lopo_all` = mean of all other patients except the
+same donor (9 patients). Their Pearson is the only metric scored for baselines.
+Patient-specific = windows in the patient's top 20% on both deviation scores
+(35 to 40 windows per patient). Models: `aml_refin` (AML-inclusive, reference
+input), `aml_honest` (no reference input), `base_honest` and `base_refin@aml`
+(trained without AML data), `aml_refin@hspc` (same model fed the HSPC
+reference). Conditions: own marks, none.
+
+### Pooled medians over ten test patients (donor bootstrap 95% interval)
+
+| 25 kb | marks | no marks |
+|---|---|---|
+| Pearson aml_refin | 0.899 [0.882, 0.918] | 0.894 [0.872, 0.916] |
+| SCC aml_refin | 0.896 [0.872, 0.913] | 0.887 [0.867, 0.912] |
+| insulation | 0.956 [0.947, 0.966] | 0.958 [0.947, 0.964] |
+| loop enrichment | 0.803 [0.745, 0.832] | 0.791 [0.748, 0.826] |
+| compartment | 0.919 [0.904, 0.933] | 0.914 [0.894, 0.929] |
+| patient-specific windows (Pearson) | 0.770 [0.686, 0.814] | 0.732 [0.692, 0.806] |
+| Pearson aml_honest | 0.595 [0.534, 0.625] | 0.434 [0.422, 0.467] |
+| Pearson base_honest | 0.533 [0.503, 0.603] | 0.448 [0.416, 0.490] |
+| Pearson base_refin@aml | 0.885 [0.866, 0.907] | 0.888 [0.866, 0.918] |
+| Pearson aml_refin@hspc | 0.870 [0.847, 0.895] | 0.868 [0.838, 0.886] |
+
+| 10 kb | marks | no marks |
+|---|---|---|
+| Pearson aml_refin | 0.813 [0.769, 0.847] | 0.809 [0.764, 0.845] |
+| SCC aml_refin | 0.805 [0.745, 0.837] | 0.796 [0.736, 0.837] |
+| insulation | 0.961 [0.951, 0.966] | 0.959 [0.948, 0.968] |
+| loop enrichment | 0.429 [0.353, 0.497] | 0.420 [0.356, 0.495] |
+| compartment | 0.879 [0.842, 0.906] | 0.873 [0.824, 0.905] |
+| patient-specific windows (Pearson) | 0.550 [0.526, 0.673] | 0.558 [0.502, 0.660] |
+| Pearson aml_honest | 0.494 [0.459, 0.542] | 0.357 [0.336, 0.404] |
+| Pearson base_honest | 0.429 [0.385, 0.500] | 0.345 [0.310, 0.426] |
+| Pearson base_refin@aml | 0.795 [0.745, 0.839] | 0.805 [0.760, 0.843] |
+| Pearson aml_refin@hspc | 0.760 [0.717, 0.806] | 0.760 [0.707, 0.804] |
+
+Baselines (Pearson, then patient-specific Pearson), 25 kb: other patients
+(training mean) 0.908 [0.885, 0.935] and 0.750 [0.687, 0.814]; other patients
+(all nine) 0.911 and 0.754; HSPC consensus (4 donors) 0.884 and 0.697; HSPC
+training mean (2 donors) 0.866 and 0.678; consensus12 0.822 and 0.558.
+10 kb: 0.803 [0.754, 0.834] and 0.527 [0.488, 0.642]; all nine 0.814 and 0.559;
+HSPC 0.748 and 0.498; HSPC training mean 0.711 and 0.442; consensus12 0.694 and
+0.394. Per-patient values in `per_patient.csv`.
+
+### Claims re-tested (paired, patient-wise; difference with donor bootstrap interval; patients where the first term is larger)
+
+| claim | 25 kb | 10 kb |
+|---|---|---|
+| aml_refin(marks) minus training-mean reference, Pearson | -0.012 [-0.015, -0.002], 1/10 | +0.011 [+0.007, +0.019], 10/10 |
+| same against the nine-patient mean | -0.016 [-0.020, -0.009], 0/10 | -0.004 [-0.008, +0.005], 4/10 |
+| best of all models per patient minus training mean | -0.011 [-0.013, -0.002], 1/10 | +0.013 [+0.009, +0.019], 10/10 |
+| aml_honest, base_honest minus training mean | -0.32, -0.37, 0/10 each | -0.28, -0.34, 0/10 each |
+| base_refin@aml(marks) minus training mean | -0.025 [-0.031, -0.012], 0/10 | +0.000 [-0.012, +0.002], 5/10 |
+| patient-specific windows, aml_refin(marks) minus training mean | -0.002 [-0.014, +0.027], 5/10 | +0.035 [+0.026, +0.056], 10/10 |
+| patient-specific, same against the nine-patient mean | -0.012 [-0.028, +0.021], 3/10 | +0.017 [-0.003, +0.056], 8/10 |
+| marks minus no marks, aml_refin, Pearson | +0.004 [-0.000, +0.009], 8/10 | +0.000 [-0.005, +0.011], 5/10 |
+| marks minus no marks, aml_refin, patient-specific | +0.007 [-0.006, +0.036], 7/10 | +0.013 [-0.001, +0.026], 7/10 |
+| marks minus no marks, aml_honest, Pearson | +0.135 [+0.103, +0.187], 10/10 | +0.122 [+0.100, +0.176], 10/10 |
+| AML training (aml_refin minus base_refin@aml, marks), Pearson | +0.014 [+0.007, +0.016], 10/10 | +0.014 [+0.006, +0.022], 9/10 |
+| AML training, patient-specific | +0.005 [-0.012, +0.017], 6/10 | +0.014 [+0.002, +0.028], 9/10 |
+
+Residual correlation corr(P - R, T - R), R = training-mean reference, all
+windows (patient-specific windows in brackets): aml_refin marks 25 kb 0.203
+[0.256], none 0.111 [0.150]; 10 kb marks 0.278 [0.282], none 0.238 [0.265];
+base_refin@aml marks 0.191 [0.261] and 0.213 [0.238]; aml_honest marks 0.080
+and 0.115. The prediction deviates from the reference in the direction of the
+measured deviation, with a small share of its variance.
+
+Loops and stripes (10 kb, Xu et al. AML-specific loops and stripes, windows
+from the evaluation output, per-patient medians then pooled over ten donors;
+log2 donut enrichment and stripe band minus the reference): measured loops
++0.292 [+0.239, +0.354] against aml_refin(marks) -0.012 [-0.019, +0.009] and
+no marks -0.029 [-0.033, -0.018]; measured stripes +0.184 [+0.084, +0.205]
+against +0.006 [-0.022, +0.026]. Across windows corr(P - R, T - R) is 0.196
+for loops and 0.357 for stripes (aml_refin marks); base_refin@aml (no AML
+training) gives 0.211 and 0.325. The enrichment above the reference is not
+produced by either model. The evaluation output already contains this stage,
+so no perturbation run was needed.
+
+### Subtype stratification (descriptive, `subtype_groups.csv`)
+
+Groups from `results/aml_subtype/patient_subtype_table.csv` (consensus_group):
+TET2 (018, 546, 1916), RUNX1 (027, 168), KMT2B (270, 629), CEBPA (773),
+STAG2 (472), FLT3-ITD only (1360). Median aml_refin(marks) minus training
+mean at 10 kb, Pearson (patient-specific): KMT2B +0.015 (+0.083), RUNX1 +0.013
+(+0.059), CEBPA +0.019 (+0.037), FLT3-ITD only +0.010 (+0.026), STAG2 +0.007
+(+0.021), TET2 +0.006 (+0.030). At 25 kb every group lies between -0.016 and
+-0.002 in Pearson. No fold removes a whole group that has several patients;
+the three singleton groups (CEBPA, STAG2, FLT3-ITD only) are the leave-one-
+group-out cases (no patient of the same group in training): median patient-
+specific gain +0.026 against +0.040 for the seven patients with a same-group
+patient in training, Pearson +0.010 against +0.012. The patient-specific gain is
+carried by KMT2B patient 270 (+0.126). Groups have one to three patients; the
+comparison supports no conclusion about subtype transfer.
+
+### Old fold 0 against the rebuilt folds
+
+The four old test patients are 027 and 270 (now fold 10) and 773 and 1916 (now
+fold 12), so the comparison is patient-wise (`old_vs_new_same_patients.csv`).
+Median over these four patients, old (contaminated) / rebuilt:
+
+| quantity | 25 kb | 10 kb |
+|---|---|---|
+| aml_refin Pearson | 0.900 / 0.908 | 0.818 / 0.812 |
+| training-mean reference | 0.912 / 0.916 | 0.802 / 0.800 |
+| nine-patient mean (old: all eleven other) | 0.922 / 0.921 | 0.814 / 0.810 |
+| aml_refin patient-specific | 0.755 / 0.763 | 0.592 / 0.600 |
+| training-mean reference, patient-specific | 0.751 / 0.774 | 0.541 / 0.559 |
+| aml_honest Pearson | 0.623 / 0.625 | 0.525 / 0.521 |
+| aml_refin marks minus none, Pearson | +0.006 / +0.004 | +0.008 / +0.003 |
+| aml_refin marks minus none, patient-specific | +0.031 / +0.004 | +0.018 / +0.019 |
+| corr(P - R, T - R), marks | 0.167 / 0.209 | 0.234 / 0.278 |
+
+Individual patients move by at most 0.025 in Pearson (up to 0.05 in
+patient-specific windows, e.g. 773 at 25 kb patient-specific reference 0.692
+against 0.697, 270 0.623 against 0.605). Removing the healthy donors from
+training and from the reference, and separating the duplicate pairs, changed
+the four-patient medians by 0.01 or less in Pearson; the old section 36 numbers
+were not inflated by the contamination. The main change is the sample: ten
+patients with intervals instead of four. The 25 kb marks effect in
+patient-specific windows (+0.031 old) falls to +0.004 on the same four
+patients and +0.007 on all ten, a difference within the interval. The old
+claim that the reference wins in 12/12 patients at 25 kb becomes: aml_refin is
+below the training mean in 9/10 patients and below the nine-patient mean in
+10/10; the old 4/4 model wins at 10 kb becomes 10/10 against the training mean
+and 4/10 against the nine-patient mean.
+
+### Variants not re-run
+
+AML+Meth (`aml_meth_refin`, section 38) was not trained for folds 10 to 12.
+The residual variant `aml_refres` (section 45) exists for old fold 0 only, at
+10 kb, and is contaminated by the old split. Old fold-0 medians over four
+patients, 10 kb: aml_refres marks 0.812 Pearson, 0.588 patient-specific (none
+0.803, 0.566); aml_refin marks 0.818, 0.592; aml_meth_refin marks+Meth 0.816,
+0.586; training mean 0.802, 0.541 (`old_fold0_refres_meth.csv`). The residual
+form does not improve on the reference-input form. The lab indicator ablation
+(`aml_refin_nolab`) was fold 0 and 25 kb only and is not re-tested.
+
+### Verdict
+
+At 25 kb the other-patient mean is at least as good as every model in
+Pearson (aml_refin 1/10 patients above it, median -0.012; -0.016 against the
+nine-patient mean, 0/10); in patient-specific windows the model and the
+reference tie (-0.002 [-0.014, +0.027]). At 10 kb aml_refin is above the
+training-mean reference in 10/10 patients (+0.011 Pearson, +0.035 in
+patient-specific windows, intervals above zero) and level with the
+nine-patient mean (-0.004, 4/10; patient-specific +0.017, 8/10, interval
+including zero), so part of the 10 kb gain reflects the model's reference
+being built from fewer patients. The AML training adds +0.014 Pearson to the
+same architecture trained without AML (10/10 at 25 kb). The deviation of the
+prediction from the reference correlates 0.20 to 0.28 with the measured
+deviation, and the model contains no AML-specific loop or stripe enrichment
+(measured +0.29 and +0.18 log2, model about 0). Marks add nothing detectable
+to the reference-input model (+0.000 to +0.013, intervals include zero), while
+the no-reference model needs them (+0.12 to +0.14). With AML patients in
+training the model remains a refined version of the other-patient reference,
+about 0.01 Pearson above it at 10 kb in this design and not above it at 25 kb;
+it does not predict AML-specific structure.
+
+Caveats. Ten donors, folds of three or four, one seed per model and fold; the
+bootstrap covers patient sampling and excludes training variance. Pooled
+intervals treat the three folds as exchangeable although the reference of each
+fold is built from different patients. Seed variation was not measured here, so differences of about 0.01 cannot be separated from it. Subtype groups have one to three patients.
+Baselines exist for Pearson only; insulation, loop and compartment scores are
+available for models alone.
+
+### Files
+
+`scripts/aml_folds_v2_summary.py`; `results/aml_train_v2/`: `per_patient.csv`,
+`pooled_medians.csv`, `paired_claims.csv`, `loop_stripe_per_patient.csv`,
+`loop_stripe_pooled.csv`, `subtype_per_patient.csv`, `subtype_groups.csv`,
+`old_vs_new_same_patients.csv`, `old_fold0_refres_meth.csv`, `aml_folds_v2.png`.
+Evaluation inputs under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_train_remote/`.
+
+## 62. Loop-level test: does the model predict AML-specific loops and stripes in held-out patients? (FINAL; section 61 was the last number when this was written)
+
+Question: the eight site figures of section 36b-v2 show a predicted but weaker gain over HSPC, the fold analysis of section 61 shows no gain beyond the AML reference. This section tests all AML-specific objects of the ten test donors of folds 10, 11, 12 (018, 027, 270 | 168, 546, 629, 1360 | 472, 773, 1916) at 10 kb.
+
+### Design
+Objects and matched controls are those of the loop classifier (sections 47, 57; `results/aml_loop_classifier/features.csv.gz`, identical sampling): AML-specific loops of Xu et al. Suppl. Table 1 (2276 loops, 193 to 284 per donor) and stripes of Suppl. Table 4 (1075 stripes, at most 150 per donor, span up to 1.5 Mb; 319 wider ones are dropped because they do not fit the 1.92 Mb window); controls: A_hspc, A_full, A_do (shared loops or stripes matched 1:1) and B_rand (random pair or shifted rectangle at the same distance). Every object and control gets a 1.92 Mb window centred on it; the fold's models predict it (own marks, the fold's AML reference): aml_refin with marks and without any ChIP (`none`), aml_refin with the HSPC training reference (`aml_refin@hspc`), and the model trained without AML data (`base_refin@aml`). The reference baseline is the fold's AML reference map itself; measured HSPC is the four-donor HSPC consensus. Loop score: log2 donut enrichment (inner 1, outer 4, as the labels of section 47), maximum over the 3x3 pixels around the annotated pixel; stripe score: mean log O/E of the stripe rectangle. Gain = score minus measured HSPC score. Recurrence: other donors among the 25 AML samples of Suppl. Table 1 and 4 with the same object (loops within one bin in both anchors; stripes overlapping anchor and extent), 168/496 and 260/424 counted once, the donor's own partner excluded: recurrent >= 2 other donors, shared 1, private 0. Intervals: bootstrap over the ten donors (500 to 2000 resamples). 16,466 objects scored. Inference on one local GPU.
+
+Of the loops 1805 are private (79 percent), 278 shared by one other donor, 193 recurrent (8 percent); of the stripes 285 private, 195 shared, 595 recurrent (55 percent). Only 87 loops are present in two or more training donors of the fold (the reference), 195 in one.
+
+### Results, loops (median over objects, log2 enrichment)
+| class | n | measured gain | model gain | reference alone | no marks | no AML training | model minus reference | model minus no marks |
+|---|---|---|---|---|---|---|---|---|
+| all | 2276 | 0.404 [0.355, 0.476] | 0.060 [0.046, 0.070] | 0.096 | 0.037 | 0.079 | -0.034 [-0.043, -0.026] | +0.014 [0.006, 0.020] |
+| recurrent | 193 | 0.450 | 0.163 | 0.219 | 0.146 | 0.204 | -0.045 [-0.063, -0.034] | +0.010 [0.003, 0.028] |
+| shared by 1 | 278 | 0.388 | 0.094 | 0.137 | 0.064 | 0.117 | -0.039 | +0.021 |
+| private | 1805 | 0.401 | 0.045 | 0.081 | 0.025 | 0.063 | -0.032 [-0.040, -0.024] | +0.013 [0.006, 0.019] |
+
+Measured gain over the reference is +0.30 (all), +0.24 (recurrent), +0.32 (private); the model is below the reference in 10/10 donors in every class. Amplitude ratio (model gain / measured gain): 0.15 all, 0.36 recurrent, 0.11 private; the reference alone 0.24, 0.49, 0.20. Predicted gain over the predicted HSPC-input model (`aml_refin@hspc`, which itself sits 0.04 below measured HSPC): 0.083 all, 0.248 recurrent, 0.069 private. Promoter-enhancer-like loops (n=301): measured 0.368, model 0.080, reference 0.100; promoter-repressive-like (n=103): 0.375, 0.046, 0.098.
+
+Predicted against measured gain (Spearman, pooled, donor bootstrap): model 0.28 [0.19, 0.35] (Pearson 0.26 [0.17, 0.36]; median per donor 0.31, positive in 10/10), reference alone 0.29 [0.22, 0.36], no AML training 0.30, no marks 0.25. Recurrent loops: model 0.34, reference 0.46 [0.34, 0.56]. Private: model 0.25, reference 0.25. Against the deviation from the reference (what the model adds): model 0.18 [0.09, 0.26] (recurrent 0.10, includes zero), no marks 0.12.
+
+Separation of AML-specific loops from matched shared loops (AUROC, A_hspc controls):
+| score | measured | model | no marks | no AML | reference |
+|---|---|---|---|---|---|
+| gain over HSPC, all | 0.834 [0.820, 0.860] | 0.621 [0.580, 0.663] | 0.625 | 0.661 | 0.585 [0.541, 0.618] |
+| gain, recurrent | 0.848 | 0.771 [0.718, 0.819] | 0.775 | 0.806 | 0.771 |
+| gain, private | 0.835 | 0.594 [0.549, 0.636] | 0.599 | 0.635 | 0.551 |
+| enrichment, all (A_hspc) | 0.199 | 0.086 | 0.075 | 0.098 | 0.062 |
+| enrichment, all (B_rand) | 0.890 | 0.807 | 0.791 | 0.795 | 0.758 |
+Fraction of AML-specific loops above the 90th percentile of the matched controls (gain; chance 0.10): measured 0.50, model 0.153 [0.120, 0.194], reference 0.170, no AML 0.215; recurrent 0.575 / 0.446 / 0.492; private 0.500 / 0.111 [0.094, 0.143] / 0.122. A_full and A_do give the same picture (model gain AUROC 0.568 with A_full). The shared controls are selected for enrichment >= 0.6 in both patient and HSPC, so their enrichment exceeds that of AML-specific loops by construction (AUROC of raw enrichment far below 0.5 in measured data too); the gain is the discriminating score, and against random pairs the raw enrichment separates the loops (measured 0.89, model 0.81, recurrent 0.95).
+
+### Results, stripes
+Measured gain 0.221 (mean log O/E), model 0.044 [0.017, 0.064], reference 0.044, no marks 0.044, no AML 0.027; model minus reference +0.003 [-0.014, 0.022], model minus no marks +0.003. Amplitude ratio 0.20 (recurrent 0.22, private 0.22). Spearman of predicted and measured gain 0.50 [0.42, 0.58] (reference 0.46, no marks 0.44); against the deviation from the reference 0.28 (no marks 0.10). AUROC against matched shared stripes (A_hspc, gain): measured 0.63, model 0.52 [0.49, 0.56], reference 0.46, no AML 0.56; enhancer-like stripes (n=326) model 0.61 (measured 0.63, reference 0.53), repressive-like (n=442) 0.49 (measured 0.64), other 0.48. Enhancer-like stripes are the one class where the own-marks model is above the reference (+0.018 [0.001, 0.039], above the no-marks model by +0.021 [0.004, 0.041]); private stripes +0.026 [0.009, 0.041] over the reference. Fraction above the control p90: measured 0.25, model 0.16, reference 0.12.
+
+### Verdict
+(a) Against healthy cells the model predicts a gain at AML-specific loops, with the right sign in 10/10 donors, 15 percent of the measured amplitude (median +0.06 against +0.40 log2) and a rank correlation of 0.28 with the measured gain per loop. It separates AML-specific from matched shared loops with AUROC 0.62 (measured 0.83), and 15 percent of AML-specific loops exceed the 90th percentile of the controls (measured 50 percent). Stripes: gain 20 percent of the measured amplitude, AUROC 0.52.
+(b) Recurrent loops (present in at least two other donors) carry the signal: gain 0.16, 36 percent of the measured amplitude, AUROC 0.77, 45 percent above control p90. Private loops: gain 0.045, 11 percent amplitude, AUROC 0.59, 11 percent above control p90 (chance 10 percent).
+(c) The signal comes from the reference. The reference map alone has the same correlation (0.29), the same recurrent AUROC (0.77), and a larger gain (0.096) than the model; the model lies 0.034 log2 below it (10/10 donors), the model trained without AML data is level with it (0.079). Own marks add +0.014 log2 over the no-marks condition (8/10 donors; +0.010 recurrent, +0.021 promoter-enhancer-like and promoter-repressive-like) and +0.02 for enhancer-like stripes; they do not lift AUROC (0.621 against 0.625). Section 61 and the eight sites are consistent: the correlation of 0.55 to 0.61 over seven hand-picked sites is higher than the 0.28 over all loops (the sites were chosen for a clear gain, and most are recurrent), and the model contains no gain beyond the reference (measured +0.30 over the reference, model -0.034).
+(d) Suggested wording: "In the ten held-out patients the model predicts a weaker gain at AML-specific loops than in healthy cells (median +0.06 against +0.40 log2 measured; rank correlation 0.28), almost entirely at loops that recur in other patients and are therefore present in the AML reference (AUROC against matched shared loops 0.77); at loops private to the patient the gain is 0.045 and the separation 0.59. The AML reference map alone gives the same result, and the patient's own marks add 0.014 log2. The model reproduces AML-specific structure that other patients share and does not predict the patient-private loops and stripes."
+
+Caveats. Ten donors, one seed per model; 10 kb only (25 kb not analysed; the loop tables are 10 kb); the matched shared controls are selected for enrichment in both patient and HSPC; recurrence uses a one-bin tolerance; stripe controls are shifted rectangles; the donut maximum over 3x3 pixels favours the sharper measured map slightly (exact-pixel values are in `object_scores.csv.gz`, columns `#px`).
+
+### Files
+`scripts/aml_loop_detection.py`; `results/aml_loop_detection/`: `items.csv.gz` (objects, windows, recurrence), `object_scores.csv.gz`, `levels_by_class.csv`, `increments.csv`, `gain_correlation.csv`, `auroc.csv`, `auroc_by_pair_type.csv`, `per_patient.csv`, `class_sizes.csv`, `levels_by_train_recurrence.csv`, `aml_loop_detection.png`. Predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_loop_detection/`.
+
+## 63. Loop-centric training of the AML-inclusive model: can it predict AML-specific loops and stripes of a new patient? (PENDING; section 62 was the last number when this was written)
+
+Question: section 62 shows that the AML-inclusive model predicts a weak gain at AML-specific loops (median +0.06 against +0.40 log2 measured, Spearman 0.28, AUROC 0.62 against matched shared loops, private loops 0.59), carried by the AML reference. The pixel loss is dominated by background; AML-specific loops (about 230 per patient, 7 training patients per fold) and stripes are rare, small-amplitude features, and the patient's own marks add little under that loss (sections 47, 57, 61, 62). The residual-reference model alone (section 45) did not change this. This section adds a loop-centric recipe and tests it on the same ten held-out patients.
+
+### Implementation (status: implemented, CPU-tested, no GPU run yet)
+Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 25 kb: the residual-reference AML model (`all12aml_refres_drop`: model.reference residual, so the network output is the patient-specific deviation from the AML reference; same cache `mc_all12aml_ref_<k>kb_f<N>`, AML x3 oversampling, patient-hard validation) plus `train.aml_object_*` (`hicmultiome/aml_objects.py`, hooks in `hicmultiome/train.py`, all defaults off, existing runs unchanged):
+
+| flag | value | role |
+|---|---|---|
+| `data.aml_objects_table` | share `aml/objects/objects_f<N>.csv.gz` | objects of the fold's training patients |
+| `train.aml_object_oversample` | 5 | windows holding an AML-specific object and an equal number of one-to-one matched control windows (same patient and object kind; first choice the classifier's matched control of the object, else an unused control window of the patient) enter every epoch 5 times, on top of the AML x3 |
+| `train.aml_object_controls` | `[A_hspc]` | control set (shared loops / stripes matched on distance, orientation, HSPC CTCF and H3K27ac) |
+| `train.aml_object_pair_batches` | true | batches of half AML-specific and half control windows, so each batch holds ranking pairs |
+| `train.aml_object_weight` | 1.0 | extra loss on the donut neighbourhood of loops (box of outer+1 bins) and the stripe rectangle with one bin of flank, both objects and controls: L1 between predicted and measured residual (prediction minus reference, target minus reference) plus L1 between the object-level enrichments (loop: maximum of the donut enrichment over the 3 x 3 pixels around the annotated pixel, as the evaluation; stripe: mean over the rectangle) |
+| `train.aml_object_rank` | 0.5 | pairwise logistic ranking softplus(-(s_AML - s_control)/0.05) over every AML-specific and control object of the same kind in the batch, scores on the residual; `aml_object_rank_consistent` keeps pairs whose measured scores are ordered the same way; `aml_object_rank_space` residual or full |
+| `train.aml_object_donut` | [1, 4] at 10 kb, [1, 3] at 25 kb | enrichment ring (inner, outer half-width in bins; the donut of `hicmultiome/losses.py` with the evaluation's 10 kb setting) |
+
+Reverse-complement augmentation flips the object coordinates with the window (tested against the tensor flip). The loss terms are logged per epoch (`obj_pix`, `obj_enr`, `obj_rank`, `obj_n`). The loss keys are `train.*` because `train.loss` is one spec string.
+
+Objects (`scripts/aml_objects_table.py`, `results/aml_objects/summary.csv`): from the loop classifier table (Suppl. Table 1 loops, Suppl. Table 4 stripes and their matched controls, 10 kb, span up to 150 bins) restricted to the training patients of the fold. Fold 10 (7 patients): 1591 AML-specific loops, 729 stripes, 1510 / 647 A_hspc controls; fold 11 (6 patients): 1320 / 700, 1296 / 603; fold 12 (7 patients): 1641 / 721, 1562 / 628. The column `n_train_other` counts the other training donors carrying the object (private among the training patients: 1438 of 1591 loops, 375 of 729 stripes in fold 10).
+
+On the real fold 10 10 kb cache the recipe finds 1114 training windows with AML-specific objects and 922 with controls only (1891 of 4477 objects lie wholly inside a cached training window with margin: validation and training-region filters), 934 matched pairs; oversampling x5 adds 7472 windows to the 40.5k of the refin run (+18 percent).
+
+### Leakage safeguards
+- A table holds only the training patients of its fold (`aml_train.train_patients`), after removing every patient of the same donor as a test patient (`aml_train.SAME_DONOR`, `donor_group`); `assert_no_leak` runs before the file is written, `tests/test_aml_objects.py` repeats it on the written tables of folds 10, 11, 12 and on a synthetic table that includes test patients and the partners 496 and 424.
+- `n_train_other` counts training donors only; no test patient, partner or non-training sample enters the table.
+- The trainer rejects a table with a cell that is not a training sample of the run (`load_objects`).
+- Oversampling and loss terms act on the rows of the training split `ti`, selected after the honest validation split (`val_exclude_overlap`: no training window overlaps a validation position in any sample), so no validation window is a training window; HSPC donors (050, 213 train; 341, 822 held out) and MOLM-13 are as in the other AML runs, U-937 and the test patients are never trained on.
+- Recurrent test-patient loops that a training patient also carries are learnable from that training patient (as from the reference); the private criterion (objects of the test patient seen in no other donor) is not reachable that way.
+
+### Tests
+`tests/test_aml_objects.py` (22): table leakage (synthetic and written tables), foreign-cell rejection, window membership with margin, one-to-one matched pairs, batch composition, flip equivalence, loss values and gradient direction, ranking direction, consistent-pair filtering, config defaults and validation, run configs of folds 10, 11, 12 at 10 and 25 kb (identical to the refres run except the recipe keys), and a 60-step CPU training smoke with all flags (synthetic genome; the three object terms appear in the log). Full suite 209 passed, 1 skipped. Configs: `results/aml_loopfocus/configs/` (`scripts/aml_loopfocus_configs.py`).
+
+### GPU job and evaluation
+`results/aml_loopfocus/REMOTE_JOB.md`: six runs (3 folds x 10 / 25 kb), claims by run name, evaluation by `aml_train_eval.py --fold N --variant extra` (model label `aml_loopfocus`) and `aml_loop_detection.py --recipe loopfocus` (tables in `results/aml_loop_detection_loopfocus/`, stage `criteria`). Estimated remote 4090 time: about 5 h for the three 10 kb runs (range 4 to 7.5 h; refin_drop took 1.0 to 1.7 h each), about 2.5 h for the three 25 kb runs, about 1 h for the evaluations; about 6.5 h at 10 kb alone, about 9.5 h in total.
+
+### Success criteria (10 kb, ten held-out patients, donor bootstrap)
+1. AUROC of the gain over HSPC, private loops against matched shared loops (A_hspc): >= 0.70 (section 62: 0.59).
+2. Amplitude (median model gain / median measured gain), private loops: >= 0.30 (section 62: 0.11).
+3. Pooled Pearson on the Akita test regions: no loss against the aml_refin models (0.813).
+Results: not yet available.
+
+### Risks
+The ranking and enrichment terms push enrichment at annotated positions up; a model that raises enrichment at every annotated-looking site would also raise the false-positive rate (the matched shared controls and the ranking term are the counterweight; B_rand and A_do controls in `criteria`/`auroc.csv` test this). Only 42 percent of the table objects lie in cached training windows. Weights (1.0, 0.5, temperature 0.05, x5) were not tuned; one seed per fold. The 25 kb variant uses the 10 kb object coordinates mapped to 25 kb bins and a narrower ring, and its loops are only 2 to 60 bins long. The hard-split JSONs of folds 10 to 12 exist only in the remote repo copy.
+
+### Files
+`hicmultiome/aml_objects.py`, `scripts/aml_objects_table.py`, `scripts/aml_loopfocus_configs.py`, edits in `hicmultiome/train.py`, `hicmultiome/config.py`, `scripts/multicell_expanded.py`, `scripts/aml_train_eval.py`, `scripts/aml_loop_detection.py`; `tests/test_aml_objects.py`; `results/aml_objects/summary.csv`, `results/aml_loopfocus/REMOTE_JOB.md`, `results/aml_loopfocus/configs/`.
+
+
+## 64. Which marks and methylation features go with AML-specific loops and stripes, and can they be boosted? (FINAL; section 63 was the last number when this was written)
+
+Script `scripts/aml_loop_mark_correlations.py` (stages inventory, tracks, features, corr, boost, maps, figures; hicdiff env, CPU only), results in `results/aml_loop_marks/`. Objects: the 2276 AML-specific loops and 1075 stripes of the ten held-out donors of section 62 (168/496 and 260/424 count once; healthy donors excluded) with their matched shared controls; target = measured gain over the HSPC consensus (`gain|measured`). CUT&Tag CTCF and WGBS exist for 8 of the 10 donors (1360 and 1916 have H3K27ac and H3K27me3 only).
+
+### Data (inventory.csv, inventory.md, inventory_data_types.md)
+Everything held locally is processed; no raw reads exist for any assay. Hi-C: nodups pairs for 32 Xu samples (25 AML, 3 healthy PBMC, 4 HSPC; 169 GB) plus iced mcools (10 kb and coarser, 25 GB), 0.02 to 0.49 B contacts at 5 kb per sample. CUT&Tag: 33 MACS2 -log10 p-value bigWigs (12 H3K27ac, 12 H3K27me3, 9 CTCF incl. healthy 103), one sample per mark and donor; GEO also lists MACS2 peak files, not downloaded (command line not in the files we hold). WGBS: 20 `.CGN.10bp.bw` (fraction per 10 bp bin, no read counts or coverage; 10 with CUT&Tag, 10 WGBS only; healthy 103 and 673, no 576, no CD34+ WGBS; CD14+ monocyte ENCODE as the other healthy reference). SV (595 junctions, 22 samples), CNV (54 segments, 18 samples), fusion / mutation labels (hand-read from Xu Fig. 1c), Suppl. Tables 1 and 4 (loops, stripes). Fischer 2024: 160 ChIP bigWigs (CTCF, RAD21, STAG2, H3K27ac; 45 patient folders) and 3 pooled Hi-C maps; cell lines MOLM-13 and U-937 (Hi-C + ChIP), K562. Used now: Hi-C targets and references, CUT&Tag as quantile-matched model inputs, WGBS as 1 kb `Meth` channel, SV table in the SV-aware runs, Fischer at group level. Not used before this section: MACS2 peaks (not downloaded), WGBS at 10 bp, Fischer per-patient RAD21 / STAG2, the 7 extra CD34+ ChIP experiments fetched here (3 H3K27ac, 3 H3K27me3, 1 CTCF; `work/loopmarks/hspc_extra`), cell-line loops. ATAC (33 files) and RNA (22 files) were downloaded by the private-loop agent (`results/aml_private_loop_info/`, in progress; its first 8-donor logistic AUROC increments of ATAC / RNA features over marks are about -0.002 [-0.005, 0.000], work not finished) and are not analysed here.
+
+### Correlations (corr; correlations_all_features.csv.gz, auroc_all_features.csv.gz, top_features.md, expected_relationships.csv, fig_mark_heatmap.png)
+1093 features: mark (H3K27ac, H3K27me3, CTCF) x representation (own, HSPC, patient minus HSPC; also z-scored / percentile difference, minus healthy 103/673, minus other AML donors, HSPC mean) x position (anchor A, B, min, max, sum, product, promoter, partner, interior; stripes anchor, extent mean/max) x scale (bin, +-20 kb, +-100 kb); WGBS mean, minimum, low-methylated fraction (1 kb bins < 0.5) with own / healthy / CD14+ / minus-reference; CpG islands; methylation and CTCF signal at the CTCF motif hits (JASPAR MA0139.2 >= 70 percent, anchor +-1 bin; methylation from the 10 bp bigWigs; data for about one third of the anchors). Pooled Spearman with donor bootstrap (1000), per-donor Spearman, partial Spearman controlling log distance and the HSPC enrichment of the object, AUROC against matched shared controls (pair-type classes against controls of the same own-mark type). Family-wise null (gain permuted within donor, max |rho| over about 475 features, 95th percentile): 0.12 (all loops), 0.15 (private loops), 0.17 (all stripes), 0.28 (enhancer-like stripes).
+- Stripes: the one clear signal. Patient-minus-HSPC H3K27ac at the anchor (minimum over anchor and extent, +-100 kb) rho 0.30 [0.23, 0.35] all stripes, 0.45 [0.36, 0.51] enhancer-like (10/10 donors), 0.36 [0.27, 0.45] private, 0.26 recurrent; partial identical. HSPC H3K27ac and H3K27me3 correlate negatively (-0.23 to -0.36; low HSPC state, large gain).
+- Loops: no patient-specific mark correlates with the gain magnitude beyond the family-wise null of 0.12 to 0.15. The strongest are locus properties: healthy WGBS mean at +-100 kb rho -0.26 [-0.30, -0.21] private loops (all 8 donors negative; patient-minus-healthy -0.1 to -0.2 only for some positions), own H3K27ac +-100 kb -0.22 [-0.30, -0.14] (10/10 negative): the more active / hypomethylated the region, the smaller the gain over HSPC. Recurrent loops: own CTCF and own H3K27ac negative (-0.28 to -0.32).
+- Expected relationships. Delta H3K27ac at both anchors for promoter-enhancer loops: rho with the gain -0.04 [-0.19, 0.07] (not supported for magnitude); as a separator against own-mark-matched PE controls AUROC 0.69 [0.64, 0.73] (min over anchors), 0.73 [0.69, 0.77] (max), 10/10 donors (supported); own H3K27ac min 0.76. H3K27me3 for promoter-silencer loops: gain rho -0.05 to -0.16 (CI includes 0, n=103), AUROC of delta H3K27me3 0.63 to 0.74 [0.70, 0.80] (4 donors evaluable; supported, small n). Repressive stripes: delta H3K27me3 at the anchor rho 0.01 [-0.08, 0.09] (not supported for magnitude), AUROC 0.74 [0.70, 0.76] (9/9 donors; own H3K27me3 0.81); enhancer-like stripes delta H3K27ac rho 0.27 [0.16, 0.35] and AUROC 0.67 (supported). CTCF: delta and own CTCF rho -0.05 to 0.02 (CI around 0) and AUROC 0.45 to 0.53 for loops and stripes, all classes (not supported); HSPC CTCF +-20 kb separates AML-specific loops from shared controls (AUROC 0.24, i.e. controls are CTCF-richer) but that is HSPC state. Methylation at CTCF motifs: rho -0.03 [-0.09, 0.04] (bound hit), patient-minus-healthy -0.10 [-0.19, 0.01]; recurrent loops +0.34 [0.22, 0.48] (n=43, 0 evaluable donors); AUROC of bound-motif methylation 0.58 [0.56, 0.62] for loops (AML-specific loops sit at less-methylated motifs than controls, partly the HSPC matching), none for stripes; patient-minus-healthy AUROC 0.51 (not supported). Patient-minus-CD14 WGBS mean AUROC 0.56 [0.54, 0.58] for loops.
+
+### Boosting (boost; boost_metrics.csv, boost_increments.csv, boost_increments.md, boost_oof_*.csv.gz, fig_boost_increments.png)
+Leave-one-donor-out, locus-disjoint (classifier folds), histogram gradient boosting as in the loop classifier (BASE reproduces its AUROC 0.837); AUROC against matched controls and Spearman of the predicted gain on positives; bootstrap over donors of paired differences. Private loops, increment over BASE (AUROC 0.850 pooled): all engineered sets together (ALL, 685 features) +0.013 pooled [-0.011, 0.033], +0.014 per donor [0.007, 0.021]; multiscale alone +0.005 [-0.008, 0.017]; pairwise products / convergent-CTCF interactions -0.001 [-0.003, 0.001]; per-patient z / percentile differences +0.002; HSPC mean of 4 experiments +0.004 [-0.011, 0.016]; healthy-donor or other-AML-donor reference -0.001, -0.002; extended methylation / CpG / motif sets +0.002; monotone constraints +0.008; per-donor feature centring +0.020 [-0.010, 0.044]. Gain Spearman, private loops (BASE 0.197): multiscale +0.045 [0.013, 0.069] (per donor +0.051 [0.028, 0.076]), ALL +0.038 [-0.017, 0.094], centring +0.068 [-0.040, 0.180] (per donor +0.064 [0.012, 0.115]). Patient data over locus-only (HSPC + sequence covariates, AUROC 0.834): BASE +0.016 [0.001, 0.029], ALL +0.029 [-0.008, 0.058]. Private stripes: no increment is reliable (AUROC BASE 0.588, locus-only 0.605, ALL 0.628, ALL over BASE +0.040 [-0.001, 0.090]; gain Spearman +0.01 to +0.08, all intervals include 0); the logistic model on ALL +0.062 [0.018, 0.108] is one of 19 variants and not corrected for that. Of the 19 variants x 2 objects x 2 tasks, few intervals exclude 0.
+2D maps (maps; maps2d_summary.csv, fig_maps2d.png): outer-product maps of the 1D deltas (H3K27ac, H3K27me3, CTCF, WGBS minus healthy, own H3K27ac, H3K27ac x H3K27me3) in the 1.92 Mb windows of all 3351 objects, diagonal-detrended pixel Spearman with measured minus AML reference, measured minus HSPC and the model residual (measured minus aml_refin): local rho (loop +-15 bins, stripe rectangle +-5) between -0.03 and +0.09 for every channel (model residual +0.001 to +0.021; delta H3K27ac outer product +0.018 loops, +0.007 stripes; additive and minimum channels the same size), partial correlation given the row and column marginals 0.000 to 0.008. CTCF channels 0.00 / negative.
+
+### Recommendation
+Add to the U-Net inputs (and to a loop-level re-scorer): (1) multiscale patient-minus-HSPC H3K27ac, smoothed at +-20 kb and +-100 kb (expected: the stripe signal, rho 0.30 to 0.45, is a +-100 kb delta; +0.045 gain Spearman for private loops), (2) per-patient normalisation of the difference channels (genome-wide z or percentile of the patient track before differencing; +0.02 to +0.03), (3) healthy-donor / HSPC-mean H3K27ac and methylation as locus context at +-100 kb (regional activity predicts a smaller gain, rho -0.2 to -0.26); keep the HSPC mean of several experiments as reference instead of one experiment (no measurable gain, cheap). Not worth it: outer-product / pairwise channels (maps: partial rho <= 0.008, tree interactions -0.001), convergent-CTCF x delta CTCF (CTCF carries no gain signal at 10 kb), motif-level methylation channels (data for a third of the anchors, no signal), patient-minus-other-AML reference (no gain), additional CpG-island / low-methylation fraction channels (+0.002). The ceiling is low: the best private-loop AUROC is 0.86 to 0.87 against matched shared loops, of which 0.83 is HSPC / sequence state; the patient's own marks add 0.016 and all engineering a further 0.01 to 0.015.
+
+### Caveats
+Ten donors (eight for CTCF and WGBS, 168 and 496 counted once), one HSPC experiment per mark in all reference-dependent analyses, three marks only, one CUT&Tag sample per donor (depth differs 4-fold across donors; the quantile matching removes scale, not noise). Pair-type classes are defined from the patient's own marks, which restricts the range of own-mark features inside the class (hence AUROC against same-type controls). Wide-window features are regional chromatin-state proxies. Many features (family-wise nulls above) and 19 boosting variants; intervals are not corrected. Methylation at motifs: data for about one third of the anchors (CpG-poor 19 bp windows have no 10 bp bin).
+
+### Files
+`scripts/aml_loop_mark_correlations.py`; `results/aml_loop_marks/`: `inventory.csv`, `inventory.md`, `inventory_data_types.{csv,md}`, `correlations_all_features.csv.gz`, `auroc_all_features.csv.gz`, `top_features_{correlation,auroc}.csv`, `top_features.md`, `expected_relationships.csv`, `correlation_familywise_null.csv`, `boost_metrics.csv`, `boost_increments.{csv,md}`, `boost_oof_{loop,stripe}.csv.gz`, `maps2d_summary.csv`, `fig_mark_heatmap.png`, `fig_boost_increments.png`, `fig_maps2d.png`. Caches (feature matrix, tracks) under `/mnt/processed/wolffjoa/hic-multiome/aml/primary/work/loopmarks/`.
+
+## 65. Does patient ATAC-seq and RNA-seq predict private AML-specific loops and stripes? (FINAL; section 64 was the last number when this was written)
+
+Question: sections 47, 57, 61 and 62 leave private loops (79 percent of AML-specific loops) unpredicted. Is there data we can obtain that carries information beyond the HSPC state of the locus, the patient's own CUT&Tag marks and WGBS?
+
+### Inventory (Xu et al. 2022, superseries GSE152136; PBMC donors 103, 673, 576 are healthy)
+Sub-series: GSE152096 `[RNA-Seq]`, GSE152099 `[WGBS]`, GSE152132 `[CUT&TAG]`, GSE152134 `[ATAC-Seq]`, GSE152135 `[Hi-C]`. Sample titles are of the form `018_ATAC-seq`, `018_RNA-seq`, `018_WGBS`, `018_CUT&TAG_H3K27ac`, `018_Hi-C` (table in `results/aml_private_loop_info/geo_samples.csv`, per-patient overlap in `inventory_per_patient.csv`).
+- ATAC-seq (GSE152134, 16 samples, 2.5 GB): per sample `GSM46042xx_<id>_ATAC-seq.10bp.RPGC.bigwig` (median 152 MB) and `.MACS2.filt.peaks.txt.gz` (0.8 MB). Patients 018, 027, 168, 260, 270, 472, 546, 566, 629, 773, 990, 1360, 1916; PBMC 103, 576, 673. No ATAC for 1071, 1324, 424, 496, 504, 798, 838, 933.
+- RNA-seq (GSE152096, 22 samples, 72 MB): `GSM..._<id>_RNA-seq.RSEM.quant.genes.txt.gz` (RSEM counts, TPM, FPKM, GENCODE v24, hg38). Patients 018, 027, 168, 260, 270, 472, 546, 566, 629, 773, 868, 1071, 1324, 424, 496, 504, 798, 838, 933; PBMC 103, 576, 673. No RNA for 1360, 1916, 990, 1021, 936, 1953. Raw reads are withheld by the submitters (patient privacy).
+- No ATAC or RNA for the four HSPC donors (HSPC-050, -213, -341, -822; Hi-C only). No H3K4me1, H3K4me3 or other marks in the cohort (CUT&Tag: H3K27ac 12, H3K27me3 12, CTCF 9 samples).
+- Overlap with the loop classifier (20 non-healthy samples): all 8 patients with CTCF + K27ac + K27me3 + WGBS have ATAC and RNA (018, 027, 168, 270, 472, 546, 629, 773); 1360 and 1916 have ATAC and K27ac/K27me3 only; 260 and 566 have ATAC, RNA, WGBS; 1071, 1324, 424, 496, 504, 798, 838, 933 have RNA and WGBS only.
+- Other AML sources (`aml_data_survey.md`): Hi-C plus marks exist for THP-1, MOLM-13, HL-60, U-937, OCI-AML3, MV4-11, NB-4 (cell lines; each one genome, so at most one more "patient" each, no private-versus-recurrent split); Kasumi-1 has no genome-wide Hi-C; Fischer et al. 2024 (GSE268035) has per-patient CTCF/RAD21/STAG2/H3K27ac ChIP for 7 patients but pooled Hi-C only. None adds per-patient ATAC or RNA with Hi-C.
+
+### Downloaded (`/mnt/processed/wolffjoa/hic-multiome/aml/primary/{atac,rna}`, 3.5 GB, `scripts/aml_private_loop_download.sh`)
+Xu ATAC bigWigs and peaks, Xu RSEM gene files, GENCODE v24 GTF; HSPC reference: five healthy CD34+ ATAC experiments (ChIP-Atlas hg38 bigWig SRX19490150-52, SRX10942129-30) and ENCODE ENCSR830HIN (CD34+ common myeloid progenitor, polyA RNA, ENCFF690QPA, GENCODE V24; one sample). Pearson of 10 kb bins between HSPC replicates 0.61 to 0.80; patient against mean of other patients 0.71 to 0.90, patient against HSPC 0.24 to 0.66 (`atac_sample_corr.csv`), so patient-minus-HSPC features carry cross-laboratory batch. RNA Spearman patient-patient 0.73, patient-HSPC 0.75.
+
+### Design
+`scripts/aml_private_loop_info.py`. ATAC: 10 kb bin mean and max of log2(1 + RPGC), quantile-matched to the mean AML profile. RNA: log2(TPM + 1), quantile-matched; genes (protein coding and lincRNA, 27,346) placed on refGene TSS by symbol (80 percent of TSS), GENCODE TSS otherwise. New groups, each per pair as min and max over the two regions: atacown, atachspc, atacdiff (mean, max, +-20 kb flank), rnaown, rnahspc, rnadiff (promoter-anchor expression, genes within +-20 kb, strongest up and down gene against HSPC), acxatac (product of genome-wide percentiles of H3K27ac and ATAC; patient and patient minus HSPC). Rows, controls (A_hspc matched shared loops or stripes, B_rand), locus-disjoint leave-one-donor-out folds, donor units ({168, 496}, {260, 424}) and models (logistic regression, gradient boosting) are those of `results/aml_loop_classifier_v2`. Private = no other donor carries the object (one-bin tolerance, Suppl. Tables 1 and 4): 3684 of 4520 loops (81 percent), 405 of 1394 sampled stripes (29 percent). Datasets: D1, 8 patients with all data, baseline HSPC state + own marks + WGBS + motif + gene + distance; D2, 10 patients with marks and ATAC (no WGBS in 1360, 1916), baseline without methylation; D3, 16 donors with RNA and WGBS, no own marks, baseline HSPC + WGBS; D4, 10 patients with ATAC, RNA and WGBS, no own marks. Increments: paired donor bootstrap (500) of macro AUROC.
+
+### Results (gradient boosting; logistic regression is the same within 0.01)
+| set | target vs controls | donors | baseline pooled AUROC [95%] | + all new groups (macro increment [95%]) | best single group |
+|---|---|---|---|---|---|
+| D1 loops | private vs A_hspc | 8 | 0.856 [0.824, 0.886] | -0.000 [-0.006, 0.004] | rnadiff +0.001 |
+| D1 loops | private vs B_rand | 8 | 0.772 [0.723, 0.823] | -0.002 [-0.011, 0.008] | atacown +0.004 |
+| D1 loops | all vs A_hspc | 8 | 0.838 [0.804, 0.868] | -0.001 [-0.007, 0.004] | rnaown +0.001 |
+| D1 loops | non-private vs A_hspc | 8 | 0.743 [0.713, 0.778] | +0.001 [-0.017, 0.017] | rnaown +0.006 |
+| D2 loops | private vs A_hspc | 10 | 0.850 [0.822, 0.877] | -0.001 [-0.004, 0.002] | atachspc +0.001 |
+| D3 loops | private vs A_hspc | 16 | 0.831 [0.810, 0.852] | +0.002 [0.000, 0.004] | rna_all +0.002 |
+| D3 loops | private vs B_rand | 16 | 0.678 [0.638, 0.709] | +0.009 [0.000, 0.018] | rnadiff +0.008 |
+| D4 loops | private vs A_hspc | 10 | 0.837 [0.809, 0.863] | +0.006 [0.001, 0.011] | rnadiff +0.001 |
+| D4 loops | private vs B_rand | 10 | 0.687 [0.642, 0.731] | +0.010 [-0.004, 0.024] | rna_all +0.006 |
+| D1 stripes | private vs A_hspc | 8 | 0.602 [0.544, 0.654] | +0.002 [-0.034, 0.035] | acxatac +0.012 |
+| D1 stripes | private vs B_rand | 8 | 0.678 [0.649, 0.712] | +0.017 [-0.009, 0.040] | acxatac +0.022 |
+| D1 stripes | all vs A_hspc | 8 | 0.600 [0.578, 0.628] | -0.003 [-0.022, 0.014] | acxatac +0.004 |
+
+All 48 dataset x target x negative x model rows are in `headline_table.csv`, the 12 feature sets per row in `increments.csv` and `summary.csv` (AUROC and AUPRC with intervals). Largest point estimate of any increment 0.026 (logistic regression, non-private loops, D1), largest upper interval limit 0.056 in that one row; for private loops the largest point estimate is 0.014 (D4 vs B_rand, logistic regression). By pair type (D1, `by_type.csv`): promoter-enhancer loops baseline 0.88 and with new groups 0.88 (private, gradient boosting), promoter-silencer loops 0.77 against 0.76; stripes enhancer-type +0.04 [0.00, 0.08] and repressive +0.01 on 91 and 101 private stripes. The new groups alone (distance + ATAC + RNA, no HSPC marks or own marks) reach pooled AUROC 0.72 for private loops against A_hspc, so they carry the signal but all of it is contained in the baseline. Strongest single features (mean donor AUROC, private vs A_hspc): H3K27ac x ATAC interaction patient-minus-HSPC 0.60, H3K27ac itself 0.62, down-regulation of nearby genes 0.58, patient-minus-HSPC ATAC 0.56 to 0.57; HSPC ATAC at the anchor goes the other way (0.35 to 0.43; AML-specific anchors are closed in HSPC).
+
+### Gate verdict
+Not passed. ATAC and RNA raise the private-loop AUROC by at most +0.006 (point estimates -0.002 to +0.014 over all configurations), against the threshold of +0.05; the intervals exclude +0.03 everywhere for loops. The baseline (HSPC state, own marks, WGBS) already separates private loops from matched shared loops at 0.83 to 0.86 AUROC (random pairs 0.69 to 0.77), and ATAC, RNA and the H3K27ac x ATAC interaction are redundant with it: accessibility and expression of the patient say where regulatory elements are, which H3K27ac and the HSPC state already say. Private loops are no better and no worse separated than recurrent ones (0.86 against 0.74 in D1), so the earlier 0.59 of the Hi-C model (section 62) is a limit of the predictor on private loops, not of the information in these inputs: a classifier on tabular features reaches 0.85 with matched controls. What the data cannot show is which of the many accessible, H3K27ac-marked anchor pairs a given patient actually joins by a loop; no feature of one anchor carries the partner choice, and the classifier increments for pair-level features (HSPC contact, motif orientation, distance) are held constant by the matching.
+
+### Further data and availability
+- H3K4me1, H3K4me3, H3K27ac for the RNA-only and ATAC-only patients: not released for Xu; the cohort has no H3K4me marks. Would need new CUT&Tag on patient material.
+- CTCF for 496-like patients (WGBS and RNA only; 1071, 1324, 424, 496, 504, 798, 838, 933) and for 1360, 1916: not released; CTCF is available for 9 samples only. Fischer et al. 2024 releases CTCF, RAD21, STAG2, H3K27ac per patient (7 WT patients) with pooled Hi-C (GSE268031/GSE267780), usable for marks but not for private-loop labels.
+- Mutation subtype and SV: subtype inferred from Suppl. Table 3 is in `aml_subtype`; SVs in Suppl. Table 5/6. Raw WGS is withheld.
+- TF expression: contained in the RNA used here (promoter and nearby genes only); a patient-level TF-expression vector (RUNX1, CEBPA, GATA2, MECOM, cohesin) was not tested and has 18 patients as the sample size, too few for a locus-level model.
+- Single-cell multiome or HiChIP on the same patient: GSE302267 (scHi-C of AML bone marrow HSPCs, no marks); no public per-patient H3K27ac HiChIP or capture Hi-C in AML cohorts was found.
+Recommendation: private AML-specific loops cannot be pushed by more input tracks of this kind; claims for new patients should be made for recurrent loops and stripes (reference-carried, section 62), with private loops stated as not predicted. A route that could add information is deeper own-patient 3D data (capture Hi-C or HiChIP of the same patient), which is a measurement of the target, not an input.
+
+Caveats. Eight to sixteen donors; one HSPC RNA sample from another laboratory (CD34+ CMP) and ATAC of healthy donors from other laboratories, so diff groups carry batch; private is defined by absence from the other donors' call sets (detection limit, not proof of absence); stripes are subsampled to 150 per patient and only 29 percent are private; no seed variation measured.
+
+### Files
+`scripts/aml_private_loop_info.py`, `scripts/aml_private_loop_download.sh`; `results/aml_private_loop_info/`: `headline_table.csv`, `summary.csv`, `increments.csv`, `by_type.csv`, `univariate.csv`, `private_counts.csv`, `inventory_per_patient.csv`, `inventory_files.csv`, `geo_samples.csv`, `atac_sample_corr.csv`, `atac_hspc_replicate_corr.csv`, `rna_sample_spearman.csv`, `oof_predictions.csv.gz`, `fig_private_loop_info.png`. Caches under `/mnt/processed/wolffjoa/hic-multiome/aml/primary/work/privinfo/`.
+
+
+## 66. One rule for all cell types: differential mark channels and cell-specific objects of every training cell (PENDING; section 65 was the last number when this was written)
+
+Premise: "this chromatin-mark / methylation pattern leads to a loop or a stripe" is cell-type independent biology and AML is only where it shows most clearly. The AML-specific recipe of section 63 gives the model the patient's marks and the AML reference and rewards AML objects only; whatever it learns can be an AML-specific rule. This section implements one rule for the 12 training cell lines, the 5 held-out cells and the AML patients: the network gets the reference's marks and the sample-minus-reference difference of the marks beside the reference Hi-C it already reads, so that residual Hi-C ~ f(delta marks) with one shared f, and the loop-centric sampling and loss act on the cell-specific loops and stripes of every training cell.
+
+### Implementation (status: implemented and CPU-tested; no window cache built, no GPU run)
+Differential mark channels (`hicmultiome/diffmarks.py`; hooks in `precompute.py`, `train.py`, `predict.py`, `scripts/crosscell_predict.py`; all off by default, existing caches, run configs and 60-step training logs identical to the previous commit):
+
+| flag | default | role |
+|---|---|---|
+| `data.diff_marks` | false | per mark (all tracks but annotation and copy number: 13 ChIP marks, Meth in the `diffmeth` runs) the reference mark `dref:<mark>` and the difference `diff:<mark>:s<r>` rows, appended after the other sequence-feature rows |
+| `data.diff_scales` | [0, 20000, 100000] | radii in bp: the 10 kb bin, +-20 kb, +-100 kb box smoothing (25 kb: 0, +-1, +-4 bins) |
+| `data.diff_reference` | consensus | reference of the AML samples: `mean_aml` (training patients of the fold, leave-one-out), `hspc` (HSPC training donors), `consensus` (the 12 cell lines) |
+| `data.diff_reference_sets`, `samples[].diff_set`, `data.diff_default_set` | empty | named pools of sample names; a sample reads its pool without itself and without any sample of its cell identity |
+| `data.diff_ref_channels`, `data.diff_tracks` | true, all | drop the `dref` rows; restrict the marks |
+| `train.object_scope`, `data.cell_objects_table` | aml, none | `all`: the objects of `data.aml_objects_table` and of the cell-line table feed the section 63 oversampling, pair batches, neighbourhood loss and ranking |
+
+Channel definition, no Hi-C read: per sample and mark z = (log1p(raw) - q50) / (q99 - q50) over the autosomal bins (per-sample quantile anchoring, so a deep and a shallow track sit on one scale; the model's own log1p / global z-score is a different, shared normalisation); reference = mean of z over the pool members that have the mark; difference = z(S) - reference, box-smoothed per scale, standardised per sample, mark and scale ((d - median) / (1.4826 MAD), clipped to +-8). The rows bypass the track normaliser (`TrackNormalizer.passthrough`, absent from old files). A mark the sample lacks, or that no pool member has, gives 0 in all its rows ("no information", the cached absent value); track dropout of a mark zeros its rows (`apply_diff_drop`, in the same draw as the ChIP row), inference keep sets and imputation do the same (`blank_diff_rows`); `train.select_tracks` drops the rows of the marks it leaves out (the select_tracks lesson of section 27: the rows must reach the network, regression test below). Reference sets of the generator (`scripts/multicell_expanded.py`): cell lines the 12 cells (leave-one-out = the leave-one-out consensus of the Hi-C reference; a held-out cell reads all 12 = consensus12), AML patients and MOLM-13 the fold's training patients (= the AML reference), HSPC donors the other training donor. Unseen cells at inference (`crosscell_predict --diff-group cell|aml|hspc`, `predict --diff-group`) read the pool of their group and leave their own identity out.
+
+Objects of every training cell (`scripts/cell_objects_table.py`, table columns of section 63, `n_train_other` = other training cells carrying the object): the cell-agnostic definitions of `scripts/crosscell_rule_transfer.py`, written in parallel, which builds the cell-specific loops and stripes of all 15 cells with the operational definitions of the AML objects (loops: local maxima of the log2 donut enrichment, 1 to 4 bins, 10 kb, 6 to 150 bins, both anchors on peak bins; specific = enrichment >= 0.5 and gain over the reference >= 0.30; stripes: 4 anchor bins x 40 extent bins at an offset of 50 bins, specific = score >= 0.55 and gain >= 0.20; shared controls `A_ref` matched on distance, orientation and the reference's CTCF and H3K27ac). `from_rule_transfer` converts its `$HM/crosscell_rules/cell_objects.csv.gz` (sets pos and A_ref) into the table: the 12 training cells to the training table, the strongest 400 loops and 200 stripes per cell that have a matched control (the AML patients have about 230 private loops each; the cap keeps the oversampled window count at the section 63 level), K562, HMEC (deep) and HUVEC (deep) with consensus12 to a separate evaluation table (1000 loops and 1000 stripes per cell, seeded draw) that the trainer rejects. The reference of a cell is its leave-one-out consensus. The script also has its own Hi-C calls (`--source local`: donut peaks, a 4 x 20-bin stripe rectangle next to the anchor, controls matched on distance and the cell's CTCF and H3K27ac) as a self-contained fallback; `--source auto` takes the rule-transfer file when it exists. The generated configs read the same output path either way. Tables written (`results/cell_objects/`, copies on the share `cell_objects/`, source file next to each): training table 12 cells x (400 loops + 200 stripes), 4800 / 2400 specific loops / stripes with 4070 / 2400 matched controls, private among the other training cells 77 percent of the loops and 47 percent of the stripes; evaluation table K562, HMEC (deep), HUVEC (deep): 3000 loops and 2563 stripes with 628 / 2211 controls. The local fallback gave 4800 / 2251 specific objects on the same cells.
+
+Run families (`scripts/multicell_expanded.py`; the joint composition of `all12aml_*` is kept: 12 cells + the fold's training patients + HSPC donors 050, 213 + MOLM-13, AML x3, lab row, patient-hard validation, residual reference, track dropout): `all12diff_loopfocus_refres_drop_f10..12` at 10 and 25 kb (PRIMARY: channels + all-cell objects, caches `mc_all12aml_ref_<k>kb_f<N>_diff`), ablations `all12diff_refres_drop_f<N>` (channels only), `all12allobj_refres_drop_f<N>` (objects only, existing AML cache), `all12diffmeth_loopfocus_refres_drop_f<N>` (+ Meth), `all12diffhspc_loopfocus_refres_drop_f<N>` (AML samples read the HSPC donors), and the pilot on the 12 cell lines alone `all12diffcells[_loopfocus]_refres_drop_{10,25}kb`. Configs: `results/diff_marks/configs/` (`scripts/diff_marks_configs.py`).
+
+### Leakage safeguards
+- A sample never sees its own track in its reference (`reference_members`; test: replacing s0's bigWigs leaves s0's reference rows unchanged and moves the others'); a copy standing for an unseen cell is left out by identity (`diff_identity`).
+- The per-sample statistics use marks only; no label enters. The reference sets of the generated configs contain no test patient, no same-donor partner (asserted in `tests/test_diffmarks.py::test_run_config_of_diff_loopfocus`).
+- The AML table keeps the section 63 safeguards (training patients of the fold only, same-donor partners removed, `assert_no_leak`); the cell table holds the 12 training cells only (`cell_objects_table.assert_no_leak`; the trainer's `load_objects` rejects any cell that is not a training sample of the run, tested with K562, HMEC, HUVEC); held-out cells exist only in the evaluation table.
+- Oversampling and losses act on the rows of the training split chosen after the honest validation split (`val_exclude_overlap`: no training window overlaps a validation position in any sample), unchanged.
+
+### Tests
+`tests/test_diffmarks.py` (38): reference = mean of the others, own track never in its reference, shapes / scales / per-sample standardisation (including a 4x deeper sample), missing and zeroed marks, empty references, unseen-cell identity, config validation and defaults, normaliser pass-through and file compatibility, cache layout (same targets, same ChIP rows as the cache without the channels), `select_tracks`, dropout coupling, a trained model whose output changes when any reference or difference row it reads is changed (select_tracks and track dropout in force), loop / stripe definitions on synthetic maps, control matching, objects-table leakage for training and held-out cells, conversion of the rule-transfer objects, run configs of all families at 10 and 25 kb, existing run configs without new keys, and a 60-step CPU smoke with every flag (both tables, ranking, dropout). Full suite 247 passed, 1 skipped (209 passed, 1 skipped before). Existing run configs, precompute caches (arrays and normaliser files) and a 60-step training log are byte-identical to the previous commit.
+
+### GPU job and evaluation
+`results/diff_marks/REMOTE_JOB.md`: run names = claim names, CPU preparation (object tables, caches), commands via `scripts/run_single_gpu.py`, evaluation commands: cell lines by the standard stage (`multicell_expanded.py --stage eval`, rows in `reference_summary.csv`: 17 cells, 413 Akita test regions), AML by `aml_train_eval.py --fold N --variant extra` and `aml_loop_detection.py --recipe diff_loopfocus` (`criteria.csv`, new `enh_gain_spearman` rows), held-out cell objects by `scripts/cell_objects_eval.py`. Estimated remote 4090 time: pilot 1.4 h, primary 10 kb about 6 h (5 to 9 h), 25 kb about 3 h, ablations about 9.5 h, extras about 12 h; minimum useful set about 9 h, everything about 34 h.
+
+### Success criteria (written before any run; 10 kb, ten held-out patients, donor bootstrap)
+1. AUROC of the gain over HSPC, AML-private loops against matched shared loops (A_hspc): >= 0.70 (aml_refin 0.59, section 62).
+2. Enhancer-like stripes: Spearman of the model's gain over HSPC with the measured gain above that of the reference map alone.
+3. Median Pearson on the 413 Akita regions, 12 training and 5 held-out cells: no loss against the matching baseline beyond the honest seed spread (>= -0.006; section 51 two-seed spreads of consensus-input models 0.0002 to 0.0062; use the seed replicates in `reference_summary.csv` once they are there); all12refres_drop_10kb 0.9270 / 0.8972.
+4. Cell-specific loops and stripes of K562, HMEC, HUVEC: AUROC of the gain over consensus12 with its interval, reported against the residual model without the recipe.
+Results: not yet available.
+
+### Risks
+The channels carry no new information for a cell whose marks equal the pool mean, and a network that ignores them returns the section 45 residual model: the ablations separate the channels from the objects. The quantile anchoring is a choice (q50 to 0, q99 to 1); sparse tracks (CUT&Tag) have q50 near 0. The cell objects depend on map depth (cap of 400 / 200 per cell) and on the definitions of `crosscell_rule_transfer.py`, which was still being developed when its objects file (2026-10-11 12:24) was converted: the tables must be regenerated (`python scripts/cell_objects_table.py`, then the 10 kb caches are unaffected, only the run configs read the table) if that stage is rerun with other thresholds; unmatched specific objects keep no control (the fallback of section 63 then takes a control of the same cell and kind). The AML patients have three marks, so most difference rows of the 13-mark layout are 0 for them; the cell lines carry 13. One seed per run; regional in-silico knockouts do not touch the difference rows. Another section may already use number 66 when this lands.
+
+### Files
+`hicmultiome/diffmarks.py`, edits in `hicmultiome/{config,precompute,train,tracks,predict}.py`, `scripts/{cell_objects_table,cell_objects_eval,diff_marks_configs}.py`, edits in `scripts/{multicell_expanded,crosscell_predict,aml_train_eval,aml_loop_detection}.py`; `tests/test_diffmarks.py`; `results/diff_marks/REMOTE_JOB.md`, `results/diff_marks/configs/`, `results/cell_objects/` (tables and counts).
+
+## 67. HiC-Reg retrained leak-free on the chromosome split of our models (FINAL; section 66 was the last number when this was written)
+
+Question: the released HiC-Reg numbers (sections 18, 37, 58) are suspected of leakage. How does HiC-Reg score when
+it is rebuilt for our cells and tracks and trained on exactly our setting (train on all chromosomes except chr2, 3,
+11, 14, 17; predict those five), and how large is the within-chromosome leak?
+
+Audit (full text with file and line references: `results/benchmark/HICREG_LEAK_AUDIT.md`). Routes found: (1) the
+released CV predictions are region-wise 5-fold CV inside the chromosome (`Framework.C:199-300`; 64% of the pairs train
+each model, 89% of the test pairs have one region among the training regions, 19% (GM12878) and 13-15% (K562) of the
+8 neighbouring pixels are training pixels of every model that could have predicted them); (2) the feature files hold no
+Hi-C-derived column, the SQRTVC normalisation enters the target only (not a route); (3) new: the prediction pair list
+is the list of non-zero pixels of the held-out chromosome's own Hi-C (GM12878 74-85% of the 1 Mb pair slots, K562
+42-60%; CV and cross-chromosome files have the same pairs), and `oe_proper.py` turns an absent mappable pixel into the
+clipped depletion that a zero-count target pixel has, so the zero pixels of the held-out map are delivered for free
+(K562 has 24-39% zero pixels at 5 kb); (4) the released cross-cell maps use models trained on the same chromosome of the
+other cell; (5) the MULTICELL fold script cuts contiguous blocks of the pair-sorted table, but the released MULTICELL
+files have the pair lists of WINDOW, so the script was not the one used, and the models ship without training pair
+lists; (6) no tuner is shipped, `-k1 -l10 -n20` are fixed defaults; the local `hyperopt_hicreg.py` scores against the
+held-out matrix; (7) hg19 maps lifted to hg38 centres, 5 kb counts summed into 10 and 25 kb; (8) the released
+cross-chromosome files are trained on one chromosome (81 to 107 Mb) with DNase and TBP.
+
+Rebuild (`scripts/hicreg_retrain.py`): our 13 tracks per 5 kb bin as E, P, W and Distance (DNase and TBP absent for our
+cells, dropped; SMC3 added), HiC-Reg's native target ln(1 + SQRTVC count) from the VC_SQRT vectors of the 4DN mcools
+(GM12878, K562; the vectors divide), every pair within 1 Mb predicted, scored through the section 18 conversion
+(expm1, sum into 10 and 25 kb, `oe_proper.py`) against our O/E targets on the identical pixels of the chrho blocks;
+random forest as in `Potential.C` (20 trees, bootstrap, one third of the features per split) in scikit-learn
+(agreement with regForest 0.983 on 60k pairs, r with the truth 0.830 against 0.826); training on all 75M mappable pairs
+of the 17 training chromosomes, no sub-sampling; leaf size 100 and training size chosen on chr10 (`hicreg_retrain_tune_*.csv`);
+MULTICELL (HiC-Reg's five cells, 196 features) on 12M pairs and chr14 and chr17 only. Mean of chr14 and chr17 (the blocks
+that also hold the released maps), `results/benchmark/hicreg_retrained_*.csv`, `hicreg_retrained_table.md` (all
+measures, five-chromosome means):
+
+| cell, grid | source | Pearson | tile median | SCC | insulation r | loop recall | HiCRep |
+|---|---|---|---|---|---|---|---|
+| GM12878 25 kb | all12refin_drop_chrho | 0.931 | 0.950 | 0.925 | 0.905 | 0.396 | 0.935 |
+| GM12878 25 kb | all12honest_drop_chrho (ChIP only) | 0.783 | 0.798 | 0.763 | 0.674 | 0.191 | 0.791 |
+| GM12878 25 kb | HiC-Reg retrained, WINDOW | 0.430 | 0.523 | 0.482 | 0.502 | 0.050 | 0.599 |
+| GM12878 25 kb | HiC-Reg retrained, MULTICELL | 0.383 | 0.569 | 0.473 | 0.498 | 0.039 | 0.601 |
+| GM12878 25 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.579 | 0.620 | 0.538 | 0.447 | 0.032 | 0.668 |
+| GM12878 25 kb | HiC-Reg CV, our pipeline | 0.879 | 0.886 | 0.855 | 0.615 | 0.216 | 0.885 |
+| GM12878 25 kb | HiC-Reg CV (released) | 0.908 | 0.965 | 0.870 | 0.677 | 0.323 | 0.915 |
+| GM12878 10 kb | all12refin_drop_chrho | 0.925 | 0.937 | 0.919 | 0.890 | 0.408 | 0.927 |
+| GM12878 10 kb | all12honest_drop_chrho (ChIP only) | 0.788 | 0.810 | 0.777 | 0.735 | 0.182 | 0.796 |
+| GM12878 10 kb | HiC-Reg retrained, WINDOW | 0.446 | 0.467 | 0.473 | 0.523 | 0.014 | 0.549 |
+| GM12878 10 kb | HiC-Reg retrained, MULTICELL | 0.428 | 0.540 | 0.470 | 0.515 | 0.011 | 0.555 |
+| GM12878 10 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.590 | 0.561 | 0.542 | 0.491 | 0.004 | 0.601 |
+| GM12878 10 kb | HiC-Reg CV, our pipeline | 0.879 | 0.846 | 0.843 | 0.556 | 0.057 | 0.882 |
+| GM12878 10 kb | HiC-Reg CV (released) | 0.920 | 0.939 | 0.881 | 0.626 | 0.148 | 0.925 |
+| GM12878 5 kb | all12refin_drop_chrho | 0.906 | 0.911 | 0.902 | 0.898 | 0.363 | 0.923 |
+| GM12878 5 kb | all12honest_drop_chrho (ChIP only) | 0.749 | 0.758 | 0.749 | 0.741 | 0.188 | 0.770 |
+| GM12878 5 kb | HiC-Reg retrained, WINDOW | 0.454 | 0.433 | 0.475 | 0.537 | 0.005 | 0.525 |
+| GM12878 5 kb | HiC-Reg retrained, MULTICELL | 0.448 | 0.503 | 0.474 | 0.534 | 0.034 | 0.534 |
+| GM12878 5 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.603 | 0.520 | 0.554 | 0.515 | 0.000 | 0.593 |
+| GM12878 5 kb | HiC-Reg CV, our pipeline | 0.872 | 0.814 | 0.836 | 0.565 | 0.030 | 0.874 |
+| GM12878 5 kb | HiC-Reg CV (released) | 0.893 | 0.898 | 0.859 | 0.647 | 0.020 | 0.922 |
+| K562 25 kb | all12refin_drop_chrho | 0.897 | 0.928 | 0.889 | 0.857 | 0.347 | 0.904 |
+| K562 25 kb | all12honest_drop_chrho (ChIP only) | 0.730 | 0.777 | 0.711 | 0.622 | 0.125 | 0.748 |
+| K562 25 kb | HiC-Reg retrained, WINDOW | 0.286 | 0.436 | 0.347 | 0.497 | 0.049 | 0.465 |
+| K562 25 kb | HiC-Reg retrained, MULTICELL | 0.297 | 0.486 | 0.392 | 0.528 | 0.029 | 0.518 |
+| K562 25 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.736 | 0.820 | 0.696 | 0.484 | 0.038 | 0.797 |
+| K562 25 kb | HiC-Reg CV, our pipeline | 0.801 | 0.844 | 0.799 | 0.603 | 0.133 | 0.841 |
+| K562 25 kb | HiC-Reg CV (released) | 0.888 | 0.950 | 0.864 | 0.670 | 0.178 | 0.923 |
+| K562 10 kb | all12refin_drop_chrho | 0.858 | 0.900 | 0.857 | 0.848 | 0.366 | 0.887 |
+| K562 10 kb | all12honest_drop_chrho (ChIP only) | 0.715 | 0.724 | 0.714 | 0.721 | 0.139 | 0.745 |
+| K562 10 kb | HiC-Reg retrained, WINDOW | 0.336 | 0.417 | 0.378 | 0.554 | 0.028 | 0.452 |
+| K562 10 kb | HiC-Reg retrained, MULTICELL | 0.361 | 0.420 | 0.426 | 0.584 | 0.016 | 0.500 |
+| K562 10 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.747 | 0.760 | 0.708 | 0.496 | 0.002 | 0.782 |
+| K562 10 kb | HiC-Reg CV, our pipeline | 0.817 | 0.794 | 0.808 | 0.618 | 0.064 | 0.858 |
+| K562 10 kb | HiC-Reg CV (released) | 0.878 | 0.899 | 0.858 | 0.650 | 0.009 | 0.925 |
+| K562 5 kb | all12refin_drop_chrho | 0.771 | 0.817 | 0.776 | 0.842 | 0.338 | 0.814 |
+| K562 5 kb | all12honest_drop_chrho (ChIP only) | 0.641 | 0.641 | 0.653 | 0.730 | 0.169 | 0.664 |
+| K562 5 kb | HiC-Reg retrained, WINDOW | 0.414 | 0.324 | 0.440 | 0.625 | 0.030 | 0.428 |
+| K562 5 kb | HiC-Reg retrained, MULTICELL | 0.439 | 0.333 | 0.479 | 0.654 | 0.026 | 0.453 |
+| K562 5 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.774 | 0.703 | 0.755 | 0.599 | 0.003 | 0.790 |
+| K562 5 kb | HiC-Reg CV, our pipeline | 0.781 | 0.697 | 0.783 | 0.692 | 0.039 | 0.758 |
+| K562 5 kb | HiC-Reg CV (released) | 0.845 | 0.814 | 0.840 | 0.728 | 0.005 | 0.899 |
+
+Within-chromosome leak (CV protocol on the retrained pipeline minus the retrained cross-chromosome model, Pearson): GM12878
++0.449 (25 kb), +0.433 (10 kb), +0.418 (5 kb); K562 +0.515, +0.482, +0.367; tile median +0.36 to +0.41, SCC +0.34 to +0.45
+(`hicreg_retrained_leak.csv`). Released CV minus retrained cross-chromosome: +0.478 (GM12878 25 kb), +0.601 (K562 25 kb).
+Support effect (retrained model, pixels with zero target count removed as in the release, Pearson, chr14+chr17):
+K562 0.419 / 0.544 / 0.758 at 25 / 10 / 5 kb against 0.227 / 0.297 / 0.394 with every pair predicted; GM12878 0.394 / 0.456 /
+0.512 against 0.358 / 0.401 / 0.420 (`hicreg_leak_support_effect.csv`).
+
+Verdict. The leak-free retrained HiC-Reg is worse than the released single-chromosome cross-chromosome version, not better:
+Pearson 0.430 against 0.579 (GM12878 25 kb) and 0.286 against 0.736 (K562 25 kb), 0.454 against 0.603 and 0.414 against
+0.774 at 5 kb; training on 17 chromosomes instead of one does not help (4M-pair control 0.432 and 0.257). The released K562
+cross-chromosome score is mostly the zero-pixel support (retrained with that support: 0.758 against 0.774 at 5 kb). Our
+margin grows: all12honest_drop_chrho (ChIP only) leads retrained HiC-Reg by 0.35 (GM12878) and 0.44 (K562) Pearson at
+25 kb and by 0.30 and 0.23 at 5 kb, all12refin_drop_chrho by 0.50 and 0.61 at 25 kb; both are ahead on all nine measures in
+both cells and all grids; K562, for which our models never see the cell's Hi-C while HiC-Reg trains on K562 Hi-C, is not
+closer. MULTICELL equals WINDOW (25 kb Pearson 0.383 and 0.297). The CV protocol on the same pipeline reaches 0.879 and
+0.801 at 25 kb (released CV 0.908, 0.888), so the pipeline reproduces the interpolation level.
+
+Caveats. The rebuild lacks DNase and TBP and differs in Hi-C source, signal source and forest implementation; the gap to
+the released cross-chromosome maps combines the support effect with these differences, only the support is separated;
+one seed; two chromosomes per block; MULTICELL on 12M pairs; released maps hg19 lifted, retrained maps hg38 native.
+The ceiling of the native target in this scoring (true SQRTVC maps through the conversion) is 0.78 to 0.94 Pearson
+(`hicreg_leak_oracle.csv`).
+
+Files: `scripts/hicreg_retrain.py`, `scripts/hicreg_leak_audit.py`, `scripts/hicreg_retrained_table.py`,
+`--chrho-hicreg-retrained` in `scripts/hic_measures.py`; `results/benchmark/HICREG_LEAK_AUDIT.md`,
+`hicreg_retrained_{per_chromosome,summary,leak}.csv`, `hicreg_retrained_table.md`, `hicreg_leak_*.csv`,
+`hicreg_retrain_tune_*.csv`, `hicreg_retrain_check_regforest_gm12878.json`;
+`results/hic_measures_chrho/chrho_hicregre_{per_block,summary}.csv`; predictions and cools under
+`/mnt/processed/wolffjoa/hic-multiome/runs/benchmark/hicreg_retrain/`. Reproduce:
+
+    python scripts/hicreg_retrain.py --stage data
+    python scripts/hicreg_retrain.py --stage tune --cell gm12878 --grid-sizes 4000000 16000000 --grid-leaf 10 30 100 300 1000
+    python scripts/hicreg_retrain.py --stage fit --cell gm12878 --leaf 100 && ... --feat multicell --n-train 12000000
+    python scripts/hicreg_retrain.py --stage cv --cell gm12878 --leaf 100 --n-train 4000000 --chroms chr14 chr17
+    python scripts/hicreg_retrain.py --stage fit --cell gm12878 --suffix small --leaf 100 --n-train 4000000 --chroms chr14 chr17
+    python scripts/hicreg_retrain.py --stage cools
+    python scripts/hicreg_leak_audit.py --stage support mcfolds oracle supportleak
+    python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-hicreg-retrained
+    python scripts/hicreg_retrained_table.py
+
+
+## 68. Are the mark-to-structure rules the same in every cell type? Cell-specific loops and stripes of 15 cells against AML patients (FINAL; section 67 was the last number when this was written)
+
+Script `scripts/crosscell_rule_transfer.py` (stages tracks, hic, objects, features, counts, rules, transfer, figures; hicdiff env, CPU only, nice 10), results in `results/crosscell_rules/`, caches in `/mnt/processed/wolffjoa/hic-multiome/crosscell_rules/`. Cells: the 12 training cells (reference = leave-one-out consensus of the other 11, `consensus_loo_*`) and K562, HMEC (deep map), HUVEC (deep map) (reference = consensus12). Cancer: K562, HCT116, MCF-7, A549, HepG2, PC-9; normal: the other nine. AML: the ten test donors of section 62 with the objects of `aml_loop_classifier_v2/features.csv.gz` and `aml_loop_detection/object_scores.csv.gz` (gain|measured over HSPC), delta features recomputed here from the 10 kb track caches. Section 66 (differential channels, model-level, PENDING) is a different analysis; this one is a feature-level test.
+
+### Definitions (as the AML objects, 10 kb)
+Loops: donut enrichment of the cell map at local maxima (> 0.4 log2, 60 kb to 1.5 Mb; MIN_BINS 6 as in the AML pool because the donut outer radius is 4 bins, not 20 kb), consensus value = 3x3 maximum, gain = cell minus consensus; candidates = both anchors on peak bins (top 8 percent H3K27ac or CTCF in the cell or its consensus track). Specific: enrichment >= 0.5 and gain >= 0.30 (about the 30th percentile of AML positives); shared: >= 0.6 in cell and consensus, not within 2 bins of a specific loop; controls matched 1:1 on distance, CTCF motif orientation and the anchors' mean H3K27ac (A_full) or the anchors' consensus CTCF and H3K27ac (A_ref, the analogue of A_hspc). Stripes: rectangle mean log O/E, 4 anchor bins x 40 extent bins starting 50 bins to the right or left (the Xu extents start 16 to 268 bins away), anchor with a peak bin; specific >= 0.55 and gain >= 0.20, shared both >= 0.55; matched on direction, orientation and anchor H3K27ac. Positives capped at 2500 per cell and kind before matching. Types as in `pair_feats` (TSS in one anchor, partner H3K27ac or H3K27me3 above the 70th percentile of the pooled training scale: PE, PS; stripes enh, rep). Tracks of all cells and donors are quantile-normalised at 10 kb to the mean training-cell distribution; features: delta (own minus reference), reference level, own, at 10 kb, +-20 kb, +-100 kb, min and max over the two anchors (stripes: anchor and extent block), delta standardised per sample (median / robust SD of the genome-wide delta, `delta_standardisation.csv`), methylation delta at +-100 kb for 9 cells (GM12878, IMR-90, H1, HepG2, A549, GM23248, CD14+, K562, HMEC; HCT116, HFF, MCF-7 tracks flat, NHEK, PC-9, HUVEC none) and 8 donors (reference mean of healthy 103 and 673), distance, motif orientation / score, promoter flags. GM23248 has no CTCF track.
+
+### Counts (object_counts*.csv)
+Cell-specific loops 125 779 in 15 cells (PE 39 475, PS 18 746, other 67 558; per cell 426 to 27 079), stripes 36 222 (enh 10 766, rep 16 523, other 8 933); after the cap and A_full matching 10 110 loop pairs (20 220 objects, 1348 per cell) and 25 310 stripe pairs (50 620 objects). AML: 2276 loops (PE 304, PS 127, other 1845) and 1075 stripes (enh 340, rep 494); 2232 loop and 1059 stripe pairs (4464 / 2118 objects, 446 / 212 per donor); per fold 1254 to 1858 loop and 686 to 734 stripe objects (the "1.5k / 0.7k" of the task). Cells give 4.5 times as many matched loop objects as the ten donors and 24 times as many stripe objects, but the shared-loop pool limits matching (25 percent of the specific loops matched).
+
+### Within-cell rules (rules_key.csv, rules_consistency_*.csv, fig_effect_heatmap.png)
+Controls A_ref; effect = Spearman with the gain, or AUROC against matched shared controls; mean over cells [bootstrap CI over cells] / AML donors. Two class conventions: classes from the own marks of positives and controls (own), and controls inheriting the class of their matched positive (inherit, the convention of section 64; circular for PE / PS / enh / rep because the class is defined by the same own marks). AML reproduces section 64 under inherit (PE delta H3K27ac max 0.74, min 0.70; PS delta H3K27me3 0.79; repressive stripes 0.72; stripes rho 0.28, enh 0.37).
+- PE loops, delta H3K27ac max(A,B) AUROC: own 0.56 [0.54, 0.58] in 15 cells (13 above 0.5; cancer 0.56, normal 0.56), AML 0.58 (pooled 0.59); inherit 0.65 [0.63, 0.68] cells (15/15), AML 0.74. Same sign and about the same size in cells and donors with class defined from the marks; larger in AML only under the circular convention.
+- All loops, delta H3K27ac max AUROC 0.55 [0.53, 0.58] cells (13/15), AML 0.61 (pooled): supported, small. Gain magnitude: delta H3K27ac +-100 kb rho -0.03 [-0.05, 0.01] cells, -0.13 AML (negative in 8/10 donors and 12/15 cells): no positive relation anywhere.
+- PS loops delta H3K27me3: own 0.50 cells (4/13 above 0.5), AML 0.54 (2 evaluable donors); inherit 0.63 cells (12/13), AML 0.79: only under the circular convention. Repressive stripes delta H3K27me3 anchor: own 0.50 cells, 0.49 AML; inherit 0.64 cells (15/15), 0.72 AML. Enhancer-like stripes delta H3K27ac: own 0.53 cells, 0.49 AML; inherit 0.62 cells, 0.60 AML.
+- Stripe gain vs delta H3K27ac +-100 kb (the clear AML signal): AML rho 0.28 [0.24, 0.33] all, 0.37 enhancer-like, 10/10 donors; cells -0.06 [-0.13, 0.00] (6/15 positive; cancer -0.11, normal -0.03), enhancer-like 0.00. AML minus cells 0.35 [0.27, 0.42]. With the other AML donors as reference the AML value falls to 0.06 (0.19 enhancer-like): the signal depends on the HSPC reference (differentiation axis).
+- CTCF delta: AUROC 0.50 [0.46, 0.54] cells, 0.45 AML loops (below 0.5), 0.50 stripes: no support anywhere. Methylation delta (min over anchors, +-100 kb): AUROC 0.50 [0.47, 0.53] cells (5/9 above 0.5; cancer 0.54, normal 0.48), 0.57 AML loops, gain rho 0.01 / -0.02. Consensus H3K27ac level +-100 kb vs gain: loops 0.03 cells, -0.11 AML (AML minus cells -0.17 [-0.25, -0.09]); stripes -0.05 cells, -0.23 AML (-0.17 [-0.31, -0.03]): the locus-state effect has the opposite sign in AML.
+- Cancer minus normal cells: no key rule differs (all CIs include 0 except loop all delta H3K27ac +-100 kb rho -0.05 [-0.10, 0.00]); PS delta H3K27me3 AUROC -0.07 [-0.13, -0.02] (own, n = 5 + 8 cells).
+- Between-cell heterogeneity of the loop rules is small (I2 0.0 to 0.6 for PE and PS AUROC with SE from loci bootstrap), larger for all stripe and methylation / CTCF rules (0.8 to 1.0; effects near zero with spread above sampling error).
+
+### Transfer (transfer_results.csv, transfer_summary.csv, transfer_paired_differences.csv, fig_transfer_matrix.png (A_full), fig_transfer_matrix_Aref.png)
+Boosted trees (the classifier settings of section 57) on standardised delta (H3K27ac, H3K27me3; 12 features), consensus-state (12) and locus (10) features, trained on whole groups, locus-disjoint (training rows within 2 bins of a test anchor dropped), per-group gain percentile as regression target; mean over test groups [bootstrap CI over groups]. Controls A_full (A_ref in the CSV and `fig_transfer_matrix_Aref.png`).
+- (a) leave-one-cell-out, 14 other cells: loops AUROC 0.69 [0.66, 0.71], gain rho 0.31 [0.25, 0.36] (range 0.49 (PC-9) to 0.79 (HMEC); 14 of 15 cells above 0.5); stripes 0.59 [0.57, 0.60], rho 0.14. Adding CTCF (14 cells): loops 0.82 [0.80, 0.84]. Without consensus-state and locus features (delta + distance + orientation only, RULE): loops 0.62, stripes 0.54; state alone (STATE): 0.67 and 0.58. Block permutation importance (AUROC drop): loops delta 0.054, reference 0.089, locus 0.083; stripes 0.018, 0.065, 0.007.
 - (b) all cells to AML donors: loops 0.70 [0.67, 0.73] (private 0.71; with CTCF, 8 donors, 0.81), gain rho 0.09 [0.04, 0.14]; stripes 0.58 [0.55, 0.61], rho 0.10. RULE only: 0.57 and 0.52 (rho -0.06 loops); STATE alone 0.69 and 0.57. AML-trained within AML (leave-one-donor-out, d_aml_only): loops 0.77 [0.73, 0.80] (private 0.78), rho 0.30; stripes 0.62, rho 0.25.
 - (c) AML donors to cells: loops 0.54 [0.51, 0.57], rho -0.15 [-0.18, -0.11] (with CTCF 0.70 on 14 cells); stripes 0.52, rho -0.01. The gain ranking learned in AML is inverted in cells.
 - (d) held-out donor, AML-only vs AML + all cells: loops AUROC 0.766 vs 0.738 (difference -0.028 [-0.040, -0.016], 0/10 donors better), private loops -0.030 [-0.042, -0.020], gain rho 0.30 vs 0.19 (-0.11 [-0.15, -0.07]); with the AML rows weighted to equal total weight the difference is -0.012 [-0.017, -0.007] (rho -0.04 [-0.07, -0.01]); stripes -0.027 [-0.057, 0.000] and -0.009 [-0.022, 0.005]. Cells added to the AML training do not raise the private-loop AUROC or the gain Spearman. (e) held-out cell, other cells vs other cells + AML: -0.008 [-0.013, -0.004] AUROC (loops), 0.000 for RULE; stripes -0.001.
