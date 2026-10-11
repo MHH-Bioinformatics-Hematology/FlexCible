@@ -14,6 +14,8 @@ one GPU training at a time, in this order:
      reference as residual (patient minus AML reference), fold 0
   f  cohesin fix: all12cohfix_refres_drop and the ablation all12cohfixna_refres_drop, 25 and 10 kb
      (registry 55), claimed by run name, with evaluation, perturbation, washout, AML and diagnosis
+  g  honest seed replicates (seeds 1, 2) of all12refin_drop, all12refres_drop, all12honest_drop,
+     25 kb then 10 kb, claimed by run name, standard evaluation (registry 51 audit)
   d  (removed 2026-10-09: the sequence CNN runs on another computer)
   e  chromosome-held-out 5 kb models all12refin_drop_chrho_5kb, all12honest_drop_chrho_5kb and
      (optional, last) all12refres_drop_chrho_5kb with the standard evaluation (registry 58),
@@ -220,6 +222,20 @@ def jobs():
     aux("cohfix_aml", gs.locked("aml", f"{PY} scripts/aml_eval.py --stage predict --models "
                                 f"{' '.join(names)} --jobs 2 --threads 3 && {PY} scripts/aml_eval.py "
                                 "--stage perturb --res 10000 25000"), coh_ready, gpu_use=False)
+    # ---- (g) honest seed replicates of the headline 12-cell models (registry 51 audit): seeds 1 and
+    # 2 of all12refin_drop, all12refres_drop, all12honest_drop, 25 kb first, then 10 kb; same recipe
+    # and caches as the seed-0 runs; claimed by run name (the remote runner takes jobs from the same
+    # list through the same claims), standard evaluation after each (reference_summary.csv)
+    for res in (25000, 10000):
+        for seed in (1, 2):
+            for fam, cache in (("all12refin_drop", "mc_all12ref_{k}kb"),
+                               ("all12refres_drop", "mc_all12ref_{k}kb"),
+                               ("all12honest_drop", "mc_all12_{k}kb")):
+                run = f"{fam}_s{seed}"
+                train(run, res, cache.format(k=res // 1000))
+                J[-1].claim = mx.run_name(run, res)
+                aux(f"eval_{mx.run_name(run, res)}", f"{gs.eval_cmd(run, res)} && ( {gs.STATUS} || true )",
+                    (lambda r=run, x=res: gs.trained(r, x)))
     # (d) the sequence CNN runs on another computer (2026-10-09), not in this queue;
     # cnn_cmd() below still builds the one-command local run if it is needed again
     return J

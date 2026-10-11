@@ -360,6 +360,17 @@ HONEST_RUNS = set(REF_RUNS) | {"all12honest_drop_meth", "all12honest_drop_meth_s
                                "all12honest_drop_motifmeth_s1", "all12honest", "all12honest_drop", "all12honest_drop_hard",
                                "all12deg_honest_drop", "all12cohunk_honest_drop"} | AML_RUNS | {"all12honest_drop_chrho"}
 REF_OUT = HM / "runs/multicell_reference"
+# honest seed replicates of the headline 12-cell models (registry 51 audit): _s1, _s2 are the same
+# recipe and cache as the seed-0 run with a different training seed (and validation-window draw)
+for _b in ("all12refin_drop", "all12refres_drop", "all12honest_drop"):
+    for _sd in (1, 2):
+        _n = f"{_b}_s{_sd}"
+        RUNS[_n] = (TRAIN12, None)
+        DROPOUT_RUNS[_n] = (0.5, 0.0)
+        SEEDED[_n] = (_b, _sd)
+        if _b in REF_RUNS:
+            REF_RUNS[_n] = REF_RUNS[_b]
+        HONEST_RUNS.add(_n)
 
 
 def consensus_loo(cell: str, res: int) -> Path:
@@ -530,21 +541,21 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
-    cache_name = (f"mc_all12aml_{'meth_' if base in METH_RUNS else ''}{'ref_' if base in REF_RUNS else ''}{res // 1000}kb"
-                  f"{'_f' + str(fold) if fold else ''}{'_nolab' if base.endswith('_nolab') else ''}"
-                  if base in AML_RUNS
-                  else f"mc_{SEEDED[base][0]}_{res // 1000}kb" if base in SEEDED
-                  else f"mc_all12ref_chrho_{res // 1000}kb" if base in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
-                  else f"mc_all12chrho_{res // 1000}kb" if base == "all12honest_drop_chrho"
-                  else f"mc_all12cohfix_refres_drop_{res // 1000}kb" if base in COHFIX_RUNS   # one cache
-                  else f"mc_{base}_{res // 1000}kb" if base in DEGRON_RUNS | METH_RUNS | CNV_RUNS
+    cbase = SEEDED[base][0] if base in SEEDED else base     # a seed copy reads its original's cache
+    cache_name = (f"mc_all12aml_{'meth_' if cbase in METH_RUNS else ''}{'ref_' if cbase in REF_RUNS else ''}{res // 1000}kb"
+                  f"{'_f' + str(fold) if fold else ''}{'_nolab' if cbase.endswith('_nolab') else ''}"
+                  if cbase in AML_RUNS
+                  else f"mc_all12ref_chrho_{res // 1000}kb" if cbase in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
+                  else f"mc_all12chrho_{res // 1000}kb" if cbase == "all12honest_drop_chrho"
+                  else f"mc_all12cohfix_refres_drop_{res // 1000}kb" if cbase in COHFIX_RUNS   # one cache
+                  else f"mc_{cbase}_{res // 1000}kb" if cbase in DEGRON_RUNS | METH_RUNS | CNV_RUNS
                   | {"all12hffcoh_refres_drop"}
-                  else f"mc_all12reflearn_{res // 1000}kb" if base == "all12reflearn"
-                  else f"mc_all12casc_{res // 1000}kb" if base == "all12casc"
-                  else f"mc_{run_name('all12', res)}" if base in ("all12honest_drop",
+                  else f"mc_all12reflearn_{res // 1000}kb" if cbase == "all12reflearn"
+                  else f"mc_all12casc_{res // 1000}kb" if cbase == "all12casc"
+                  else f"mc_{run_name('all12', res)}" if cbase in ("all12honest_drop",
                                                                    "all12honest_drop_hard")
-                  else f"mc_all12ref_{res // 1000}kb" if base in REF_RUNS
-                  else f"mc_{run_name('all12', res)}" if base == "all12honest"   # same windows
+                  else f"mc_all12ref_{res // 1000}kb" if cbase in REF_RUNS
+                  else f"mc_{run_name('all12', res)}" if cbase == "all12honest"   # same windows
                   else f"mc_{name}")
     cfg["train"].update({
         "output_dir": str(out_of(name) / name), "cache_dir": str(CACHE / cache_name),
