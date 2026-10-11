@@ -1987,6 +1987,7 @@ CHRHO_CELLS = ["gm12878", "imr90", "k562"]
 
 CHRHO_25KB_COMPS = False      # --chrho-25kb-comps: C.Origami and Epiphany resampled onto the 25 kb grid
 CHRHO_RES = None              # --chrho-res 5000: only the 5 kb blocks, predictions and tables
+CHRHO_HICREG_RE = False       # --chrho-hicreg-retrained: HiC-Reg retrained on our split (registry 63)
 
 
 def chrho_blocks() -> list[dict]:
@@ -1994,6 +1995,8 @@ def chrho_blocks() -> list[dict]:
     Every block holds the chromosomes the competitor left out of its training;
     the band is cut to the competitor's reach where it is shorter than our
     window (Epiphany 990 kb, HiC-Reg 1 Mb)."""
+    if CHRHO_HICREG_RE:
+        return _finish_blocks(chrho_blocks_hicreg_retrained())
     if CHRHO_RES == 5000:
         rows = chrho_blocks_5kb()
         return _finish_blocks(rows)
@@ -2027,6 +2030,35 @@ def chrho_blocks() -> list[dict]:
         for c in ("chr3", "chr11", "chr17"):
             rows.append(("chrho_epiphany", "gm12878", 25000, c, 39, ["epiphany_gm12878_10kb"]))
     return _finish_blocks(rows)
+
+
+def chrho_blocks_hicreg_retrained() -> list[tuple]:
+    """HiC-Reg retrained on the chromosome split of our models (scripts/hicreg_retrain.py),
+    GM12878 and K562, chr2, 3, 11, 14, 17, at 25, 10 and 5 kb, band 1 Mb (HiC-Reg's reach).
+    chr14 and chr17 also carry the released HiC-Reg predictions (cross-chromosome, CV) and
+    the CV protocol re-run on the retrained pipeline; the other chromosomes only the
+    retrained variants."""
+    rows = []
+    for res in (25000, 10000, 5000):
+        k = res // 1000
+        band = 1_000_000 // res
+        for cell in ("gm12878", "k562"):
+            other = "k562" if cell == "gm12878" else "gm12878"
+            for c in ("chr2", "chr3", "chr11", "chr14", "chr17"):
+                comps = [f"hicregrewindow_{cell}_{k}kb"]
+                if c in ("chr14", "chr17"):
+                    comps += [f"hicregrewindowcvours_{cell}_{k}kb", f"hicregrewindowsmall_{cell}_{k}kb",
+                              f"hicregrecrosscell_{other}to{cell}_{k}kb",
+                              f"hicregwindowcrosschrom_{cell}_{k}kb",
+                              f"hicregmulticellcrosschrom_{cell}_{k}kb",
+                              f"hicregwindowcv_{cell}_{k}kb"]
+                rows.append(("chrho_hicregre", cell, res, c, band, comps))
+                # MULTICELL (12M training pairs, chr14 and chr17 only) in blocks of its own: same pixels in
+                # practice (every pair is predicted), so the common-pixel rule is unchanged
+                mc = f"hicregremulticell_{cell}_{k}kb"
+                if c in ("chr14", "chr17") and (HM / "runs/benchmark/competitor_oe" / f"{mc}_{c}.cool").exists():
+                    rows.append(("chrho_hicregmc", cell, res, c, band, [mc]))
+    return rows
 
 
 def _finish_blocks(rows) -> list[dict]:
@@ -2120,6 +2152,9 @@ def chrho_score(jobs: int) -> None:
     chrho_use_root()
     import hicreg_audit
     hicreg_audit.register()
+    if CHRHO_HICREG_RE:
+        import hicreg_retrain
+        hicreg_retrain.register()
     todo = [b for b in chrho_blocks() if not (OUT / "blocks" / b["id"] / "measures.csv").exists()]
     for b in todo:
         if not any(m in chrho_available(b["res"]) for m in CHRHO_MODELS):
@@ -2155,7 +2190,10 @@ def chrho_report() -> None:
     D = D[D.kind.isin(["model", "cool", "competitor", "measured"])]
     cols = [c for c in CHRHO_COLS if c in D.columns]
     tag = "chrho"
-    if CHRHO_RES == 5000:                      # the 5 kb grid, own files
+    if CHRHO_HICREG_RE:                        # all three grids, own files
+        D = D[D.set.isin(["chrho_hicregre", "chrho_hicregmc"])]
+        tag = "chrho_hicregre"
+    elif CHRHO_RES == 5000:                      # the 5 kb grid, own files
         D = D[D.res == 5000]
         tag = "chrho_5kb"
     elif CHRHO_25KB_COMPS:                     # the 25 kb grid, all competitors, own files
@@ -2190,12 +2228,19 @@ def main():
                     help="chrho_predict/chrho_score/chrho_report: only the 5 kb blocks, "
                          "predictions and tables (chrho_5kb_*.csv); default off, the 25 and "
                          "10 kb behaviour is unchanged")
+    ap.add_argument("--chrho-hicreg-retrained", action="store_true",
+                    help="chrho_score/chrho_report: only the blocks of HiC-Reg retrained on our "
+                         "chromosome split (chrho_hicregre_*, 25/10/5 kb, results in "
+                         "chrho_hicregre_*.csv); default off")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
-    global CHRHO_25KB_COMPS, CHRHO_RES
+    global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE
     CHRHO_25KB_COMPS = a.chrho_25kb_comps
     CHRHO_RES = a.chrho_res
+    CHRHO_HICREG_RE = a.chrho_hicreg_retrained
+    if a.chrho_hicreg_retrained:         # registers the 5 kb released HiC-Reg variants
+        os.environ["BENCH_5KB"] = "1"
     if a.chrho_res:                      # registers the 5 kb Hi-cGAN and HiC-Reg competitors
         os.environ["BENCH_5KB"] = "1"
     if a.chrho_25kb_comps:               # registers the 25 kb Hi-cGAN IMR-90 competitors

@@ -1,0 +1,265 @@
+cell,res,chrom,source,label,oe_pearson,oe_pearson_tile_median,oe_scc,insulation_r,bnd_recall,loop_recall_rank,apa_ratio,comp_pref_r,HiCRep
+gm12878,5000,chr11,hicregrewindow_gm12878_5kb,"HiC-Reg retrained (our split), WINDOW",0.3774,0.4466,0.3996,0.4868,0.1529,0.0181,0.0503,0.7711,0.4465
+gm12878,5000,chr11,best_other_map,best other measured map,0.6547,0.7135,0.6572,0.7073,0.4691,0.0933,0.9487,0.8539,0.7586
+gm12878,5000,chr11,consensus,consensus of the other cells,0.7861,0.8215,0.7836,0.7911,0.5498,0.4326,0.9496,0.8898,0.8251
+gm12878,5000,chr11,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7318,0.7353,0.7269,0.7140,0.4485,0.2073,0.4154,0.8768,0.7575
+gm12878,5000,chr11,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8897,0.9112,0.8858,0.8843,0.5653,0.4378,0.6389,0.9628,0.9152
+gm12878,5000,chr11,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8802,0.8983,0.8754,0.8659,0.5567,0.4223,0.7475,0.9532,0.9092
+gm12878,5000,chr14,hicregwindowcv_gm12878_5kb,"HiC-Reg CV (released, within-chromosome)",0.8882,0.9005,0.8511,0.6249,0.1693,0.0177,0.3856,0.9948,0.9053
+gm12878,5000,chr14,hicregrewindowcvours_gm12878_5kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8575,0.7990,0.8233,0.5290,0.1429,0.0319,0.1070,0.9813,0.8573
+gm12878,5000,chr14,hicregmulticellcrosschrom_gm12878_5kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.6541,0.5791,0.5992,0.5013,0.1481,0.0000,0.0319,0.9106,0.6020
+gm12878,5000,chr14,hicregwindowcrosschrom_gm12878_5kb,"HiC-Reg cross-chromosome (released), WINDOW",0.6168,0.5411,0.5673,0.4924,0.1587,0.0000,0.0469,0.9014,0.5735
+gm12878,5000,chr14,hicregremulticell_gm12878_5kb,"HiC-Reg retrained (our split), MULTICELL",0.4298,0.5506,0.4631,0.5144,0.1455,0.0496,-0.0231,0.8113,0.5053
+gm12878,5000,chr14,hicregrewindow_gm12878_5kb,"HiC-Reg retrained (our split), WINDOW",0.4457,0.4528,0.4800,0.5120,0.1296,0.0000,0.0288,0.7813,0.5086
+gm12878,5000,chr14,hicregrewindowsmall_gm12878_5kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4472,0.4659,0.4656,0.4816,0.0952,0.0035,-0.0019,0.7960,0.4921
+gm12878,5000,chr14,hicregrecrosscell_k562togm12878_5kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.3664,0.3585,0.3932,0.4428,0.0926,0.0284,0.1349,0.7229,0.4167
+gm12878,5000,chr14,best_other_map,best other measured map,0.5866,0.6770,0.5971,0.6864,0.4392,0.0461,0.9265,0.8274,0.7226
+gm12878,5000,chr14,consensus,consensus of the other cells,0.8253,0.8413,0.8172,0.7899,0.5556,0.4149,0.9292,0.9278,0.8448
+gm12878,5000,chr14,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7747,0.7712,0.7680,0.7404,0.4339,0.2057,0.4040,0.8970,0.7813
+gm12878,5000,chr14,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9074,0.9151,0.9026,0.8944,0.5503,0.3972,0.6693,0.9717,0.9190
+gm12878,5000,chr14,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8992,0.9028,0.8933,0.8725,0.5635,0.3972,0.7608,0.9700,0.9149
+gm12878,5000,chr17,hicregwindowcv_gm12878_5kb,"HiC-Reg CV (released, within-chromosome)",0.8971,0.8963,0.8661,0.6689,0.3347,0.0217,0.4097,0.9884,0.9381
+gm12878,5000,chr17,hicregrewindowcvours_gm12878_5kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8856,0.8295,0.8487,0.6016,0.1883,0.0290,0.0955,0.9783,0.8916
+gm12878,5000,chr17,hicregmulticellcrosschrom_gm12878_5kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.5986,0.4581,0.5428,0.5485,0.2427,0.0000,0.0391,0.8694,0.6197
+gm12878,5000,chr17,hicregwindowcrosschrom_gm12878_5kb,"HiC-Reg cross-chromosome (released), WINDOW",0.5891,0.4995,0.5415,0.5387,0.1632,0.0000,0.0438,0.8810,0.6118
+gm12878,5000,chr17,hicregremulticell_gm12878_5kb,"HiC-Reg retrained (our split), MULTICELL",0.4663,0.4564,0.4849,0.5535,0.1807,0.0181,0.0338,0.7098,0.5629
+gm12878,5000,chr17,hicregrewindow_gm12878_5kb,"HiC-Reg retrained (our split), WINDOW",0.4618,0.4143,0.4696,0.5612,0.1632,0.0109,0.0230,0.7644,0.5425
+gm12878,5000,chr17,hicregrewindowsmall_gm12878_5kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4599,0.3769,0.4622,0.5356,0.1381,0.0000,0.0207,0.7713,0.5352
+gm12878,5000,chr17,hicregrecrosscell_k562togm12878_5kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.3097,0.2598,0.3249,0.4759,0.0795,0.0290,0.1317,0.5772,0.4234
+gm12878,5000,chr17,best_other_map,best other measured map,0.6925,0.7200,0.7069,0.8005,0.5230,0.0797,0.9873,0.8092,0.8046
+gm12878,5000,chr17,consensus,consensus of the other cells,0.8164,0.8421,0.8165,0.8069,0.5565,0.2935,0.9631,0.8415,0.8615
+gm12878,5000,chr17,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7238,0.7448,0.7300,0.7416,0.4770,0.1703,0.3652,0.8456,0.7584
+gm12878,5000,chr17,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9042,0.9076,0.9016,0.9011,0.5732,0.3297,0.6805,0.9424,0.9277
+gm12878,5000,chr17,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8997,0.8963,0.8955,0.8731,0.5732,0.3007,0.7825,0.9375,0.9231
+gm12878,5000,chr2,hicregrewindow_gm12878_5kb,"HiC-Reg retrained (our split), WINDOW",0.3946,0.5052,0.4064,0.3977,0.1361,0.0230,0.0337,0.6773,0.4688
+gm12878,5000,chr2,best_other_map,best other measured map,0.6363,0.6722,0.6324,0.6215,0.4345,0.0512,0.9048,0.8073,0.7385
+gm12878,5000,chr2,consensus,consensus of the other cells,0.7927,0.7976,0.7803,0.7088,0.5242,0.3975,0.8940,0.8557,0.8170
+gm12878,5000,chr2,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7394,0.7516,0.7338,0.7098,0.4556,0.1926,0.4294,0.8552,0.7612
+gm12878,5000,chr2,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8939,0.9039,0.8876,0.8717,0.5302,0.3887,0.6495,0.9454,0.9166
+gm12878,5000,chr2,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8841,0.8890,0.8722,0.8095,0.5252,0.3975,0.7300,0.9419,0.8973
+gm12878,5000,chr3,hicregrewindow_gm12878_5kb,"HiC-Reg retrained (our split), WINDOW",0.4154,0.4810,0.4236,0.3712,0.1503,0.0205,0.0302,0.6892,0.4711
+gm12878,5000,chr3,best_other_map,best other measured map,0.5895,0.6413,0.5877,0.5762,0.4417,0.0883,0.9136,0.7871,0.6802
+gm12878,5000,chr3,consensus,consensus of the other cells,0.7834,0.8038,0.7768,0.7507,0.5303,0.3819,0.9243,0.8796,0.8073
+gm12878,5000,chr3,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7573,0.7789,0.7514,0.7355,0.4674,0.2197,0.4362,0.8493,0.7730
+gm12878,5000,chr3,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8930,0.9053,0.8893,0.8896,0.5559,0.4086,0.6576,0.9543,0.9176
+gm12878,5000,chr3,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8871,0.8996,0.8795,0.8560,0.5233,0.4066,0.7615,0.9514,0.9060
+gm12878,10000,chr11,hicregrewindow_gm12878_10kb,"HiC-Reg retrained (our split), WINDOW",0.3517,0.4842,0.3877,0.4590,0.2047,0.0104,0.0207,0.7678,0.4514
+gm12878,10000,chr11,best_other_map,best other measured map,0.7592,0.8026,0.7553,0.7305,0.5965,0.2591,0.8720,0.8491,0.7948
+gm12878,10000,chr11,consensus,consensus of the other cells,0.8192,0.8693,0.8130,0.7852,0.6516,0.4689,0.8935,0.8877,0.8281
+gm12878,10000,chr11,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7443,0.7623,0.7344,0.7010,0.4783,0.2021,0.3525,0.8767,0.7458
+gm12878,10000,chr11,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9119,0.9380,0.9052,0.8706,0.6398,0.4819,0.6757,0.9601,0.9185
+gm12878,10000,chr11,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9160,0.9395,0.9121,0.8916,0.6732,0.4741,0.9471,0.9609,0.9277
+gm12878,10000,chr14,hicregwindowcv_gm12878_10kb,"HiC-Reg CV (released, within-chromosome)",0.9276,0.9398,0.8849,0.6244,0.3482,0.1915,0.4728,0.9965,0.9106
+gm12878,10000,chr14,hicregrewindowcvours_gm12878_10kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8620,0.8364,0.8245,0.5161,0.2013,0.0674,0.1371,0.9831,0.8587
+gm12878,10000,chr14,hicregmulticellcrosschrom_gm12878_10kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.6757,0.6497,0.6148,0.4835,0.2077,0.0000,-0.0146,0.8958,0.6062
+gm12878,10000,chr14,hicregwindowcrosschrom_gm12878_10kb,"HiC-Reg cross-chromosome (released), WINDOW",0.6211,0.6126,0.5679,0.4730,0.1885,0.0035,0.0067,0.8794,0.5762
+gm12878,10000,chr14,hicregremulticell_gm12878_10kb,"HiC-Reg retrained (our split), MULTICELL",0.4004,0.5822,0.4468,0.4912,0.2204,0.0142,-0.0956,0.8099,0.5073
+gm12878,10000,chr14,hicregrewindow_gm12878_10kb,"HiC-Reg retrained (our split), WINDOW",0.4296,0.4782,0.4701,0.4926,0.2204,0.0142,-0.0240,0.7895,0.5158
+gm12878,10000,chr14,hicregrewindowsmall_gm12878_10kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4329,0.5329,0.4547,0.4630,0.1438,0.0071,-0.0534,0.8022,0.5027
+gm12878,10000,chr14,hicregrecrosscell_k562togm12878_10kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.3773,0.4221,0.4078,0.4392,0.0958,0.0319,0.0583,0.7328,0.4498
+gm12878,10000,chr14,best_other_map,best other measured map,0.7434,0.7870,0.7386,0.7104,0.5623,0.1773,0.8860,0.8383,0.7804
+gm12878,10000,chr14,consensus,consensus of the other cells,0.8624,0.8819,0.8478,0.7865,0.6134,0.4858,0.9008,0.9301,0.8505
+gm12878,10000,chr14,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.8203,0.8193,0.7979,0.7244,0.4920,0.2128,0.2902,0.9055,0.8003
+gm12878,10000,chr14,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9336,0.9384,0.9258,0.8915,0.6262,0.4752,0.7317,0.9710,0.9288
+gm12878,10000,chr14,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9348,0.9356,0.9284,0.8963,0.6677,0.5177,0.9393,0.9735,0.9367
+gm12878,10000,chr17,hicregwindowcv_gm12878_10kb,"HiC-Reg CV (released, within-chromosome)",0.9129,0.9379,0.8767,0.6267,0.4384,0.1051,0.5150,0.9860,0.9397
+gm12878,10000,chr17,hicregrewindowcvours_gm12878_10kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8962,0.8554,0.8605,0.5961,0.3059,0.0471,0.1420,0.9781,0.9063
+gm12878,10000,chr17,hicregmulticellcrosschrom_gm12878_10kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.5708,0.4990,0.5239,0.5181,0.2511,0.0000,0.0272,0.8207,0.6374
+gm12878,10000,chr17,hicregwindowcrosschrom_gm12878_10kb,"HiC-Reg cross-chromosome (released), WINDOW",0.5580,0.5089,0.5170,0.5090,0.2283,0.0036,0.0252,0.8342,0.6258
+gm12878,10000,chr17,hicregremulticell_gm12878_10kb,"HiC-Reg retrained (our split), MULTICELL",0.4548,0.4975,0.4926,0.5398,0.2274,0.0072,0.0195,0.7124,0.6036
+gm12878,10000,chr17,hicregrewindow_gm12878_10kb,"HiC-Reg retrained (our split), WINDOW",0.4629,0.4563,0.4759,0.5541,0.2100,0.0145,0.0050,0.7628,0.5825
+gm12878,10000,chr17,hicregrewindowsmall_gm12878_10kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4599,0.4207,0.4669,0.5301,0.1553,0.0000,0.0050,0.7669,0.5763
+gm12878,10000,chr17,hicregrecrosscell_k562togm12878_10kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.2852,0.3349,0.3097,0.4643,0.1370,0.0181,0.0986,0.5579,0.4534
+gm12878,10000,chr17,best_other_map,best other measured map,0.7687,0.8239,0.7742,0.8016,0.6941,0.1848,0.9087,0.8006,0.8378
+gm12878,10000,chr17,consensus,consensus of the other cells,0.8430,0.8827,0.8365,0.7995,0.7352,0.3080,0.9036,0.8308,0.8713
+gm12878,10000,chr17,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7561,0.8012,0.7552,0.7446,0.4977,0.1522,0.3124,0.8017,0.7928
+gm12878,10000,chr17,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9170,0.9348,0.9125,0.8881,0.7032,0.3406,0.7235,0.9320,0.9258
+gm12878,10000,chr17,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9263,0.9362,0.9221,0.8986,0.7169,0.3188,0.9447,0.9417,0.9411
+gm12878,10000,chr2,hicregrewindow_gm12878_10kb,"HiC-Reg retrained (our split), WINDOW",0.3649,0.5524,0.3884,0.3648,0.2071,0.0124,0.0003,0.6815,0.4879
+gm12878,10000,chr2,best_other_map,best other measured map,0.7549,0.7781,0.7384,0.6401,0.5279,0.2191,0.8861,0.8106,0.7830
+gm12878,10000,chr2,consensus,consensus of the other cells,0.8257,0.8645,0.8068,0.7003,0.6166,0.4293,0.8793,0.8560,0.8269
+gm12878,10000,chr2,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7602,0.7938,0.7473,0.7006,0.5074,0.2032,0.3199,0.8326,0.7766
+gm12878,10000,chr2,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9177,0.9284,0.9056,0.8458,0.6405,0.4753,0.7188,0.9455,0.9209
+gm12878,10000,chr2,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9225,0.9303,0.9140,0.8719,0.6246,0.4594,0.9470,0.9505,0.9293
+gm12878,10000,chr3,hicregrewindow_gm12878_10kb,"HiC-Reg retrained (our split), WINDOW",0.3822,0.5165,0.4021,0.3348,0.2047,0.0144,0.0005,0.6985,0.4627
+gm12878,10000,chr3,best_other_map,best other measured map,0.7086,0.7621,0.6961,0.5940,0.5228,0.1934,0.8355,0.7859,0.7139
+gm12878,10000,chr3,consensus,consensus of the other cells,0.8221,0.8578,0.8102,0.7455,0.6063,0.4547,0.9007,0.8737,0.8132
+gm12878,10000,chr3,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7893,0.8255,0.7763,0.7255,0.5072,0.2366,0.3386,0.8581,0.7841
+gm12878,10000,chr3,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9194,0.9351,0.9106,0.8681,0.6297,0.4877,0.7273,0.9546,0.9196
+gm12878,10000,chr3,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9244,0.9348,0.9186,0.8873,0.6441,0.4774,0.9730,0.9581,0.9283
+gm12878,25000,chr11,hicregrewindow_gm12878_25kb,"HiC-Reg retrained (our split), WINDOW",0.3037,0.5152,0.3798,0.4352,0.3811,0.0443,0.0049,0.7360,0.4790
+gm12878,25000,chr11,best_other_map,best other measured map,0.7888,0.8489,0.7850,0.7683,0.7507,0.3880,0.7309,0.8505,0.8038
+gm12878,25000,chr11,consensus,consensus of the other cells,0.8342,0.8910,0.8283,0.8162,0.7994,0.4661,0.7344,0.8905,0.8316
+gm12878,25000,chr11,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7438,0.8058,0.7285,0.6607,0.5759,0.2786,0.3634,0.8793,0.7431
+gm12878,25000,chr11,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9138,0.9465,0.9118,0.9049,0.8195,0.4792,0.7621,0.9516,0.9249
+gm12878,25000,chr11,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9194,0.9480,0.9165,0.9104,0.8309,0.4583,0.7786,0.9557,0.9283
+gm12878,25000,chr14,hicregwindowcv_gm12878_25kb,"HiC-Reg CV (released, within-chromosome)",0.9298,0.9683,0.8954,0.7064,0.7248,0.4057,0.7015,0.9954,0.8969
+gm12878,25000,chr14,hicregrewindowcvours_gm12878_25kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8584,0.8738,0.8323,0.5766,0.5229,0.2527,0.3078,0.9807,0.8496
+gm12878,25000,chr14,hicregmulticellcrosschrom_gm12878_25kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.6847,0.6974,0.6364,0.4714,0.3716,0.0498,-0.1101,0.8895,0.6608
+gm12878,25000,chr14,hicregwindowcrosschrom_gm12878_25kb,"HiC-Reg cross-chromosome (released), WINDOW",0.6242,0.6707,0.5826,0.4580,0.3119,0.0427,-0.0395,0.8700,0.6249
+gm12878,25000,chr14,hicregremulticell_gm12878_25kb,"HiC-Reg retrained (our split), MULTICELL",0.3634,0.6423,0.4502,0.4819,0.3591,0.0569,-0.2712,0.7787,0.5203
+gm12878,25000,chr14,hicregrewindow_gm12878_25kb,"HiC-Reg retrained (our split), WINDOW",0.4104,0.5251,0.4743,0.4789,0.3073,0.0641,-0.1805,0.7781,0.5394
+gm12878,25000,chr14,hicregrewindowsmall_gm12878_25kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4198,0.6130,0.4591,0.4529,0.3028,0.0391,-0.2006,0.7898,0.5293
+gm12878,25000,chr14,hicregrecrosscell_k562togm12878_25kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.3776,0.4956,0.4315,0.4608,0.2248,0.0534,-0.2519,0.7235,0.5060
+gm12878,25000,chr14,best_other_map,best other measured map,0.7992,0.8719,0.7864,0.7479,0.7385,0.3559,0.7902,0.8448,0.7915
+gm12878,25000,chr14,consensus,consensus of the other cells,0.8781,0.9070,0.8606,0.8080,0.7706,0.4555,0.8202,0.9335,0.8415
+gm12878,25000,chr14,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.8065,0.8334,0.7817,0.7038,0.6193,0.2171,0.3519,0.8998,0.7803
+gm12878,25000,chr14,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9441,0.9567,0.9368,0.9130,0.8257,0.4484,0.7977,0.9745,0.9348
+gm12878,25000,chr14,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9375,0.9562,0.9291,0.8992,0.8028,0.4306,0.8482,0.9686,0.9239
+gm12878,25000,chr17,hicregwindowcv_gm12878_25kb,"HiC-Reg CV (released, within-chromosome)",0.8869,0.9606,0.8446,0.6486,0.7219,0.2409,0.8276,0.9794,0.9336
+gm12878,25000,chr17,hicregrewindowcvours_gm12878_25kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.9006,0.8982,0.8768,0.6528,0.5858,0.1788,0.4064,0.9772,0.9200
+gm12878,25000,chr17,hicregmulticellcrosschrom_gm12878_25kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.5451,0.5716,0.4974,0.4387,0.3195,0.0255,0.0471,0.8229,0.7237
+gm12878,25000,chr17,hicregwindowcrosschrom_gm12878_25kb,"HiC-Reg cross-chromosome (released), WINDOW",0.5329,0.5683,0.4928,0.4365,0.3314,0.0219,0.0361,0.8224,0.7112
+gm12878,25000,chr17,hicregremulticell_gm12878_25kb,"HiC-Reg retrained (our split), MULTICELL",0.4032,0.4963,0.4956,0.5149,0.3258,0.0219,0.0232,0.7042,0.6821
+gm12878,25000,chr17,hicregrewindow_gm12878_25kb,"HiC-Reg retrained (our split), WINDOW",0.4504,0.5220,0.4903,0.5246,0.3550,0.0365,-0.0404,0.7329,0.6590
+gm12878,25000,chr17,hicregrewindowsmall_gm12878_25kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4439,0.4616,0.4782,0.5091,0.3254,0.0365,-0.0184,0.7357,0.6534
+gm12878,25000,chr17,hicregrecrosscell_k562togm12878_25kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.2757,0.3651,0.3191,0.4728,0.2604,0.0547,0.0179,0.5504,0.5403
+gm12878,25000,chr17,best_other_map,best other measured map,0.7955,0.8383,0.7961,0.8037,0.8639,0.3139,0.8278,0.8159,0.8548
+gm12878,25000,chr17,consensus,consensus of the other cells,0.8568,0.8942,0.8448,0.7998,0.8402,0.3358,0.8156,0.8545,0.8722
+gm12878,25000,chr17,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7586,0.7634,0.7445,0.6444,0.5976,0.1642,0.2861,0.8350,0.8027
+gm12878,25000,chr17,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9186,0.9439,0.9143,0.8978,0.8402,0.3431,0.7858,0.9324,0.9347
+gm12878,25000,chr17,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9232,0.9440,0.9165,0.8978,0.8580,0.3358,0.8193,0.9314,0.9367
+gm12878,25000,chr2,hicregrewindow_gm12878_25kb,"HiC-Reg retrained (our split), WINDOW",0.3176,0.5771,0.3784,0.3565,0.3570,0.0335,-0.0681,0.6696,0.5295
+gm12878,25000,chr2,best_other_map,best other measured map,0.7860,0.8516,0.7665,0.6918,0.7322,0.3739,0.8046,0.8107,0.7942
+gm12878,25000,chr2,consensus,consensus of the other cells,0.8393,0.8894,0.8185,0.7431,0.7818,0.4356,0.7884,0.8593,0.8309
+gm12878,25000,chr2,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7550,0.8117,0.7334,0.6744,0.6000,0.2257,0.3577,0.8456,0.7742
+gm12878,25000,chr2,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9296,0.9417,0.9192,0.8854,0.7868,0.4656,0.8120,0.9492,0.9341
+gm12878,25000,chr2,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9294,0.9460,0.9183,0.8800,0.8017,0.4356,0.8361,0.9488,0.9323
+gm12878,25000,chr3,hicregrewindow_gm12878_25kb,"HiC-Reg retrained (our split), WINDOW",0.3365,0.5575,0.3937,0.3479,0.3268,0.0429,-0.0691,0.6945,0.4818
+gm12878,25000,chr3,best_other_map,best other measured map,0.7399,0.8224,0.7240,0.6562,0.7362,0.3947,0.7592,0.7802,0.7026
+gm12878,25000,chr3,consensus,consensus of the other cells,0.8374,0.8751,0.8246,0.7899,0.7835,0.4765,0.7609,0.8740,0.8146
+gm12878,25000,chr3,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7678,0.8087,0.7548,0.7164,0.6378,0.2536,0.4051,0.8345,0.7667
+gm12878,25000,chr3,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9275,0.9455,0.9207,0.9044,0.8209,0.4724,0.8464,0.9552,0.9278
+gm12878,25000,chr3,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9279,0.9452,0.9212,0.9025,0.8169,0.4703,0.8313,0.9563,0.9262
+k562,5000,chr11,hicregrewindow_k562_5kb,"HiC-Reg retrained (our split), WINDOW",0.4570,0.3866,0.4886,0.6653,0.1015,0.0468,0.1325,0.7509,0.4571
+k562,5000,chr11,best_other_map,best other measured map,0.5645,0.6871,0.5862,0.6745,0.4382,0.1754,0.6188,0.7880,0.6318
+k562,5000,chr11,consensus,consensus of the other cells,0.6786,0.7825,0.6896,0.8243,0.5093,0.3713,0.8138,0.8340,0.7266
+k562,5000,chr11,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.6181,0.6415,0.6273,0.7322,0.4264,0.1871,0.3244,0.8184,0.6275
+k562,5000,chr11,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.7742,0.8403,0.7776,0.8366,0.5008,0.3713,0.6760,0.9180,0.8186
+k562,5000,chr11,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.7833,0.8418,0.7896,0.8837,0.5127,0.3860,0.6497,0.9126,0.8315
+k562,5000,chr14,hicregwindowcv_k562_5kb,"HiC-Reg CV (released, within-chromosome)",0.8483,0.7998,0.8589,0.7933,0.2500,0.0057,0.4553,0.9756,0.8888
+k562,5000,chr14,hicregrewindowcvours_k562_5kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.7604,0.6634,0.7776,0.7306,0.1575,0.0514,0.1073,0.9581,0.6920
+k562,5000,chr14,hicregmulticellcrosschrom_k562_5kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.8189,0.7488,0.8285,0.7522,0.2175,0.0057,0.3075,0.9689,0.8384
+k562,5000,chr14,hicregwindowcrosschrom_k562_5kb,"HiC-Reg cross-chromosome (released), WINDOW",0.8216,0.7484,0.8289,0.7430,0.2025,0.0057,0.3198,0.9684,0.8393
+k562,5000,chr14,hicregremulticell_k562_5kb,"HiC-Reg retrained (our split), MULTICELL",0.4716,0.2907,0.5196,0.7316,0.1092,0.0400,0.0163,0.7166,0.4460
+k562,5000,chr14,hicregrewindow_k562_5kb,"HiC-Reg retrained (our split), WINDOW",0.4321,0.2976,0.4653,0.6932,0.0700,0.0286,0.0969,0.6617,0.4073
+k562,5000,chr14,hicregrewindowsmall_k562_5kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.4312,0.2698,0.4631,0.6806,0.0650,0.0171,0.0768,0.6562,0.3809
+k562,5000,chr14,hicregrecrosscell_gm12878tok562_5kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.2694,0.2259,0.3083,0.5862,0.1425,0.0000,-0.0073,0.6149,0.2603
+k562,5000,chr14,best_other_map,best other measured map,0.4813,0.6794,0.5006,0.5575,0.3350,0.1371,0.5491,0.8221,0.5003
+k562,5000,chr14,consensus,consensus of the other cells,0.6107,0.7591,0.6220,0.7601,0.4425,0.3600,0.7963,0.8909,0.6597
+k562,5000,chr14,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.6598,0.6423,0.6647,0.7326,0.3900,0.1829,0.2563,0.8819,0.6642
+k562,5000,chr14,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.7514,0.8072,0.7553,0.8375,0.4600,0.3829,0.7179,0.9402,0.7947
+k562,5000,chr14,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.7663,0.8057,0.7692,0.8583,0.4425,0.3829,0.6795,0.9409,0.8079
+k562,5000,chr17,hicregwindowcv_k562_5kb,"HiC-Reg CV (released, within-chromosome)",0.8409,0.8282,0.8203,0.6623,0.3135,0.0039,0.4258,0.9799,0.9087
+k562,5000,chr17,hicregrewindowcvours_k562_5kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8015,0.7311,0.7882,0.6538,0.1984,0.0270,0.1213,0.9608,0.8246
+k562,5000,chr17,hicregmulticellcrosschrom_k562_5kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.7478,0.6825,0.7074,0.5287,0.3254,0.0000,0.1767,0.9554,0.7809
+k562,5000,chr17,hicregwindowcrosschrom_k562_5kb,"HiC-Reg cross-chromosome (released), WINDOW",0.7259,0.6576,0.6816,0.4545,0.2500,0.0000,0.2012,0.9490,0.7410
+k562,5000,chr17,hicregremulticell_k562_5kb,"HiC-Reg retrained (our split), MULTICELL",0.4069,0.3751,0.4390,0.5759,0.1903,0.0116,0.0591,0.6370,0.4601
+k562,5000,chr17,hicregrewindow_k562_5kb,"HiC-Reg retrained (our split), WINDOW",0.3951,0.3495,0.4137,0.5564,0.1071,0.0309,0.1194,0.6106,0.4495
+k562,5000,chr17,hicregrewindowsmall_k562_5kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.3750,0.3096,0.3933,0.5147,0.0635,0.0193,0.1080,0.6146,0.4216
+k562,5000,chr17,hicregrecrosscell_gm12878tok562_5kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.1176,0.0894,0.1385,0.3158,0.1786,0.0039,0.0570,0.5221,0.2129
+k562,5000,chr17,best_other_map,best other measured map,0.6579,0.7543,0.6598,0.6048,0.5000,0.1236,0.5743,0.8516,0.7030
+k562,5000,chr17,consensus,consensus of the other cells,0.7351,0.7944,0.7471,0.8603,0.5675,0.2857,0.8406,0.8583,0.7952
+k562,5000,chr17,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.6225,0.6393,0.6412,0.7277,0.4405,0.1544,0.3096,0.7805,0.6631
+k562,5000,chr17,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.7916,0.8271,0.7974,0.8473,0.5595,0.2934,0.7176,0.9090,0.8330
+k562,5000,chr17,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8016,0.8182,0.8086,0.8787,0.5754,0.2934,0.6992,0.9027,0.8491
+k562,5000,chr2,hicregrewindow_k562_5kb,"HiC-Reg retrained (our split), WINDOW",0.4224,0.3642,0.4450,0.5237,0.1003,0.0207,0.1355,0.6840,0.4189
+k562,5000,chr2,best_other_map,best other measured map,0.5683,0.6743,0.5698,0.5281,0.4241,0.1475,0.6210,0.8041,0.6062
+k562,5000,chr2,consensus,consensus of the other cells,0.6709,0.7409,0.6786,0.7722,0.4995,0.3779,0.8130,0.8503,0.7206
+k562,5000,chr2,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.6538,0.6435,0.6580,0.7344,0.3993,0.1475,0.3372,0.8428,0.6771
+k562,5000,chr2,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.7688,0.7931,0.7710,0.8254,0.4793,0.3525,0.6973,0.9106,0.8181
+k562,5000,chr2,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.7671,0.7888,0.7698,0.8338,0.4673,0.3618,0.6696,0.9089,0.8128
+k562,5000,chr3,hicregrewindow_k562_5kb,"HiC-Reg retrained (our split), WINDOW",0.4421,0.3479,0.4591,0.5587,0.0949,0.0149,0.1246,0.6460,0.4230
+k562,5000,chr3,best_other_map,best other measured map,0.5246,0.6465,0.5347,0.5542,0.3915,0.1612,0.6148,0.7862,0.5450
+k562,5000,chr3,consensus,consensus of the other cells,0.6296,0.7151,0.6397,0.7552,0.4667,0.3522,0.8513,0.8501,0.6555
+k562,5000,chr3,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.6362,0.6563,0.6393,0.6998,0.4002,0.1881,0.3571,0.8522,0.6355
+k562,5000,chr3,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.7564,0.7950,0.7582,0.8141,0.4646,0.3522,0.7327,0.9267,0.7843
+k562,5000,chr3,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.7630,0.7789,0.7656,0.8399,0.4460,0.3552,0.6933,0.9246,0.7903
+k562,10000,chr11,hicregrewindow_k562_10kb,"HiC-Reg retrained (our split), WINDOW",0.4111,0.5293,0.4621,0.5768,0.1377,0.0292,0.1068,0.7477,0.5152
+k562,10000,chr11,best_other_map,best other measured map,0.7445,0.8197,0.7460,0.7033,0.5340,0.3567,0.6295,0.8017,0.7623
+k562,10000,chr11,consensus,consensus of the other cells,0.8042,0.8677,0.8120,0.8548,0.6340,0.4444,0.8093,0.8380,0.8422
+k562,10000,chr11,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7120,0.7809,0.7111,0.7324,0.4811,0.1696,0.2501,0.8554,0.7098
+k562,10000,chr11,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8624,0.9010,0.8646,0.8774,0.6358,0.4444,0.5201,0.9177,0.8883
+k562,10000,chr11,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8674,0.9035,0.8698,0.8814,0.6547,0.4591,0.8382,0.9305,0.8969
+k562,10000,chr14,hicregwindowcv_k562_10kb,"HiC-Reg CV (released, within-chromosome)",0.8875,0.8975,0.8766,0.7314,0.4033,0.0057,0.4568,0.9915,0.9214
+k562,10000,chr14,hicregrewindowcvours_k562_10kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.7835,0.7797,0.7976,0.6371,0.1934,0.0629,0.1051,0.9664,0.8341
+k562,10000,chr14,hicregmulticellcrosschrom_k562_10kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.8079,0.8071,0.7895,0.6635,0.3481,0.0000,0.2218,0.9750,0.8230
+k562,10000,chr14,hicregwindowcrosschrom_k562_10kb,"HiC-Reg cross-chromosome (released), WINDOW",0.8321,0.8222,0.8106,0.6484,0.2762,0.0000,0.2354,0.9747,0.8492
+k562,10000,chr14,hicregremulticell_k562_10kb,"HiC-Reg retrained (our split), MULTICELL",0.3469,0.4148,0.4291,0.6438,0.1951,0.0171,-0.0750,0.7231,0.4551
+k562,10000,chr14,hicregrewindow_k562_10kb,"HiC-Reg retrained (our split), WINDOW",0.3021,0.3971,0.3621,0.6031,0.0994,0.0057,0.0427,0.6824,0.3861
+k562,10000,chr14,hicregrewindowsmall_k562_10kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.2869,0.3790,0.3407,0.5856,0.0718,0.0000,0.0270,0.6801,0.3632
+k562,10000,chr14,hicregrecrosscell_gm12878tok562_10kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.2877,0.3837,0.3493,0.5097,0.1796,0.0000,-0.0458,0.6417,0.3265
+k562,10000,chr14,best_other_map,best other measured map,0.7171,0.8084,0.7099,0.6224,0.4807,0.2743,0.5710,0.8394,0.7186
+k562,10000,chr14,consensus,consensus of the other cells,0.7912,0.8580,0.7923,0.8016,0.5773,0.4343,0.7891,0.9052,0.8203
+k562,10000,chr14,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7188,0.7249,0.7171,0.7399,0.4475,0.1429,0.1854,0.8791,0.7301
+k562,10000,chr14,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8483,0.9001,0.8461,0.8281,0.5414,0.4057,0.5799,0.9473,0.8728
+k562,10000,chr14,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8565,0.9010,0.8526,0.8214,0.5691,0.4571,0.8160,0.9527,0.8856
+k562,10000,chr17,hicregwindowcv_k562_10kb,"HiC-Reg CV (released, within-chromosome)",0.8688,0.9016,0.8385,0.5680,0.4221,0.0116,0.4559,0.9785,0.9280
+k562,10000,chr17,hicregrewindowcvours_k562_10kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8512,0.8093,0.8189,0.5995,0.3238,0.0659,0.1473,0.9682,0.8809
+k562,10000,chr17,hicregmulticellcrosschrom_k562_10kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.7036,0.7199,0.6485,0.4179,0.3033,0.0000,0.1509,0.9333,0.7627
+k562,10000,chr17,hicregwindowcrosschrom_k562_10kb,"HiC-Reg cross-chromosome (released), WINDOW",0.6619,0.6973,0.6054,0.3440,0.2582,0.0039,0.1840,0.9336,0.7149
+k562,10000,chr17,hicregremulticell_k562_10kb,"HiC-Reg retrained (our split), MULTICELL",0.3761,0.4247,0.4230,0.5235,0.2609,0.0155,0.0201,0.6462,0.5456
+k562,10000,chr17,hicregrewindow_k562_10kb,"HiC-Reg retrained (our split), WINDOW",0.3695,0.4373,0.3946,0.5053,0.1352,0.0504,0.0984,0.6447,0.5169
+k562,10000,chr17,hicregrewindowsmall_k562_10kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.3355,0.3929,0.3594,0.4625,0.1107,0.0233,0.1014,0.6322,0.4903
+k562,10000,chr17,hicregrecrosscell_gm12878tok562_10kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.0506,0.0968,0.0881,0.3170,0.2459,0.0078,0.0720,0.5172,0.2325
+k562,10000,chr17,best_other_map,best other measured map,0.7754,0.8581,0.7606,0.6343,0.6107,0.2287,0.6186,0.8434,0.7764
+k562,10000,chr17,consensus,consensus of the other cells,0.8304,0.8747,0.8351,0.8711,0.7418,0.3372,0.8325,0.8538,0.8740
+k562,10000,chr17,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7102,0.7239,0.7107,0.7023,0.5205,0.1357,0.2553,0.8162,0.7607
+k562,10000,chr17,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8673,0.9005,0.8681,0.8677,0.7131,0.3256,0.5558,0.9013,0.9006
+k562,10000,chr17,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8691,0.9006,0.8713,0.8728,0.7418,0.3295,0.8795,0.9036,0.9030
+k562,10000,chr2,hicregrewindow_k562_10kb,"HiC-Reg retrained (our split), WINDOW",0.3197,0.4813,0.3489,0.3677,0.1194,0.0092,0.1217,0.6980,0.4328
+k562,10000,chr2,best_other_map,best other measured map,0.7492,0.7767,0.7291,0.5717,0.5058,0.3303,0.6091,0.8110,0.7472
+k562,10000,chr2,consensus,consensus of the other cells,0.8076,0.8219,0.8070,0.8027,0.5801,0.4296,0.7986,0.8532,0.8423
+k562,10000,chr2,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7257,0.7767,0.7198,0.7060,0.4450,0.1986,0.2502,0.8543,0.7421
+k562,10000,chr2,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8570,0.8730,0.8519,0.8269,0.5780,0.4365,0.5504,0.9165,0.8797
+k562,10000,chr2,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8620,0.8754,0.8580,0.8405,0.5832,0.4596,0.8390,0.9242,0.8864
+k562,10000,chr3,hicregrewindow_k562_10kb,"HiC-Reg retrained (our split), WINDOW",0.2751,0.4409,0.3004,0.3953,0.1079,0.0210,0.1148,0.6532,0.3481
+k562,10000,chr3,best_other_map,best other measured map,0.7166,0.7775,0.7059,0.5890,0.4893,0.3303,0.6357,0.7967,0.7063
+k562,10000,chr3,consensus,consensus of the other cells,0.7797,0.8310,0.7811,0.7805,0.5772,0.4144,0.8667,0.8549,0.8018
+k562,10000,chr3,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7225,0.7528,0.7190,0.7105,0.4680,0.2432,0.2748,0.8506,0.7203
+k562,10000,chr3,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8514,0.8779,0.8456,0.8068,0.5709,0.4264,0.5805,0.9312,0.8591
+k562,10000,chr3,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8568,0.8773,0.8519,0.8199,0.5897,0.4565,0.8880,0.9334,0.8706
+k562,25000,chr11,hicregrewindow_k562_25kb,"HiC-Reg retrained (our split), WINDOW",0.3595,0.5708,0.4493,0.5055,0.2624,0.0556,0.0353,0.7157,0.5212
+k562,25000,chr11,best_other_map,best other measured map,0.7905,0.8769,0.7818,0.7102,0.6989,0.4152,0.6757,0.8052,0.7776
+k562,25000,chr11,consensus,consensus of the other cells,0.8343,0.8971,0.8406,0.8602,0.7597,0.4561,0.8085,0.8395,0.8525
+k562,25000,chr11,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7108,0.8163,0.7016,0.6598,0.5691,0.2076,0.3232,0.8135,0.6797
+k562,25000,chr11,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8874,0.9389,0.8848,0.8678,0.7818,0.4532,0.8503,0.9241,0.8886
+k562,25000,chr11,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8893,0.9367,0.8870,0.8741,0.7707,0.4620,0.8086,0.9204,0.8891
+k562,25000,chr14,hicregwindowcv_k562_25kb,"HiC-Reg CV (released, within-chromosome)",0.9262,0.9505,0.9200,0.7810,0.6980,0.1965,0.6086,0.9901,0.9266
+k562,25000,chr14,hicregrewindowcvours_k562_25kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.7566,0.8325,0.7781,0.6088,0.4367,0.1329,0.1014,0.9618,0.7991
+k562,25000,chr14,hicregmulticellcrosschrom_k562_25kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.8334,0.8641,0.8173,0.6631,0.5551,0.0405,0.2408,0.9691,0.8244
+k562,25000,chr14,hicregwindowcrosschrom_k562_25kb,"HiC-Reg cross-chromosome (released), WINDOW",0.8700,0.8793,0.8531,0.6812,0.5673,0.0520,0.2552,0.9681,0.8677
+k562,25000,chr14,hicregremulticell_k562_25kb,"HiC-Reg retrained (our split), MULTICELL",0.2783,0.5200,0.3852,0.5745,0.2955,0.0462,-0.4121,0.7153,0.4437
+k562,25000,chr14,hicregrewindow_k562_25kb,"HiC-Reg retrained (our split), WINDOW",0.2391,0.4205,0.3143,0.5349,0.2327,0.0520,-0.2260,0.6867,0.3587
+k562,25000,chr14,hicregrewindowsmall_k562_25kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.2162,0.4226,0.2811,0.5156,0.2041,0.0231,-0.2198,0.6866,0.3338
+k562,25000,chr14,hicregrecrosscell_gm12878tok562_25kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.2912,0.4499,0.3810,0.4858,0.2694,0.0231,-0.2247,0.6491,0.4029
+k562,25000,chr14,best_other_map,best other measured map,0.8004,0.8835,0.7715,0.6362,0.6694,0.3757,0.7427,0.8524,0.7453
+k562,25000,chr14,consensus,consensus of the other cells,0.8566,0.9122,0.8489,0.8174,0.7102,0.3642,0.8916,0.9081,0.8461
+k562,25000,chr14,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7531,0.8401,0.7325,0.6604,0.5633,0.1214,0.1729,0.8560,0.7314
+k562,25000,chr14,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.9120,0.9440,0.8987,0.8459,0.7143,0.3931,0.8870,0.9558,0.8977
+k562,25000,chr14,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.9027,0.9432,0.8923,0.8554,0.7429,0.3584,0.8811,0.9501,0.8875
+k562,25000,chr17,hicregwindowcv_k562_25kb,"HiC-Reg CV (released, within-chromosome)",0.8490,0.9496,0.8081,0.5600,0.6778,0.1602,0.7871,0.9552,0.9198
+k562,25000,chr17,hicregrewindowcvours_k562_25kb,HiC-Reg CV protocol on our pipeline (within-chromosome),0.8454,0.8563,0.8198,0.5971,0.5500,0.1328,0.3618,0.9587,0.8824
+k562,25000,chr17,hicregmulticellcrosschrom_k562_25kb,"HiC-Reg cross-chromosome (released), MULTICELL",0.6470,0.7738,0.5822,0.3364,0.4833,0.0195,0.2797,0.8842,0.7748
+k562,25000,chr17,hicregwindowcrosschrom_k562_25kb,"HiC-Reg cross-chromosome (released), WINDOW",0.6021,0.7599,0.5395,0.2859,0.4778,0.0234,0.3286,0.8856,0.7259
+k562,25000,chr17,hicregremulticell_k562_25kb,"HiC-Reg retrained (our split), MULTICELL",0.3156,0.4515,0.3984,0.4807,0.2857,0.0117,-0.0885,0.6446,0.5932
+k562,25000,chr17,hicregrewindow_k562_25kb,"HiC-Reg retrained (our split), WINDOW",0.3334,0.4523,0.3793,0.4598,0.2778,0.0469,0.0327,0.6470,0.5711
+k562,25000,chr17,hicregrewindowsmall_k562_25kb,"HiC-Reg retrained, WINDOW, 4M-pair training (size control)",0.2985,0.4585,0.3414,0.4266,0.2167,0.0234,0.0665,0.6358,0.5458
+k562,25000,chr17,hicregrecrosscell_gm12878tok562_25kb,"HiC-Reg retrained, cross-cell (model of the other cell)",0.0441,0.1594,0.0926,0.3425,0.3389,0.0156,0.1229,0.5341,0.3505
+k562,25000,chr17,best_other_map,best other measured map,0.8102,0.8929,0.7804,0.6291,0.7667,0.2852,0.7900,0.8565,0.7861
+k562,25000,chr17,consensus,consensus of the other cells,0.8582,0.8979,0.8570,0.8611,0.8278,0.3008,0.8605,0.8656,0.8904
+k562,25000,chr17,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7071,0.7134,0.6893,0.5834,0.5722,0.1289,0.2017,0.8128,0.7654
+k562,25000,chr17,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8826,0.9127,0.8797,0.8672,0.7611,0.3008,0.7990,0.8989,0.9103
+k562,25000,chr17,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8958,0.9225,0.8911,0.8751,0.8278,0.3086,0.8436,0.9078,0.9144
+k562,25000,chr2,hicregrewindow_k562_25kb,"HiC-Reg retrained (our split), WINDOW",0.2464,0.5244,0.2932,0.2868,0.2241,0.0554,0.0460,0.6939,0.4056
+k562,25000,chr2,best_other_map,best other measured map,0.7944,0.8656,0.7621,0.6033,0.6784,0.3672,0.7182,0.8143,0.7652
+k562,25000,chr2,consensus,consensus of the other cells,0.8386,0.8940,0.8347,0.8148,0.7210,0.4042,0.7886,0.8535,0.8584
+k562,25000,chr2,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7110,0.8068,0.6947,0.6432,0.5381,0.2194,0.2805,0.8057,0.7234
+k562,25000,chr2,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8876,0.9286,0.8781,0.8404,0.7149,0.4180,0.8349,0.9185,0.8868
+k562,25000,chr2,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8881,0.9248,0.8798,0.8472,0.7363,0.4018,0.8183,0.9156,0.8944
+k562,25000,chr3,hicregrewindow_k562_25kb,"HiC-Reg retrained (our split), WINDOW",0.1770,0.4887,0.2134,0.3091,0.2609,0.0390,0.0715,0.6451,0.2535
+k562,25000,chr3,best_other_map,best other measured map,0.7686,0.8402,0.7459,0.6196,0.6975,0.3994,0.7807,0.7996,0.7071
+k562,25000,chr3,consensus,consensus of the other cells,0.8202,0.8863,0.8168,0.7953,0.7486,0.3934,0.8954,0.8566,0.8069
+k562,25000,chr3,all12honest_drop_chrho,ours: all12honest_drop_chrho (ChIP only),0.7032,0.8079,0.6916,0.6469,0.6163,0.1772,0.3273,0.7787,0.6618
+k562,25000,chr3,all12refin_drop_chrho,ours: all12refin_drop_chrho,0.8892,0.9293,0.8783,0.8300,0.7561,0.4144,0.9431,0.9305,0.8541
+k562,25000,chr3,all12refres_drop_chrho,ours: all12refres_drop_chrho,0.8888,0.9241,0.8797,0.8383,0.7732,0.4054,0.8981,0.9229,0.8662

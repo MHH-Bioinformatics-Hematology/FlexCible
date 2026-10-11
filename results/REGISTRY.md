@@ -7417,3 +7417,120 @@ The channels carry no new information for a cell whose marks equal the pool mean
 
 ### Files
 `hicmultiome/diffmarks.py`, edits in `hicmultiome/{config,precompute,train,tracks,predict}.py`, `scripts/{cell_objects_table,cell_objects_eval,diff_marks_configs}.py`, edits in `scripts/{multicell_expanded,crosscell_predict,aml_train_eval,aml_loop_detection}.py`; `tests/test_diffmarks.py`; `results/diff_marks/REMOTE_JOB.md`, `results/diff_marks/configs/`, `results/cell_objects/` (tables and counts).
+
+## 67. HiC-Reg retrained leak-free on the chromosome split of our models (FINAL; section 66 was the last number when this was written)
+
+Question: the released HiC-Reg numbers (sections 18, 37, 58) are suspected of leakage. How does HiC-Reg score when
+it is rebuilt for our cells and tracks and trained on exactly our setting (train on all chromosomes except chr2, 3,
+11, 14, 17; predict those five), and how large is the within-chromosome leak?
+
+Audit (full text with file and line references: `results/benchmark/HICREG_LEAK_AUDIT.md`). Routes found: (1) the
+released CV predictions are region-wise 5-fold CV inside the chromosome (`Framework.C:199-300`; 64% of the pairs train
+each model, 89% of the test pairs have one region among the training regions, 19% (GM12878) and 13-15% (K562) of the
+8 neighbouring pixels are training pixels of every model that could have predicted them); (2) the feature files hold no
+Hi-C-derived column, the SQRTVC normalisation enters the target only (not a route); (3) new: the prediction pair list
+is the list of non-zero pixels of the held-out chromosome's own Hi-C (GM12878 74-85% of the 1 Mb pair slots, K562
+42-60%; CV and cross-chromosome files have the same pairs), and `oe_proper.py` turns an absent mappable pixel into the
+clipped depletion that a zero-count target pixel has, so the zero pixels of the held-out map are delivered for free
+(K562 has 24-39% zero pixels at 5 kb); (4) the released cross-cell maps use models trained on the same chromosome of the
+other cell; (5) the MULTICELL fold script cuts contiguous blocks of the pair-sorted table, but the released MULTICELL
+files have the pair lists of WINDOW, so the script was not the one used, and the models ship without training pair
+lists; (6) no tuner is shipped, `-k1 -l10 -n20` are fixed defaults; the local `hyperopt_hicreg.py` scores against the
+held-out matrix; (7) hg19 maps lifted to hg38 centres, 5 kb counts summed into 10 and 25 kb; (8) the released
+cross-chromosome files are trained on one chromosome (81 to 107 Mb) with DNase and TBP.
+
+Rebuild (`scripts/hicreg_retrain.py`): our 13 tracks per 5 kb bin as E, P, W and Distance (DNase and TBP absent for our
+cells, dropped; SMC3 added), HiC-Reg's native target ln(1 + SQRTVC count) from the VC_SQRT vectors of the 4DN mcools
+(GM12878, K562; the vectors divide), every pair within 1 Mb predicted, scored through the section 18 conversion
+(expm1, sum into 10 and 25 kb, `oe_proper.py`) against our O/E targets on the identical pixels of the chrho blocks;
+random forest as in `Potential.C` (20 trees, bootstrap, one third of the features per split) in scikit-learn
+(agreement with regForest 0.983 on 60k pairs, r with the truth 0.830 against 0.826); training on all 75M mappable pairs
+of the 17 training chromosomes, no sub-sampling; leaf size 100 and training size chosen on chr10 (`hicreg_retrain_tune_*.csv`);
+MULTICELL (HiC-Reg's five cells, 196 features) on 12M pairs and chr14 and chr17 only. Mean of chr14 and chr17 (the blocks
+that also hold the released maps), `results/benchmark/hicreg_retrained_*.csv`, `hicreg_retrained_table.md` (all
+measures, five-chromosome means):
+
+| cell, grid | source | Pearson | tile median | SCC | insulation r | loop recall | HiCRep |
+|---|---|---|---|---|---|---|---|
+| GM12878 25 kb | all12refin_drop_chrho | 0.931 | 0.950 | 0.925 | 0.905 | 0.396 | 0.935 |
+| GM12878 25 kb | all12honest_drop_chrho (ChIP only) | 0.783 | 0.798 | 0.763 | 0.674 | 0.191 | 0.791 |
+| GM12878 25 kb | HiC-Reg retrained, WINDOW | 0.430 | 0.523 | 0.482 | 0.502 | 0.050 | 0.599 |
+| GM12878 25 kb | HiC-Reg retrained, MULTICELL | 0.383 | 0.569 | 0.473 | 0.498 | 0.039 | 0.601 |
+| GM12878 25 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.579 | 0.620 | 0.538 | 0.447 | 0.032 | 0.668 |
+| GM12878 25 kb | HiC-Reg CV, our pipeline | 0.879 | 0.886 | 0.855 | 0.615 | 0.216 | 0.885 |
+| GM12878 25 kb | HiC-Reg CV (released) | 0.908 | 0.965 | 0.870 | 0.677 | 0.323 | 0.915 |
+| GM12878 10 kb | all12refin_drop_chrho | 0.925 | 0.937 | 0.919 | 0.890 | 0.408 | 0.927 |
+| GM12878 10 kb | all12honest_drop_chrho (ChIP only) | 0.788 | 0.810 | 0.777 | 0.735 | 0.182 | 0.796 |
+| GM12878 10 kb | HiC-Reg retrained, WINDOW | 0.446 | 0.467 | 0.473 | 0.523 | 0.014 | 0.549 |
+| GM12878 10 kb | HiC-Reg retrained, MULTICELL | 0.428 | 0.540 | 0.470 | 0.515 | 0.011 | 0.555 |
+| GM12878 10 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.590 | 0.561 | 0.542 | 0.491 | 0.004 | 0.601 |
+| GM12878 10 kb | HiC-Reg CV, our pipeline | 0.879 | 0.846 | 0.843 | 0.556 | 0.057 | 0.882 |
+| GM12878 10 kb | HiC-Reg CV (released) | 0.920 | 0.939 | 0.881 | 0.626 | 0.148 | 0.925 |
+| GM12878 5 kb | all12refin_drop_chrho | 0.906 | 0.911 | 0.902 | 0.898 | 0.363 | 0.923 |
+| GM12878 5 kb | all12honest_drop_chrho (ChIP only) | 0.749 | 0.758 | 0.749 | 0.741 | 0.188 | 0.770 |
+| GM12878 5 kb | HiC-Reg retrained, WINDOW | 0.454 | 0.433 | 0.475 | 0.537 | 0.005 | 0.525 |
+| GM12878 5 kb | HiC-Reg retrained, MULTICELL | 0.448 | 0.503 | 0.474 | 0.534 | 0.034 | 0.534 |
+| GM12878 5 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.603 | 0.520 | 0.554 | 0.515 | 0.000 | 0.593 |
+| GM12878 5 kb | HiC-Reg CV, our pipeline | 0.872 | 0.814 | 0.836 | 0.565 | 0.030 | 0.874 |
+| GM12878 5 kb | HiC-Reg CV (released) | 0.893 | 0.898 | 0.859 | 0.647 | 0.020 | 0.922 |
+| K562 25 kb | all12refin_drop_chrho | 0.897 | 0.928 | 0.889 | 0.857 | 0.347 | 0.904 |
+| K562 25 kb | all12honest_drop_chrho (ChIP only) | 0.730 | 0.777 | 0.711 | 0.622 | 0.125 | 0.748 |
+| K562 25 kb | HiC-Reg retrained, WINDOW | 0.286 | 0.436 | 0.347 | 0.497 | 0.049 | 0.465 |
+| K562 25 kb | HiC-Reg retrained, MULTICELL | 0.297 | 0.486 | 0.392 | 0.528 | 0.029 | 0.518 |
+| K562 25 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.736 | 0.820 | 0.696 | 0.484 | 0.038 | 0.797 |
+| K562 25 kb | HiC-Reg CV, our pipeline | 0.801 | 0.844 | 0.799 | 0.603 | 0.133 | 0.841 |
+| K562 25 kb | HiC-Reg CV (released) | 0.888 | 0.950 | 0.864 | 0.670 | 0.178 | 0.923 |
+| K562 10 kb | all12refin_drop_chrho | 0.858 | 0.900 | 0.857 | 0.848 | 0.366 | 0.887 |
+| K562 10 kb | all12honest_drop_chrho (ChIP only) | 0.715 | 0.724 | 0.714 | 0.721 | 0.139 | 0.745 |
+| K562 10 kb | HiC-Reg retrained, WINDOW | 0.336 | 0.417 | 0.378 | 0.554 | 0.028 | 0.452 |
+| K562 10 kb | HiC-Reg retrained, MULTICELL | 0.361 | 0.420 | 0.426 | 0.584 | 0.016 | 0.500 |
+| K562 10 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.747 | 0.760 | 0.708 | 0.496 | 0.002 | 0.782 |
+| K562 10 kb | HiC-Reg CV, our pipeline | 0.817 | 0.794 | 0.808 | 0.618 | 0.064 | 0.858 |
+| K562 10 kb | HiC-Reg CV (released) | 0.878 | 0.899 | 0.858 | 0.650 | 0.009 | 0.925 |
+| K562 5 kb | all12refin_drop_chrho | 0.771 | 0.817 | 0.776 | 0.842 | 0.338 | 0.814 |
+| K562 5 kb | all12honest_drop_chrho (ChIP only) | 0.641 | 0.641 | 0.653 | 0.730 | 0.169 | 0.664 |
+| K562 5 kb | HiC-Reg retrained, WINDOW | 0.414 | 0.324 | 0.440 | 0.625 | 0.030 | 0.428 |
+| K562 5 kb | HiC-Reg retrained, MULTICELL | 0.439 | 0.333 | 0.479 | 0.654 | 0.026 | 0.453 |
+| K562 5 kb | HiC-Reg cross-chromosome (released), WINDOW | 0.774 | 0.703 | 0.755 | 0.599 | 0.003 | 0.790 |
+| K562 5 kb | HiC-Reg CV, our pipeline | 0.781 | 0.697 | 0.783 | 0.692 | 0.039 | 0.758 |
+| K562 5 kb | HiC-Reg CV (released) | 0.845 | 0.814 | 0.840 | 0.728 | 0.005 | 0.899 |
+
+Within-chromosome leak (CV protocol on the retrained pipeline minus the retrained cross-chromosome model, Pearson): GM12878
++0.449 (25 kb), +0.433 (10 kb), +0.418 (5 kb); K562 +0.515, +0.482, +0.367; tile median +0.36 to +0.41, SCC +0.34 to +0.45
+(`hicreg_retrained_leak.csv`). Released CV minus retrained cross-chromosome: +0.478 (GM12878 25 kb), +0.601 (K562 25 kb).
+Support effect (retrained model, pixels with zero target count removed as in the release, Pearson, chr14+chr17):
+K562 0.419 / 0.544 / 0.758 at 25 / 10 / 5 kb against 0.227 / 0.297 / 0.394 with every pair predicted; GM12878 0.394 / 0.456 /
+0.512 against 0.358 / 0.401 / 0.420 (`hicreg_leak_support_effect.csv`).
+
+Verdict. The leak-free retrained HiC-Reg is worse than the released single-chromosome cross-chromosome version, not better:
+Pearson 0.430 against 0.579 (GM12878 25 kb) and 0.286 against 0.736 (K562 25 kb), 0.454 against 0.603 and 0.414 against
+0.774 at 5 kb; training on 17 chromosomes instead of one does not help (4M-pair control 0.432 and 0.257). The released K562
+cross-chromosome score is mostly the zero-pixel support (retrained with that support: 0.758 against 0.774 at 5 kb). Our
+margin grows: all12honest_drop_chrho (ChIP only) leads retrained HiC-Reg by 0.35 (GM12878) and 0.44 (K562) Pearson at
+25 kb and by 0.30 and 0.23 at 5 kb, all12refin_drop_chrho by 0.50 and 0.61 at 25 kb; both are ahead on all nine measures in
+both cells and all grids; K562, for which our models never see the cell's Hi-C while HiC-Reg trains on K562 Hi-C, is not
+closer. MULTICELL equals WINDOW (25 kb Pearson 0.383 and 0.297). The CV protocol on the same pipeline reaches 0.879 and
+0.801 at 25 kb (released CV 0.908, 0.888), so the pipeline reproduces the interpolation level.
+
+Caveats. The rebuild lacks DNase and TBP and differs in Hi-C source, signal source and forest implementation; the gap to
+the released cross-chromosome maps combines the support effect with these differences, only the support is separated;
+one seed; two chromosomes per block; MULTICELL on 12M pairs; released maps hg19 lifted, retrained maps hg38 native.
+The ceiling of the native target in this scoring (true SQRTVC maps through the conversion) is 0.78 to 0.94 Pearson
+(`hicreg_leak_oracle.csv`).
+
+Files: `scripts/hicreg_retrain.py`, `scripts/hicreg_leak_audit.py`, `scripts/hicreg_retrained_table.py`,
+`--chrho-hicreg-retrained` in `scripts/hic_measures.py`; `results/benchmark/HICREG_LEAK_AUDIT.md`,
+`hicreg_retrained_{per_chromosome,summary,leak}.csv`, `hicreg_retrained_table.md`, `hicreg_leak_*.csv`,
+`hicreg_retrain_tune_*.csv`, `hicreg_retrain_check_regforest_gm12878.json`;
+`results/hic_measures_chrho/chrho_hicregre_{per_block,summary}.csv`; predictions and cools under
+`/mnt/processed/wolffjoa/hic-multiome/runs/benchmark/hicreg_retrain/`. Reproduce:
+
+    python scripts/hicreg_retrain.py --stage data
+    python scripts/hicreg_retrain.py --stage tune --cell gm12878 --grid-sizes 4000000 16000000 --grid-leaf 10 30 100 300 1000
+    python scripts/hicreg_retrain.py --stage fit --cell gm12878 --leaf 100 && ... --feat multicell --n-train 12000000
+    python scripts/hicreg_retrain.py --stage cv --cell gm12878 --leaf 100 --n-train 4000000 --chroms chr14 chr17
+    python scripts/hicreg_retrain.py --stage fit --cell gm12878 --suffix small --leaf 100 --n-train 4000000 --chroms chr14 chr17
+    python scripts/hicreg_retrain.py --stage cools
+    python scripts/hicreg_leak_audit.py --stage support mcfolds oracle supportleak
+    python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-hicreg-retrained
+    python scripts/hicreg_retrained_table.py

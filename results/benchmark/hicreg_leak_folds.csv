@@ -1,0 +1,9 @@
+cell,chrom,scheme,pairs,train_share,neighbour_pixels_in_training,pixels_with_any_trained_neighbour,test_pairs_region1_in_training,test_pairs_region2_in_training
+gm12878,chr14,MULTICELL generator: contiguous blocks of the sorted pair table,3175713,0.8000,0.0002,0.0005,0.0568,0.0564
+gm12878,chr17,MULTICELL generator: contiguous blocks of the sorted pair table,2748295,0.8000,0.0011,0.0029,0.1496,0.1435
+k562,chr14,MULTICELL generator: contiguous blocks of the sorted pair table,1811846,0.8000,0.0002,0.0005,0.0582,0.0567
+k562,chr17,MULTICELL generator: contiguous blocks of the sorted pair table,1933967,0.8000,0.0008,0.0027,0.1418,0.1362
+gm12878,chr14,WINDOW released models: region-wise CV (hicreg_split.csv),3175713,0.6400,0.1907,0.7239,,
+gm12878,chr17,WINDOW released models: region-wise CV (hicreg_split.csv),2748295,0.6400,0.1934,0.7286,,
+k562,chr14,WINDOW released models: region-wise CV (hicreg_split.csv),1811846,0.6400,0.1343,0.5940,,
+k562,chr17,WINDOW released models: region-wise CV (hicreg_split.csv),1933967,0.6401,0.1547,0.6461,,
