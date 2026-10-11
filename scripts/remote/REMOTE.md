@@ -121,3 +121,10 @@ queue then skips them, because dedicated_done() sees the finished run on the sha
   the share (scoring stays on the local machine). Done marker REMOTE_QUEUE_COHESIN_DONE.
 All runners log to remote_queue.log, claim jobs by run name in runs/multicell_reference/claims/ and stop after 2 consecutive failures.
 Stop one with `kill $(cat <runner>.pid)`.
+
+- remote_queue_more.py (PID file remote_queue_more.pid, 2026-10-11): 60-step smoke on the first B config; A caches (meth AML
+  folds 10 to 12) precomputed in the background at nice 10 with 8 workers; B = honest seed replicates (seeds 1 and 2) of
+  all12refin_drop, all12refres_drop, all12honest_drop at 25 and 10 kb with `--stage eval` after each; then A = per fold
+  all12aml_meth_refin_drop_fN 25 and 10 kb, all12aml_refres_drop_fN 10 kb and `aml_train_eval.py --fold N --variant extra`
+  (results eval_fN_extra_*.csv copied to runs/aml_train_remote/fold<N>/). Claims by run name (the local queue takes the same
+  B jobs through the same claims). Done marker REMOTE_QUEUE_MORE_DONE.
