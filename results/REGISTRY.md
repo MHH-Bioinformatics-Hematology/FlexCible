@@ -5790,7 +5790,7 @@ WGBS-only (no CUT&Tag) and are in no AML training fold.
 4. AML-sites figures (`aml_sites_figures.py`): use patients with CUT&Tag; 496, 260 and 424 are not among them; unaffected, but any
    "n patients" statement for Hi-C or WGBS counts samples, which overstate the number of donors by 2.
 
-## 55. Cohesin-fraction input and cohesin-loss augmentation (PENDING; section 54 was the last number when this was written)
+## 55. Cohesin-fraction input and cohesin-loss augmentation (FINAL; section 54 was the last number when this was written)
 
 Problem (sections 21, 25, 32): the RAD21 degron is predicted with a change-map correlation of 0.80
 (10 kb) when the measured auxin ChIP is given, but a RAD21 track declared absent moves the loops by
@@ -5854,10 +5854,32 @@ weaker for `minus_RAD21_f0` at least those of `measured_chip` of all12deg_refres
 CTCF degron (held out) not below 0.40, washout monotone, intact medians within 0.005. A fraction row that
 the model ignores (spread of `wt_f0` below 0.1 of the measured) counts as a failure.
 
-Status: operators fitted, 25 kb cache built, 60-step CPU smoke on the real 25 kb cache passed (36 of 180
-windows augmented), unit tests `tests/test_cohesin_fix.py` (8) and the full suite (187 passed) pass; 10 kb
-cache in progress. Trainings are queued as `results/cohesin_fix/REMOTE_JOB.md` (0.6 GPU hours for the two
-main runs, 1.2 with the ablation) and wait for the GPU. Results: pending.
+Results (FINAL; `results/cohesin_fix/RESULTS.md`, `results_*.csv`, `scripts/cohesin_fix_results.py`; single seed;
+10 kb / 25 kb; deg = all12deg_refres_drop, cohfix = all12cohfix_refres_drop, cohfixna = row and shared contact
+scale only). All four runs trained (cohfix 25 kb and both cohfixna on the local pair, cohfix 10 kb on the remote
+machine; perturbation, washout and AML predictions on the remote machine). Intact accuracy: cohfix within
+-0.0022 of deg in all comparisons (12 training cells 0.9279 / 0.9336 against 0.9237 / 0.9358, 5 held-out cells
+0.9060 / 0.9133 against 0.9039 / 0.9037); cohfixna loses 0.0264 on the 10 kb held-out cells and 0.0050 on the
+25 kb training cells. RAD21 degron with the fraction stated: spread of the predicted change at fraction 0 is
+97% / 84% of the measured (deg, RAD21 absent: 11% / 14%; threshold 10%), loops weaker 100% / 98.5% (deg absent
+20.8% / 33.1%), loop change -1.14 / -0.49 at fraction 0 (measured -0.73 / -0.48) and -0.65 / -0.34 with the
+measured auxin track at fraction 0.26 (deg -0.49 / -0.20), change-map Pearson 0.784 / 0.852 at fraction 0 (the
+strict "at least 0.80" misses by 0.019 at 10 kb) and 0.839 / 0.888 at fraction 0.26 (deg 0.803 / 0.842).
+Washout correct and closer to the measured: median change -0.67 / -0.32 (deg -0.36 / -0.12), monotone recovery;
+CTCF degron held out 0.403 / 0.402 (floor 0.40 met; 25 kb 0.115 below deg 0.517). RAD21 absent as ChIP only
+(row 1) is unchanged (16.9% / 26.2% loops weaker): the response runs through the row, the RAD21 track shape
+alone gives Pearson -0.27 (deg 0.71). STAG2 knockout stays wrong in size and sign (ko_f0.5 loop change -0.23 /
+-0.32 against +0.08 / -0.03 measured; the change-map Pearson 0.20 / 0.26 approaches the 0.25 ceiling at 10 kb);
+ko_half unchanged. AML rows: MOLM-13 +0.034 / +0.012 over deg, U-937 wild type +0.007 / +0.011. Ablation:
+row and scale alone give the change map at the measured state (Pearson 0.85 / 0.89, spread 70% / 61%) but do not
+extrapolate (spread at fraction 0 is 58% / 49%, below that at 0.26; washout recovery at 0.25 is 0.13 at 10 kb);
+the augmentation supplies the graded response and the held-out intact accuracy at a cost in CTCF-degron
+generalisation at 25 kb (0.402 against 0.602 without it). Limitations: one seed, one degron cell line (RAD21,
+6 h), the operator from one cell, synthetic augmentation, HFF cohesin not re-tested. Verdicts: (a) pass,
+(b) pass with the 10 kb f0 Pearson miss, (c) pass, (d) not solved (as expected), (e) pass, (f) see above.
+The queue's diagnose of cohfixna failed on a cache-name fallback and was rerun with
+`--cache mc_all12cohfix_refres_drop_<k>kb`; `aml_eval.py --stage score` was run for 10 and 25 kb (28 rows added
+to `results/aml/summary.csv`, existing values unchanged).
 
 ## 56. CTCF binding, motif methylation and insulation in the Xu et al. AML patients without the healthy donor (FINAL; recomputation of section 46; section 55 was the last number when this was written)
 
