@@ -6983,3 +6983,195 @@ gives (K562 absent: CTCF + Meth over meth only +0.009, CTCF over none +0.011).
 `per_region_scores.csv.gz`, `twostage_cnn.png`. CNN checkpoint, caches, track dumps
 (`pred/`) and per-set Hi-C predictions under
 `/mnt/processed/wolffjoa/hic-multiome/runs/seq_cnn_twostage/`.
+
+## 61. AML-inclusive cross-validation without healthy donors: pooled ten test patients and the section 36 claims re-tested (FINAL; section 60 was the last number when this was written)
+
+Question: with the rebuilt folds (sections 50, 52, 54; healthy PBMC donors 103,
+673, 576 removed, same-donor pairs 168/496 and 260/424 kept together, three
+patient-disjoint folds over the ten AML patients with Hi-C and CUT&Tag; test
+patients fold 10: 018, 027, 270; fold 11: 168, 546, 629, 1360; fold 12: 472,
+773, 1916), do the section 36 findings (other-patient mean beats every model at
+25 kb; model beats it at 10 kb; patient-specific gain; marks +0.013 / +0.032;
+AML-specific loops and stripes not reproduced; lab indicator no help) hold?
+
+Method. `scripts/aml_folds_v2_summary.py` pools `eval_f10/11/12_*.csv` from
+`/mnt/processed/wolffjoa/hic-multiome/runs/aml_train_remote/fold10..12`
+(scored by `scripts/aml_train_eval.py --fold N`, 413 Akita test regions, 25 and
+10 kb). The unit is the donor (10 donors; 168 stands for 168+496, the 260/424
+pair is in no test set). Pooled value = median over the ten patients, interval
+= 95% percentile bootstrap over donors (10000 resamples, seed 0). Paired
+differences are patient-wise. Two other-patient references exist: `ref_other_patients`
+= mean of the fold's training patients (7 or 6 patients; the map the models
+receive as input) and `ref_lopo_all` = mean of all other patients except the
+same donor (9 patients). Their Pearson is the only metric scored for baselines.
+Patient-specific = windows in the patient's top 20% on both deviation scores
+(35 to 40 windows per patient). Models: `aml_refin` (AML-inclusive, reference
+input), `aml_honest` (no reference input), `base_honest` and `base_refin@aml`
+(trained without AML data), `aml_refin@hspc` (same model fed the HSPC
+reference). Conditions: own marks, none.
+
+### Pooled medians over ten test patients (donor bootstrap 95% interval)
+
+| 25 kb | marks | no marks |
+|---|---|---|
+| Pearson aml_refin | 0.899 [0.882, 0.918] | 0.894 [0.872, 0.916] |
+| SCC aml_refin | 0.896 [0.872, 0.913] | 0.887 [0.867, 0.912] |
+| insulation | 0.956 [0.947, 0.966] | 0.958 [0.947, 0.964] |
+| loop enrichment | 0.803 [0.745, 0.832] | 0.791 [0.748, 0.826] |
+| compartment | 0.919 [0.904, 0.933] | 0.914 [0.894, 0.929] |
+| patient-specific windows (Pearson) | 0.770 [0.686, 0.814] | 0.732 [0.692, 0.806] |
+| Pearson aml_honest | 0.595 [0.534, 0.625] | 0.434 [0.422, 0.467] |
+| Pearson base_honest | 0.533 [0.503, 0.603] | 0.448 [0.416, 0.490] |
+| Pearson base_refin@aml | 0.885 [0.866, 0.907] | 0.888 [0.866, 0.918] |
+| Pearson aml_refin@hspc | 0.870 [0.847, 0.895] | 0.868 [0.838, 0.886] |
+
+| 10 kb | marks | no marks |
+|---|---|---|
+| Pearson aml_refin | 0.813 [0.769, 0.847] | 0.809 [0.764, 0.845] |
+| SCC aml_refin | 0.805 [0.745, 0.837] | 0.796 [0.736, 0.837] |
+| insulation | 0.961 [0.951, 0.966] | 0.959 [0.948, 0.968] |
+| loop enrichment | 0.429 [0.353, 0.497] | 0.420 [0.356, 0.495] |
+| compartment | 0.879 [0.842, 0.906] | 0.873 [0.824, 0.905] |
+| patient-specific windows (Pearson) | 0.550 [0.526, 0.673] | 0.558 [0.502, 0.660] |
+| Pearson aml_honest | 0.494 [0.459, 0.542] | 0.357 [0.336, 0.404] |
+| Pearson base_honest | 0.429 [0.385, 0.500] | 0.345 [0.310, 0.426] |
+| Pearson base_refin@aml | 0.795 [0.745, 0.839] | 0.805 [0.760, 0.843] |
+| Pearson aml_refin@hspc | 0.760 [0.717, 0.806] | 0.760 [0.707, 0.804] |
+
+Baselines (Pearson, then patient-specific Pearson), 25 kb: other patients
+(training mean) 0.908 [0.885, 0.935] and 0.750 [0.687, 0.814]; other patients
+(all nine) 0.911 and 0.754; HSPC consensus (4 donors) 0.884 and 0.697; HSPC
+training mean (2 donors) 0.866 and 0.678; consensus12 0.822 and 0.558.
+10 kb: 0.803 [0.754, 0.834] and 0.527 [0.488, 0.642]; all nine 0.814 and 0.559;
+HSPC 0.748 and 0.498; HSPC training mean 0.711 and 0.442; consensus12 0.694 and
+0.394. Per-patient values in `per_patient.csv`.
+
+### Claims re-tested (paired, patient-wise; difference with donor bootstrap interval; patients where the first term is larger)
+
+| claim | 25 kb | 10 kb |
+|---|---|---|
+| aml_refin(marks) minus training-mean reference, Pearson | -0.012 [-0.015, -0.002], 1/10 | +0.011 [+0.007, +0.019], 10/10 |
+| same against the nine-patient mean | -0.016 [-0.020, -0.009], 0/10 | -0.004 [-0.008, +0.005], 4/10 |
+| best of all models per patient minus training mean | -0.011 [-0.013, -0.002], 1/10 | +0.013 [+0.009, +0.019], 10/10 |
+| aml_honest, base_honest minus training mean | -0.32, -0.37, 0/10 each | -0.28, -0.34, 0/10 each |
+| base_refin@aml(marks) minus training mean | -0.025 [-0.031, -0.012], 0/10 | +0.000 [-0.012, +0.002], 5/10 |
+| patient-specific windows, aml_refin(marks) minus training mean | -0.002 [-0.014, +0.027], 5/10 | +0.035 [+0.026, +0.056], 10/10 |
+| patient-specific, same against the nine-patient mean | -0.012 [-0.028, +0.021], 3/10 | +0.017 [-0.003, +0.056], 8/10 |
+| marks minus no marks, aml_refin, Pearson | +0.004 [-0.000, +0.009], 8/10 | +0.000 [-0.005, +0.011], 5/10 |
+| marks minus no marks, aml_refin, patient-specific | +0.007 [-0.006, +0.036], 7/10 | +0.013 [-0.001, +0.026], 7/10 |
+| marks minus no marks, aml_honest, Pearson | +0.135 [+0.103, +0.187], 10/10 | +0.122 [+0.100, +0.176], 10/10 |
+| AML training (aml_refin minus base_refin@aml, marks), Pearson | +0.014 [+0.007, +0.016], 10/10 | +0.014 [+0.006, +0.022], 9/10 |
+| AML training, patient-specific | +0.005 [-0.012, +0.017], 6/10 | +0.014 [+0.002, +0.028], 9/10 |
+
+Residual correlation corr(P - R, T - R), R = training-mean reference, all
+windows (patient-specific windows in brackets): aml_refin marks 25 kb 0.203
+[0.256], none 0.111 [0.150]; 10 kb marks 0.278 [0.282], none 0.238 [0.265];
+base_refin@aml marks 0.191 [0.261] and 0.213 [0.238]; aml_honest marks 0.080
+and 0.115. The prediction deviates from the reference in the direction of the
+measured deviation, with a small share of its variance.
+
+Loops and stripes (10 kb, Xu et al. AML-specific loops and stripes, windows
+from the evaluation output, per-patient medians then pooled over ten donors;
+log2 donut enrichment and stripe band minus the reference): measured loops
++0.292 [+0.239, +0.354] against aml_refin(marks) -0.012 [-0.019, +0.009] and
+no marks -0.029 [-0.033, -0.018]; measured stripes +0.184 [+0.084, +0.205]
+against +0.006 [-0.022, +0.026]. Across windows corr(P - R, T - R) is 0.196
+for loops and 0.357 for stripes (aml_refin marks); base_refin@aml (no AML
+training) gives 0.211 and 0.325. The enrichment above the reference is not
+produced by either model. The evaluation output already contains this stage,
+so no perturbation run was needed.
+
+### Subtype stratification (descriptive, `subtype_groups.csv`)
+
+Groups from `results/aml_subtype/patient_subtype_table.csv` (consensus_group):
+TET2 (018, 546, 1916), RUNX1 (027, 168), KMT2B (270, 629), CEBPA (773),
+STAG2 (472), FLT3-ITD only (1360). Median aml_refin(marks) minus training
+mean at 10 kb, Pearson (patient-specific): KMT2B +0.015 (+0.083), RUNX1 +0.013
+(+0.059), CEBPA +0.019 (+0.037), FLT3-ITD only +0.010 (+0.026), STAG2 +0.007
+(+0.021), TET2 +0.006 (+0.030). At 25 kb every group lies between -0.016 and
+-0.002 in Pearson. No fold removes a whole group that has several patients;
+the three singleton groups (CEBPA, STAG2, FLT3-ITD only) are the leave-one-
+group-out cases (no patient of the same group in training): median patient-
+specific gain +0.026 against +0.040 for the seven patients with a same-group
+patient in training, Pearson +0.010 against +0.012. The patient-specific gain is
+carried by KMT2B patient 270 (+0.126). Groups have one to three patients; the
+comparison supports no conclusion about subtype transfer.
+
+### Old fold 0 against the rebuilt folds
+
+The four old test patients are 027 and 270 (now fold 10) and 773 and 1916 (now
+fold 12), so the comparison is patient-wise (`old_vs_new_same_patients.csv`).
+Median over these four patients, old (contaminated) / rebuilt:
+
+| quantity | 25 kb | 10 kb |
+|---|---|---|
+| aml_refin Pearson | 0.900 / 0.908 | 0.818 / 0.812 |
+| training-mean reference | 0.912 / 0.916 | 0.802 / 0.800 |
+| nine-patient mean (old: all eleven other) | 0.922 / 0.921 | 0.814 / 0.810 |
+| aml_refin patient-specific | 0.755 / 0.763 | 0.592 / 0.600 |
+| training-mean reference, patient-specific | 0.751 / 0.774 | 0.541 / 0.559 |
+| aml_honest Pearson | 0.623 / 0.625 | 0.525 / 0.521 |
+| aml_refin marks minus none, Pearson | +0.006 / +0.004 | +0.008 / +0.003 |
+| aml_refin marks minus none, patient-specific | +0.031 / +0.004 | +0.018 / +0.019 |
+| corr(P - R, T - R), marks | 0.167 / 0.209 | 0.234 / 0.278 |
+
+Individual patients move by at most 0.025 in Pearson (up to 0.05 in
+patient-specific windows, e.g. 773 at 25 kb patient-specific reference 0.692
+against 0.697, 270 0.623 against 0.605). Removing the healthy donors from
+training and from the reference, and separating the duplicate pairs, changed
+the four-patient medians by 0.01 or less in Pearson; the old section 36 numbers
+were not inflated by the contamination. The main change is the sample: ten
+patients with intervals instead of four. The 25 kb marks effect in
+patient-specific windows (+0.031 old) falls to +0.004 on the same four
+patients and +0.007 on all ten, a difference within the interval. The old
+claim that the reference wins in 12/12 patients at 25 kb becomes: aml_refin is
+below the training mean in 9/10 patients and below the nine-patient mean in
+10/10; the old 4/4 model wins at 10 kb becomes 10/10 against the training mean
+and 4/10 against the nine-patient mean.
+
+### Variants not re-run
+
+AML+Meth (`aml_meth_refin`, section 38) was not trained for folds 10 to 12.
+The residual variant `aml_refres` (section 45) exists for old fold 0 only, at
+10 kb, and is contaminated by the old split. Old fold-0 medians over four
+patients, 10 kb: aml_refres marks 0.812 Pearson, 0.588 patient-specific (none
+0.803, 0.566); aml_refin marks 0.818, 0.592; aml_meth_refin marks+Meth 0.816,
+0.586; training mean 0.802, 0.541 (`old_fold0_refres_meth.csv`). The residual
+form does not improve on the reference-input form. The lab indicator ablation
+(`aml_refin_nolab`) was fold 0 and 25 kb only and is not re-tested.
+
+### Verdict
+
+At 25 kb the other-patient mean is at least as good as every model in
+Pearson (aml_refin 1/10 patients above it, median -0.012; -0.016 against the
+nine-patient mean, 0/10); in patient-specific windows the model and the
+reference tie (-0.002 [-0.014, +0.027]). At 10 kb aml_refin is above the
+training-mean reference in 10/10 patients (+0.011 Pearson, +0.035 in
+patient-specific windows, intervals above zero) and level with the
+nine-patient mean (-0.004, 4/10; patient-specific +0.017, 8/10, interval
+including zero), so part of the 10 kb gain reflects the model's reference
+being built from fewer patients. The AML training adds +0.014 Pearson to the
+same architecture trained without AML (10/10 at 25 kb). The deviation of the
+prediction from the reference correlates 0.20 to 0.28 with the measured
+deviation, and the model contains no AML-specific loop or stripe enrichment
+(measured +0.29 and +0.18 log2, model about 0). Marks add nothing detectable
+to the reference-input model (+0.000 to +0.013, intervals include zero), while
+the no-reference model needs them (+0.12 to +0.14). With AML patients in
+training the model remains a refined version of the other-patient reference,
+about 0.01 Pearson above it at 10 kb in this design and not above it at 25 kb;
+it does not predict AML-specific structure.
+
+Caveats. Ten donors, folds of three or four, one seed per model and fold; the
+bootstrap covers patient sampling and excludes training variance. Pooled
+intervals treat the three folds as exchangeable although the reference of each
+fold is built from different patients. Seed variation was not measured here, so differences of about 0.01 cannot be separated from it. Subtype groups have one to three patients.
+Baselines exist for Pearson only; insulation, loop and compartment scores are
+available for models alone.
+
+### Files
+
+`scripts/aml_folds_v2_summary.py`; `results/aml_train_v2/`: `per_patient.csv`,
+`pooled_medians.csv`, `paired_claims.csv`, `loop_stripe_per_patient.csv`,
+`loop_stripe_pooled.csv`, `subtype_per_patient.csv`, `subtype_groups.csv`,
+`old_vs_new_same_patients.csv`, `old_fold0_refres_meth.csv`, `aml_folds_v2.png`.
+Evaluation inputs under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_train_remote/`.
