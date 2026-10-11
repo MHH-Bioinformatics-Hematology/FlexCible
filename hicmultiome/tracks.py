@@ -100,6 +100,10 @@ class TrackNormalizer:
     std: list[float] | None = None
     vmin: list[float] | None = None
     vmax: list[float] | None = None
+    # rows that are already final inputs (the differential mark rows, hicmultiome.diffmarks):
+    # they are neither transformed nor standardised, apply() returns them unchanged. None = none
+    # (every previous normaliser).
+    passthrough: list[int] | None = None
 
     def _pre(self, x: np.ndarray) -> np.ndarray:
         if self.transform == "log1p":
@@ -126,9 +130,10 @@ class TrackNormalizer:
         if valid_rows is None:
             valid_rows = [np.ones(n_rows, dtype=bool)] * len(pre)
         mean, std, vmin, vmax = [], [], [], []
+        pt = set(self.passthrough or [])
         for r in range(n_rows):
             vals = [p[r] for p, m in zip(pre, valid_rows) if m[r]]
-            if not vals:                      # measured nowhere: neutral scale
+            if not vals or r in pt:                      # measured nowhere: neutral scale
                 mean.append(0.0); std.append(1.0); vmin.append(0.0); vmax.append(1.0)
                 continue
             cat = np.concatenate(vals)
@@ -142,6 +147,11 @@ class TrackNormalizer:
     def apply(self, tracks: np.ndarray) -> np.ndarray:
         """Normalise a (n_tracks, n_bins) array using the fitted stats."""
         x = self._pre(tracks)
+        if self.passthrough:
+            return self._apply_stats(x, tracks)
+        return self._apply_stats(x, None)
+
+    def _apply_stats(self, x: np.ndarray, orig) -> np.ndarray:
         if self.norm == "zscore":
             m = np.asarray(self.mean)[:, None]
             s = np.asarray(self.std)[:, None]
@@ -152,7 +162,10 @@ class TrackNormalizer:
             x = (x - lo) / (hi - lo)
         elif self.norm != "none":
             raise ValueError(self.norm)
-        return x.astype(np.float32)
+        x = x.astype(np.float32)
+        if orig is not None:
+            x[self.passthrough] = np.asarray(orig, dtype=np.float32)[self.passthrough]
+        return x
 
     def absent_values(self) -> np.ndarray:
         """Per-row normalised value of a raw-zero ("assay absent") signal --
@@ -162,7 +175,10 @@ class TrackNormalizer:
 
     def save(self, path: str | Path) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(json.dumps(self.__dict__, indent=2))
+        d = dict(self.__dict__)
+        if d.get("passthrough") is None:
+            d.pop("passthrough", None)       # previous files stay byte-identical
+        Path(path).write_text(json.dumps(d, indent=2))
 
     @classmethod
     def load(cls, path: str | Path) -> "TrackNormalizer":

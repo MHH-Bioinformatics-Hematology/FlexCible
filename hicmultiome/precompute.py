@@ -35,6 +35,7 @@ from .matrix import (
     open_cool,
     plan_windows,
 )
+from . import diffmarks as dm
 from . import motifmeth as mm
 from .motifs import cached_motif_positions, cached_motif_tracks
 from .reference import assert_reference_excludes
@@ -166,6 +167,7 @@ def seq_feature_names(cfg: Config) -> list[str]:
     names += [f"lab_{c}" for c in cfg.data.lab_classes]
     if cfg.motif_meth_active:
         names.append(mm.COVERED_FEATURE)
+    names += dm.diff_row_names(cfg)
     return names
 
 
@@ -180,6 +182,7 @@ def sym_row_names(cfg: Config) -> list[str]:
     rows += [f"lab:{c}" for c in cfg.data.lab_classes]
     if cfg.motif_meth_active:
         rows.append(mm.COVERED_ROW)
+    rows += dm.diff_row_names(cfg)
     for mid in cfg.active_motif_ids:
         rows += [f"motif:{mid}:fwd", f"motif:{mid}:rev"]
     return rows
@@ -232,6 +235,10 @@ def assemble_chrom(
             mm.find_cpg_file(sample.extra_bigwig_dirs))
             if fasta else np.zeros((3, nb), dtype=np.float32))
         parts.append(mmeth[2:3])
+    if cfg.data.diff_marks:
+        # reference and differential mark rows (hicmultiome.diffmarks); final values, they bypass
+        # the track normaliser (TrackNormalizer.passthrough)
+        parts.append(dm.diff_rows(cfg, sample, chrom, nb))
     if not fasta and cfg.any_fasta and cfg.active_motif_ids:
         parts.append(np.zeros((2 * len(cfg.active_motif_ids), nb), dtype=np.float32))
     if fasta:
@@ -370,6 +377,19 @@ def build(cfg: Config, workers: int = 1) -> dict:
                                         cfg.data.resolution, cfg.motifs.score_frac,
                                         cfg.sequence.cache_dir)
 
+    if cfg.data.diff_marks:
+        # normalised marks of every sample once, before the (possibly forked) passes
+        inst = dm.DiffMarks.get(cfg)
+        # the bigWig reads (about 2.5 min per sample on the share) run in the worker processes and are
+        # written beside the window cache; the parent then loads them from there
+        _pmap(lambda s: inst.sample_marks(s) and None, [(s,) for s in samples], workers)
+        for s in samples:
+            inst.sample_marks(s)
+            inst.stats(s)
+        log.info("differential marks: %d marks, scales %s bp, %d rows, reference sets %s",
+                 len(inst.marks), cfg.data.diff_scales, len(inst.names),
+                 {k: len(v) for k, v in cfg.data.diff_reference_sets.items()})
+
     def fit_sample(s: SampleSpec):
         clr = coolers[s.name]
         train_chroms, _ = sample_chroms[s.name]
@@ -428,6 +448,7 @@ def build(cfg: Config, workers: int = 1) -> dict:
     track_norm = TrackNormalizer(
         transform=cfg.track.transform, norm=cfg.track.norm,
         smooth_bins=cfg.track.smooth_bins,
+        passthrough=([rows.index(n) for n in dm.diff_row_names(cfg)] if cfg.data.diff_marks else None),
     ).fit(all_rows_arrays, all_valid_rows)
     if cfg.data.cohesin_fraction:
         fix_fraction_norm(track_norm, rows.index(FRACTION_SYM))
@@ -448,6 +469,11 @@ def build(cfg: Config, workers: int = 1) -> dict:
         "capture_input": bool(captures) and cfg.capture.use_as_input,
         "samples": [s.name for s in samples],
     }
+    if cfg.data.diff_marks:
+        inst = dm.DiffMarks.get(cfg)
+        channels["diff"] = {"scales_bp": list(cfg.data.diff_scales), "reference": cfg.data.diff_reference,
+                            "marks": inst.marks,
+                            "members": {s.name: inst.members(s) for s in samples}}
     if ref_clrs:
         refs_by_sample = {s.name: str(cfg.sample_reference(s)) for s in samples}
         paths = set(refs_by_sample.values())

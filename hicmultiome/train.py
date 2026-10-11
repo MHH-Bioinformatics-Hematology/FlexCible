@@ -30,6 +30,7 @@ import torch.distributed as dist
 from .config import Config
 from .dataset import WindowDataset, reverse_cond, split_cond
 from . import motifmeth as mm
+from .diffmarks import coupling, is_diff_row, row_mark
 from .losses import build_loss
 from .model import (HiCModel, HiCUNet, SeqEncoder, build_backbone,
                     build_spatial_cond, make_model, n_cond_channels)
@@ -383,6 +384,15 @@ def log_val_split(coords, vi, ti, exclude_overlap: bool):
             log.warning("  sample %s has NO validation window", s)
 
 
+def apply_diff_drop(cond: torch.Tensor, drop: torch.Tensor, dcp) -> torch.Tensor:
+    """In place: the reference and difference rows (dcp = (cond rows, ownership matrix) of
+    diff_coupling) of every track that `drop` (bool, B x tracks) removes are set to 0, "no
+    information"."""
+    gone = (drop.float() @ dcp[1]) > 0                      # (B, diff rows)
+    cond[:, dcp[0]] = cond[:, dcp[0]] * (~gone)[:, :, None].to(cond.dtype)
+    return cond
+
+
 def apply_motif_meth_drop(cond: torch.Tensor, dropped: torch.Tensor, mmc, rev_mask=None):
     """In place: the windows with `dropped` (bool, B) lose the methylation of
     the motif planes (see motif_meth_coupling). rev_mask marks the windows whose
@@ -432,10 +442,45 @@ def _select_rows(cfg: Config, channels: dict):
     used |= {meth_id(m) for m in list(used) if m is not None}
     keep_m = [m for m, mid in enumerate(motifs) if mid in used]
     nt, ns = len(tracks), len(seqf)
+    seq_keep = list(range(ns))
+    if any(is_diff_row(n) for n in seqf):
+        # the reference / difference rows of a mark the model does not read must not reach it either
+        kept = {tracks[i] for i in keep_t}
+        seq_keep = [k for k, n in enumerate(seqf) if row_mark(n) is None or row_mark(n) in kept]
     rows = (keep_t
-            + list(range(nt, nt + ns))
+            + [nt + k for k in seq_keep]
             + [nt + ns + 2 * m + k for m in keep_m for k in (0, 1)])
-    return rows, len(keep_t) + ns, len(keep_m), len(rows)
+    return rows, len(keep_t) + len(seq_keep), len(keep_m), len(rows)
+
+
+def cond_row_map(cfg: Config, channels: dict) -> dict:
+    """{row of the cached cond -> row of the model's (possibly reduced) cond}."""
+    if cfg.train.select_tracks is None and cfg.train.select_motifs is None:
+        return {r: r for r in range(len(channels["sym_rows"]))}
+    return {r: i for i, r in enumerate(_select_rows(cfg, channels)[0])}
+
+
+def diff_coupling(cfg: Config, channels: dict, chip_rows: list[int]):
+    """Track dropout of a mark also blanks its reference and difference rows (hicmultiome.diffmarks:
+    a missing mark gives a missing reference and difference, value 0). Returns None without diff
+    rows, else (cond rows of all diff rows, matrix (len(chip_rows), len(rows)) with 1 where the
+    dropped track j owns the row)."""
+    seqf, tracks = channels["seq_features"], channels["tracks"]
+    if not any(is_diff_row(n) for n in seqf):
+        return None
+    cmap = cond_row_map(cfg, channels)
+    owner = coupling(cfg, tracks, seqf)
+    nt = len(tracks)
+    rows = sorted({cmap[nt + k] for ks in owner.values() for k in ks if nt + k in cmap})
+    if not rows:
+        return None
+    pos = {r: i for i, r in enumerate(rows)}
+    mat = np.zeros((len(chip_rows), len(rows)), dtype=np.float32)
+    for j, t in enumerate(chip_rows):
+        for k in owner.get(t, []):
+            if nt + k in cmap:
+                mat[j, pos[cmap[nt + k]]] = 1.0
+    return rows, mat
 
 
 def motif_meth_coupling(cfg: Config, channels: dict, chip_rows: list[int], track_norm):
@@ -516,10 +561,21 @@ def capture_planes(tgt, bait, present):
     return torch.stack([plane, mask], dim=1)
 
 
+def object_tables(cfg: Config) -> list[str]:
+    """Objects tables the loop-centric recipe reads: the AML table, plus the cell-line table with
+    train.object_scope "all" (registry section 66)."""
+    out = [cfg.data.aml_objects_table] if cfg.data.aml_objects_table else []
+    if cfg.train.object_scope == "all" and cfg.data.cell_objects_table:
+        out.append(cfg.data.cell_objects_table)
+    return out
+
+
 def _aml_object_rows(cfg: Config, ds, ti, os_idx, data, is_main: bool):
     """Loop-centric recipe (hicmultiome/aml_objects.py): the objects of the table in every
     training window row, the matched-pair oversampling rows appended to `data`. Returns
     (data, per-row object lists, per-row roles) aligned to the returned data."""
+    import pandas as pd
+
     from . import aml_objects as ao
 
     tc = cfg.train
@@ -527,7 +583,11 @@ def _aml_object_rows(cfg: Config, ds, ti, os_idx, data, is_main: bool):
     ch, st, sm = _coords(ds)
     coords = ([ch[i] for i in rows_ti], st[rows_ti], [sm[i] for i in rows_ti])
     train_samples = {s.name for s in cfg.data.samples}
-    objs = ao.load_objects(cfg.data.aml_objects_table, train_samples, tuple(tc.aml_object_controls))
+    paths = object_tables(cfg)
+    objs = ao.load_objects(paths[0], train_samples, tuple(tc.aml_object_controls))
+    if len(paths) > 1:         # train.object_scope "all": the cell-line table beside the AML one
+        objs = pd.concat([objs] + [ao.load_objects(q, train_samples, tuple(tc.aml_object_controls))
+                                   for q in paths[1:]], ignore_index=True)
     objs = ao.to_bins(objs, int(cfg.data.resolution))
     margin = int(tc.aml_object_donut[1]) + 1
     row0 = ao.rows_of_objects(objs, coords, ds.window_size, margin)     # rows of ti
@@ -550,7 +610,7 @@ def _aml_object_rows(cfg: Config, ds, ti, os_idx, data, is_main: bool):
         log.info("aml objects %s: %d objects of %d samples (%s); %d of %d training windows "
                  "hold objects; oversample x%d adds %d windows (%d matched pairs); rows "
                  "AML-specific %d, control-only %d",
-                 cfg.data.aml_objects_table, len(objs), objs.cell.nunique(),
+                 ",".join(paths), len(objs), objs.cell.nunique(),
                  ", ".join(f"{k[0]}/{k[1]} {v}" for k, v in objs.groupby(["kind", "set"]).size().items()),
                  sum(1 for o in row0 if o), n_ti, tc.aml_object_oversample, len(extra),
                  len(extra) // 2 // max(1, tc.aml_object_oversample - 1),
@@ -895,7 +955,7 @@ def train(cfg: Config):
                      cfg.train.oversample_factor, len(over),
                      len({names[i] for i in over}), len(names), len(idx))
     obj_rows = obj_roles = obj_loss = None
-    if cfg.data.aml_objects_table and (
+    if object_tables(cfg) and (
             cfg.train.aml_object_oversample > 1 or cfg.train.aml_object_weight > 0
             or cfg.train.aml_object_rank > 0 or cfg.train.aml_object_pair_batches):
         if (ti is None or cfg.train.loss_weighting != "none" or cfg.train.sv_mask or use_seq
@@ -988,6 +1048,14 @@ def train(cfg: Config):
             log.info("motif_meth: Meth dropout removes the methylation of the motif planes "
                      "(cond rows %s from %s, covered row %d)", [p[0] for p in mmc[1]],
                      [p[1] for p in mmc[1]], mmc[2])
+    dcp = None
+    if absent_t is not None:
+        dcp = diff_coupling(cfg, ds.channels, chip_rows)
+        if dcp is not None:
+            dcp = (torch.as_tensor(dcp[0], device=device), torch.from_numpy(dcp[1]).to(device))
+            if is_main:
+                log.info("diff marks: dropout of a track blanks its %d reference/difference rows "
+                         "(%d rows in all)", int(dcp[1].sum().item()), len(dcp[0]))
     coh = None
     if cfg.data.cohesin_unknown and absent_t is not None:
         from .precompute import COHESIN_ROW, COHESIN_TRACKS
@@ -1003,7 +1071,7 @@ def train(cfg: Config):
             # row of the indicator in the (possibly reduced) cond: the last
             # sequence-feature row, directly before the motif rows
             seqf = ds.channels["seq_features"]
-            r_ind = offset - len(seqf) + seqf.index(COHESIN_ROW)
+            r_ind = cond_row_map(cfg, ds.channels)[len(tracks_all) + seqf.index(COHESIN_ROW)]
             sym_i = ds.channels["sym_rows"].index("cohesin:unknown")
             one = tn.apply(np.ones((len(tn.mean), 1), dtype=np.float32))[sym_i, 0]
             coh = (pos[0], pos[1:], r_ind, float(one))
@@ -1277,6 +1345,8 @@ def train(cfg: Config):
                             torch.full_like(cond_b[:, coh[2]], coh[3]), cond_b[:, coh[2]])
                     if mmc is not None:
                         apply_motif_meth_drop(cond_b, drop[:, mmc[0]], mmc, rev_mask)
+                    if dcp is not None:
+                        apply_diff_drop(cond_b, drop, dcp)
             sym, pairs = split_cond(cond_b, offset, n_motifs)
             planes = None
             dropped = None

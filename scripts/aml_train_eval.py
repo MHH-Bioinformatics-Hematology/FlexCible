@@ -94,6 +94,19 @@ def samples(fold: int, res: int) -> list[dict]:
     return out
 
 
+# (label, run base, with the Meth track) of the section 66 models; the first is the primary run
+DIFF_MODELS = [("aml_diff_loopfocus", "all12diff_loopfocus_refres_drop", False),
+               ("aml_diff", "all12diff_refres_drop", False),
+               ("aml_allobj", "all12allobj_refres_drop", False),
+               ("aml_diffmeth_loopfocus", "all12diffmeth_loopfocus_refres_drop", True)]
+
+
+def diff_group_of(s: dict) -> str:
+    """Reference group of a sample for the diff-marks models: patients and U-937 read the AML
+    reference set, HSPC donors the HSPC donors."""
+    return "hspc" if s["group"] == "hspc" else "aml"
+
+
 def models(fold: int, res: int) -> list[dict]:
     k = res // 1000
     sfx = f"_f{fold}" if fold else ""
@@ -121,6 +134,10 @@ def models(fold: int, res: int) -> list[dict]:
     if extra:                         # the loop-centric recipe (registry section 63)
         ms.append({"label": "aml_loopfocus", "run": f"all12aml_loopfocus_refres_drop{sfx}_{k}kb",
                    "ref": "aml", "lab": True})
+    if extra:                         # differential mark channels and all-cell objects (section 66)
+        for lab, run, meth in DIFF_MODELS:
+            ms.append({"label": lab, "run": f"{run}{sfx}_{k}kb", "ref": "aml", "lab": True,
+                       "diff": True, **({"meth": True} if meth else {})})
     if fold == 0 and res == 25000:
         ms.append({"label": "aml_refin_nolab", "run": "all12aml_refin_drop_nolab_25kb",
                    "ref": "aml", "lab": False})
@@ -187,6 +204,8 @@ def predict(fold: int, res: int, m: dict, s: dict, gpu: str) -> int:
         cmd += ["--extra-bigwig-dir", s["meth"]]
     if m["lab"]:
         cmd += ["--lab", s["lab"]]
+    if m.get("diff"):
+        cmd += ["--diff-group", diff_group_of(s)]
     ref = ref_of(m, s, fold, res)
     if ref is not None:
         cmd += ["--reference", ref]
@@ -351,6 +370,8 @@ def stage_features(fold: int):
             cmd += ["--extra-bigwig-dir", s["meth"]]
         if m["lab"]:
             cmd += ["--lab", s["lab"]]
+        if m.get("diff"):
+            cmd += ["--diff-group", diff_group_of(s)]
         if ref_of(m, s, fold, res) is not None:
             cmd += ["--reference", ref_of(m, s, fold, res)]
         env = dict(os.environ, OMP_NUM_THREADS="2", CUDA_VISIBLE_DEVICES=gpu)

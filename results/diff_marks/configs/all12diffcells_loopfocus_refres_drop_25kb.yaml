@@ -1,0 +1,248 @@
+data:
+  tracks:
+  - name: CTCF
+    type: tf
+    motif: MA0139.2
+  - name: RAD21
+    type: cofactor
+    motif: MA0139.2
+  - name: SMC3
+    type: cofactor
+    motif: MA0139.2
+  - name: H3K27ac
+    type: histone
+  - name: H3K27me3
+    type: histone
+  - name: H3K36me3
+    type: histone
+  - name: H3K4me1
+    type: histone
+  - name: H3K4me2
+    type: histone
+  - name: H3K4me3
+    type: histone
+  - name: H3K79me2
+    type: histone
+  - name: H3K9ac
+    type: histone
+  - name: H3K9me3
+    type: histone
+  - name: H4K20me1
+    type: histone
+  samples:
+  - name: gm12878
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/gm12878_proper_25kb.cool
+    bigwig_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/hg38_gm12878
+    missing_tracks: []
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_gm12878_proper_25kb.cool
+  - name: imr90
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/imr90_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_imr90
+    missing_tracks: []
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_imr90_proper_25kb.cool
+  - name: hct116
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/hct116_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_hct116
+    missing_tracks:
+    - SMC3
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_hct116_proper_25kb.cool
+  - name: hff
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/hff_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_hff
+    missing_tracks:
+    - RAD21
+    - SMC3
+    - H3K4me2
+    - H3K79me2
+    - H3K9ac
+    - H4K20me1
+    assay: microc
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_hff_proper_25kb.cool
+  - name: h1
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/h1_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_h1
+    missing_tracks:
+    - SMC3
+    assay: microc
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_h1_proper_25kb.cool
+  - name: hepg2
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/hepg2_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_hepg2
+    missing_tracks: []
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_hepg2_proper_25kb.cool
+  - name: a549
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/a549_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_a549
+    missing_tracks: []
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_a549_proper_25kb.cool
+  - name: nhek
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/nhek_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_nhek
+    missing_tracks:
+    - RAD21
+    - SMC3
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_nhek_proper_25kb.cool
+  - name: gm23248
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/gm23248_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_gm23248
+    missing_tracks:
+    - CTCF
+    - RAD21
+    - SMC3
+    assay: hic
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_gm23248_proper_25kb.cool
+  - name: mcf7
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/mcf7_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_mcf7
+    missing_tracks:
+    - SMC3
+    assay: intact
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_mcf7_proper_25kb.cool
+  - name: cd14mono
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/cd14mono_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_cd14mono
+    missing_tracks:
+    - RAD21
+    - SMC3
+    assay: intact
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_cd14mono_proper_25kb.cool
+  - name: pc9
+    cool_path: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/pc9_proper_25kb.cool
+    bigwig_dir: /mnt/processed/wolffjoa/hic-multiome/hg38_pc9
+    missing_tracks:
+    - RAD21
+    - SMC3
+    assay: intact
+    diff_set: consensus
+    reference_cool: /mnt/processed/wolffjoa/hic-multiome/crosscell_oe/consensus_loo_pc9_proper_25kb.cool
+  resolution: 25000
+  holdout_bed: /home/mh-hannover.local/wolffjoa/data/hic-multiome/akita_holdout_valid_test.bed
+  diff_marks: true
+  diff_scales:
+  - 0
+  - 20000
+  - 100000
+  diff_reference: consensus
+  diff_reference_sets:
+    consensus:
+    - gm12878
+    - imr90
+    - hct116
+    - hff
+    - h1
+    - hepg2
+    - a549
+    - nhek
+    - gm23248
+    - mcf7
+    - cd14mono
+    - pc9
+  diff_default_set: consensus
+  train_regions_bed: /home/mh-hannover.local/wolffjoa/data/hic-multiome/akita/akita_train_regions.bed
+  assay_indicator: false
+  cell_objects_table: /mnt/processed/wolffjoa/hic-multiome/cell_objects/cell_objects.csv.gz
+sequence:
+  fasta: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome/hg38.fa
+  features:
+  - gc
+  - cpg
+  cache_dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/genome_cache
+  encoder: none
+motifs:
+  dir: /home/mh-hannover.local/wolffjoa/data/hic-multiome/motifs
+  enabled: true
+  score_frac: 0.8
+  extra:
+  - MA0095.3
+  - MA0088.2
+  - MA1522.1
+window:
+  size: 80
+  stride: 40
+  transform: prescaled
+  clip_quantile: 0.999
+  max_zero_fraction: 0.95
+track:
+  transform: log1p
+  norm: zscore
+model:
+  base_channels: 48
+  depth: 4
+  dist_bias: false
+  reference: residual
+train:
+  output_dir: /mnt/processed/wolffjoa/hic-multiome/runs/multicell_reference/all12diffcells_loopfocus_refres_drop_25kb
+  cache_dir: /mnt/processed/wolffjoa/hic-multiome/cache_expanded/mc_all12ref_diff_25kb
+  batch_size: 3
+  lr: 0.0003
+  max_steps: 10000000
+  max_minutes: null
+  eval_every: 10000000
+  val_fraction: 0.1
+  seed: 0
+  amp: bf16
+  compile: true
+  augment_reverse: true
+  track_dropout: 0.5
+  track_dropout_mode: uniform_count
+  val_regions: 1200
+  max_epochs: 500
+  patience_epochs: 10
+  select_tracks:
+  - CTCF
+  - RAD21
+  - SMC3
+  - H3K27ac
+  - H3K27me3
+  - H3K36me3
+  - H3K4me1
+  - H3K4me2
+  - H3K4me3
+  - H3K79me2
+  - H3K9ac
+  - H3K9me3
+  - H4K20me1
+  select_motifs:
+  - MA0139.2
+  - MA0095.3
+  - MA0088.2
+  - MA1522.1
+  chroms: null
+  resume: false
+  save_checkpoints: true
+  resident_dtype: float16
+  val_exclude_overlap: true
+  reference_dropout: 0.0
+  aml_object_oversample: 5
+  aml_object_controls:
+  - A_ref
+  aml_object_pair_batches: true
+  aml_object_weight: 1.0
+  aml_object_rank: 0.5
+  aml_object_rank_temp: 0.05
+  aml_object_rank_consistent: true
+  aml_object_rank_space: residual
+  aml_object_donut:
+  - 1
+  - 3
+  object_scope: all
+predict:
+  merge: hann
+  integer_counts: false

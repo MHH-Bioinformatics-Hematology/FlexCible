@@ -130,6 +130,33 @@ TEST = ["k562", "hmec", "huvec", "hmec_deep", "huvec_deep"]
 BASE6 = ["gm12878", "imr90", "hct116", "hff", "h1", "k562"]
 # one measured map per cell identity serves as a baseline (the deep one where both exist)
 BASELINE_MAPS = [c for c in CELLS if c not in ("hmec", "huvec")]
+# Registry section 66. The joint AML-inclusive composition of all12aml_* (12 cells + the fold's training
+# patients, 2 HSPC donors, MOLM-13; AML x3, lab row, patient-hard validation) with
+#   diff*       data.diff_marks: reference and differential mark channels; the reference of a cell line
+#               is its leave-one-out consensus set, of an AML patient or MOLM-13 the training patients
+#               of the fold (diff, diffmeth) or the HSPC donors (diffhspc), of an HSPC donor the other
+#               HSPC training donor
+#   diffmeth    the same with the 14th track Meth (v2 cell set, Xu WGBS where it exists)
+#   *_loopfocus train.object_scope all: loop and stripe objects of every training cell (AML table of
+#               the fold + cell-line table) with the section 63 oversampling / loss / ranking
+#   allobj      the all-cell objects without the differential channels (ablation)
+DIFF_KINDS = {"diff": ("mean_aml", False), "diffmeth": ("mean_aml", True), "diffhspc": ("hspc", False),
+              "diffcells": ("consensus", False)}
+DIFF_FAMILY = {f"all12{k}{o}_refres_drop{f}" for k in DIFF_KINDS if k != "diffcells"
+               for o in ("", "_loopfocus") for f in ("_f10", "_f11", "_f12")}
+# the 12 cell lines alone (no AML sample, no fold): a cheap pilot of the differential channels and of the
+# cell objects on the cell-line evaluation (12-cell runs: about 10 min at 25 kb, 23 min at 10 kb)
+DIFFCELL_FAMILY = {f"all12diffcells{o}_refres_drop" for o in ("", "_loopfocus")}
+ALLOBJ_FAMILY = {f"all12allobj_refres_drop{f}" for f in ("_f10", "_f11", "_f12")}
+DIFF_SCALES = [0, 20000, 100000]            # bp radius: the 10 kb bin, +-20 kb, +-100 kb
+
+
+def diff_parts(base: str):
+    """(reference kind, with Meth) of a diff-marks run base name, else None."""
+    m = re.fullmatch(r"all12(diff|diffmeth|diffhspc|diffcells)(?:_loopfocus)?_refres_drop(?:_f\d+)?", base)
+    return DIFF_KINDS[m.group(1)] if m else None
+
+
 RUNS = {  # name: (cells, assay indicator mode or None)
     "all12": (TRAIN12, None),
     "all12assay3": (TRAIN12, "three"),
@@ -192,6 +219,8 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # train.aml_object_* (window oversampling of AML-specific loop / stripe windows and matched
     # shared-control windows, object-neighbourhood loss, pairwise ranking), folds 10 to 12
     **{f"all12aml_loopfocus_refres_drop{f}": (TRAIN12, None) for f in ("_f10", "_f11", "_f12")},
+    # differential mark channels and all-cell objects (registry section 66): see DIFF_FAMILY
+    **{n: (TRAIN12, None) for n in sorted(DIFF_FAMILY | ALLOBJ_FAMILY | DIFFCELL_FAMILY)},
     # the recipe with the reference as residual (model.reference "residual": the
     # network predicts patient minus AML reference) instead of an input plane;
     # same cache as all12aml_refin_drop (mc_all12aml_ref_<k>kb), fold 0
@@ -297,8 +326,9 @@ for _r in CHRHO_RUNS:
     DROPOUT_RUNS[_r] = (0.5, 0.0)
 CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
-AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
-LOOPFOCUS_RUNS = {k for k in AML_RUNS if "loopfocus" in k}
+AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")} | DIFF_FAMILY | ALLOBJ_FAMILY
+LOOPFOCUS_RUNS = {k for k in AML_RUNS if "loopfocus" in k} | ALLOBJ_FAMILY
+OBJECT_ALL_RUNS = {k for k in DIFF_FAMILY if "loopfocus" in k} | ALLOBJ_FAMILY
 
 
 def loopfocus_train(res: int) -> dict:
@@ -313,14 +343,16 @@ def loopfocus_train(res: int) -> dict:
             "aml_object_donut": [1, 4] if res <= 10000 else [1, 3]}
 
 
-DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
-METH_RUNS = {f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
+DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS | DIFFCELL_FAMILY})
+METH_RUNS = {n for n in DIFF_FAMILY if diff_parts(n)[1]} | {
+             f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
              "all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
              "all12refres_drop_motifmeth", "all12honest_drop_meth", "all12honest_drop_meth_s1",
              "all12honest_drop_motifmeth", "all12honest_drop_motifmeth_s1"}
 MOTIFMETH_RUNS = {"all12refres_drop_motifmeth", "all12honest_drop_motifmeth",
                   "all12honest_drop_motifmeth_s1"}
-METH_V2 = {f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
+METH_V2 = {n for n in DIFF_FAMILY if diff_parts(n)[1]} | {
+           f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
            "all12refres_drop_meth_v2", "all12aml_meth_refin_drop", "all12honest_drop_meth",
            "all12honest_drop_meth_s1", "all12honest_drop_motifmeth",
            "all12honest_drop_motifmeth_s1"}
@@ -379,6 +411,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             "all12aml_refres_drop": "residual",
             **{f"all12aml_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
             **{f"all12aml_loopfocus_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
+            **{n: "residual" for n in DIFF_FAMILY | ALLOBJ_FAMILY | DIFFCELL_FAMILY},
             "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
@@ -547,6 +580,22 @@ def run_config(name, val_per_cell, patience, max_epochs):
         else:                                         # same data, no lab row
             for smp in cfg["data"]["samples"]:
                 smp.pop("lab", None)
+    if base in DIFF_FAMILY or base in DIFFCELL_FAMILY:
+        # differential mark channels (registry section 66, hicmultiome/diffmarks.py): one rule for
+        # every cell. Reference sets: the 12 training cell lines (a cell line reads the set without
+        # itself; a held-out cell all 12), the fold's training patients, the HSPC training donors.
+        from hicmultiome import diffmarks as dmk
+        kind, _ = diff_parts(base)
+        groups = {s_["name"]: ("cell" if s_["name"] in cells[:len(TRAIN12)] else
+                               "hspc" if s_["name"].startswith("amlxuhspc") else "aml")
+                  for s_ in cfg["data"]["samples"]}
+        by = lambda g: [n for n, v in groups.items() if v == g and n != "molm13"]    # noqa: E731
+        cfg["data"].update({
+            "diff_marks": True, "diff_scales": list(DIFF_SCALES), "diff_reference": kind,
+            "diff_reference_sets": dmk.build_sets(by("cell"), by("aml"), by("hspc")),
+            "diff_default_set": "consensus"})
+        for s_ in cfg["data"]["samples"]:
+            s_["diff_set"] = dmk.set_key(kind, groups[s_["name"]])
     if base in CHRHO_RUNS:
         cfg["data"]["chroms"] = list(CHRHO_CHROMS)
     cfg["data"]["resolution"] = res
@@ -571,7 +620,9 @@ def run_config(name, val_per_cell, patience, max_epochs):
     cbase = SEEDED[base][0] if base in SEEDED else base     # a seed copy reads its original's cache
     cache_name = (f"mc_all12aml_{'meth_' if cbase in METH_RUNS else ''}{'ref_' if cbase in REF_RUNS else ''}{res // 1000}kb"
                   f"{'_f' + str(fold) if fold else ''}{'_nolab' if cbase.endswith('_nolab') else ''}"
+                  f"{'_diff' + ('hspc' if diff_parts(cbase)[0] == 'hspc' else '') if cbase in DIFF_FAMILY else ''}"
                   if cbase in AML_RUNS
+                  else f"mc_all12ref_diff_{res // 1000}kb" if cbase in DIFFCELL_FAMILY
                   else f"mc_all12ref_chrho_{res // 1000}kb" if cbase in CHRHO_RUNS[::2] + ["all12refres_drop_chrho"]
                   else f"mc_all12chrho_{res // 1000}kb" if cbase == "all12honest_drop_chrho"
                   else f"mc_all12cohfix_refres_drop_{res // 1000}kb" if cbase in COHFIX_RUNS   # one cache
@@ -624,6 +675,19 @@ def run_config(name, val_per_cell, patience, max_epochs):
             import aml_objects_table as aot
             cfg["data"]["aml_objects_table"] = str(aot.table_path(fold))
             cfg["train"].update(loopfocus_train(res))
+        if base in OBJECT_ALL_RUNS:
+            # objects of every training cell: the cell lines' table beside the fold's AML table
+            import cell_objects_table as cot
+            cfg["data"]["cell_objects_table"] = str(cot.table_path())
+            cfg["train"]["object_scope"] = "all"
+            cfg["train"]["aml_object_controls"] = ["A_hspc", "A_ref"]     # AML table: A_hspc, cell table: A_ref
+    if base in DIFFCELL_FAMILY and "loopfocus" in base:
+        # objects of the 12 cell lines alone (section 66 pilot): the cell table, no AML table
+        import cell_objects_table as cot
+        cfg["data"]["cell_objects_table"] = str(cot.table_path())
+        cfg["train"].update(loopfocus_train(res))
+        cfg["train"]["object_scope"] = "all"
+        cfg["train"]["aml_object_controls"] = ["A_ref"]
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg

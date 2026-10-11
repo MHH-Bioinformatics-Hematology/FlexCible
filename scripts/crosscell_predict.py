@@ -138,6 +138,11 @@ def main():
                          "row. A keep set named *_f<value> (e.g. minus_RAD21_f0) overrides it. "
                          "A missing RAD21/SMC3 track alone does not change it: the row states "
                          "the biology, not what was measured")
+    ap.add_argument("--diff-group", choices=["cell", "aml", "hspc"], default="cell",
+                    help="models trained with data.diff_marks: the group of the cell, which picks "
+                         "its reference set (cell lines: the 12-cell consensus; aml: the training "
+                         "patients or the HSPC donors per data.diff_reference; hspc: the training "
+                         "HSPC donors); the cell itself never enters it")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default=os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome") + "/runs/crosscell")
     a = ap.parse_args()
@@ -219,6 +224,13 @@ def main():
 
     def frac_z(f):
         return float(track_norm.apply(np.full((len(track_norm.mean), 1), f, np.float32))[frac_i, 0])
+    import hicmultiome.diffmarks as dmk
+    if cfg.data.diff_marks:
+        dmk.configure_unseen(cfg, sample, a.cell, a.diff_group)
+
+    def blank_diff(sy, t):
+        """a dropped / imputed mark also loses its reference and difference rows (diff models)"""
+        dmk.blank_diff_rows(sy, cfg, channels["tracks"], channels["seq_features"], t)
     track_files = sample_track_files(cfg, sample)
 
     ref_clr = None
@@ -274,6 +286,7 @@ def main():
         # fill any missing mark rows with the absent value
         for t in missing:
             sym_full[row_of[t]] = absent[row_of[t]]
+            blank_diff(sym_full, t)
         sym_sets, coh_report = {}, {}
         imp_z = {}
         for var, f in imp_files.items():
@@ -296,12 +309,14 @@ def main():
                 sy[frac_i] = frac_z(float(mf.group(1)) if mf else a.cohesin_fraction)
             for t in drop:
                 sy[row_of[t]] = absent[row_of[t]]
+                blank_diff(sy, t)
             if k in imp_drop:
                 var, take = imp_drop[k]
                 marks_, z = imp_z[var]
                 for t in take:
                     zt = z[marks_.index(t)]
                     sy[row_of[t]] = np.where(np.isfinite(zt), zt, absent[row_of[t]])
+                    blank_diff(sy, t)
             if mm_rows is not None and ("Meth" in drop or k in nomm_sets):
                 mm.drop_methylation(sy, track_norm, mm_rows)      # motif planes lose it too
             if coh_i is not None:

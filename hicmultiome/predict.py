@@ -138,7 +138,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             zero_regions: list[tuple[str, str, int, int]] | None = None,
             renormalize_tracks: bool = False, bigwig_dir: str | None = None,
             cell: str | None = None, reference: str | None = None,
-            prior: str | None = None, extra_bigwig_dirs: list[str] | None = None):
+            prior: str | None = None, extra_bigwig_dirs: list[str] | None = None,
+            diff_group: str | None = None):
     """bigwig_dir: predict a cell from this folder of ChIP bigWigs (tracks it
     lacks enter as absent) with the configured sample's bin grid and
     normalisers; `cell` names it (default: the sample name, or the folder
@@ -165,6 +166,9 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
         sample.missing_tracks = list(missing_new)
         cell = cell or Path(bigwig_dir).name
         log.info("cell %s from %s; absent tracks: %s", cell, bigwig_dir, missing_new)
+        if cfg.data.diff_marks:
+            from .diffmarks import configure_unseen
+            configure_unseen(cfg, sample, cell or Path(bigwig_dir).name, diff_group)
     cell = cell or sample.name
     use_seq = cfg.sequence.uses_encoder
     fasta = sample.fasta or cfg.sequence.fasta
@@ -242,6 +246,9 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
 
     track_files = sample_track_files(cfg, sample)
     if zero_regions:
+        if cfg.data.diff_marks:
+            log.warning("regional knockouts act on the raw tracks only; the reference/difference "
+                        "rows of a diff-marks model keep the unperturbed values")
         for t, ch, a, b in zero_regions:
             if t in channels["tracks"]:
                 continue
@@ -274,7 +281,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             valid.append(v)
         track_norm = TrackNormalizer(
             transform=track_norm.transform, norm=track_norm.norm,
-            smooth_bins=track_norm.smooth_bins).fit(fit_rows, valid)
+            smooth_bins=track_norm.smooth_bins,
+            passthrough=track_norm.passthrough).fit(fit_rows, valid)
 
     for chrom in chroms:
         nb = chrom_nbins_of(clr, chrom)
@@ -463,6 +471,9 @@ def main():
                          "the cell's training reference, else the embedded map)")
     ap.add_argument("--prior", default=None,
                     help="cascade models: the coarser model's prediction for this cell")
+    ap.add_argument("--diff-group", choices=["cell", "aml", "hspc"], default=None,
+                    help="diff-marks models with --bigwig-dir: group of the cell, which picks its "
+                         "reference set (default cell)")
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
@@ -476,7 +487,7 @@ def main():
             args.batch_size, args.pchic_out, args.sample, zt, args.capture_input,
             args.tta, args.obs_exp, args.capture_cool, zr or None,
             args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference,
-            args.prior, args.extra_bigwig_dir)
+            args.prior, args.extra_bigwig_dir, args.diff_group)
 
 
 if __name__ == "__main__":

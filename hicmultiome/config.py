@@ -140,6 +140,12 @@ class SampleSpec:
     # the same scale (the per-sample clip quantile of |log O/E| is smaller
     # for a map that lost its loops, which stretches it back). None = fit.
     norm_like: str | None = None
+    # Reference set of the differential mark channels (data.diff_marks): a key of
+    # data.diff_reference_sets; None = data.diff_default_set.
+    diff_set: str | None = None
+    # Cell identity used to leave the sample out of its own reference set when it stands for another
+    # cell (a prediction of an unseen cell on a configured sample's grid); None = the sample name.
+    diff_identity: str | None = None
 
     def __post_init__(self):
         if not 0.0 <= self.cohesin_fraction <= 1.0:
@@ -217,6 +223,25 @@ class DataConfig:
     # AML-specific loops / stripes and matched shared controls of the training patients of one
     # fold. Read by train.aml_object_*; None = off.
     aml_objects_table: str | None = None
+    # Objects table of the training cell lines (scripts/cell_objects_table.py), same columns as the
+    # AML table; read when train.object_scope is "all". None = off.
+    cell_objects_table: str | None = None
+    # Differential mark channels (registry section 66; hicmultiome/diffmarks.py), all off by
+    # default. diff_marks: per mark of the model the reference mark (dref rows, unless
+    # diff_ref_channels is false) and the sample-minus-reference difference at the radii diff_scales
+    # (bp; 0 = the native bin), standardised per sample. The reference of a sample is the mean over
+    # its reference set (diff_reference_sets: name -> sample names; SampleSpec.diff_set picks the
+    # set, diff_default_set otherwise) without the sample itself. diff_reference records which
+    # reference the AML samples read ("consensus", "hspc" or "mean_aml"; the generator sets the
+    # sample sets accordingly). diff_tracks: marks to difference (None = all but annotation and
+    # copy-number tracks).
+    diff_marks: bool = False
+    diff_scales: list[int] = field(default_factory=lambda: [0, 20000, 100000])
+    diff_reference: str = "consensus"
+    diff_reference_sets: dict[str, list[str]] = field(default_factory=dict)
+    diff_default_set: str = "consensus"
+    diff_ref_channels: bool = True
+    diff_tracks: list[str] | None = None
 
     def __post_init__(self):
         if self.assay_indicator_mode not in ASSAY_MODES:
@@ -465,6 +490,10 @@ class TrainConfig:
     aml_object_rank_consistent: bool = True
     aml_object_rank_space: str = "residual"
     aml_object_donut: list[int] = field(default_factory=lambda: [1, 4])
+    # Whose objects the recipe above uses (registry section 66): "aml" = data.aml_objects_table
+    # only (previous behaviour); "all" = that table plus data.cell_objects_table, the cell-specific
+    # loops and stripes of every training cell line, with the same oversampling, batches and losses.
+    object_scope: str = "aml"
     # Memory-mapped training windows: the train split of cache_dir staged
     # uncompressed on local disk (python -m hicmultiome.train --stage-only)
     # and read batch by batch, so DDP ranks share the page cache instead of
@@ -731,9 +760,18 @@ class Config:
                     0.0 <= f < 1.0 for f in self.train.cohesin_aug_fractions):
                 raise ValueError("train.cohesin_aug in [0, 1], cohesin_aug_fractions in [0, 1)")
         t = self.train
+        if t.object_scope not in ("aml", "all"):
+            raise ValueError("train.object_scope is 'aml' or 'all'")
+        if t.object_scope == "all" and not self.data.cell_objects_table:
+            raise ValueError("train.object_scope 'all' needs data.cell_objects_table")
+        if t.object_scope == "aml" and self.data.cell_objects_table:
+            raise ValueError("data.cell_objects_table is read with train.object_scope 'all' only")
+        from .diffmarks import validate as _validate_diff
+        _validate_diff(self)
         if (t.aml_object_oversample > 1 or t.aml_object_weight > 0 or t.aml_object_rank > 0
                 or t.aml_object_pair_batches):
-            if not self.data.aml_objects_table:
+            if not self.data.aml_objects_table and not (
+                    t.object_scope == "all" and self.data.cell_objects_table):
                 raise ValueError("train.aml_object_* needs data.aml_objects_table")
             if t.aml_object_weight > 0 or t.aml_object_rank > 0:
                 if self.model.reference == "none":

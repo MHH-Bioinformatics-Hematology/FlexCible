@@ -30,6 +30,7 @@ shared 1, private 0. n_train counts the donors of the fold's training set (the r
 
     python scripts/aml_loop_detection.py --stage windows predict score stats inc figure --gpu 0
     python scripts/aml_loop_detection.py --recipe loopfocus --stage predict score stats inc criteria --gpu 0
+    python scripts/aml_loop_detection.py --recipe diff_loopfocus --stage predict score stats inc criteria --gpu 0
 Run with the hicdiff conda env.
 
 --recipe loopfocus (registry section 63) adds the loop-centric model all12aml_loopfocus_refres_drop_f<N>
@@ -69,7 +70,10 @@ CONTROLS = ["A_hspc", "A_full", "A_do", "B_rand"]
 RUNS = [("aml_refin", ["marks", "none"]), ("aml_refin@hspc", ["marks"]), ("base_refin@aml", ["marks"])]
 SEED = 0
 NBOOT = 2000
-EXTRA_LABELS = ("aml_loopfocus",)    # models of the extra variant of aml_train_eval
+# models of the extra variant of aml_train_eval (section 63 loop-centric recipe; section 66 differential
+# mark channels with all-cell objects, and its ablations)
+DIFF_LABELS = ("aml_diff_loopfocus", "aml_diff", "aml_allobj", "aml_diffmeth_loopfocus")
+EXTRA_LABELS = ("aml_loopfocus", *DIFF_LABELS)
 ITEMS = RES_OUT / "items.csv.gz"     # objects and windows (always the section 62 table)
 
 
@@ -180,6 +184,9 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
     te.VARIANT = "extra" if label in EXTRA_LABELS else ""
     m = next(x for x in te.models(fold, RES) if x["label"] == label)
     te.VARIANT = ""
+    if label in DIFF_LABELS and not te.ready(m["run"]):
+        log(f"f{fold} {label} {p}: run {m['run']} not finished, skipped")
+        return
     out = OUTD / f"f{fold}" / f"{label}__xu_{p}"
     if all((out / f"{k}.npz").exists() for k in sets):
         return
@@ -192,6 +199,8 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
            "--save-pred", str(out / "{set}.npz"), "--keep-sets", *keep]
     if m["lab"]:
         cmd += ["--lab", s["lab"]]
+    if m.get("diff"):
+        cmd += ["--diff-group", te.diff_group_of(s)]
     ref = te.ref_of(m, s, fold, RES)
     if ref is not None:
         cmd += ["--reference", ref]
@@ -244,7 +253,7 @@ def stage_score(only: list[str] | None = None) -> pd.DataFrame:
                 for k in sets:
                     f = OUTD / f"f{fold}" / f"{label}__xu_{p}" / f"{k}.npz"
                     if f.exists():
-                        nm = f"{label}|{k}" if (label in ("aml_refin", "aml_loopfocus") and k == "none") else label
+                        nm = f"{label}|{k}" if (label in ("aml_refin", *EXTRA_LABELS) and k == "none") else label
                         preds[nm] = np.load(f)
             log(f"score {p}: {len(g)} objects, models {list(preds)}")
             cache: dict = {}
@@ -310,7 +319,7 @@ def boot_donor(df: pd.DataFrame, fn, rng, nboot=NBOOT):
 
 
 PRED = ["aml_refin", "aml_refin|none", "base_refin@aml", "reference"]
-PRED_EXTRA = ["aml_loopfocus", "aml_loopfocus|none"]
+PRED_EXTRA = [x for lab in EXTRA_LABELS for x in (lab, lab + "|none")]
 CLASSES = ["all", "recurrent", "shared1", "private"]
 
 
@@ -555,7 +564,7 @@ def stage_criteria(D: pd.DataFrame) -> pd.DataFrame:
     rng = np.random.default_rng(SEED + 2)
     D = add_derived(D) if "cls" not in D else D
     rows = []
-    for nm in [c for c in ["aml_refin", "aml_loopfocus", "aml_loopfocus|none", "reference"] if c in D]:
+    for nm in [c for c in ["aml_refin", *PRED_EXTRA, "reference"] if c in D]:
         col = "gain|" + nm
         for kind in ("loop", "stripe"):
             for cls in ("private", "all"):
@@ -575,6 +584,26 @@ def stage_criteria(D: pd.DataFrame) -> pd.DataFrame:
                              "median_model_gain": pos[col].median(), "median_measured_gain": pos["gain|measured"].median(),
                              "pass_auroc_0.70": bool(au >= 0.70) if kind == "loop" and cls == "private" else np.nan,
                              "pass_amplitude_0.30": bool(am >= 0.30) if cls == "private" else np.nan})
+    # enhancer-like stripes (pair_type enh): Spearman of the model's gain over HSPC with the measured
+    # gain; criterion of section 66: higher than that of the reference map alone (donor bootstrap)
+    from scipy.stats import spearmanr
+    enh = D[(D.kind == "stripe") & (D.set == "pos") & (D.pair_type == "enh")]
+    if len(enh) >= 10:
+        def sp(x, col):
+            ok = np.isfinite(x[col]) & np.isfinite(x["gain|measured"])
+            if ok.sum() < 10 or x[col][ok].std() == 0:
+                return np.nan
+            return spearmanr(x[col][ok], x["gain|measured"][ok])[0]
+        base = None
+        for nm in ["reference"] + [c for c in ["aml_refin", *PRED_EXTRA] if c in D]:
+            col = "gain|" + nm
+            r_, lo, hi = boot_donor(enh, lambda y, col=col: sp(y, col), rng, 500)
+            if nm == "reference":
+                base = r_
+            rows.append({"model": nm, "kind": "stripe", "class": "enh_gain_spearman", "n_pos": len(enh),
+                         "gain_spearman": r_, "gain_spearman_lo": lo, "gain_spearman_hi": hi,
+                         "pass_enh_gain_above_reference": bool(r_ > base) if nm != "reference" and base is not None
+                         and np.isfinite(r_) else np.nan})
     R = pd.DataFrame(rows)
     R.to_csv(RES_OUT / "criteria.csv", index=False, float_format="%.4f")
     print(R.round(3).to_string(index=False))
@@ -693,16 +722,21 @@ def main():
     ap.add_argument("--gpu", default="0", help="one local GPU index for inference")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--only", nargs="*", help="test patients to predict (default all ten)")
-    ap.add_argument("--recipe", default="", choices=["", "loopfocus"],
-                    help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus")
+    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus"],
+                    help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus; "
+                         "diff_loopfocus (registry section 66): add the differential-mark models "
+                         f"{', '.join(DIFF_LABELS)} (those whose runs are finished) and the loop-centric "
+                         "model, tables in results/aml_loop_detection_diff_loopfocus")
     a = ap.parse_args()
     global RES_OUT
-    if a.recipe == "loopfocus":
+    if a.recipe in ("loopfocus", "diff_loopfocus"):
         RUNS.append(("aml_loopfocus", ["marks", "none"]))
-        RES_OUT = REPO / "results/aml_loop_detection_loopfocus"
+        if a.recipe == "diff_loopfocus":
+            RUNS.extend((lab, ["marks", "none"]) for lab in DIFF_LABELS)
+        RES_OUT = REPO / f"results/aml_loop_detection_{a.recipe}"
         RES_OUT.mkdir(parents=True, exist_ok=True)
         if "windows" in a.stage or "figure" in a.stage:
-            raise SystemExit("--recipe loopfocus reuses the section 62 windows and has no figure stage")
+            raise SystemExit(f"--recipe {a.recipe} reuses the section 62 windows and has no figure stage")
     if "windows" in a.stage:
         stage_windows()
     if "predict" in a.stage:
