@@ -146,3 +146,10 @@ Stop one with `kill $(cat <runner>.pid)`.
   runs are skipped), trains the primary runs for folds 10 to 12 (stop rule: honest validation more than 0.01 below the AML baseline),
   runs aml_train_eval --variant extra, aml_loop_detection --recipe diff_loopfocus and cell_objects_eval, copies the tables to
   runs/diff_marks/, and hands over to remote_queue_more.main() (seed replicates, AML Meth/residual jobs).
+
+- remote_queue_diff.py was replaced at 13:13 (order 2, channels first; the v1 runner was only waiting and was killed with SIGKILL by
+  explicit PID, the lock file remote_queue_more.pid was taken over without a gap): T0a all12diffcells_refres_drop with the cell-line
+  criterion, T1a all12diff_refres_drop_f10-12 (channels only, reference = training patients), T1b all12diffhspc_refres_drop_f10-12
+  (reference marks = HSPC donors), T0b all12diffcells_loopfocus_refres_drop, T2a all12diff_loopfocusaml_refres_drop_f10-12 (AML objects
+  only), T2b all12diff_loopfocus_refres_drop_f10-12 (all-cell objects), with aml_train_eval, aml_loop_detection and cell_objects_eval
+  after the AML stages, then the older queue. diff_prep2.sh builds the _diffhspc caches after diff_prep.sh.
