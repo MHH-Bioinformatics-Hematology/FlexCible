@@ -1,4 +1,4 @@
-"""Order 3 (object-focused stages on hold, criteria2 after every AML stage).
+"""Order 4 (loop-focus v2 pilot between T1a and T1b; object-focused stages on hold, criteria2 after every AML stage).
 
 Remote runner for the differential mark channels (registry section 66, results/diff_marks/REMOTE_JOB.md),
 second order (2026-10-11): channels first, objects later.
@@ -198,6 +198,82 @@ def aml_stage(tag, bases, baselines):
     return done
 
 
+PILOT = "all12aml_loopfocus2_refres_drop_f10"
+PDEST = rq.HM / "runs/aml_loopfocus"
+
+
+def pilot_v2():
+    """Loop-centric recipe v2 (registry 70), fold 10, 10 kb ALONE; criteria2 on the three fold-10 donors."""
+    global fails
+    import re
+    name = mx.run_name(PILOT, RES)
+    if not m.trained(name):
+        err = m.smoke(PILOT, RES, "loop2_smoke")
+        if err:
+            rq.log(f"LOOP2 SMOKE FAILED, pilot skipped: {err}")
+            return
+        rq.log("loop2 smoke ok")
+        if not m.claim(name):
+            return
+        rq.current = name
+        rq.log(f"start {name}")
+        t0 = time.time()
+        out = mx.REF_OUT / f"{name}.remote.out"
+        rq.child = subprocess.Popen(["bash", "-c", f"{rq.PYB} scripts/run_single_gpu.py multicell_expanded --runs "
+                                     f"{PILOT} --res {RES} --stage train --gpus 0"], cwd=rq.REPO, env=rq.env,
+                                    start_new_session=True, stdout=open(out, "a"), stderr=subprocess.STDOUT)
+        gap_stop = False
+        while rq.child.poll() is None:
+            time.sleep(120)
+            lg = mx.REF_OUT / f"{name}.log"
+            if lg.exists():
+                gaps = {}
+                for line in lg.read_text(errors="replace").splitlines():
+                    g = re.search(r"epoch (\d+) .*obj_gap=([-0-9.eE]+)", line)
+                    if g:
+                        gaps[int(g.group(1))] = float(g.group(2))
+                late = [v for e, v in gaps.items() if 8 <= e]
+                if gaps and max(gaps) >= 12 and late and max(late) <= 0:
+                    rq.log(f"STOP_GAP {name}: obj_gap <= 0 in epochs 8 to {max(gaps)}; training stopped")
+                    os.killpg(rq.child.pid, signal.SIGTERM)
+                    gap_stop = True
+                    break
+        rc = rq.child.wait()
+        ok = rc == 0 and m.trained(name) and not gap_stop
+        rq.log(f"{'done' if ok else 'FAILED'} {name} rc={rc} {(time.time() - t0) / 3600:.2f} h")
+        rq.current = None
+        if not ok:
+            rq.release(name)
+            fails = 0 if gap_stop else fails + 1
+            return
+        fails = 0
+    PDEST.mkdir(parents=True, exist_ok=True)
+    if not run_step("loopfocus2_pilot_eval",
+                    f"( {rq.PYB} scripts/aml_loop_detection.py --recipe loopfocus2 --stage predict score --only 018 027 270 "
+                    f"--gpu 0 ) && ( {rq.PYB} scripts/aml_loop_detection.py --stage criteria2 --scores "
+                    f"results/aml_loop_detection_loopfocus2/object_scores_partial.csv.gz --tag loopfocus2_f10_pilot "
+                    f"--nboot 1000 )", PDEST / "pilot_eval_f10_v2.out"):
+        return
+    c2 = rq.REPO / "results/aml_loop_detection_criteria2"
+    for src in list(c2.glob("loopfocus2_f10_pilot_*.csv")) + list((rq.REPO / "results/aml_loop_detection_loopfocus2").glob("*.csv*")):
+        sfx = "".join(src.suffixes)
+        shutil.copyfile(src, PDEST / (src.name[:-len(sfx)] + "_f10_pilot_v2" + sfx))
+    try:
+        with open(c2 / "loopfocus2_f10_pilot_criteria2.csv") as fh:
+            for r in csv.DictReader(fh):
+                rq.log(f"pilot v2 criteria2 {r.get('model')}: C1 {r.get('C1_pass')} ({r.get('C1_marks_delta_resid_A_refrand')}) "
+                       f"C2 {r.get('C2_pass')} ({r.get('C2_resid_auroc_A_refrand')}) C3 {r.get('C3_pass')} "
+                       f"({r.get('C3_resid_spearman')}) C4 {r.get('C4_pass')} overall {r.get('criteria2_pass')}")
+                if r.get("model") == "aml_loopfocus2" and not (str(r.get("C1_pass")) == "True" and str(r.get("C2_pass")) == "True"):
+                    rq.log("STOP_LOOPFOCUS2: C1 or C2 failed; folds 11, 12 and the diff_loopfocus2 variants are not queued")
+    except OSError:
+        rq.log("pilot v2 criteria2 table missing")
+    run_step("loopfocus2_pilot_aml_eval", f"HICMULTI_GPUS=0 {rq.PYB} scripts/aml_train_eval.py --fold 10 --variant extra",
+             PDEST / "pilot_aml_eval_f10_v2.out")
+    for p in (rq.REPO / "results/aml_train").glob("eval_f10_extra_*.csv"):
+        shutil.copyfile(p, PDEST / (p.stem + "_f10_pilot_v2" + p.suffix))
+
+
 def main():
     global fails
     if PIDF.exists():
@@ -241,6 +317,8 @@ def main():
         rq.log("tier 0 criterion passed")
         aml_base = lambda f: (f"all12aml_refres_drop_f{f}", f"all12aml_refin_drop_f{f}")
         aml_stage("T1a", [f"all12diff_refres_drop_f{f}" for f in FOLDS], aml_base)
+        if fails < 2:
+            pilot_v2()
         aml_stage("T1b", [f"all12diffhspc_refres_drop_f{f}" for f in FOLDS], aml_base)
         # HOLD (2026-10-11, registry 69): T0b, T2a, T2b (object-focused stages) are skipped until the recipe
         # is redesigned (family loopfocus2); the configs and run names stay defined.

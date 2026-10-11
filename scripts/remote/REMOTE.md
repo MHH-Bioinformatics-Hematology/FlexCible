@@ -159,3 +159,10 @@ Stop one with `kill $(cat <runner>.pid)`.
   results/aml_loop_detection_diff_loopfocus/object_scores.csv.gz --tag diff_<stage> --nboot 1000` runs, the tables are copied to
   runs/diff_marks/ and C1 to C4 are logged. The previous runner was replaced between jobs: SIGKILL by explicit PID while its last child
   (the evaluation of all12diffcells_refres_drop_10kb) continued as an orphan; the new runner waits for that process.
+
+- remote_queue_diff.py order 4 (2026-10-11, registry 70): after T1a (channels-only AML folds with evaluations and criteria2) and before T1b the
+  pilot of loop-centric recipe v2, all12aml_loopfocus2_refres_drop_f10_10kb alone: 60-step smoke, training (watcher: STOP_GAP and kill when
+  obj_gap stays <= 0 in epochs 8 to 12 or later), then aml_loop_detection --recipe loopfocus2 for the fold-10 donors 018 027 270,
+  criteria2 with tag loopfocus2_f10_pilot, aml_train_eval --fold 10 --variant extra; tables copied to runs/aml_loopfocus/ with _f10_pilot_v2 in
+  the names; a failed C1 or C2 logs STOP_LOOPFOCUS2 (nothing of the loopfocus2 / diff_loopfocus2 families is queued beyond the pilot). The runner
+  was replaced while T1a f10 trained (SIGKILL of the runner by explicit PID, the training continued as an orphan).
