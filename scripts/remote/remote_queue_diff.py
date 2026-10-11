@@ -1,4 +1,6 @@
-"""Remote runner for the differential mark channels (registry section 66, results/diff_marks/REMOTE_JOB.md),
+"""Order 3 (object-focused stages on hold, criteria2 after every AML stage).
+
+Remote runner for the differential mark channels (registry section 66, results/diff_marks/REMOTE_JOB.md),
 second order (2026-10-11): channels first, objects later.
 
 Lock: holds remote_queue_more.pid so that remote_queue_loop.py (last step remote_queue_more.main()) exits after the
@@ -178,6 +180,21 @@ def aml_stage(tag, bases, baselines):
                  f"predict --gpu 0 && {rq.PYB} scripts/aml_loop_detection.py --recipe diff_loopfocus --stage score "
                  f"stats inc criteria", DEST / f"loop_detection_{tag}.out")
         copy_dir(rq.REPO / "results/aml_loop_detection_diff_loopfocus", DEST / f"aml_loop_detection_diff_loopfocus_after_{tag}")
+        # registry section 69: confound-free criteria C1..C4
+        run_step(f"diff_criteria2_{tag}", f"{rq.PYB} scripts/aml_loop_detection.py --stage criteria2 --scores "
+                 f"results/aml_loop_detection_diff_loopfocus/object_scores.csv.gz --tag diff_{tag} --nboot 1000",
+                 DEST / f"criteria2_{tag}.out")
+        c2 = rq.REPO / "results/aml_loop_detection_criteria2"
+        for p in c2.glob(f"diff_{tag}_*.csv"):
+            shutil.copyfile(p, DEST / p.name)
+        try:
+            with open(c2 / f"diff_{tag}_criteria2.csv") as fh:
+                for r in csv.DictReader(fh):
+                    rq.log(f"criteria2 {tag} {r.get('model')}: C1 {r.get('C1_pass')} (marks effect {r.get('C1_marks_delta_resid_A_refrand')}) "
+                           f"C2 {r.get('C2_pass')} ({r.get('C2_resid_auroc_A_refrand')}) C3 {r.get('C3_pass')} ({r.get('C3_resid_spearman')}) "
+                           f"C4 {r.get('C4_pass')} overall {r.get('criteria2_pass')}")
+        except OSError:
+            rq.log(f"criteria2 table of {tag} missing")
     return done
 
 
@@ -225,20 +242,8 @@ def main():
         aml_base = lambda f: (f"all12aml_refres_drop_f{f}", f"all12aml_refin_drop_f{f}")
         aml_stage("T1a", [f"all12diff_refres_drop_f{f}" for f in FOLDS], aml_base)
         aml_stage("T1b", [f"all12diffhspc_refres_drop_f{f}" for f in FOLDS], aml_base)
-        if fails < 2 and train(T0b):
-            cell_eval(T0b)
-            criterion(T0b)
-        chan = lambda f: (f"all12diff_refres_drop_f{f}",) + aml_base(f)
-        aml_stage("T2a", [f"all12diff_loopfocusaml_refres_drop_f{f}" for f in FOLDS], chan)
-        done = aml_stage("T2b", [f"all12diff_loopfocus_refres_drop_f{f}" for f in FOLDS], chan) or []
-        if done and fails < 2:
-            models = "base_refres " + " ".join(f"diff_loopfocus_f{f}" for f in done)
-            run_step("diff_cell_objects_eval",
-                     f"{rq.PYB} scripts/cell_objects_eval.py --stage windows && "
-                     f"{rq.PYB} scripts/cell_objects_eval.py --stage predict --models {models} --gpu 0 && "
-                     f"{rq.PYB} scripts/cell_objects_eval.py --stage score --models {models}",
-                     DEST / "cell_objects_eval.out")
-            copy_dir(rq.REPO / "results/cell_objects_eval", DEST / "cell_objects_eval")
+        # HOLD (2026-10-11, registry 69): T0b, T2a, T2b (object-focused stages) are skipped until the recipe
+        # is redesigned (family loopfocus2); the configs and run names stay defined.
     if fails >= 2:
         rq.log("2 consecutive failures: diff stopping")
         release_lock(); PIDF.unlink(missing_ok=True); return

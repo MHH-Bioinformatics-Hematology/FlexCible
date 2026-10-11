@@ -153,3 +153,9 @@ Stop one with `kill $(cat <runner>.pid)`.
   (reference marks = HSPC donors), T0b all12diffcells_loopfocus_refres_drop, T2a all12diff_loopfocusaml_refres_drop_f10-12 (AML objects
   only), T2b all12diff_loopfocus_refres_drop_f10-12 (all-cell objects), with aml_train_eval, aml_loop_detection and cell_objects_eval
   after the AML stages, then the older queue. diff_prep2.sh builds the _diffhspc caches after diff_prep.sh.
+
+- remote_queue_diff.py order 3 (2026-10-11, registry 69): the object-focused stages (T0b all12diffcells_loopfocus, T2a, T2b) are on hold
+  (skipped, configs kept); after every AML stage (T1a, T1b) `aml_loop_detection.py --stage criteria2 --scores
+  results/aml_loop_detection_diff_loopfocus/object_scores.csv.gz --tag diff_<stage> --nboot 1000` runs, the tables are copied to
+  runs/diff_marks/ and C1 to C4 are logged. The previous runner was replaced between jobs: SIGKILL by explicit PID while its last child
+  (the evaluation of all12diffcells_refres_drop_10kb) continued as an orphan; the new runner waits for that process.
