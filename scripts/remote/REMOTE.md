@@ -136,3 +136,13 @@ Stop one with `kill $(cat <runner>.pid)`.
   trains all12aml_loopfocus_refres_drop_f10_10kb (claimed), runs aml_loop_detection.py --recipe loopfocus for the fold-10
   donors 018 027 270 (predict, score; the partial score table is copied to object_scores.csv.gz; stats, inc, criteria) and
   copies the tables to runs/aml_loopfocus/*_f10_pilot*, then hands over to remote_queue_more.main() (finished jobs skipped).
+
+- remote_queue_diff.py + diff_prep.sh (2026-10-11, registry 66, results/diff_marks/REMOTE_JOB.md): diff_prep.sh precomputes at nice 10
+  with 16 workers the caches of the 12-cell pilot (all12diffcells_refres_drop, 10 kb) and of the primary runs
+  all12diff_loopfocus_refres_drop_f10/f11/f12 (10 kb). remote_queue_diff.py takes the lock file remote_queue_more.pid, so that
+  remote_queue_loop.py ends with "already running" after the loop-focus pilot instead of starting the older queue; it then waits for
+  quiet GPU, smokes, trains and evaluates tier 0 (all12diffcells[_loopfocus]_refres_drop 10 kb), checks the cell-line criterion
+  (median Pearson on the 12 training / 5 held-out cells within 0.006 of all12refres_drop_10kb; otherwise STOP_TIER0 and the primary
+  runs are skipped), trains the primary runs for folds 10 to 12 (stop rule: honest validation more than 0.01 below the AML baseline),
+  runs aml_train_eval --variant extra, aml_loop_detection --recipe diff_loopfocus and cell_objects_eval, copies the tables to
+  runs/diff_marks/, and hands over to remote_queue_more.main() (seed replicates, AML Meth/residual jobs).
