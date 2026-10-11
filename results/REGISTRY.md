@@ -7242,3 +7242,51 @@ Caveats. Ten donors, one seed per model; 10 kb only (25 kb not analysed; the loo
 
 ### Files
 `scripts/aml_loop_detection.py`; `results/aml_loop_detection/`: `items.csv.gz` (objects, windows, recurrence), `object_scores.csv.gz`, `levels_by_class.csv`, `increments.csv`, `gain_correlation.csv`, `auroc.csv`, `auroc_by_pair_type.csv`, `per_patient.csv`, `class_sizes.csv`, `levels_by_train_recurrence.csv`, `aml_loop_detection.png`. Predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_loop_detection/`.
+
+## 63. Loop-centric training of the AML-inclusive model: can it predict AML-specific loops and stripes of a new patient? (PENDING; section 62 was the last number when this was written)
+
+Question: section 62 shows that the AML-inclusive model predicts a weak gain at AML-specific loops (median +0.06 against +0.40 log2 measured, Spearman 0.28, AUROC 0.62 against matched shared loops, private loops 0.59), carried by the AML reference. The pixel loss is dominated by background; AML-specific loops (about 230 per patient, 7 training patients per fold) and stripes are rare, small-amplitude features, and the patient's own marks add little under that loss (sections 47, 57, 61, 62). The residual-reference model alone (section 45) did not change this. This section adds a loop-centric recipe and tests it on the same ten held-out patients.
+
+### Implementation (status: implemented, CPU-tested, no GPU run yet)
+Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 25 kb: the residual-reference AML model (`all12aml_refres_drop`: model.reference residual, so the network output is the patient-specific deviation from the AML reference; same cache `mc_all12aml_ref_<k>kb_f<N>`, AML x3 oversampling, patient-hard validation) plus `train.aml_object_*` (`hicmultiome/aml_objects.py`, hooks in `hicmultiome/train.py`, all defaults off, existing runs unchanged):
+
+| flag | value | role |
+|---|---|---|
+| `data.aml_objects_table` | share `aml/objects/objects_f<N>.csv.gz` | objects of the fold's training patients |
+| `train.aml_object_oversample` | 5 | windows holding an AML-specific object and an equal number of one-to-one matched control windows (same patient and object kind; first choice the classifier's matched control of the object, else an unused control window of the patient) enter every epoch 5 times, on top of the AML x3 |
+| `train.aml_object_controls` | `[A_hspc]` | control set (shared loops / stripes matched on distance, orientation, HSPC CTCF and H3K27ac) |
+| `train.aml_object_pair_batches` | true | batches of half AML-specific and half control windows, so each batch holds ranking pairs |
+| `train.aml_object_weight` | 1.0 | extra loss on the donut neighbourhood of loops (box of outer+1 bins) and the stripe rectangle with one bin of flank, both objects and controls: L1 between predicted and measured residual (prediction minus reference, target minus reference) plus L1 between the object-level enrichments (loop: maximum of the donut enrichment over the 3 x 3 pixels around the annotated pixel, as the evaluation; stripe: mean over the rectangle) |
+| `train.aml_object_rank` | 0.5 | pairwise logistic ranking softplus(-(s_AML - s_control)/0.05) over every AML-specific and control object of the same kind in the batch, scores on the residual; `aml_object_rank_consistent` keeps pairs whose measured scores are ordered the same way; `aml_object_rank_space` residual or full |
+| `train.aml_object_donut` | [1, 4] at 10 kb, [1, 3] at 25 kb | enrichment ring (inner, outer half-width in bins; the donut of `hicmultiome/losses.py` with the evaluation's 10 kb setting) |
+
+Reverse-complement augmentation flips the object coordinates with the window (tested against the tensor flip). The loss terms are logged per epoch (`obj_pix`, `obj_enr`, `obj_rank`, `obj_n`). The loss keys are `train.*` because `train.loss` is one spec string.
+
+Objects (`scripts/aml_objects_table.py`, `results/aml_objects/summary.csv`): from the loop classifier table (Suppl. Table 1 loops, Suppl. Table 4 stripes and their matched controls, 10 kb, span up to 150 bins) restricted to the training patients of the fold. Fold 10 (7 patients): 1591 AML-specific loops, 729 stripes, 1510 / 647 A_hspc controls; fold 11 (6 patients): 1320 / 700, 1296 / 603; fold 12 (7 patients): 1641 / 721, 1562 / 628. The column `n_train_other` counts the other training donors carrying the object (private among the training patients: 1438 of 1591 loops, 375 of 729 stripes in fold 10).
+
+On the real fold 10 10 kb cache the recipe finds 1114 training windows with AML-specific objects and 922 with controls only (1891 of 4477 objects lie wholly inside a cached training window with margin: validation and training-region filters), 934 matched pairs; oversampling x5 adds 7472 windows to the 40.5k of the refin run (+18 percent).
+
+### Leakage safeguards
+- A table holds only the training patients of its fold (`aml_train.train_patients`), after removing every patient of the same donor as a test patient (`aml_train.SAME_DONOR`, `donor_group`); `assert_no_leak` runs before the file is written, `tests/test_aml_objects.py` repeats it on the written tables of folds 10, 11, 12 and on a synthetic table that includes test patients and the partners 496 and 424.
+- `n_train_other` counts training donors only; no test patient, partner or non-training sample enters the table.
+- The trainer rejects a table with a cell that is not a training sample of the run (`load_objects`).
+- Oversampling and loss terms act on the rows of the training split `ti`, selected after the honest validation split (`val_exclude_overlap`: no training window overlaps a validation position in any sample), so no validation window is a training window; HSPC donors (050, 213 train; 341, 822 held out) and MOLM-13 are as in the other AML runs, U-937 and the test patients are never trained on.
+- Recurrent test-patient loops that a training patient also carries are learnable from that training patient (as from the reference); the private criterion (objects of the test patient seen in no other donor) is not reachable that way.
+
+### Tests
+`tests/test_aml_objects.py` (22): table leakage (synthetic and written tables), foreign-cell rejection, window membership with margin, one-to-one matched pairs, batch composition, flip equivalence, loss values and gradient direction, ranking direction, consistent-pair filtering, config defaults and validation, run configs of folds 10, 11, 12 at 10 and 25 kb (identical to the refres run except the recipe keys), and a 60-step CPU training smoke with all flags (synthetic genome; the three object terms appear in the log). Full suite 209 passed, 1 skipped. Configs: `results/aml_loopfocus/configs/` (`scripts/aml_loopfocus_configs.py`).
+
+### GPU job and evaluation
+`results/aml_loopfocus/REMOTE_JOB.md`: six runs (3 folds x 10 / 25 kb), claims by run name, evaluation by `aml_train_eval.py --fold N --variant extra` (model label `aml_loopfocus`) and `aml_loop_detection.py --recipe loopfocus` (tables in `results/aml_loop_detection_loopfocus/`, stage `criteria`). Estimated remote 4090 time: about 5 h for the three 10 kb runs (range 4 to 7.5 h; refin_drop took 1.0 to 1.7 h each), about 2.5 h for the three 25 kb runs, about 1 h for the evaluations; about 6.5 h at 10 kb alone, about 9.5 h in total.
+
+### Success criteria (10 kb, ten held-out patients, donor bootstrap)
+1. AUROC of the gain over HSPC, private loops against matched shared loops (A_hspc): >= 0.70 (section 62: 0.59).
+2. Amplitude (median model gain / median measured gain), private loops: >= 0.30 (section 62: 0.11).
+3. Pooled Pearson on the Akita test regions: no loss against the aml_refin models (0.813).
+Results: not yet available.
+
+### Risks
+The ranking and enrichment terms push enrichment at annotated positions up; a model that raises enrichment at every annotated-looking site would also raise the false-positive rate (the matched shared controls and the ranking term are the counterweight; B_rand and A_do controls in `criteria`/`auroc.csv` test this). Only 42 percent of the table objects lie in cached training windows. Weights (1.0, 0.5, temperature 0.05, x5) were not tuned; one seed per fold. The 25 kb variant uses the 10 kb object coordinates mapped to 25 kb bins and a narrower ring, and its loops are only 2 to 60 bins long. The hard-split JSONs of folds 10 to 12 exist only in the remote repo copy.
+
+### Files
+`hicmultiome/aml_objects.py`, `scripts/aml_objects_table.py`, `scripts/aml_loopfocus_configs.py`, edits in `hicmultiome/train.py`, `hicmultiome/config.py`, `scripts/multicell_expanded.py`, `scripts/aml_train_eval.py`, `scripts/aml_loop_detection.py`; `tests/test_aml_objects.py`; `results/aml_objects/summary.csv`, `results/aml_loopfocus/REMOTE_JOB.md`, `results/aml_loopfocus/configs/`.

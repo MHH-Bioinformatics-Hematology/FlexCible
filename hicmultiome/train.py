@@ -516,6 +516,48 @@ def capture_planes(tgt, bait, present):
     return torch.stack([plane, mask], dim=1)
 
 
+def _aml_object_rows(cfg: Config, ds, ti, os_idx, data, is_main: bool):
+    """Loop-centric recipe (hicmultiome/aml_objects.py): the objects of the table in every
+    training window row, the matched-pair oversampling rows appended to `data`. Returns
+    (data, per-row object lists, per-row roles) aligned to the returned data."""
+    from . import aml_objects as ao
+
+    tc = cfg.train
+    rows_ti = np.asarray(ti, dtype=np.int64)
+    ch, st, sm = _coords(ds)
+    coords = ([ch[i] for i in rows_ti], st[rows_ti], [sm[i] for i in rows_ti])
+    train_samples = {s.name for s in cfg.data.samples}
+    objs = ao.load_objects(cfg.data.aml_objects_table, train_samples, tuple(tc.aml_object_controls))
+    objs = ao.to_bins(objs, int(cfg.data.resolution))
+    margin = int(tc.aml_object_donut[1]) + 1
+    row0 = ao.rows_of_objects(objs, coords, ds.window_size, margin)     # rows of ti
+    n_ti = len(row0)
+    base = np.arange(n_ti) if os_idx is None else np.asarray(os_idx, dtype=np.int64)
+    row_objs = [row0[i] for i in base]                  # aligned to data (first n_ti rows = ti)
+    extra = np.zeros(0, dtype=np.int64)
+    if tc.aml_object_oversample > 1:
+        rng = np.random.default_rng(tc.seed + 7)
+        pos_r, ctl_r = ao.select_pairs(row0, objs, rng)
+        if len(pos_r) == 0:
+            raise ValueError("train.aml_object_oversample: no training window holds a matched "
+                             "pair of an AML-specific object and a control")
+        extra = np.concatenate([np.concatenate([pos_r, ctl_r])] * (int(tc.aml_object_oversample) - 1))
+        idx = np.concatenate([np.arange(len(base)), extra])
+        data = {k: v[idx] for k, v in data.items()}
+        row_objs += [row0[i] for i in extra]
+    roles = ao.row_roles(row_objs)
+    if is_main:
+        log.info("aml objects %s: %d objects of %d samples (%s); %d of %d training windows "
+                 "hold objects; oversample x%d adds %d windows (%d matched pairs); rows "
+                 "AML-specific %d, control-only %d",
+                 cfg.data.aml_objects_table, len(objs), objs.cell.nunique(),
+                 ", ".join(f"{k[0]}/{k[1]} {v}" for k, v in objs.groupby(["kind", "set"]).size().items()),
+                 sum(1 for o in row0 if o), n_ti, tc.aml_object_oversample, len(extra),
+                 len(extra) // 2 // max(1, tc.aml_object_oversample - 1),
+                 int((roles == 1).sum()), int((roles == 2).sum()))
+    return data, row_objs, roles
+
+
 @torch.no_grad()
 def val_distance_pearson(model, data, device, batch, offset, n_motifs, maxd=64,
                          capin=False, cond_mode="full", seq_fn=None, use_ref=False):
@@ -832,6 +874,7 @@ def train(cfg: Config):
         if is_main:
             log.info("window_subsample=%d: %d training windows (effective "
                      "stride %d bins)", k, len(keep), cfg.window.stride * k)
+    os_idx = None                                # rows of ti after train.oversample_*
     if cfg.train.oversample_factor > 1 and cfg.train.oversample_samples:
         if (ti is None or cfg.train.loss_weighting != "none" or cfg.train.sv_mask or use_seq
                 or cfg.train.window_subsample > 1):
@@ -846,10 +889,20 @@ def train(cfg: Config):
                              f"no training window of these samples (training samples: {sorted(set(names))})")
         idx = np.concatenate([np.arange(len(names))] + [over] * (cfg.train.oversample_factor - 1))
         data = {kk: v[idx] for kk, v in data.items()}
+        os_idx = idx
         if is_main:
             log.info("oversample x%d: %d windows of %d samples; training windows %d -> %d",
                      cfg.train.oversample_factor, len(over),
                      len({names[i] for i in over}), len(names), len(idx))
+    obj_rows = obj_roles = obj_loss = None
+    if cfg.data.aml_objects_table and (
+            cfg.train.aml_object_oversample > 1 or cfg.train.aml_object_weight > 0
+            or cfg.train.aml_object_rank > 0 or cfg.train.aml_object_pair_batches):
+        if (ti is None or cfg.train.loss_weighting != "none" or cfg.train.sv_mask or use_seq
+                or cfg.train.window_subsample > 1 or cfg.train.cohesin_aug > 0):
+            raise ValueError("train.aml_object_* needs val_regions and no loss_weighting, "
+                             "sv_mask, sequence encoder, window_subsample or cohesin_aug")
+        data, obj_rows, obj_roles = _aml_object_rows(cfg, ds, ti, os_idx, data, is_main)
     N_total = data["target"].shape[0]
 
     # Each rank keeps its stripe of the windows resident on its GPU. Stripes are
@@ -896,6 +949,15 @@ def train(cfg: Config):
     if is_main and hdata is not None:
         hdata_d = {k2: _dense(v, device) for k2, v in hdata.items()}
     N = tg.shape[0]
+    if obj_rows is not None:
+        from .aml_objects import ObjectLoss
+        obj_rows = [obj_rows[i] for i in range(rank, n_even, world)]
+        obj_roles = obj_roles[rank:n_even:world]
+        tc = cfg.train
+        if tc.aml_object_weight > 0 or tc.aml_object_rank > 0:
+            obj_loss = ObjectLoss(tc.aml_object_weight, tc.aml_object_rank, tc.aml_object_rank_temp,
+                                  tc.aml_object_rank_consistent, tc.aml_object_rank_space,
+                                  tc.aml_object_donut)
 
     tr_coords = val_coords = None
     if use_seq:
@@ -1153,6 +1215,11 @@ def train(cfg: Config):
             break
         g = torch.Generator(device="cpu").manual_seed(cfg.train.seed * 100003 + epoch)
         perm = torch.randperm(N, generator=g).to(device)
+        if obj_roles is not None and cfg.train.aml_object_pair_batches:
+            from .aml_objects import object_batches
+            perm = torch.from_numpy(object_batches(
+                perm.cpu().numpy(), obj_roles, min(batch, N),
+                np.random.default_rng(cfg.train.seed * 100003 + epoch))).to(device)
         epoch += 1
         bs = min(batch, N)
         ep_loss = nb = 0
@@ -1246,6 +1313,14 @@ def train(cfg: Config):
                 pwb = pwb / pwb.mean()
             loss = hic_loss(pred[:, 0], tgt[:, 0], pwb) if pwb is not None else \
                 hic_loss(pred[:, 0], tgt[:, 0])
+            if obj_loss is not None:
+                from .aml_objects import batch_geometry
+                geo = batch_geometry([obj_rows[i] for i in idx.tolist()],
+                                     rev_mask.tolist() if rev_mask is not None else None,
+                                     W, obj_loss.outer, device)
+                loss = loss + obj_loss(pred[:, 0], tgt[:, 0], ref_b, geo)
+                for tn_, tv_ in obj_loss.last.items():
+                    ep_terms[tn_] = ep_terms.get(tn_, 0.0) + tv_
             if cap_w > 0:
                 bait_eff = bait_b
                 if dropped is not None:

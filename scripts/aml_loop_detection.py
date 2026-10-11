@@ -29,7 +29,15 @@ one bin in both anchors (stripes: overlapping anchor and overlapping extent); re
 shared 1, private 0. n_train counts the donors of the fold's training set (the reference) alone.
 
     python scripts/aml_loop_detection.py --stage windows predict score stats inc figure --gpu 0
+    python scripts/aml_loop_detection.py --recipe loopfocus --stage predict score stats inc criteria --gpu 0
 Run with the hicdiff conda env.
+
+--recipe loopfocus (registry section 63) adds the loop-centric model all12aml_loopfocus_refres_drop_f<N>
+(label aml_loopfocus; predictions of the other models are reused from the sections 62 run), reads the
+objects and windows of results/aml_loop_detection and writes every table to
+results/aml_loop_detection_loopfocus/; stage criteria compares it with aml_refin on the success criteria
+(AUROC of private loops against the matched shared loops >= 0.70, amplitude >= 30 percent of the
+measured gain).
 """
 from __future__ import annotations
 
@@ -61,6 +69,8 @@ CONTROLS = ["A_hspc", "A_full", "A_do", "B_rand"]
 RUNS = [("aml_refin", ["marks", "none"]), ("aml_refin@hspc", ["marks"]), ("base_refin@aml", ["marks"])]
 SEED = 0
 NBOOT = 2000
+EXTRA_LABELS = ("aml_loopfocus",)    # models of the extra variant of aml_train_eval
+ITEMS = RES_OUT / "items.csv.gz"     # objects and windows (always the section 62 table)
 
 
 def log(msg: str) -> None:
@@ -167,7 +177,9 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
     import aml_train as at
     import aml_train_eval as te
     s = next(x for x in te.samples(fold, RES) if x["patient"] == p and x["group"] == "patient")
+    te.VARIANT = "extra" if label in EXTRA_LABELS else ""
     m = next(x for x in te.models(fold, RES) if x["label"] == label)
+    te.VARIANT = ""
     out = OUTD / f"f{fold}" / f"{label}__xu_{p}"
     if all((out / f"{k}.npz").exists() for k in sets):
         return
@@ -217,7 +229,7 @@ def stage_score(only: list[str] | None = None) -> pd.DataFrame:
     import aml_train as at
     from hicmultiome.bioscore import BioParams
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
-    items = pd.read_csv(RES_OUT / "items.csv.gz", dtype={"patient": str})
+    items = pd.read_csv(ITEMS, dtype={"patient": str})
     hspc = cooler.Cooler(str(ex.hspc_consensus_path(RES)))
     rows = []
     for fold, ps in FOLDS.items():
@@ -232,7 +244,7 @@ def stage_score(only: list[str] | None = None) -> pd.DataFrame:
                 for k in sets:
                     f = OUTD / f"f{fold}" / f"{label}__xu_{p}" / f"{k}.npz"
                     if f.exists():
-                        nm = f"aml_refin|{k}" if (label == "aml_refin" and k == "none") else label
+                        nm = f"{label}|{k}" if (label in ("aml_refin", "aml_loopfocus") and k == "none") else label
                         preds[nm] = np.load(f)
             log(f"score {p}: {len(g)} objects, models {list(preds)}")
             cache: dict = {}
@@ -298,6 +310,7 @@ def boot_donor(df: pd.DataFrame, fn, rng, nboot=NBOOT):
 
 
 PRED = ["aml_refin", "aml_refin|none", "base_refin@aml", "reference"]
+PRED_EXTRA = ["aml_loopfocus", "aml_loopfocus|none"]
 CLASSES = ["all", "recurrent", "shared1", "private"]
 
 
@@ -305,7 +318,8 @@ def add_derived(D: pd.DataFrame) -> pd.DataFrame:
     D = D.copy()
     D["cls"] = np.where(D.n_other >= 2, "recurrent", np.where(D.n_other == 1, "shared1", "private"))
     D["cls_train"] = np.where(D.n_train >= 2, "train2+", np.where(D.n_train == 1, "train1", "train0"))
-    for nm in ["measured", "aml_refin", "aml_refin|none", "base_refin@aml", "reference", "aml_refin@hspc"]:
+    for nm in ["measured", "aml_refin", "aml_refin|none", "base_refin@aml", "reference", "aml_refin@hspc",
+               *PRED_EXTRA]:
         if nm in D:
             D["gain|" + nm] = D[nm] - D["hspc"]
     D["gain_model_hspc|aml_refin"] = D["aml_refin"] - D["aml_refin@hspc"]
@@ -332,7 +346,7 @@ def stage_stats(D: pd.DataFrame) -> None:
     cs = (P.groupby(["kind", "patient", "pair_type", "cls"]).size().rename("n").reset_index())
     cs.to_csv(RES_OUT / "class_sizes.csv", index=False)
     # ---- (1)-(3) level and gain per patient / pooled, per class
-    preds = [c for c in PRED if c in D]
+    preds = [c for c in PRED + PRED_EXTRA if c in D]
     rows = []
     for kind in ("loop", "stripe"):
         for cls in CLASSES:
@@ -485,6 +499,10 @@ def stage_inc(D: pd.DataFrame) -> None:
             "model_minus_base": lambda d: d["aml_refin"] - d["base_refin@aml"],
             "measured_minus_reference": lambda d: d["measured"] - d["reference"],
             "model_gain_over_model_hspc": lambda d: d["aml_refin"] - d["aml_refin@hspc"]}
+    if "aml_loopfocus" in D:
+        defs.update({"loopfocus_gain": lambda d: d["gain|aml_loopfocus"],
+                     "loopfocus_minus_reference": lambda d: d["aml_loopfocus"] - d["reference"],
+                     "loopfocus_minus_refin": lambda d: d["aml_loopfocus"] - d["aml_refin"]})
     rows = []
     for kind in ("loop", "stripe"):
         types = ["all", "PE", "PS", "enh", "rep", "other"]
@@ -525,6 +543,42 @@ def stage_inc(D: pd.DataFrame) -> None:
                                   "n_ctl": len(neg), "auroc_gain_A_hspc": au, "lo": lo, "hi": hi})
     pd.DataFrame(arows).to_csv(RES_OUT / "auroc_by_pair_type.csv", index=False, float_format="%.4f")
     log("increments written")
+
+
+def stage_criteria(D: pd.DataFrame) -> pd.DataFrame:
+    """Success criteria of the loop-centric recipe (registry section 63) for the models present:
+    AUROC of the gain over HSPC, AML-specific against matched shared loops (A_hspc), for private
+    loops (target >= 0.70, reference model 0.59) and all loops, and the amplitude (median model
+    gain / median measured gain, target >= 0.30; reference model 0.11 private) for loops and
+    stripes. Donor-bootstrap intervals. The Pearson criterion (no loss against the aml_refin models,
+    0.813 at 10 kb pooled) comes from aml_train_eval.py --fold N --variant extra."""
+    rng = np.random.default_rng(SEED + 2)
+    D = add_derived(D) if "cls" not in D else D
+    rows = []
+    for nm in [c for c in ["aml_refin", "aml_loopfocus", "aml_loopfocus|none", "reference"] if c in D]:
+        col = "gain|" + nm
+        for kind in ("loop", "stripe"):
+            for cls in ("private", "all"):
+                pos = D[(D.kind == kind) & (D.set == "pos")]
+                neg = D[(D.kind == kind) & (D.set == "A_hspc")]
+                if cls != "all":
+                    pos = pos[pos.cls == cls]
+                x = pd.concat([pos, neg], ignore_index=True)
+                if len(pos) < 10 or len(neg) < 10:
+                    continue
+                au, lo, hi = boot_donor(x, lambda y: auroc(y[y.set == "pos"][col].values,
+                                                           y[y.set == "A_hspc"][col].values), rng, 500)
+                am, alo, ahi = boot_donor(pos, lambda y: y[col].median() / y["gain|measured"].median(), rng, 500)
+                rows.append({"model": nm, "kind": kind, "class": cls, "n_pos": len(pos), "n_ctl": len(neg),
+                             "auroc_gain_A_hspc": au, "auroc_lo": lo, "auroc_hi": hi,
+                             "amplitude_ratio": am, "amp_lo": alo, "amp_hi": ahi,
+                             "median_model_gain": pos[col].median(), "median_measured_gain": pos["gain|measured"].median(),
+                             "pass_auroc_0.70": bool(au >= 0.70) if kind == "loop" and cls == "private" else np.nan,
+                             "pass_amplitude_0.30": bool(am >= 0.30) if cls == "private" else np.nan})
+    R = pd.DataFrame(rows)
+    R.to_csv(RES_OUT / "criteria.csv", index=False, float_format="%.4f")
+    print(R.round(3).to_string(index=False))
+    return R
 
 
 # ===================================================================== figure
@@ -639,7 +693,16 @@ def main():
     ap.add_argument("--gpu", default="0", help="one local GPU index for inference")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--only", nargs="*", help="test patients to predict (default all ten)")
+    ap.add_argument("--recipe", default="", choices=["", "loopfocus"],
+                    help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus")
     a = ap.parse_args()
+    global RES_OUT
+    if a.recipe == "loopfocus":
+        RUNS.append(("aml_loopfocus", ["marks", "none"]))
+        RES_OUT = REPO / "results/aml_loop_detection_loopfocus"
+        RES_OUT.mkdir(parents=True, exist_ok=True)
+        if "windows" in a.stage or "figure" in a.stage:
+            raise SystemExit("--recipe loopfocus reuses the section 62 windows and has no figure stage")
     if "windows" in a.stage:
         stage_windows()
     if "predict" in a.stage:
@@ -655,6 +718,8 @@ def main():
     if "figure" in a.stage:
         D = pd.read_csv(RES_OUT / "object_scores.csv.gz", dtype={"patient": str})
         stage_figure(D)
+    if "criteria" in a.stage:
+        stage_criteria(pd.read_csv(RES_OUT / "object_scores.csv.gz", dtype={"patient": str}))
 
 
 if __name__ == "__main__":

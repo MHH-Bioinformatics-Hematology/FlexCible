@@ -118,6 +118,9 @@ def models(fold: int, res: int) -> list[dict]:
     if fold == 0 or extra:            # the reference as residual instead of an input plane
         ms.append({"label": "aml_refres", "run": f"all12aml_refres_drop{sfx}_{k}kb", "ref": "aml",
                    "lab": True})
+    if extra:                         # the loop-centric recipe (registry section 63)
+        ms.append({"label": "aml_loopfocus", "run": f"all12aml_loopfocus_refres_drop{sfx}_{k}kb",
+                   "ref": "aml", "lab": True})
     if fold == 0 and res == 25000:
         ms.append({"label": "aml_refin_nolab", "run": "all12aml_refin_drop_nolab_25kb",
                    "ref": "aml", "lab": False})
@@ -446,7 +449,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fold", type=int, default=0)
     ap.add_argument("--variant", default="", choices=["", "extra"],
-                    help="extra: evaluate only the Meth and residual-reference models of a fold >= 10")
+                    help="extra: evaluate only the Meth, residual-reference and loop-centric models of a fold >= 10")
     ap.add_argument("--stage", nargs="+", default=["predict", "score", "features"])
     a = ap.parse_args()
     global VARIANT, TAG

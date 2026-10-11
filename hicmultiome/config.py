@@ -213,6 +213,10 @@ class DataConfig:
     reference_cool: str | None = None
     # prior map for every sample without samples[].prior_cool (model.prior)
     prior_cool: str | None = None
+    # Objects table of the loop-centric AML recipe (scripts/aml_objects_table.py): annotated
+    # AML-specific loops / stripes and matched shared controls of the training patients of one
+    # fold. Read by train.aml_object_*; None = off.
+    aml_objects_table: str | None = None
 
     def __post_init__(self):
         if self.assay_indicator_mode not in ASSAY_MODES:
@@ -440,6 +444,27 @@ class TrainConfig:
     # windows, and the honest validation (val_regions) is logged alongside.
     # Needs val_regions. None = off.
     hard_split: str | None = None
+    # Loop-centric recipe (registry section 63; hicmultiome/aml_objects.py; needs
+    # data.aml_objects_table, val_regions and a model.reference model). All off by default.
+    # aml_object_oversample > 1: training windows that hold an AML-specific object and an equal
+    # number of one-to-one matched control windows enter every epoch that many times (on top of
+    # oversample_*). aml_object_controls: control sets of the table used as matched controls.
+    # aml_object_pair_batches: batches of half AML-specific, half control windows, so the
+    # ranking term always has pairs. aml_object_weight: weight of the neighbourhood L1 and the
+    # object-enrichment match in the residual (prediction - reference vs target - reference).
+    # aml_object_rank: weight of the pairwise ranking of AML-specific against control objects
+    # (logistic, temperature aml_object_rank_temp in encoded units; aml_object_rank_consistent:
+    # only pairs the measurement separates; aml_object_rank_space "residual" or "full").
+    # aml_object_donut: [inner, outer] half-widths of the enrichment ring in bins.
+    aml_object_oversample: int = 1
+    aml_object_controls: list[str] = field(default_factory=lambda: ["A_hspc"])
+    aml_object_pair_batches: bool = False
+    aml_object_weight: float = 0.0
+    aml_object_rank: float = 0.0
+    aml_object_rank_temp: float = 0.05
+    aml_object_rank_consistent: bool = True
+    aml_object_rank_space: str = "residual"
+    aml_object_donut: list[int] = field(default_factory=lambda: [1, 4])
     # Memory-mapped training windows: the train split of cache_dir staged
     # uncompressed on local disk (python -m hicmultiome.train --stage-only)
     # and read batch by batch, so DDP ranks share the page cache instead of
@@ -705,6 +730,23 @@ class Config:
             if not 0.0 <= self.train.cohesin_aug <= 1.0 or not all(
                     0.0 <= f < 1.0 for f in self.train.cohesin_aug_fractions):
                 raise ValueError("train.cohesin_aug in [0, 1], cohesin_aug_fractions in [0, 1)")
+        t = self.train
+        if (t.aml_object_oversample > 1 or t.aml_object_weight > 0 or t.aml_object_rank > 0
+                or t.aml_object_pair_batches):
+            if not self.data.aml_objects_table:
+                raise ValueError("train.aml_object_* needs data.aml_objects_table")
+            if t.aml_object_weight > 0 or t.aml_object_rank > 0:
+                if self.model.reference == "none":
+                    raise ValueError("train.aml_object_weight / aml_object_rank score the "
+                                     "residual and need model.reference")
+            if t.aml_object_rank_space not in ("residual", "full"):
+                raise ValueError("train.aml_object_rank_space is 'residual' or 'full'")
+            if len(t.aml_object_donut) != 2 or not 0 <= t.aml_object_donut[0] < t.aml_object_donut[1]:
+                raise ValueError("train.aml_object_donut is [inner, outer] with inner < outer")
+            if not t.val_regions:
+                raise ValueError("train.aml_object_* needs train.val_regions")
+            if t.stream:
+                raise ValueError("train.aml_object_* is not implemented for train.stream")
         if self.model.reference != "none":
             lack = [s.name for s in self.data.samples
                     if not (s.reference_cool or self.data.reference_cool)]

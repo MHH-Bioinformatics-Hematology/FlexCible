@@ -188,6 +188,10 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # (registry section 52)
     **{f"all12aml_{k}{f}": (TRAIN12, None) for k in ("meth_refin_drop", "refres_drop")
        for f in ("_f10", "_f11", "_f12")},
+    # loop-centric recipe (registry section 63): the residual-reference AML model with
+    # train.aml_object_* (window oversampling of AML-specific loop / stripe windows and matched
+    # shared-control windows, object-neighbourhood loss, pairwise ranking), folds 10 to 12
+    **{f"all12aml_loopfocus_refres_drop{f}": (TRAIN12, None) for f in ("_f10", "_f11", "_f12")},
     # the recipe with the reference as residual (model.reference "residual": the
     # network predicts patient minus AML reference) instead of an input plane;
     # same cache as all12aml_refin_drop (mc_all12aml_ref_<k>kb), fold 0
@@ -294,6 +298,21 @@ for _r in CHRHO_RUNS:
 CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")}
+LOOPFOCUS_RUNS = {k for k in AML_RUNS if "loopfocus" in k}
+
+
+def loopfocus_train(res: int) -> dict:
+    """train.aml_object_* of the loop-centric recipe (registry section 63): matched-pair
+    oversampling x5 on top of the AML x3, half-and-half batches, neighbourhood weight 1,
+    ranking weight 0.5 (temperature 0.05 in encoded units, pairs the measurement separates),
+    donut [1, 4] bins at 10 kb ([1, 3] at 25 kb)."""
+    return {"aml_object_oversample": 5, "aml_object_controls": ["A_hspc"],
+            "aml_object_pair_batches": True, "aml_object_weight": 1.0, "aml_object_rank": 0.5,
+            "aml_object_rank_temp": 0.05, "aml_object_rank_consistent": True,
+            "aml_object_rank_space": "residual",
+            "aml_object_donut": [1, 4] if res <= 10000 else [1, 3]}
+
+
 DROPOUT_RUNS.update({k: (0.5, 0.0) for k in AML_RUNS})
 METH_RUNS = {f"all12aml_meth_refin_drop{f}" for f in ("_f10", "_f11", "_f12")} | {
              "all12refres_drop_meth", "all12refres_drop_meth_v2", "all12aml_meth_refin_drop",
@@ -359,6 +378,7 @@ REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "
             **{k: "input" for k in AML_RUNS if "refin" in k},
             "all12aml_refres_drop": "residual",
             **{f"all12aml_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
+            **{f"all12aml_loopfocus_refres_drop{f}": "residual" for f in ("_f10", "_f11", "_f12")},
             "all12refin_drop_chrho": "input", "all12refres_drop_chrho": "residual"}
 CASCADE_FROM = {10000: 25000, 5000: 10000, 2000: 5000}   # fine -> coarser level
 MULTIRES = [2000, 5000, 10000, 25000]
@@ -600,6 +620,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
         cfg["train"].update({"oversample_samples": at.aml_names(fold),
                              "oversample_factor": at.OVERSAMPLE,
                              "hard_split": str(at.hard_split_path(fold, res))})
+        if base in LOOPFOCUS_RUNS:
+            import aml_objects_table as aot
+            cfg["data"]["aml_objects_table"] = str(aot.table_path(fold))
+            cfg["train"].update(loopfocus_train(res))
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg
