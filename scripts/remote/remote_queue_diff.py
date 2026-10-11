@@ -1,4 +1,4 @@
-"""Order 4 (loop-focus v2 pilot between T1a and T1b; object-focused stages on hold, criteria2 after every AML stage).
+"""Order 5 (evaluation failures never stop the runner; loop-focus v2 pilot between T1a and T1b; object-focused stages on hold, criteria2 after every AML stage).
 
 Remote runner for the differential mark channels (registry section 66, results/diff_marks/REMOTE_JOB.md),
 second order (2026-10-11): channels first, objects later.
@@ -104,11 +104,13 @@ def train(base):
 
 
 def run_step(name, cmd, out):
-    global fails
+    """Evaluation / auxiliary step: a failure is logged (the claim is released by run_cmd, so a later run retries it)
+    and never counts toward the 2-failure stop of the GPU training stages."""
     if not m.claim(name):
         return True
     ok = m.run_cmd(name, cmd, out)
-    fails = 0 if ok else fails + 1
+    if not ok:
+        rq.log(f"EVAL STEP FAILED (continuing, retry by hand or on the next start): {name}")
     return ok
 
 
@@ -168,14 +170,17 @@ def aml_stage(tag, bases, baselines):
             rq.log(f"STOP_{tag}: honest validation more than 0.01 below {ref[0]}; remaining folds of {tag} skipped")
             break
     for fold in done:
-        if fails >= 2:
-            return
+        ev = DEST / f"fold{fold}" / f"eval_f{fold}_extra_summary.csv"
+        best = mx.REF_OUT / mx.run_name(next(b for b in bases if b.endswith(f"_f{fold}")), RES) / "best"
+        if ev.exists() and best.exists() and ev.stat().st_mtime > best.stat().st_mtime:
+            rq.log(f"{tag} fold {fold}: evaluation already done, skipped")
+            continue
         if run_step(f"diff_aml_eval_f{fold}_{tag}", f"HICMULTI_GPUS=0 {rq.PYB} scripts/aml_train_eval.py --fold {fold} "
                     f"--variant extra", DEST / f"aml_eval_f{fold}_{tag}.out"):
             for p in (rq.REPO / "results/aml_train").glob(f"eval_f{fold}_extra_*.csv"):
                 (DEST / f"fold{fold}").mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(p, DEST / f"fold{fold}" / p.name)
-    if done and fails < 2:
+    if done:
         run_step(f"diff_loop_detection_{tag}", f"{rq.PYB} scripts/aml_loop_detection.py --recipe diff_loopfocus --stage "
                  f"predict --gpu 0 && {rq.PYB} scripts/aml_loop_detection.py --recipe diff_loopfocus --stage score "
                  f"stats inc criteria", DEST / f"loop_detection_{tag}.out")

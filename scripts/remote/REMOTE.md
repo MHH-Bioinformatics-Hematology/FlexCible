@@ -166,3 +166,9 @@ Stop one with `kill $(cat <runner>.pid)`.
   criteria2 with tag loopfocus2_f10_pilot, aml_train_eval --fold 10 --variant extra; tables copied to runs/aml_loopfocus/ with _f10_pilot_v2 in
   the names; a failed C1 or C2 logs STOP_LOOPFOCUS2 (nothing of the loopfocus2 / diff_loopfocus2 families is queued beyond the pilot). The runner
   was replaced while T1a f10 trained (SIGKILL of the runner by explicit PID, the training continued as an orphan).
+
+- remote_queue_diff.py order 5 (2026-10-11 23:19): resumes after the crash of diff_loop_detection_T1a (aml_loop_detection.predict crashed on the
+  checkpoint of the never trained all12aml_loopfocus_refres_drop_f11_10kb; fixed in d9ac466, every extra model without finished run or
+  checkpoint is skipped with a log line). Evaluation steps (aml_train_eval, loop detection, criteria2, cell_objects_eval) never count toward the
+  2-failure stop of the training stages; a failed step is logged ("EVAL STEP FAILED"), its claim released and the queue goes on. An evaluation
+  whose output in runs/diff_marks/fold<N>/ is newer than the model's best checkpoint is skipped on resume.
