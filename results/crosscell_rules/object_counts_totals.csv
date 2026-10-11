@@ -1,0 +1,5 @@
+kind,domain,n_groups,specific_total,pos_used,matched_pairs_A_full,matched_pairs_A_ref,objects_A_full,total_PE,total_PS,total_other,mean_objects_A_full_per_group,total_enh,total_rep
+loop,cell,15,125779,31889,10110,7995,20220,39475.0,18746.0,67558,1348.0,,
+loop,aml,10,2276,2276,2232,2184,4464,304.0,127.0,1845,446.4,,
+stripe,cell,15,36222,28979,25310,22738,50620,,,8933,3374.6666666666665,10766.0,16523.0
+stripe,aml,10,1075,1075,1059,939,2118,,,241,211.8,340.0,494.0
