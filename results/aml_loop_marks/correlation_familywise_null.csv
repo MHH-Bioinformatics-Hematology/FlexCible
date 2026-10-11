@@ -1,0 +1,15 @@
+kind,class,n,n_features,max_abs_rho_null_median,max_abs_rho_null_p95,max_abs_rho_null_max
+loop,all,2276,474,0.0955,0.1228,0.1409
+loop,PE,301,510,0.1883,0.2483,0.3006
+loop,PS,103,161,0.2440,0.3213,0.4690
+loop,other,1872,474,0.1024,0.1303,0.1458
+loop,recurrent,193,474,0.2131,0.2728,0.3142
+loop,private,1805,474,0.1110,0.1485,0.1734
+loop,shared1,278,474,0.1876,0.2296,0.2611
+stripe,all,1069,473,0.1460,0.1748,0.1989
+stripe,enh,326,473,0.2321,0.2815,0.3167
+stripe,rep,442,476,0.1749,0.2124,0.2594
+stripe,other,301,473,0.2209,0.2783,0.3417
+stripe,recurrent,595,476,0.1378,0.1770,0.1936
+stripe,private,281,473,0.2381,0.2909,0.3208
+stripe,shared1,193,473,0.2322,0.2925,0.3237
