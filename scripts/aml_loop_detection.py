@@ -198,13 +198,19 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
     te.VARIANT = "extra" if label in EXTRA_LABELS else ""
     m = next(x for x in te.models(fold, RES) if x["label"] == label)
     te.VARIANT = ""
-    if label in DIFF_LABELS and not te.ready(m["run"]):
+    if label in EXTRA_LABELS and not te.ready(m["run"]):
         log(f"f{fold} {label} {p}: run {m['run']} not finished, skipped")
         return
     out = OUTD / f"f{fold}" / f"{label}__xu_{p}"
     if all((out / f"{k}.npz").exists() for k in sets):
         return
-    ck = te.ckpt(m["run"])
+    try:
+        ck = te.ckpt(m["run"])
+        if not (Path(ck) / "config.yaml").exists():
+            raise FileNotFoundError(f"{ck}/config.yaml")
+    except (FileNotFoundError, OSError, ValueError, StopIteration) as e:    # a model that is not there is skipped, never a crash
+        log(f"f{fold} {label} {p}: no checkpoint for {m['run']} ({e}), skipped")
+        return
     keep = [f"marks={','.join(s['marks'])}"] + (["none="] if "none" in sets else [])
     cmd = [te.PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml", "--checkpoint", ck,
            "--cell", s["cell"], "--bigwig-dir", s["dir"], "--target", s["target"], "--tta",
