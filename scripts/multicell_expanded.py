@@ -143,7 +143,7 @@ BASELINE_MAPS = [c for c in CELLS if c not in ("hmec", "huvec")]
 DIFF_KINDS = {"diff": ("mean_aml", False), "diffmeth": ("mean_aml", True), "diffhspc": ("hspc", False),
               "diffcells": ("consensus", False)}
 DIFF_FAMILY = {f"all12{k}{o}_refres_drop{f}" for k in DIFF_KINDS if k != "diffcells"
-               for o in ("", "_loopfocus") for f in ("_f10", "_f11", "_f12")}
+               for o in ("", "_loopfocus", "_loopfocusaml") for f in ("_f10", "_f11", "_f12")}
 # the 12 cell lines alone (no AML sample, no fold): a cheap pilot of the differential channels and of the
 # cell objects on the cell-line evaluation (12-cell runs: about 10 min at 25 kb, 23 min at 10 kb)
 DIFFCELL_FAMILY = {f"all12diffcells{o}_refres_drop" for o in ("", "_loopfocus")}
@@ -153,7 +153,7 @@ DIFF_SCALES = [0, 20000, 100000]            # bp radius: the 10 kb bin, +-20 kb,
 
 def diff_parts(base: str):
     """(reference kind, with Meth) of a diff-marks run base name, else None."""
-    m = re.fullmatch(r"all12(diff|diffmeth|diffhspc|diffcells)(?:_loopfocus)?_refres_drop(?:_f\d+)?", base)
+    m = re.fullmatch(r"all12(diff|diffmeth|diffhspc|diffcells)(?:_loopfocus(?:aml)?)?_refres_drop(?:_f\d+)?", base)
     return DIFF_KINDS[m.group(1)] if m else None
 
 
@@ -328,7 +328,8 @@ CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 CHRHO_CHROMS = [f"chr{i}" for i in range(1, 23) if f"chr{i}" not in CHRHO_HELD]
 AML_RUNS = {k for k in RUNS if k.startswith("all12aml_")} | DIFF_FAMILY | ALLOBJ_FAMILY
 LOOPFOCUS_RUNS = {k for k in AML_RUNS if "loopfocus" in k} | ALLOBJ_FAMILY
-OBJECT_ALL_RUNS = {k for k in DIFF_FAMILY if "loopfocus" in k} | ALLOBJ_FAMILY
+# *_loopfocusaml: the loop-centric recipe with the AML objects only (object_scope aml), no cell-line objects
+OBJECT_ALL_RUNS = {k for k in DIFF_FAMILY if "loopfocus" in k and "loopfocusaml" not in k} | ALLOBJ_FAMILY
 
 
 def loopfocus_train(res: int) -> dict:

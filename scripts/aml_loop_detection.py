@@ -72,7 +72,8 @@ SEED = 0
 NBOOT = 2000
 # models of the extra variant of aml_train_eval (section 63 loop-centric recipe; section 66 differential
 # mark channels with all-cell objects, and its ablations)
-DIFF_LABELS = ("aml_diff_loopfocus", "aml_diff", "aml_allobj", "aml_diffmeth_loopfocus")
+DIFF_LABELS = ("aml_diff_loopfocus", "aml_diff", "aml_diffhspc", "aml_diff_loopfocusaml", "aml_allobj",
+               "aml_diffmeth_loopfocus")
 EXTRA_LABELS = ("aml_loopfocus", *DIFF_LABELS)
 ITEMS = RES_OUT / "items.csv.gz"     # objects and windows (always the section 62 table)
 

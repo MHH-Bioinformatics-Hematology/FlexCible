@@ -97,6 +97,8 @@ def samples(fold: int, res: int) -> list[dict]:
 # (label, run base, with the Meth track) of the section 66 models; the first is the primary run
 DIFF_MODELS = [("aml_diff_loopfocus", "all12diff_loopfocus_refres_drop", False),
                ("aml_diff", "all12diff_refres_drop", False),
+               ("aml_diffhspc", "all12diffhspc_refres_drop", False),
+               ("aml_diff_loopfocusaml", "all12diff_loopfocusaml_refres_drop", False),
                ("aml_allobj", "all12allobj_refres_drop", False),
                ("aml_diffmeth_loopfocus", "all12diffmeth_loopfocus_refres_drop", True)]
 
