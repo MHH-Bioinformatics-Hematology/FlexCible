@@ -87,7 +87,8 @@ DIFF_LABELS = ("aml_diff_loopfocus", "aml_diff", "aml_diffhspc", "aml_diff_loopf
 LOOP2_LABELS = ("aml_loopfocus2",)
 DIFF2_LABELS = ("aml_diff_loopfocus2", "aml_diff_loopfocus2aml", "aml_diffmeth_loopfocus2",
                 "aml_diffhspc_loopfocus2")
-EXTRA_LABELS = ("aml_loopfocus", *LOOP2_LABELS, *DIFF_LABELS, *DIFF2_LABELS)
+METH_RESID_LABELS = ("aml_meth_refin", "aml_refres")     # AML+Meth and residual-reference models of the fold
+EXTRA_LABELS = ("aml_loopfocus", *LOOP2_LABELS, *DIFF_LABELS, *DIFF2_LABELS, *METH_RESID_LABELS)
 ITEMS = RES_OUT / "items.csv.gz"     # objects and windows (always the section 62 table)
 
 
@@ -211,7 +212,8 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
     except (FileNotFoundError, OSError, ValueError, StopIteration) as e:    # a model that is not there is skipped, never a crash
         log(f"f{fold} {label} {p}: no checkpoint for {m['run']} ({e}), skipped")
         return
-    keep = [f"marks={','.join(s['marks'])}"] + (["none="] if "none" in sets else [])
+    mk = list(s["marks"]) + (["Meth"] if m.get("meth") and s["meth"] is not None else [])
+    keep = [f"marks={','.join(mk)}"] + (["none="] if "none" in sets else [])
     cmd = [te.PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml", "--checkpoint", ck,
            "--cell", s["cell"], "--bigwig-dir", s["dir"], "--target", s["target"], "--tta",
            "--assay", s["assay"], "--binsize", RES, "--device", "cuda",
@@ -221,6 +223,8 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
         cmd += ["--lab", s["lab"]]
     if m.get("diff"):
         cmd += ["--diff-group", te.diff_group_of(s)]
+    if m.get("meth") and s["meth"] is not None:
+        cmd += ["--extra-bigwig-dir", s["meth"]]
     ref = te.ref_of(m, s, fold, RES)
     if ref is not None:
         cmd += ["--reference", ref]
@@ -1064,7 +1068,7 @@ def main():
     ap.add_argument("--tag", default="", help="criteria2: prefix of the output tables")
     ap.add_argument("--nboot", type=int, default=1000, help="criteria2: bootstrap replicates")
     ap.add_argument("--only", nargs="*", help="test patients to predict (default all ten)")
-    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus", "loopfocus2", "diff_loopfocus2"],
+    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus", "loopfocus2", "diff_loopfocus2", "meth_resid"],
                     help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus; "
                          "diff_loopfocus (registry section 66): add the differential-mark models "
                          f"{', '.join(DIFF_LABELS)} (those whose runs are finished) and the loop-centric "
@@ -1073,6 +1077,8 @@ def main():
     global RES_OUT
     if a.recipe:
         RUNS.append(("aml_loopfocus", ["marks", "none"]))
+        if a.recipe == "meth_resid":
+            RUNS.extend((lab, ["marks", "none"]) for lab in METH_RESID_LABELS)
         if a.recipe.endswith("loopfocus2"):
             RUNS.extend((lab, ["marks", "none"]) for lab in LOOP2_LABELS)
         if a.recipe == "diff_loopfocus":

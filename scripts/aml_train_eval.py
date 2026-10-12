@@ -129,7 +129,8 @@ def models(fold: int, res: int) -> list[dict]:
         {"label": "base_refin@c12", "run": f"all12refin_drop_{k}kb", "ref": c12, "lab": False},
         {"label": "base_honest", "run": f"all12honest_drop_{k}kb", "ref": None, "lab": False},
     ]
-    extra = fold >= at.NEW_FOLD_MIN and VARIANT == "extra"
+    extra = fold >= at.NEW_FOLD_MIN and VARIANT in ("extra", "meth_resid")
+    only_mr = fold >= at.NEW_FOLD_MIN and VARIANT == "meth_resid"
     if extra:                         # folds >= 10: only the variants, evaluated after the main models
         ms = []
     if fold == 0 or extra:            # the same recipe with the Meth channel (section 38)
@@ -138,13 +139,13 @@ def models(fold: int, res: int) -> list[dict]:
     if fold == 0 or extra:            # the reference as residual instead of an input plane
         ms.append({"label": "aml_refres", "run": f"all12aml_refres_drop{sfx}_{k}kb", "ref": "aml",
                    "lab": True})
-    if extra:                         # the loop-centric recipe (registry section 63)
+    if extra and not only_mr:         # the loop-centric recipe (registry section 63)
         ms.append({"label": "aml_loopfocus", "run": f"all12aml_loopfocus_refres_drop{sfx}_{k}kb",
                    "ref": "aml", "lab": True})
-    if extra:                         # reference/HSPC-matched controls, marks margin (registry section 70)
+    if extra and not only_mr:         # reference/HSPC-matched controls, marks margin (registry section 70)
         ms.append({"label": "aml_loopfocus2", "run": f"all12aml_loopfocus2_refres_drop{sfx}_{k}kb",
                    "ref": "aml", "lab": True})
-    if extra:                         # differential mark channels and all-cell objects (section 66)
+    if extra and not only_mr:         # differential mark channels and all-cell objects (section 66)
         for lab, run, meth in DIFF_MODELS:
             ms.append({"label": lab, "run": f"{run}{sfx}_{k}kb", "ref": "aml", "lab": True,
                        "diff": True, **({"meth": True} if meth else {})})
@@ -479,7 +480,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fold", type=int, default=0)
-    ap.add_argument("--variant", default="", choices=["", "extra"],
+    ap.add_argument("--variant", default="", choices=["", "extra", "meth_resid"],
                     help="extra: evaluate only the Meth, residual-reference and loop-centric models of a fold >= 10")
     ap.add_argument("--stage", nargs="+", default=["predict", "score", "features"])
     a = ap.parse_args()
