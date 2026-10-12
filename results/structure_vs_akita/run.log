@@ -1,0 +1,103 @@
+19:18:44 akita: 413 of 413 regions assembled; Hi-cGAN partially missing in 3
+19:22:07 akita: scored in 203 s
+/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/lib/python3.12/site-packages/scipy/stats/_wilcoxon.py:181: RuntimeWarning: invalid value encountered in scalar divide
+  z = (r_plus - mn) / se
+19:22:16 akita: tables written
+19:22:59 aml 018: 1423 of 1424 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+19:26:29 aml 018: scored in 210 s
+19:28:20 aml 027: 1500 of 1501 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+19:33:31 aml 027: scored in 311 s
+19:40:18 aml 168: 1665 of 1666 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+19:44:05 aml 168: scored in 228 s
+19:52:57 aml 270: 1857 of 1857 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+19:59:31 aml 270: scored in 395 s
+20:01:58 aml 472: 1483 of 1484 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+20:06:35 aml 472: scored in 277 s
+20:17:54 aml 546: 1843 of 1843 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+20:23:20 aml 546: scored in 325 s
+20:30:49 aml 629: 1631 of 1635 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+20:38:42 aml 629: scored in 473 s
+20:40:20 aml 773: 1662 of 1663 windows with every method
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/hicmultiome/structure.py:116: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(X, axis=1, keepdims=True)
+20:47:08 aml 773: scored in 408 s
+20:47:16 chrho: tables written
+20:47:16 report: markdown tables written

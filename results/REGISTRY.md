@@ -9229,3 +9229,77 @@ The published predictors detect AML-specific loops and stripes at 1.3 to 2.2 tim
 
 ### Files
 `scripts/aml_competitors_loops.py`, `results/aml_competitors_loops/{scores.csv.gz, detection_rates, detection_rates_gain, auroc, auroc_gain, spearman, spearman_gain, coverage, match_quality}*.csv`, `summary_tables.md`, `summary_tables_gain.md`, `summary_*.csv`, `fig_aml_competitors_loops.png`; predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/aml_competitors_loops/` (ours, corigami, epiphany, akita; windows as float16 / float32 npz).
+
+## 73. Structure scores of our models against Akita and the other published predictors, one definition on identical pixels (FINAL; section 72 was the last number when this was written)
+
+Question: on TAD, domain, loop, stripe-related and compartment measures, how do our models compare with Akita (main comparison, GM12878, the 413 Akita test regions) and with C.Origami, Epiphany and Hi-cGAN (whole held-out chromosomes and AML windows), computed with one definition per table? HiC-Reg is not part of this table.
+
+### Inventory (what existed before)
+- Block A of section 18 (`results/benchmark/A_gm12878_2kb_*`): 411 regions (Hi-cGAN has no prediction in 2 of the 413), Akita, Hi-cGAN, akita_native_honest, akita_native_refres, consensus4 and measured maps of other cells; columns Pearson, SCC, Spearman, insulation Pearson (51 kb), boundary recall of the hicFindTADs boundaries (K-matched), loop recall, APA ratio, anchor AUROC. No boundary precision or F1, no multi-window insulation, no domain-level or stripe-related measure, no compartment measure, no per-region win counts for the structure columns. The 222-region subset of section 1 holds Pearson only.
+- Whole chromosomes: `results/hic_measures_chrho/*` and `results/benchmark/chrho_*_table.md` (10, 25 and 5 kb; insulation r, boundary recall and precision of hicFindTADs boundaries, TAD fraction, TAD score MSE, loop recall, APA ratio, compartment preference). Akita has no whole-chromosome map (1 Mb predictions in its own space), so it is absent from the chromosome table.
+- AML: `insulation_corr`, `boundary_f1`, `loop_enrich_corr`, `compartment_corr` of `runs/aml_train_remote/fold10..12/eval_f*_patients.csv` for our models only (413 regions, 10 donors); reference maps and competitors have Pearson only (the base_* columns).
+
+### Design
+`scripts/structure_scores_vs_akita.py` (stages akita, aml, chrho, report; the exact definitions are in its docstring and in `results/structure_vs_akita/structure_scores_vs_akita.md`). Nothing was rerun: Akita and Hi-cGAN come from `akita_testset_rasters.npz`, our two models from `runs/benchmark/pred/akita_space/*.npz`, consensus4 and the HFF map from block A (2 regions fetched from the 2 kb cools), the AML predictions from `runs/aml_competitors_loops`. One pixel mask per region (upper triangle, at least 2 bins off the diagonal, finite in the target and in every method; Hi-cGAN is scored where it is fully defined, 408 regions). Metrics: Pearson, SCC; insulation correlation at 10, 25, 51, 102 and 250 kb; boundary recall, precision and F1 of insulation minima (51 kb square, prominence 0.5 SD, tolerance 10 kb, strict 4 kb) against the boundaries of the measured target, per region and pooled; boundary-strength correlation; measure of concordance of the domain partitions; K-matched recall of the hicFindTADs boundaries and of the hicDetectLoops loops of the measured map; APA ratio; anchor profile correlation at 20 to 200 kb (stripe proxy); within-window compartment and eigenvector correlations. Paired statistics: ours minus Akita per region, 2000 region bootstrap resamples (seed 0), regions ahead and fraction ahead.
+
+### Results, GM12878, 413 Akita test regions (median over regions; pooled values with 95% interval)
+
+| predictor | regions | Pearson | SCC | ins r 51 kb | ins r 250 kb | bnd F1 | bnd strength r | MoC | stripe r | compart. r | pooled bnd F1 | hFT bnd recall | loop recall | APA ratio |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Akita (GM12878 head) | 413 | 0.548 | 0.510 | 0.688 | 0.847 | 0.500 | 0.608 | 0.625 | 0.697 | 0.710 | 0.436 [0.411, 0.462] | 0.494 [0.471, 0.519] | 0.314 [0.280, 0.346] | 0.264 [0.243, 0.286] |
+| ours, ChIP only | 413 | 0.638 | 0.610 | 0.819 | 0.919 | 0.571 | 0.730 | 0.674 | 0.791 | 0.776 | 0.487 [0.457, 0.518] | 0.548 [0.522, 0.573] | 0.383 [0.345, 0.420] | 0.381 [0.356, 0.408] |
+| ours, with consensus | 413 | 0.746 | 0.694 | 0.920 | 0.971 | 0.667 | 0.871 | 0.718 | 0.894 | 0.885 | 0.575 [0.545, 0.609] | 0.647 [0.621, 0.672] | 0.571 [0.537, 0.603] | 0.845 [0.814, 0.878] |
+| consensus of 4 measured cells | 413 | 0.611 | 0.559 | 0.777 | 0.916 | 0.598 | 0.724 | 0.656 | 0.759 | 0.797 | 0.533 [0.511, 0.556] | 0.589 [0.564, 0.615] | 0.514 [0.479, 0.549] | 1.025 [0.972, 1.076] |
+| HFF measured map | 413 | 0.514 | 0.469 | 0.705 | 0.893 | 0.500 | 0.639 | 0.612 | 0.669 | 0.716 | 0.488 [0.469, 0.509] | 0.522 [0.497, 0.548] | 0.418 [0.384, 0.451] | 1.552 [1.453, 1.654] |
+| Hi-cGAN (submitted) | 408 | 0.236 | 0.207 | 0.376 | 0.567 | 0.222 | 0.227 | 0.516 | 0.309 | 0.546 | 0.243 [0.225, 0.263] | 0.321 [0.298, 0.344] | 0.137 [0.111, 0.162] | 0.179 [0.146, 0.215] |
+
+Paired against Akita (ours minus Akita, median over regions [95% interval]; regions ahead of 413):
+
+| metric | ChIP only | ahead | with consensus | ahead |
+|---|---|---|---|---|
+| Pearson | 0.040 [0.029, 0.050] | 274 (0.66) | 0.136 [0.124, 0.149] | 401 (0.97) |
+| SCC | 0.061 [0.051, 0.074] | 309 (0.75) | 0.140 [0.128, 0.153] | 405 (0.98) |
+| ins r 10 kb | 0.272 [0.254, 0.281] | 397 (0.96) | 0.324 [0.314, 0.343] | 408 (0.99) |
+| ins r 51 kb | 0.096 [0.075, 0.116] | 323 (0.78) | 0.190 [0.175, 0.213] | 398 (0.96) |
+| ins r 250 kb | 0.026 [0.013, 0.037] | 248 (0.60) | 0.072 [0.055, 0.097] | 331 (0.80) |
+| bnd F1 | 0.048 [0.000, 0.083] | 223 (0.61) | 0.127 [0.100, 0.159] | 281 (0.78) |
+| bnd strength r | 0.075 [0.054, 0.095] | 266 (0.64) | 0.181 [0.157, 0.199] | 365 (0.88) |
+| MoC | 0.026 [0.012, 0.035] | 249 (0.60) | 0.063 [0.048, 0.081] | 307 (0.75) |
+| stripe r | 0.077 [0.057, 0.101] | 296 (0.72) | 0.173 [0.146, 0.188] | 389 (0.94) |
+| compart. r | 0.029 [0.016, 0.042] | 263 (0.64) | 0.099 [0.081, 0.111] | 376 (0.91) |
+| pooled bnd F1 | 0.051 [0.028, 0.075] | | 0.140 [0.118, 0.162] | |
+| pooled hFT bnd recall | 0.054 [0.029, 0.080] | | 0.153 [0.129, 0.176] | |
+| pooled loop recall | 0.069 [0.025, 0.115] | | 0.257 [0.221, 0.296] | |
+| APA ratio | 0.117 [0.086, 0.148] | | 0.581 [0.551, 0.612] | |
+
+Reading. Both models are ahead of Akita on every measure; the with-consensus model in 75 to 99 percent of regions, the ChIP-only model in 58 to 96 percent (ahead fraction 0.58 for the eigenvector, 0.60 for insulation at 250 kb, MoC and strict boundary F1; the per-region boundary F1 interval includes 0, the pooled one does not). The ChIP-only model is level with the consensus of four measured cells on insulation at 102 and 250 kb (difference -0.002 and -0.004), and behind it on pooled boundary recall (0.386 against 0.503), hicFindTADs boundary recall (0.548 against 0.589), loop recall (0.383 against 0.514), APA ratio (0.38 against 1.03) and compartment correlation (0.776 against 0.797). The HFF measured map, a different cell, is ahead of Akita on pooled boundary recall (0.522 against 0.494 hFT), loop recall (0.418 against 0.314) and APA ratio (1.55 against 0.26, an over-enriched map) and behind it on Pearson, SCC and insulation at 10 and 25 kb. Akita has the lowest APA ratio of the non-Hi-cGAN predictors (0.26), so its loop signal is attenuated. Hi-cGAN is the lowest on every measure.
+
+### Whole held-out chromosomes (mean over chromosomes; hicFindTADs boundaries on the prediction against the measured map, 1 bin; K-matched loop recall)
+
+| 10 kb block | predictor | Pearson | ins r | bnd F1 | loop recall | APA ratio | compart. r |
+|---|---|---|---|---|---|---|---|
+| C.Origami IMR-90, chr2, chr3 | ours, refres | 0.928 | 0.943 | 0.666 | 0.364 | 0.943 | 0.964 |
+| | ours, refin | 0.926 | 0.924 | 0.667 | 0.355 | 0.830 | 0.960 |
+| | ours, ChIP only | 0.808 | 0.823 | 0.518 | 0.192 | 0.409 | 0.885 |
+| | C.Origami | 0.920 | 0.866 | 0.498 | 0.162 | 0.729 | 0.972 |
+| Epiphany GM12878, chr3, 11, 17 | ours, refres | 0.919 | 0.892 | 0.683 | 0.474 | 0.949 | 0.956 |
+| | ours, ChIP only | 0.760 | 0.715 | 0.502 | 0.220 | 0.340 | 0.844 |
+| | Epiphany | 0.512 | 0.318 | 0.226 | 0.052 | 0.265 | 0.776 |
+| Hi-cGAN GM12878, chr2, chr14 | ours, refres | 0.924 | 0.890 | 0.640 | 0.407 | 0.945 | 0.960 |
+| | ours, ChIP only | 0.797 | 0.726 | 0.492 | 0.164 | 0.295 | 0.876 |
+| | Hi-cGAN | 0.328 | 0.260 | 0.125 | 0.031 | 0.135 | 0.700 |
+| Hi-cGAN K562, chr2, chr14 | ours, refres | 0.849 | 0.830 | 0.593 | 0.382 | 0.794 | 0.940 |
+| | ours, ChIP only | 0.731 | 0.732 | 0.466 | 0.160 | 0.207 | 0.872 |
+| | Hi-cGAN (GM12878 model) | 0.125 | 0.339 | 0.127 | 0.008 | 0.088 | 0.519 |
+
+The 25 kb table, refin rows, TAD fraction, TAD score MSE and per-chromosome ahead counts are in `results/structure_vs_akita/structure_scores_vs_akita.md` and `chrho_*_structure.csv`. Against C.Origami, the with-consensus models are ahead on insulation, boundary F1 and loop recall on both chromosomes (2/2) at 10 and 25 kb and level on Pearson (25 kb: 0.940 against 0.942); C.Origami is ahead on compartment preference (0.972 against 0.964 at 10 kb, 0.980 against 0.960 at 25 kb; 0/2 chromosomes for ours) and its APA ratio at 25 kb is 2.93. The ChIP-only model is behind C.Origami on Pearson and insulation at 10 and 25 kb, ahead on boundary F1 and loop recall at 10 kb (2/2), and behind on all four at 25 kb (0/2). Against Epiphany and Hi-cGAN every one of our three models is ahead on all four counted measures on every chromosome, except the ChIP-only model against Epiphany (compartment preference 2/3 chromosomes at 10 kb; loop recall and compartment preference 2/3 at 25 kb).
+
+### AML windows and AML patients
+- 10 kb object windows of 8 donors (13 064 windows, identical pixels; saved predictions, no AML in the training of our models): Pearson 0.761 (ours, refres), 0.746 (consensus12), 0.591 (Akita), 0.248 (Epiphany), 0.188 (C.Origami); insulation r at 50 kb 0.735, 0.738, 0.641, 0.342, 0.190; boundary F1 0.500, 0.500, 0.400, 0.000, 0.222; compartment r 0.821, 0.810, 0.653, 0.578, 0.575. Ours is ahead of Akita, C.Origami and Epiphany in 8/8 donors on each of the nine measures of the table (`aml_windows_paired.csv`). Against the measured consensus12 reference map our model is level on the structure measures (boundary F1 difference 0.000, ahead in 0/8 donors; insulation r at 50 kb +0.002, 5/8; Pearson +0.016, 7/8), so on these windows the TAD-level gain over the reference map is nil.
+- Models trained with AML patients (folds 10 to 12, 10 donors, 413 regions, median over donors): insulation r 0.961 (10 kb) and 0.956 (25 kb) for aml_refin, 0.954 and 0.950 for base_refin@aml, 0.901 and 0.906 for base_refin@c12, 0.675 and 0.667 for aml_honest. The structure.py boundary F1 is 0 or 1 for most donors (250 kb square, 4 kb tolerance) and is not informative here. Competitors were not run on the 413 regions of these tables; the competitor values are the object-window values above.
+
+### Caveats
+(i) Akita is sequence only with one head per training cell type (GM12878 head) and is restricted to its cell types; the ChIP-only model gets cell-specific inputs and the with-consensus model also gets the Hi-C of other cells, so the comparison with Akita is a comparison of input sets as much as of models. (ii) The chromosome table uses hicFindTADs boundaries and 50 or 75 kb insulation squares; the Akita table uses insulation minima of the target and a 51 kb square; values are not comparable between the two tables. (iii) At 2 kb the donut of the structure.py loop enrichment (4 to 10 kb) is smaller than a loop, the compartment measures see 917 kb, and structure.py's boundary F1 (250 kb square) is 0 in the median for every predictor on the Akita regions; the table does not use it. (iv) Stripe r is a proxy, not a stripe caller. (v) Chromosome blocks have 2 or 3 chromosomes and AML windows 8 donors; counts are descriptive. (vi) Akita and the competitors are scored on pixels that all methods share, which restricts the AML windows to the central 917 kb (Akita) and to 99 bins from the diagonal (Epiphany) of the 1.92 Mb window.
+
+### Files
+`scripts/structure_scores_vs_akita.py`, `results/structure_vs_akita/{structure_scores_vs_akita.md, akita413_per_region.csv.gz, akita413_per_region_summary.csv, akita413_pooled.csv, akita413_paired.csv, chrho_summary_structure.csv, chrho_vs_competitor_structure.csv, aml_windows_*.csv, aml_eval_*.csv, run.log}`; the per-window AML table `aml_windows_per_window.csv.gz` (4.5 MB) is git-ignored and regenerated by the aml stage.
