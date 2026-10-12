@@ -129,6 +129,15 @@ def models(fold: int, res: int) -> list[dict]:
         {"label": "base_refin@c12", "run": f"all12refin_drop_{k}kb", "ref": c12, "lab": False},
         {"label": "base_honest", "run": f"all12honest_drop_{k}kb", "ref": None, "lab": False},
     ]
+    if VARIANT == "seeds" and fold >= at.NEW_FOLD_MIN:     # seed replicates s1, s2 of three families (registry 72)
+        out = []
+        for sd in (1, 2):
+            out += [{"label": f"aml_refin_s{sd}", "run": f"all12aml_refin_drop{sfx}_s{sd}_{k}kb", "ref": "aml", "lab": True},
+                    {"label": f"aml_diff_s{sd}", "run": f"all12diff_refres_drop{sfx}_s{sd}_{k}kb", "ref": "aml",
+                     "lab": True, "diff": True},
+                    {"label": f"aml_honest_s{sd}", "run": f"all12aml_honest_drop{sfx}_s{sd}_{k}kb", "ref": None,
+                     "lab": True}]
+        return out
     extra = fold >= at.NEW_FOLD_MIN and VARIANT in ("extra", "meth_resid")
     only_mr = fold >= at.NEW_FOLD_MIN and VARIANT == "meth_resid"
     if extra:                         # folds >= 10: only the variants, evaluated after the main models
@@ -480,7 +489,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fold", type=int, default=0)
-    ap.add_argument("--variant", default="", choices=["", "extra", "meth_resid"],
+    ap.add_argument("--variant", default="", choices=["", "extra", "meth_resid", "seeds"],
                     help="extra: evaluate only the Meth, residual-reference and loop-centric models of a fold >= 10")
     ap.add_argument("--stage", nargs="+", default=["predict", "score", "features"])
     a = ap.parse_args()

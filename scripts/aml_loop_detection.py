@@ -88,7 +88,8 @@ LOOP2_LABELS = ("aml_loopfocus2",)
 DIFF2_LABELS = ("aml_diff_loopfocus2", "aml_diff_loopfocus2aml", "aml_diffmeth_loopfocus2",
                 "aml_diffhspc_loopfocus2")
 METH_RESID_LABELS = ("aml_meth_refin", "aml_refres")     # AML+Meth and residual-reference models of the fold
-EXTRA_LABELS = ("aml_loopfocus", *LOOP2_LABELS, *DIFF_LABELS, *DIFF2_LABELS, *METH_RESID_LABELS)
+SEED_LABELS = ("aml_refin_s1", "aml_refin_s2", "aml_diff_s1", "aml_diff_s2")   # seed replicates (registry 72)
+EXTRA_LABELS = ("aml_loopfocus", *LOOP2_LABELS, *DIFF_LABELS, *DIFF2_LABELS, *METH_RESID_LABELS, *SEED_LABELS)
 ITEMS = RES_OUT / "items.csv.gz"     # objects and windows (always the section 62 table)
 
 
@@ -196,7 +197,7 @@ def predict(gpu: str, fold: int, p: str, label: str, sets: list[str], threads: i
     import aml_train as at
     import aml_train_eval as te
     s = next(x for x in te.samples(fold, RES) if x["patient"] == p and x["group"] == "patient")
-    te.VARIANT = "extra" if label in EXTRA_LABELS else ""
+    te.VARIANT = "seeds" if label in SEED_LABELS else ("extra" if label in EXTRA_LABELS else "")
     m = next(x for x in te.models(fold, RES) if x["label"] == label)
     te.VARIANT = ""
     if label in EXTRA_LABELS and not te.ready(m["run"]):
@@ -1068,7 +1069,7 @@ def main():
     ap.add_argument("--tag", default="", help="criteria2: prefix of the output tables")
     ap.add_argument("--nboot", type=int, default=1000, help="criteria2: bootstrap replicates")
     ap.add_argument("--only", nargs="*", help="test patients to predict (default all ten)")
-    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus", "loopfocus2", "diff_loopfocus2", "meth_resid"],
+    ap.add_argument("--recipe", default="", choices=["", "loopfocus", "diff_loopfocus", "loopfocus2", "diff_loopfocus2", "meth_resid", "seeds"],
                     help="loopfocus: add the loop-centric model, tables in results/aml_loop_detection_loopfocus; "
                          "diff_loopfocus (registry section 66): add the differential-mark models "
                          f"{', '.join(DIFF_LABELS)} (those whose runs are finished) and the loop-centric "
@@ -1077,6 +1078,8 @@ def main():
     global RES_OUT
     if a.recipe:
         RUNS.append(("aml_loopfocus", ["marks", "none"]))
+        if a.recipe == "seeds":
+            RUNS.extend((lab, ["marks", "none"]) for lab in ("aml_diff", *SEED_LABELS))
         if a.recipe == "meth_resid":
             RUNS.extend((lab, ["marks", "none"]) for lab in METH_RESID_LABELS)
         if a.recipe.endswith("loopfocus2"):

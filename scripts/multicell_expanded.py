@@ -452,6 +452,17 @@ for _b in ("all12refin_drop", "all12refres_drop", "all12honest_drop", "all12diff
         if _b in REF_RUNS:
             REF_RUNS[_n] = REF_RUNS[_b]
         HONEST_RUNS.add(_n)
+# AML seed replicates (folds 10 to 12; registry section 72): <base>_f<N>_s<seed> is the run <base>_f<N> with
+# another training seed, same composition, caches, references, hard split and same-donor rules (run_config
+# builds the original's config and replaces train.seed and the output folder)
+AML_SEEDED = {}
+for _b in ("all12aml_refin_drop", "all12aml_honest_drop", "all12diff_refres_drop"):
+    for _f in (10, 11, 12):
+        for _sd in (1, 2):
+            _n = f"{_b}_f{_f}_s{_sd}"
+            AML_SEEDED[_n] = (f"{_b}_f{_f}", _sd)
+            RUNS[_n] = (TRAIN12, None)
+            HONEST_RUNS.add(_n)
 
 
 def consensus_loo(cell: str, res: int) -> Path:
@@ -521,6 +532,12 @@ def missing_marks(bw_dir: Path) -> list[str]:
 
 def run_config(name, val_per_cell, patience, max_epochs):
     base, res = split_name(name)
+    if base in AML_SEEDED:                      # an AML seed replicate: the original's config, another seed
+        orig, seed = AML_SEEDED[base]
+        cfg = run_config(run_name(orig, res), val_per_cell, patience, max_epochs)
+        cfg["train"]["seed"] = seed
+        cfg["train"]["output_dir"] = str(out_of(name) / name)
+        return cfg
     cells, mode = RUNS[base]
     cfg = copy.deepcopy(yaml.safe_load(open(REF_CFG)))
     cfg["data"]["samples"] = [
