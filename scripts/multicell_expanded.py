@@ -443,7 +443,7 @@ HONEST_RUNS = set(REF_RUNS) | {"all12honest_drop_meth", "all12honest_drop_meth_s
 REF_OUT = HM / "runs/multicell_reference"
 # honest seed replicates of the headline 12-cell models (registry 51 audit): _s1, _s2 are the same
 # recipe and cache as the seed-0 run with a different training seed (and validation-window draw)
-for _b in ("all12refin_drop", "all12refres_drop", "all12honest_drop"):
+for _b in ("all12refin_drop", "all12refres_drop", "all12honest_drop", "all12diffcells_refres_drop"):
     for _sd in (1, 2):
         _n = f"{_b}_s{_sd}"
         RUNS[_n] = (TRAIN12, None)
@@ -601,12 +601,13 @@ def run_config(name, val_per_cell, patience, max_epochs):
         else:                                         # same data, no lab row
             for smp in cfg["data"]["samples"]:
                 smp.pop("lab", None)
-    if base in DIFF_FAMILY or base in DIFFCELL_FAMILY:
+    sbase = SEEDED[base][0] if base in SEEDED else base       # a seed copy has its original's recipe
+    if sbase in DIFF_FAMILY or sbase in DIFFCELL_FAMILY:
         # differential mark channels (registry section 66, hicmultiome/diffmarks.py): one rule for
         # every cell. Reference sets: the 12 training cell lines (a cell line reads the set without
         # itself; a held-out cell all 12), the fold's training patients, the HSPC training donors.
         from hicmultiome import diffmarks as dmk
-        kind, _ = diff_parts(base)
+        kind, _ = diff_parts(sbase)
         groups = {s_["name"]: ("cell" if s_["name"] in cells[:len(TRAIN12)] else
                                "hspc" if s_["name"].startswith("amlxuhspc") else "aml")
                   for s_ in cfg["data"]["samples"]}
@@ -704,7 +705,7 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["train"]["object_scope"] = "all"
             if base not in LOOP2_RUNS:
                 cfg["train"]["aml_object_controls"] = ["A_hspc", "A_ref"]     # AML table: A_hspc, cell table: A_ref
-    if base in DIFFCELL_FAMILY and "loopfocus" in base:
+    if sbase in DIFFCELL_FAMILY and "loopfocus" in sbase:
         # objects of the 12 cell lines alone (section 66 pilot): the cell table, no AML table
         import cell_objects_table as cot
         import cell_objects_refrand as cor
@@ -1127,7 +1128,8 @@ def reference_summary():
         honest_name = run_name("all12honest", res)  # the same, honest validation
         for rb in list(REF_RUNS) + ["all12honest", "all12honest_drop", "all12honest_drop_hard",
                                     "all12deg_honest_drop", "all12cohunk_honest_drop",
-                                    "all12aml_honest_drop"]:
+                                    "all12aml_honest_drop", "all12honest_drop_s1",
+                                    "all12honest_drop_s2"]:
             refres_name = run_name("all12refres", res)
             name = run_name(rb, res)
             run = REF_OUT / name

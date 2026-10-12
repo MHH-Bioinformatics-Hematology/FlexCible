@@ -16,6 +16,8 @@ one GPU training at a time, in this order:
      (registry 55), claimed by run name, with evaluation, perturbation, washout, AML and diagnosis
   g  honest seed replicates (seeds 1, 2) of all12refin_drop, all12refres_drop, all12honest_drop,
      25 kb then 10 kb, claimed by run name, standard evaluation (registry 51 audit)
+  h  differential-channel 12-cell family: all12diffcells_refres_drop seeds s1, s2 at 10 kb, the run and
+     seeds at 25 kb (registry 66), claimed by run name, standard evaluation, reference summary refresh
   d  (removed 2026-10-09: the sequence CNN runs on another computer)
   e  chromosome-held-out 5 kb models all12refin_drop_chrho_5kb, all12honest_drop_chrho_5kb and
      (optional, last) all12refres_drop_chrho_5kb with the standard evaluation (registry 58),
@@ -51,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -236,6 +239,26 @@ def jobs():
                 J[-1].claim = mx.run_name(run, res)
                 aux(f"eval_{mx.run_name(run, res)}", f"{gs.eval_cmd(run, res)} && ( {gs.STATUS} || true )",
                     (lambda r=run, x=res: gs.trained(r, x)))
+    # ---- (h) differential-channel 12-cell family (registry 66, results/diff_marks/REMOTE_JOB.md):
+    # seed replicates of all12diffcells_refres_drop at 10 kb first (cache exists), then the 25 kb
+    # run (its cache is built here on the CPU, nice 19, 12 workers), then the 25 kb replicates.
+    # Claims by run name; standard evaluation after each; the reference summary is refreshed at the end.
+    fam = "all12diffcells_refres_drop"
+    cpu("cache_mc_all12ref_diff_25kb", f"{M} --runs {fam} --res 25000 --stage precompute --workers 12",
+        lambda: True, (lambda: cache_ok("mc_all12ref_diff_25kb")), lane="cache")
+    diff_runs = [(f"{fam}_s1", 10000), (f"{fam}_s2", 10000), (fam, 25000),
+                 (f"{fam}_s1", 25000), (f"{fam}_s2", 25000)]
+    for run, res in diff_runs:
+        train(run, res, f"mc_all12ref_diff_{res // 1000}kb")
+        J[-1].claim = mx.run_name(run, res)
+        aux(f"eval_{mx.run_name(run, res)}", f"{gs.eval_cmd(run, res)} && ( {gs.STATUS} || true )",
+            (lambda r=run, x=res: gs.trained(r, x)))
+    need = [mx.run_name(r, k) for r, k in diff_runs] + [mx.run_name(fam, 10000)]
+    chk = ("import pandas as pd,sys; d=pd.read_csv(%r); m=[n for n in %r if n not in set(d.run)]; "
+           "print('reference_summary rows missing for', m); sys.exit(1 if m else 0)"
+           % (str(MR / "reference_summary.csv"), need))
+    aux("diffcells_refsummary", f"{M} --stage refsummary && {PY} -c {shlex.quote(chk)}",
+        lambda: all(marked(f"eval_{mx.run_name(r, k)}") for r, k in diff_runs), gpu_use=False)
     # (d) the sequence CNN runs on another computer (2026-10-09), not in this queue;
     # cnn_cmd() below still builds the one-command local run if it is needed again
     return J
