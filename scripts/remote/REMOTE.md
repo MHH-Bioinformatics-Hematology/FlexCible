@@ -172,3 +172,11 @@ Stop one with `kill $(cat <runner>.pid)`.
   checkpoint is skipped with a log line). Evaluation steps (aml_train_eval, loop detection, criteria2, cell_objects_eval) never count toward the
   2-failure stop of the training stages; a failed step is logged ("EVAL STEP FAILED"), its claim released and the queue goes on. An evaluation
   whose output in runs/diff_marks/fold<N>/ is newer than the model's best checkpoint is skipped on resume.
+
+- meth_resid.sh (2026-10-12): evaluation of the AML+Meth and residual-reference models for folds 10 to 12 (aml_train_eval --variant meth_resid, tables
+  eval_f<N>_meth_resid_*), loop detection recipe meth_resid and criteria2 (tag meth_resid). Reason for the earlier missing rows: the extra evaluation
+  of the diff queue wrote eval_f<N>_extra_summary.csv first, so the later queue treated the evaluation as done.
+- remote_queue_seeds.py (PID file remote_queue_seeds.pid, registry 72): seed replicates s1, s2 of all12aml_refin_drop_fN, all12diff_refres_drop_fN and
+  all12aml_honest_drop_fN at 10 kb (names <base>_f<N>_s<seed>, same config as the original with another train.seed; multicell_expanded.AML_SEEDED).
+  Batches refin s1, diff s1, refin s2, diff s2, honest s1, honest s2; after each batch aml_train_eval --variant seeds, loop detection recipe seeds +
+  criteria2 (tag seeds) for refin and diff, tidy table scripts/aml_seeds_table.py -> runs/diff_marks/aml_seeds/. Waits for METH_RESID_DONE.
