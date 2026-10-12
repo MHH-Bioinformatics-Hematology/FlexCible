@@ -1,0 +1,112 @@
+dataset,contrast,kind,a,b,delta,lo,hi
+priv,hgb: all features minus without own-patient features,marks_effect,hgb|everything,hgb|no_patient_features,0.0629,0.0275,0.0956
+priv,hgb: + group b,increment,hgb|cum_b,hgb|cum_a,0.0391,0.0033,0.0742
+priv,hgb: + group x,increment,hgb|cum_x,hgb|cum_b,0.1100,0.0591,0.1562
+priv,hgb: + group c,increment,hgb|cum_c,hgb|cum_x,0.0592,0.0283,0.0855
+priv,hgb: + group d,increment,hgb|cum_d,hgb|cum_c,0.0005,-0.0096,0.0081
+priv,hgb: + group e,increment,hgb|cum_e,hgb|cum_d,-0.0016,-0.0160,0.0109
+priv,hgb: + group f,increment,hgb|cum_f,hgb|cum_e,0.0028,-0.0044,0.0100
+priv,hgb: + group g,increment,hgb|cum_g,hgb|cum_f,0.0020,-0.0008,0.0043
+priv,hgb: all minus group b,drop_one,hgb|everything,hgb|drop_b,0.0094,0.0064,0.0123
+priv,hgb: all minus group x,drop_one,hgb|everything,hgb|drop_x,0.0024,-0.0048,0.0102
+priv,hgb: all minus group c,drop_one,hgb|everything,hgb|drop_c,0.0056,-0.0006,0.0121
+priv,hgb: all minus group d,drop_one,hgb|everything,hgb|drop_d,0.0048,-0.0077,0.0157
+priv,hgb: all minus group e,drop_one,hgb|everything,hgb|drop_e,-0.0033,-0.0152,0.0089
+priv,hgb: all minus group f,drop_one,hgb|everything,hgb|drop_f,0.0026,-0.0059,0.0109
+priv,hgb: all minus group g,drop_one,hgb|everything,hgb|drop_g,0.0020,-0.0008,0.0043
+priv,hgb everything minus aml_diff,vs_hic,hgb|everything,hic|aml_diff,0.0827,0.0268,0.1411
+priv,hgb everything minus aml_refin,vs_hic,hgb|everything,hic|aml_refin,0.1083,0.0400,0.1784
+priv,lr: all features minus without own-patient features,marks_effect,lr|everything,lr|no_patient_features,0.0377,0.0030,0.0732
+priv,lr: + group b,increment,lr|cum_b,lr|cum_a,0.0160,-0.0129,0.0474
+priv,lr: + group x,increment,lr|cum_x,lr|cum_b,0.1071,0.0671,0.1392
+priv,lr: + group c,increment,lr|cum_c,lr|cum_x,0.0474,0.0200,0.0710
+priv,lr: + group d,increment,lr|cum_d,lr|cum_c,-0.0043,-0.0158,0.0090
+priv,lr: + group e,increment,lr|cum_e,lr|cum_d,-0.0129,-0.0281,0.0018
+priv,lr: + group f,increment,lr|cum_f,lr|cum_e,0.0060,-0.0033,0.0174
+priv,lr: + group g,increment,lr|cum_g,lr|cum_f,0.0016,-0.0031,0.0052
+priv,lr: all minus group b,drop_one,lr|everything,lr|drop_b,-0.0017,-0.0041,0.0006
+priv,lr: all minus group x,drop_one,lr|everything,lr|drop_x,-0.0034,-0.0114,0.0055
+priv,lr: all minus group c,drop_one,lr|everything,lr|drop_c,-0.0030,-0.0100,0.0038
+priv,lr: all minus group d,drop_one,lr|everything,lr|drop_d,-0.0045,-0.0155,0.0084
+priv,lr: all minus group e,drop_one,lr|everything,lr|drop_e,-0.0162,-0.0374,0.0006
+priv,lr: all minus group f,drop_one,lr|everything,lr|drop_f,0.0066,-0.0039,0.0185
+priv,lr: all minus group g,drop_one,lr|everything,lr|drop_g,0.0016,-0.0031,0.0052
+priv,lr everything minus aml_diff,vs_hic,lr|everything,hic|aml_diff,0.0389,-0.0034,0.0761
+priv,lr everything minus aml_refin,vs_hic,lr|everything,hic|aml_refin,0.0645,0.0113,0.1137
+priv,hic aml_refin: with minus without own marks,hic_marks_effect,hic|aml_refin,hic|aml_refin|none,0.0516,0.0306,0.0699
+priv,hic aml_diff: with minus without own marks,hic_marks_effect,hic|aml_diff,hic|aml_diff|none,0.0681,0.0350,0.1010
+priv,hic aml_diffhspc: with minus without own marks,hic_marks_effect,hic|aml_diffhspc,hic|aml_diffhspc|none,0.0500,0.0317,0.0663
+allloop,hgb: all features minus without own-patient features,marks_effect,hgb|everything,hgb|no_patient_features,0.0636,0.0235,0.0967
+allloop,hgb: + group b,increment,hgb|cum_b,hgb|cum_a,0.0426,0.0059,0.0757
+allloop,hgb: + group x,increment,hgb|cum_x,hgb|cum_b,0.1147,0.0726,0.1520
+allloop,hgb: + group c,increment,hgb|cum_c,hgb|cum_x,0.0625,0.0316,0.0894
+allloop,hgb: + group d,increment,hgb|cum_d,hgb|cum_c,0.0006,-0.0103,0.0101
+allloop,hgb: + group e,increment,hgb|cum_e,hgb|cum_d,-0.0055,-0.0162,0.0047
+allloop,hgb: + group f,increment,hgb|cum_f,hgb|cum_e,0.0047,-0.0014,0.0096
+allloop,hgb: + group g,increment,hgb|cum_g,hgb|cum_f,0.0013,-0.0032,0.0050
+allloop,hgb: all minus group b,drop_one,hgb|everything,hgb|drop_b,0.0120,0.0080,0.0167
+allloop,hgb: all minus group x,drop_one,hgb|everything,hgb|drop_x,0.0033,-0.0058,0.0105
+allloop,hgb: all minus group c,drop_one,hgb|everything,hgb|drop_c,0.0086,0.0012,0.0143
+allloop,hgb: all minus group d,drop_one,hgb|everything,hgb|drop_d,0.0034,-0.0098,0.0146
+allloop,hgb: all minus group e,drop_one,hgb|everything,hgb|drop_e,-0.0060,-0.0148,0.0029
+allloop,hgb: all minus group f,drop_one,hgb|everything,hgb|drop_f,0.0041,-0.0020,0.0096
+allloop,hgb: all minus group g,drop_one,hgb|everything,hgb|drop_g,0.0013,-0.0032,0.0050
+allloop,hgb everything minus aml_diff,vs_hic,hgb|everything,hic|aml_diff,0.0935,0.0365,0.1513
+allloop,hgb everything minus aml_refin,vs_hic,hgb|everything,hic|aml_refin,0.1131,0.0458,0.1824
+allloop,lr: all features minus without own-patient features,marks_effect,lr|everything,lr|no_patient_features,0.0384,-0.0006,0.0691
+allloop,lr: + group b,increment,lr|cum_b,lr|cum_a,0.0184,-0.0101,0.0470
+allloop,lr: + group x,increment,lr|cum_x,lr|cum_b,0.1058,0.0684,0.1348
+allloop,lr: + group c,increment,lr|cum_c,lr|cum_x,0.0424,0.0118,0.0670
+allloop,lr: + group d,increment,lr|cum_d,lr|cum_c,-0.0041,-0.0136,0.0067
+allloop,lr: + group e,increment,lr|cum_e,lr|cum_d,-0.0118,-0.0225,-0.0004
+allloop,lr: + group f,increment,lr|cum_f,lr|cum_e,0.0080,-0.0005,0.0185
+allloop,lr: + group g,increment,lr|cum_g,lr|cum_f,0.0038,-0.0025,0.0100
+allloop,lr: all minus group b,drop_one,lr|everything,lr|drop_b,-0.0025,-0.0052,-0.0005
+allloop,lr: all minus group x,drop_one,lr|everything,lr|drop_x,-0.0025,-0.0089,0.0040
+allloop,lr: all minus group c,drop_one,lr|everything,lr|drop_c,-0.0037,-0.0098,0.0024
+allloop,lr: all minus group d,drop_one,lr|everything,lr|drop_d,-0.0046,-0.0140,0.0071
+allloop,lr: all minus group e,drop_one,lr|everything,lr|drop_e,-0.0127,-0.0258,-0.0003
+allloop,lr: all minus group f,drop_one,lr|everything,lr|drop_f,0.0082,-0.0005,0.0189
+allloop,lr: all minus group g,drop_one,lr|everything,lr|drop_g,0.0038,-0.0025,0.0100
+allloop,lr everything minus aml_diff,vs_hic,lr|everything,hic|aml_diff,0.0485,0.0070,0.0846
+allloop,lr everything minus aml_refin,vs_hic,lr|everything,hic|aml_refin,0.0681,0.0158,0.1194
+allloop,hic aml_refin: with minus without own marks,hic_marks_effect,hic|aml_refin,hic|aml_refin|none,0.0549,0.0321,0.0745
+allloop,hic aml_diff: with minus without own marks,hic_marks_effect,hic|aml_diff,hic|aml_diff|none,0.0663,0.0348,0.0973
+allloop,hic aml_diffhspc: with minus without own marks,hic_marks_effect,hic|aml_diffhspc,hic|aml_diffhspc|none,0.0540,0.0348,0.0716
+enh,hgb: all features minus without own-patient features,marks_effect,hgb|everything,hgb|no_patient_features,0.1167,0.0666,0.1643
+enh,hgb: + group b,increment,hgb|cum_b,hgb|cum_a,0.1662,0.0404,0.3348
+enh,hgb: + group x,increment,hgb|cum_x,hgb|cum_b,0.0995,-0.0247,0.2003
+enh,hgb: + group c,increment,hgb|cum_c,hgb|cum_x,0.1000,0.0463,0.1635
+enh,hgb: + group d,increment,hgb|cum_d,hgb|cum_c,-0.0080,-0.0399,0.0200
+enh,hgb: + group e,increment,hgb|cum_e,hgb|cum_d,0.0059,-0.0051,0.0205
+enh,hgb: + group f,increment,hgb|cum_f,hgb|cum_e,0.0146,-0.0074,0.0379
+enh,hgb: + group g,increment,hgb|cum_g,hgb|cum_f,0.0041,-0.0056,0.0130
+enh,hgb: all minus group b,drop_one,hgb|everything,hgb|drop_b,0.0053,-0.0116,0.0205
+enh,hgb: all minus group x,drop_one,hgb|everything,hgb|drop_x,0.0167,-0.0056,0.0403
+enh,hgb: all minus group c,drop_one,hgb|everything,hgb|drop_c,0.0489,0.0126,0.0969
+enh,hgb: all minus group d,drop_one,hgb|everything,hgb|drop_d,0.0050,-0.0287,0.0393
+enh,hgb: all minus group e,drop_one,hgb|everything,hgb|drop_e,0.0063,-0.0031,0.0148
+enh,hgb: all minus group f,drop_one,hgb|everything,hgb|drop_f,0.0151,-0.0015,0.0355
+enh,hgb: all minus group g,drop_one,hgb|everything,hgb|drop_g,0.0041,-0.0056,0.0130
+enh,hgb everything minus aml_diff,vs_hic,hgb|everything,hic|aml_diff,0.1765,0.0719,0.2883
+enh,hgb everything minus aml_refin,vs_hic,hgb|everything,hic|aml_refin,0.1780,0.0968,0.2577
+enh,lr: all features minus without own-patient features,marks_effect,lr|everything,lr|no_patient_features,0.0229,-0.0422,0.0721
+enh,lr: + group b,increment,lr|cum_b,lr|cum_a,0.0399,-0.0308,0.1230
+enh,lr: + group x,increment,lr|cum_x,lr|cum_b,0.2014,0.0909,0.3091
+enh,lr: + group c,increment,lr|cum_c,lr|cum_x,0.0470,0.0107,0.0778
+enh,lr: + group d,increment,lr|cum_d,lr|cum_c,-0.0184,-0.0493,0.0113
+enh,lr: + group e,increment,lr|cum_e,lr|cum_d,-0.0133,-0.0369,0.0085
+enh,lr: + group f,increment,lr|cum_f,lr|cum_e,-0.0042,-0.0183,0.0056
+enh,lr: + group g,increment,lr|cum_g,lr|cum_f,0.0118,-0.0089,0.0289
+enh,lr: all minus group b,drop_one,lr|everything,lr|drop_b,0.0030,-0.0052,0.0085
+enh,lr: all minus group x,drop_one,lr|everything,lr|drop_x,0.0077,-0.0068,0.0211
+enh,lr: all minus group c,drop_one,lr|everything,lr|drop_c,0.0065,0.0010,0.0131
+enh,lr: all minus group d,drop_one,lr|everything,lr|drop_d,0.0000,-0.0191,0.0156
+enh,lr: all minus group e,drop_one,lr|everything,lr|drop_e,-0.0184,-0.0449,0.0054
+enh,lr: all minus group f,drop_one,lr|everything,lr|drop_f,-0.0042,-0.0176,0.0054
+enh,lr: all minus group g,drop_one,lr|everything,lr|drop_g,0.0118,-0.0089,0.0289
+enh,lr everything minus aml_diff,vs_hic,lr|everything,hic|aml_diff,0.0970,-0.0400,0.2657
+enh,lr everything minus aml_refin,vs_hic,lr|everything,hic|aml_refin,0.0984,-0.0221,0.2409
+enh,hic aml_refin: with minus without own marks,hic_marks_effect,hic|aml_refin,hic|aml_refin|none,0.1053,0.0109,0.1952
+enh,hic aml_diff: with minus without own marks,hic_marks_effect,hic|aml_diff,hic|aml_diff|none,0.0815,-0.0526,0.1806
+enh,hic aml_diffhspc: with minus without own marks,hic_marks_effect,hic|aml_diffhspc,hic|aml_diffhspc|none,0.1350,0.0235,0.2277

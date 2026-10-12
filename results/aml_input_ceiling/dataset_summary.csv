@@ -1,0 +1,4 @@
+dataset,n_positives,n_matched_pairs,n_donors,auroc_reference_matched,auroc_hspc_matched,auroc_distance_matched
+priv,1805,1302,10,0.4550,0.5069,0.5003
+allloop,2276,1407,10,0.4508,0.5087,0.4986
+enh,326,91,10,0.4765,0.4952,0.4855

@@ -9120,3 +9120,41 @@ The marks term can only push the with-marks pass up; if the marks carry little i
 
 ### Files
 `scripts/refrand_controls.py`, `scripts/cell_objects_refrand.py`, `scripts/aml_objects_table.py`, `scripts/multicell_expanded.py`, `scripts/aml_loop_detection.py`, `scripts/aml_train_eval.py`, `scripts/cell_objects_eval.py`, `hicmultiome/{aml_objects,config,train}.py`, `tests/test_aml_objects2.py`, `results/aml_objects/{refrand_match_quality,summary2}.csv`, `results/aml_loopfocus/{REMOTE_JOB.md,configs2/}`.
+
+## 71. Input-information ceiling of the criteria2 loop test (FINAL; section 70 was the last number when this was written)
+
+Question: how well does a flexible feature-based classifier separate the 1805 AML-specific private loops of the ten test donors from A_refrand controls (random pairs matched on reference and HSPC enrichment, log10 distance and orientation; the 1302 matched pairs of section 69, reproduced exactly) when it may use every patient-level input that exists? If it is far above the Hi-C models (residual AUROC 0.66 to 0.69) the models leave information unused.
+
+### Design
+`scripts/aml_input_ceiling.py`. Features per object (no feature uses the Hi-C of the target): a level (AML reference, HSPC consensus enrichment; 2), b sequence / orientation / distance / gene annotation / CpG islands (44), x HSPC context (HSPC marks, healthy methylation, HSPC ATAC and RNA; 318), c own H3K27ac / H3K27me3 / CTCF at bin, +-20 kb, +-100 kb with A, B, min, max, sum, product, promoter / partner, mid (91), d patient minus HSPC marks in six reference variants (436), e WGBS (254), f ATAC multiscale and ATAC x H3K27ac (54), g anchor-gene RNA multiscale (69); sources `results/aml_loop_marks` features.pkl, `aml_loop_classifier_v2`, `aml_private_loop_info` new_features plus multiscale ATAC / RNA computed here. HGB (depth 3, 150 iterations) and L2 logistic regression; leave-one-donor-out, training rows within 2 bins of a test anchor dropped; pooled AUROC with donor bootstrap (1000), paired contrasts on the same resamples. Regression (HGB, ridge) of the measured residual (patient minus reference) among private loops for the Spearman ceiling. Datasets: private loops (1302 pairs), all AML-specific loops (1407 pairs), enhancer-like stripes (only 91 matched pairs; underpowered).
+
+### Results, private loops vs A_refrand (AUROC, donor bootstrap 95 percent interval)
+| features | HGB | logistic |
+|---|---|---|
+| a level only (check) | 0.559 [0.544, 0.572] | 0.567 [0.558, 0.576] |
+| b + sequence / orientation / distance | 0.598 | 0.583 |
+| x + HSPC context | 0.708 [0.649, 0.766] | 0.690 [0.641, 0.734] |
+| c + own marks | 0.768 | 0.737 |
+| d + patient-minus-HSPC marks | 0.768 | 0.733 |
+| e + methylation | 0.767 | 0.720 |
+| f + ATAC | 0.769 | 0.726 |
+| g + RNA (= everything) | 0.771 [0.692, 0.845] | 0.728 [0.664, 0.782] |
+| everything without own-patient features (a, b, x) | 0.708 | 0.690 |
+| labels permuted within donor | 0.493 | |
+| Hi-C models | aml_refin 0.663 [0.640, 0.683], aml_diff 0.689 [0.653, 0.713], aml_diffhspc 0.667 [0.642, 0.689] | |
+
+All variants of the same row set; all-AML loops give 0.779 / 0.734 (Hi-C 0.666 / 0.686 / 0.668), enhancer-like stripes 0.836 / 0.756 (Hi-C 0.66; n = 91 pairs, intervals 0.78 to 0.88 / 0.66 to 0.85). Marks effect of the classifier (everything minus without own-patient features): HGB +0.063 [0.028, 0.096], logistic +0.038 [0.003, 0.073]; Hi-C models +0.052 / +0.068 / +0.050. Classifier minus aml_diff: HGB +0.083 [0.027, 0.141], logistic +0.039 [-0.003, 0.076]; minus aml_refin +0.108 [0.040, 0.178] / +0.064 [0.011, 0.114]. Increments (HGB): x +0.110 [0.059, 0.156], c +0.059 [0.028, 0.086], b +0.039 [0.003, 0.074], d / e / f / g within +-0.003 and intervals containing 0; drop-one differences of every group are below 0.01. Single groups with the level (HGB): c 0.732, d 0.739, x 0.694 (HSPC marks 0.688, healthy methylation 0.651, HSPC ATAC / RNA 0.632), f 0.716, g 0.655, e 0.634, b 0.598. Learning curve (HGB, everything): 0.696 / 0.701 / 0.734 / 0.754 / 0.764 / 0.774 with 1 / 2 / 3 / 5 / 7 / 9 training donors, still rising; without own-patient features 0.643 to 0.713.
+
+Residual ranking among the 1805 private loops (Spearman with measured minus reference; partial = given reference and HSPC ranks): regression HGB on everything 0.395 [0.289, 0.490], partial 0.326 [0.220, 0.424]; ridge 0.313, partial 0.248; regression without own-patient features 0.360, partial 0.280. Hi-C models: aml_refin 0.182 (partial 0.070), aml_diff 0.121 (0.038), aml_diffhspc 0.120 (0.031). The classifier score itself correlates negatively with the residual (-0.21 HGB, -0.18 logistic; partial -0.21 / -0.17).
+
+### Verdict
+The Hi-C models are below the input ceiling of this test: gradient boosting reaches 0.771 (logistic 0.728), 0.08 (0.04) above aml_diff and 0.11 (0.06) above aml_refin, and the regression ceiling for the residual Spearman (partial 0.33) exceeds C3 (0.20) while the Hi-C models reach 0.03 to 0.07 partial. The gap is not patient-specific information: patient-independent features alone (a, b, x) give 0.708 (0.690) and the classifier's marks effect (+0.04 to +0.06) equals that of the Hi-C models (+0.05 to +0.07). The AUROC is carried by HSPC context (+0.11; HSPC marks, then healthy methylation and HSPC ATAC / RNA; the HSPC marks mark the loop anchors as regulatory elements against random pairs), own marks (+0.06) and sequence / distance (+0.04); patient-minus-HSPC marks, methylation, ATAC and RNA add nothing beyond the own marks (each +0.003 or less, drop-one below 0.01). C2 (0.70) is reachable by a classifier on the existing inputs (0.77 HGB, interval 0.69 to 0.85; the logistic 0.73 interval includes 0.70), so the inputs do not cap the test at 0.69.
+
+### Caveats
+Matching leaves a residual reference difference (AUROC of the reference 0.545 between positives and controls inside the 0.15 caliper), so the level-only check is 0.56 and not 0.50; this is included in every classifier value but is not in the Hi-C residual scores. The classifier is trained directly on this contrast (pos against random pairs) while the Hi-C models learn a map and are scored on it afterwards; its 0.77 is a ceiling for features, not a model that predicts Hi-C. Nine training donors only (the Hi-C models see more training patients), one seed, fixed hyper-parameters, no monotone constraints, many correlated features (1268) on 2600 rows; the partial Spearman residualises ranks linearly and keeps the residualisation fixed across bootstrap resamples. Patient-minus-AML-mean references (diffA) use the marks of the other nine donors (no labels). aml_loopfocus has missing scores for most matched rows in the T1b table and is left out. Donors 1360 and 1916 have no CTCF, WGBS or RNA (NaN columns).
+
+### Recommendations
+Feed the Hi-C model the HSPC marks (it reads the patient's own marks and the HSPC reference Hi-C only) and the CTCF motif / orientation and gene annotation tracks as inputs, and train with the ranking of A_refrand controls (section 70) so that the marks-based locus-activity signal enters the residual; the data do not support extra patient-minus-HSPC, methylation, ATAC or RNA channels for this test (no increment). More training donors would help (learning curve not saturated). Quantity prediction (C3) has the larger gap (regression partial 0.33 against 0.03 to 0.07), and about 0.28 of it comes from patient-independent features.
+
+### Files
+`scripts/aml_input_ceiling.py`, `results/aml_input_ceiling/{table_main,auroc_all_variants,auroc_per_donor,paired_contrasts,spearman,learning_curve,dataset_summary,feature_groups}.csv`, `oof_scores.csv.gz`, `fig_input_ceiling.png`.
