@@ -1,0 +1,15 @@
+subset,kind,class,n_pos,n_matched,frac_matched
+all objects (each model on its own coverage),loop,all,2276,1407,0.6182
+all objects (each model on its own coverage),loop,private,1805,1302,0.7213
+all objects (each model on its own coverage),loop,recurrent,193,93,0.4819
+all objects (each model on its own coverage),loop,shared1,278,211,0.7590
+all objects (each model on its own coverage),loop,PE,301,255,0.8472
+all objects (each model on its own coverage),loop,PS,103,80,0.7767
+all objects (each model on its own coverage),loop,other,1872,1255,0.6704
+all objects (each model on its own coverage),stripe,all,1075,261,0.2428
+all objects (each model on its own coverage),stripe,private,285,128,0.4491
+all objects (each model on its own coverage),stripe,recurrent,595,121,0.2034
+all objects (each model on its own coverage),stripe,shared1,195,67,0.3436
+all objects (each model on its own coverage),stripe,enh,326,91,0.2791
+all objects (each model on its own coverage),stripe,rep,442,121,0.2738
+all objects (each model on its own coverage),stripe,other,307,106,0.3453

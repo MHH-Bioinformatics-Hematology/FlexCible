@@ -1,0 +1,157 @@
+kind,class,model,block,target,n,spearman,lo,hi,median_donor_spearman
+loop,all,reference,reference,level,2276,0.5593,0.4872,0.6405,0.5786
+loop,all,reference,reference,gain_vs_own_hspc,2276,0.2888,0.2232,0.3581,0.3724
+loop,all,consensus12,reference,level,2276,0.5073,0.4323,0.5810,0.5425
+loop,all,consensus12,reference,gain_vs_own_hspc,2276,0.2215,0.1543,0.2965,0.2701
+loop,all,base_refin@aml,no AML in training,level,2276,0.5633,0.4800,0.6505,0.5984
+loop,all,base_refin@aml,no AML in training,gain_vs_own_hspc,2276,0.2977,0.2131,0.3704,0.3577
+loop,all,c12_refin,no AML in training,level,2276,0.4940,0.4100,0.5686,0.5070
+loop,all,c12_refin,no AML in training,gain_vs_own_hspc,2276,0.0891,0.0383,0.1291,0.0652
+loop,all,c12_refres,no AML in training,level,2276,0.5060,0.4224,0.5805,0.5188
+loop,all,c12_refres,no AML in training,gain_vs_own_hspc,2276,0.1030,0.0481,0.1472,0.0339
+loop,all,c12_diffcells,no AML in training,level,2276,0.5095,0.4254,0.5872,0.5350
+loop,all,c12_diffcells,no AML in training,gain_vs_own_hspc,2276,0.0879,0.0385,0.1218,0.0825
+loop,all,corigami_q,"competitors (published models, no AML in training)",level,1886,0.0972,0.0518,0.1378,0.1175
+loop,all,corigami_q,"competitors (published models, no AML in training)",gain_vs_own_hspc,1886,0.0076,-0.0475,0.0627,-0.0048
+loop,all,corigami_raw,"competitors (published models, no AML in training)",level,1886,0.0480,-0.0214,0.1095,0.0379
+loop,all,epiphany_zero,"competitors (published models, no AML in training)",level,1880,0.1154,0.0761,0.1628,0.0922
+loop,all,epiphany_zero,"competitors (published models, no AML in training)",gain_vs_own_hspc,1880,0.0467,-0.0128,0.0908,0.0053
+loop,all,epiphany_mean,"competitors (published models, no AML in training)",level,1880,0.1130,0.0731,0.1621,0.0972
+loop,all,epiphany_mean,"competitors (published models, no AML in training)",gain_vs_own_hspc,1880,0.0457,-0.0122,0.0952,-0.0059
+loop,all,akita,"competitors (published models, no AML in training)",level,2228,0.4116,0.3337,0.4826,0.4084
+loop,all,aml_refin,trained with AML patients (not comparable to competitors),level,2276,0.5495,0.4722,0.6246,0.5920
+loop,all,aml_refin,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,2276,0.2757,0.1924,0.3600,0.3089
+loop,all,aml_diff,trained with AML patients (not comparable to competitors),level,2276,0.5521,0.4625,0.6334,0.6067
+loop,all,aml_diff,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,2276,0.2625,0.1730,0.3516,0.3123
+loop,all,aml_diffhspc,trained with AML patients (not comparable to competitors),level,2276,0.5536,0.4840,0.6332,0.5907
+loop,all,aml_diffhspc,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,2276,0.2594,0.1726,0.3280,0.3215
+loop,private,reference,reference,level,1805,0.5068,0.4445,0.5976,0.5311
+loop,private,reference,reference,gain_vs_own_hspc,1805,0.2542,0.1955,0.3229,0.2978
+loop,private,consensus12,reference,level,1805,0.4911,0.3925,0.5823,0.5666
+loop,private,consensus12,reference,gain_vs_own_hspc,1805,0.2473,0.1735,0.3398,0.2670
+loop,private,base_refin@aml,no AML in training,level,1805,0.5168,0.4277,0.5938,0.5600
+loop,private,base_refin@aml,no AML in training,gain_vs_own_hspc,1805,0.2710,0.1871,0.3574,0.2980
+loop,private,c12_refin,no AML in training,level,1805,0.4807,0.3962,0.5678,0.5477
+loop,private,c12_refin,no AML in training,gain_vs_own_hspc,1805,0.0953,0.0323,0.1530,0.0697
+loop,private,c12_refres,no AML in training,level,1805,0.4899,0.4097,0.5840,0.5514
+loop,private,c12_refres,no AML in training,gain_vs_own_hspc,1805,0.1045,0.0423,0.1573,0.0853
+loop,private,c12_diffcells,no AML in training,level,1805,0.4942,0.3923,0.5821,0.5747
+loop,private,c12_diffcells,no AML in training,gain_vs_own_hspc,1805,0.0910,0.0465,0.1292,0.1070
+loop,private,corigami_q,"competitors (published models, no AML in training)",level,1486,0.0912,0.0337,0.1468,0.0887
+loop,private,corigami_q,"competitors (published models, no AML in training)",gain_vs_own_hspc,1486,0.0137,-0.0460,0.0782,-0.0267
+loop,private,corigami_raw,"competitors (published models, no AML in training)",level,1486,0.0461,-0.0207,0.1145,0.0518
+loop,private,epiphany_zero,"competitors (published models, no AML in training)",level,1480,0.1041,0.0564,0.1567,0.0849
+loop,private,epiphany_zero,"competitors (published models, no AML in training)",gain_vs_own_hspc,1480,0.0371,-0.0042,0.0681,-0.0059
+loop,private,epiphany_mean,"competitors (published models, no AML in training)",level,1480,0.1044,0.0531,0.1633,0.0885
+loop,private,epiphany_mean,"competitors (published models, no AML in training)",gain_vs_own_hspc,1480,0.0403,0.0005,0.0711,-0.0001
+loop,private,akita,"competitors (published models, no AML in training)",level,1776,0.4017,0.3175,0.4805,0.4132
+loop,private,aml_refin,trained with AML patients (not comparable to competitors),level,1805,0.5003,0.4204,0.5711,0.5605
+loop,private,aml_refin,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,1805,0.2535,0.1708,0.3443,0.2537
+loop,private,aml_diff,trained with AML patients (not comparable to competitors),level,1805,0.5026,0.4266,0.5860,0.5736
+loop,private,aml_diff,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,1805,0.2379,0.1450,0.3410,0.2635
+loop,private,aml_diffhspc,trained with AML patients (not comparable to competitors),level,1805,0.5017,0.4301,0.5808,0.5528
+loop,private,aml_diffhspc,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,1805,0.2329,0.1552,0.3070,0.2670
+loop,recurrent,reference,reference,level,193,0.7015,0.6221,0.7709,0.7046
+loop,recurrent,reference,reference,gain_vs_own_hspc,193,0.4585,0.3618,0.5592,0.4923
+loop,recurrent,consensus12,reference,level,193,0.4037,0.3059,0.5361,0.4180
+loop,recurrent,consensus12,reference,gain_vs_own_hspc,193,0.0872,-0.0235,0.1989,0.0496
+loop,recurrent,base_refin@aml,no AML in training,level,193,0.6401,0.5475,0.7062,0.6544
+loop,recurrent,base_refin@aml,no AML in training,gain_vs_own_hspc,193,0.4274,0.3087,0.5404,0.3123
+loop,recurrent,c12_refin,no AML in training,level,193,0.3647,0.2061,0.5071,0.2848
+loop,recurrent,c12_refin,no AML in training,gain_vs_own_hspc,193,0.0900,-0.0662,0.2043,0.1679
+loop,recurrent,c12_refres,no AML in training,level,193,0.3892,0.2601,0.5099,0.3477
+loop,recurrent,c12_refres,no AML in training,gain_vs_own_hspc,193,0.1934,0.0275,0.3337,0.1961
+loop,recurrent,c12_diffcells,no AML in training,level,193,0.3578,0.2435,0.4873,0.3629
+loop,recurrent,c12_diffcells,no AML in training,gain_vs_own_hspc,193,0.1302,-0.0554,0.2743,0.1857
+loop,recurrent,corigami_q,"competitors (published models, no AML in training)",level,166,0.0172,-0.0836,0.1109,0.0664
+loop,recurrent,corigami_q,"competitors (published models, no AML in training)",gain_vs_own_hspc,166,-0.0216,-0.2039,0.1221,-0.0214
+loop,recurrent,corigami_raw,"competitors (published models, no AML in training)",level,166,0.1018,-0.0597,0.2700,0.0845
+loop,recurrent,epiphany_zero,"competitors (published models, no AML in training)",level,166,0.1281,-0.1380,0.3363,0.2056
+loop,recurrent,epiphany_zero,"competitors (published models, no AML in training)",gain_vs_own_hspc,166,0.0710,-0.1624,0.2356,0.0312
+loop,recurrent,epiphany_mean,"competitors (published models, no AML in training)",level,166,0.1312,-0.1535,0.3455,0.2051
+loop,recurrent,epiphany_mean,"competitors (published models, no AML in training)",gain_vs_own_hspc,166,0.0608,-0.1398,0.2081,0.0135
+loop,recurrent,akita,"competitors (published models, no AML in training)",level,183,0.2338,0.0960,0.4110,0.2405
+loop,recurrent,aml_refin,trained with AML patients (not comparable to competitors),level,193,0.6108,0.5165,0.6878,0.6029
+loop,recurrent,aml_refin,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,193,0.3450,0.2258,0.4439,0.3089
+loop,recurrent,aml_diff,trained with AML patients (not comparable to competitors),level,193,0.6359,0.5428,0.7060,0.6472
+loop,recurrent,aml_diff,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,193,0.3668,0.2683,0.4801,0.3922
+loop,recurrent,aml_diffhspc,trained with AML patients (not comparable to competitors),level,193,0.6547,0.5426,0.7380,0.6753
+loop,recurrent,aml_diffhspc,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,193,0.4029,0.2934,0.5071,0.5263
+stripe,all,reference,reference,level,1072,0.7936,0.7347,0.8472,0.8116
+stripe,all,reference,reference,gain_vs_own_hspc,1069,0.4640,0.3744,0.5576,0.5527
+stripe,all,consensus12,reference,level,1072,0.6967,0.6083,0.7733,0.6960
+stripe,all,consensus12,reference,gain_vs_own_hspc,1069,0.3153,0.1853,0.4381,0.3164
+stripe,all,base_refin@aml,no AML in training,level,1073,0.8061,0.7526,0.8557,0.8106
+stripe,all,base_refin@aml,no AML in training,gain_vs_own_hspc,1069,0.4897,0.4167,0.5573,0.5189
+stripe,all,c12_refin,no AML in training,level,1073,0.7076,0.6253,0.7836,0.7158
+stripe,all,c12_refin,no AML in training,gain_vs_own_hspc,1069,0.2254,0.1688,0.2783,0.2578
+stripe,all,c12_refres,no AML in training,level,1073,0.6974,0.6096,0.7712,0.7137
+stripe,all,c12_refres,no AML in training,gain_vs_own_hspc,1069,0.2340,0.1318,0.3537,0.2874
+stripe,all,c12_diffcells,no AML in training,level,1073,0.7013,0.6268,0.7717,0.6969
+stripe,all,c12_diffcells,no AML in training,gain_vs_own_hspc,1069,0.2272,0.1712,0.2762,0.1821
+stripe,all,corigami_q,"competitors (published models, no AML in training)",level,919,0.1400,0.0891,0.2017,0.1518
+stripe,all,corigami_q,"competitors (published models, no AML in training)",gain_vs_own_hspc,915,0.0195,-0.0367,0.0974,0.0394
+stripe,all,corigami_raw,"competitors (published models, no AML in training)",level,919,0.0904,0.0230,0.1601,0.1316
+stripe,all,epiphany_zero,"competitors (published models, no AML in training)",level,887,0.1265,0.0444,0.2362,0.1239
+stripe,all,epiphany_zero,"competitors (published models, no AML in training)",gain_vs_own_hspc,883,0.0006,-0.0831,0.0964,0.0340
+stripe,all,epiphany_mean,"competitors (published models, no AML in training)",level,887,0.1202,0.0225,0.2396,0.1140
+stripe,all,epiphany_mean,"competitors (published models, no AML in training)",gain_vs_own_hspc,883,-0.0076,-0.0921,0.0987,0.0373
+stripe,all,akita,"competitors (published models, no AML in training)",level,604,0.3322,0.2141,0.4670,0.2832
+stripe,all,aml_refin,trained with AML patients (not comparable to competitors),level,1073,0.8022,0.7575,0.8456,0.8329
+stripe,all,aml_refin,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,1069,0.5039,0.4195,0.5879,0.5407
+stripe,all,aml_diff,trained with AML patients (not comparable to competitors),level,1073,0.7949,0.7354,0.8440,0.8332
+stripe,all,aml_diff,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,1069,0.4943,0.3741,0.5950,0.5573
+stripe,all,aml_diffhspc,trained with AML patients (not comparable to competitors),level,1073,0.7950,0.7417,0.8484,0.8364
+stripe,all,aml_diffhspc,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,1069,0.4905,0.3938,0.5902,0.5233
+stripe,private,reference,reference,level,283,0.7555,0.6827,0.8474,0.8064
+stripe,private,reference,reference,gain_vs_own_hspc,281,0.4412,0.2900,0.5876,0.4891
+stripe,private,consensus12,reference,level,282,0.7060,0.6455,0.7684,0.7374
+stripe,private,consensus12,reference,gain_vs_own_hspc,281,0.3220,0.1967,0.4428,0.3824
+stripe,private,base_refin@aml,no AML in training,level,283,0.7660,0.7095,0.8384,0.7698
+stripe,private,base_refin@aml,no AML in training,gain_vs_own_hspc,281,0.4591,0.3605,0.5863,0.4549
+stripe,private,c12_refin,no AML in training,level,283,0.7110,0.6419,0.7853,0.7361
+stripe,private,c12_refin,no AML in training,gain_vs_own_hspc,281,0.2706,0.1335,0.3774,0.3086
+stripe,private,c12_refres,no AML in training,level,283,0.7034,0.6392,0.7773,0.7312
+stripe,private,c12_refres,no AML in training,gain_vs_own_hspc,281,0.2938,0.1669,0.4316,0.2951
+stripe,private,c12_diffcells,no AML in training,level,283,0.6966,0.6340,0.7626,0.7356
+stripe,private,c12_diffcells,no AML in training,gain_vs_own_hspc,281,0.2565,0.1619,0.3521,0.2519
+stripe,private,corigami_q,"competitors (published models, no AML in training)",level,253,0.1981,0.1453,0.2690,0.2291
+stripe,private,corigami_q,"competitors (published models, no AML in training)",gain_vs_own_hspc,251,0.0005,-0.0916,0.1412,-0.0551
+stripe,private,corigami_raw,"competitors (published models, no AML in training)",level,253,0.0747,-0.0105,0.1768,0.1711
+stripe,private,epiphany_zero,"competitors (published models, no AML in training)",level,239,0.0963,-0.0620,0.2925,0.0804
+stripe,private,epiphany_zero,"competitors (published models, no AML in training)",gain_vs_own_hspc,237,-0.0722,-0.1918,0.0878,-0.0541
+stripe,private,epiphany_mean,"competitors (published models, no AML in training)",level,239,0.0850,-0.0693,0.2672,0.1013
+stripe,private,epiphany_mean,"competitors (published models, no AML in training)",gain_vs_own_hspc,237,-0.0807,-0.2089,0.0914,0.0315
+stripe,private,akita,"competitors (published models, no AML in training)",level,166,0.4105,0.2590,0.5259,0.4214
+stripe,private,aml_refin,trained with AML patients (not comparable to competitors),level,283,0.7806,0.7336,0.8350,0.8128
+stripe,private,aml_refin,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,281,0.5014,0.3984,0.6092,0.6133
+stripe,private,aml_diff,trained with AML patients (not comparable to competitors),level,283,0.7737,0.7166,0.8273,0.8120
+stripe,private,aml_diff,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,281,0.4736,0.3670,0.5847,0.5565
+stripe,private,aml_diffhspc,trained with AML patients (not comparable to competitors),level,283,0.7684,0.7067,0.8366,0.8176
+stripe,private,aml_diffhspc,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,281,0.4641,0.3445,0.5808,0.6015
+stripe,recurrent,reference,reference,level,595,0.7981,0.7434,0.8428,0.8148
+stripe,recurrent,reference,reference,gain_vs_own_hspc,595,0.4820,0.4111,0.5638,0.5441
+stripe,recurrent,consensus12,reference,level,595,0.6634,0.5383,0.7531,0.6743
+stripe,recurrent,consensus12,reference,gain_vs_own_hspc,595,0.3099,0.1409,0.4690,0.2966
+stripe,recurrent,base_refin@aml,no AML in training,level,595,0.8081,0.7488,0.8501,0.8077
+stripe,recurrent,base_refin@aml,no AML in training,gain_vs_own_hspc,595,0.4783,0.3952,0.5585,0.4912
+stripe,recurrent,c12_refin,no AML in training,level,595,0.6849,0.5737,0.7788,0.7423
+stripe,recurrent,c12_refin,no AML in training,gain_vs_own_hspc,595,0.1494,0.0941,0.2018,0.2068
+stripe,recurrent,c12_refres,no AML in training,level,595,0.6747,0.5552,0.7687,0.7496
+stripe,recurrent,c12_refres,no AML in training,gain_vs_own_hspc,595,0.1811,0.0871,0.2795,0.2156
+stripe,recurrent,c12_diffcells,no AML in training,level,595,0.6945,0.5769,0.7782,0.7360
+stripe,recurrent,c12_diffcells,no AML in training,gain_vs_own_hspc,595,0.1941,0.1392,0.2481,0.1782
+stripe,recurrent,corigami_q,"competitors (published models, no AML in training)",level,496,0.0912,0.0117,0.1767,0.0611
+stripe,recurrent,corigami_q,"competitors (published models, no AML in training)",gain_vs_own_hspc,496,-0.0006,-0.0889,0.1089,0.0250
+stripe,recurrent,corigami_raw,"competitors (published models, no AML in training)",level,496,0.0815,0.0284,0.1435,0.0994
+stripe,recurrent,epiphany_zero,"competitors (published models, no AML in training)",level,483,0.1680,0.0852,0.2552,0.2252
+stripe,recurrent,epiphany_zero,"competitors (published models, no AML in training)",gain_vs_own_hspc,483,-0.0063,-0.1018,0.1011,0.0142
+stripe,recurrent,epiphany_mean,"competitors (published models, no AML in training)",level,483,0.1568,0.0751,0.2525,0.2122
+stripe,recurrent,epiphany_mean,"competitors (published models, no AML in training)",gain_vs_own_hspc,483,-0.0123,-0.1024,0.0842,-0.0075
+stripe,recurrent,akita,"competitors (published models, no AML in training)",level,330,0.2184,0.0993,0.3479,0.1602
+stripe,recurrent,aml_refin,trained with AML patients (not comparable to competitors),level,595,0.7983,0.7436,0.8496,0.8432
+stripe,recurrent,aml_refin,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,595,0.4854,0.3853,0.5974,0.5352
+stripe,recurrent,aml_diff,trained with AML patients (not comparable to competitors),level,595,0.7889,0.7141,0.8478,0.8420
+stripe,recurrent,aml_diff,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,595,0.4848,0.3634,0.6044,0.5458
+stripe,recurrent,aml_diffhspc,trained with AML patients (not comparable to competitors),level,595,0.7909,0.7292,0.8508,0.8447
+stripe,recurrent,aml_diffhspc,trained with AML patients (not comparable to competitors),gain_vs_own_hspc,595,0.4886,0.3780,0.6077,0.5410

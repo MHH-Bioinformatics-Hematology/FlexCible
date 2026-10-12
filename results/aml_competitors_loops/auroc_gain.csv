@@ -1,0 +1,393 @@
+subset,kind,class,control,model,block,n_pos,n_ctl,n_donors,auroc,lo,hi
+all objects (each model on its own coverage),loop,all,B_rand,measured,reference,2276,2276,10,0.8710,0.8605,0.8839
+all objects (each model on its own coverage),loop,all,B_rand,reference,reference,2276,2276,10,0.7226,0.7075,0.7379
+all objects (each model on its own coverage),loop,all,B_rand,consensus12,reference,2276,2276,10,0.6952,0.6754,0.7137
+all objects (each model on its own coverage),loop,all,B_rand,base_refin@aml,no AML in training,2276,2276,10,0.7619,0.7482,0.7753
+all objects (each model on its own coverage),loop,all,B_rand,c12_refin,no AML in training,2276,2276,10,0.6086,0.5620,0.6544
+all objects (each model on its own coverage),loop,all,B_rand,c12_refres,no AML in training,2276,2276,10,0.6403,0.5902,0.6831
+all objects (each model on its own coverage),loop,all,B_rand,c12_diffcells,no AML in training,2276,2276,10,0.5865,0.5408,0.6344
+all objects (each model on its own coverage),loop,all,B_rand,corigami_q,"competitors (published models, no AML in training)",2276,2276,10,0.5592,0.5325,0.5874
+all objects (each model on its own coverage),loop,all,B_rand,corigami_raw,"competitors (published models, no AML in training)",2276,2276,10,0.4400,0.3954,0.4805
+all objects (each model on its own coverage),loop,all,B_rand,epiphany_zero,"competitors (published models, no AML in training)",2276,2276,10,0.4925,0.4457,0.5358
+all objects (each model on its own coverage),loop,all,B_rand,epiphany_mean,"competitors (published models, no AML in training)",2276,2276,10,0.4808,0.4361,0.5285
+all objects (each model on its own coverage),loop,all,B_rand,aml_refin,trained with AML patients (not comparable to competitors),2276,2276,10,0.7619,0.7463,0.7748
+all objects (each model on its own coverage),loop,all,B_rand,aml_diff,trained with AML patients (not comparable to competitors),2276,2276,10,0.7776,0.7612,0.7913
+all objects (each model on its own coverage),loop,all,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),2276,2276,10,0.7702,0.7572,0.7833
+all objects (each model on its own coverage),loop,all,A_refrand,measured,reference,1407,1407,10,0.8748,0.8551,0.8955
+all objects (each model on its own coverage),loop,all,A_refrand,reference,reference,1407,1407,10,0.5776,0.5645,0.5895
+all objects (each model on its own coverage),loop,all,A_refrand,consensus12,reference,1407,1407,10,0.6612,0.6311,0.6896
+all objects (each model on its own coverage),loop,all,A_refrand,base_refin@aml,no AML in training,1407,1407,10,0.6655,0.6462,0.6827
+all objects (each model on its own coverage),loop,all,A_refrand,c12_refin,no AML in training,1407,1407,10,0.6198,0.5619,0.6619
+all objects (each model on its own coverage),loop,all,A_refrand,c12_refres,no AML in training,1407,1407,10,0.6316,0.5775,0.6680
+all objects (each model on its own coverage),loop,all,A_refrand,c12_diffcells,no AML in training,1407,1407,10,0.5884,0.5503,0.6275
+all objects (each model on its own coverage),loop,all,A_refrand,corigami_q,"competitors (published models, no AML in training)",1407,1407,10,0.5430,0.5098,0.5725
+all objects (each model on its own coverage),loop,all,A_refrand,corigami_raw,"competitors (published models, no AML in training)",1407,1407,10,0.5156,0.4952,0.5342
+all objects (each model on its own coverage),loop,all,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",1407,1407,10,0.5133,0.4856,0.5442
+all objects (each model on its own coverage),loop,all,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",1407,1407,10,0.5060,0.4805,0.5323
+all objects (each model on its own coverage),loop,all,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),1407,1407,10,0.6868,0.6696,0.7023
+all objects (each model on its own coverage),loop,all,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),1407,1407,10,0.6968,0.6766,0.7145
+all objects (each model on its own coverage),loop,all,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),1407,1407,10,0.6836,0.6702,0.6936
+all objects (each model on its own coverage),loop,private,B_rand,measured,reference,1805,2276,10,0.8715,0.8606,0.8843
+all objects (each model on its own coverage),loop,private,B_rand,reference,reference,1805,2276,10,0.6949,0.6792,0.7087
+all objects (each model on its own coverage),loop,private,B_rand,consensus12,reference,1805,2276,10,0.6943,0.6725,0.7127
+all objects (each model on its own coverage),loop,private,B_rand,base_refin@aml,no AML in training,1805,2276,10,0.7404,0.7266,0.7522
+all objects (each model on its own coverage),loop,private,B_rand,c12_refin,no AML in training,1805,2276,10,0.6103,0.5532,0.6583
+all objects (each model on its own coverage),loop,private,B_rand,c12_refres,no AML in training,1805,2276,10,0.6381,0.5773,0.6837
+all objects (each model on its own coverage),loop,private,B_rand,c12_diffcells,no AML in training,1805,2276,10,0.5851,0.5268,0.6404
+all objects (each model on its own coverage),loop,private,B_rand,corigami_q,"competitors (published models, no AML in training)",1805,2276,10,0.5495,0.5249,0.5749
+all objects (each model on its own coverage),loop,private,B_rand,corigami_raw,"competitors (published models, no AML in training)",1805,2276,10,0.4586,0.4164,0.5002
+all objects (each model on its own coverage),loop,private,B_rand,epiphany_zero,"competitors (published models, no AML in training)",1805,2276,10,0.5014,0.4520,0.5457
+all objects (each model on its own coverage),loop,private,B_rand,epiphany_mean,"competitors (published models, no AML in training)",1805,2276,10,0.4912,0.4419,0.5395
+all objects (each model on its own coverage),loop,private,B_rand,aml_refin,trained with AML patients (not comparable to competitors),1805,2276,10,0.7406,0.7284,0.7537
+all objects (each model on its own coverage),loop,private,B_rand,aml_diff,trained with AML patients (not comparable to competitors),1805,2276,10,0.7554,0.7384,0.7713
+all objects (each model on its own coverage),loop,private,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),1805,2276,10,0.7467,0.7329,0.7615
+all objects (each model on its own coverage),loop,private,A_refrand,measured,reference,1302,1302,10,0.8774,0.8620,0.8969
+all objects (each model on its own coverage),loop,private,A_refrand,reference,reference,1302,1302,10,0.5720,0.5586,0.5860
+all objects (each model on its own coverage),loop,private,A_refrand,consensus12,reference,1302,1302,10,0.6640,0.6318,0.6910
+all objects (each model on its own coverage),loop,private,A_refrand,base_refin@aml,no AML in training,1302,1302,10,0.6611,0.6412,0.6777
+all objects (each model on its own coverage),loop,private,A_refrand,c12_refin,no AML in training,1302,1302,10,0.6126,0.5696,0.6539
+all objects (each model on its own coverage),loop,private,A_refrand,c12_refres,no AML in training,1302,1302,10,0.6276,0.5755,0.6671
+all objects (each model on its own coverage),loop,private,A_refrand,c12_diffcells,no AML in training,1302,1302,10,0.5860,0.5434,0.6294
+all objects (each model on its own coverage),loop,private,A_refrand,corigami_q,"competitors (published models, no AML in training)",1302,1302,10,0.5388,0.5061,0.5755
+all objects (each model on its own coverage),loop,private,A_refrand,corigami_raw,"competitors (published models, no AML in training)",1302,1302,10,0.5150,0.4920,0.5382
+all objects (each model on its own coverage),loop,private,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",1302,1302,10,0.5137,0.4772,0.5527
+all objects (each model on its own coverage),loop,private,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",1302,1302,10,0.5083,0.4762,0.5406
+all objects (each model on its own coverage),loop,private,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),1302,1302,10,0.6823,0.6676,0.6939
+all objects (each model on its own coverage),loop,private,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),1302,1302,10,0.6940,0.6754,0.7104
+all objects (each model on its own coverage),loop,private,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),1302,1302,10,0.6786,0.6659,0.6896
+all objects (each model on its own coverage),loop,recurrent,B_rand,measured,reference,193,2276,10,0.8800,0.8602,0.8976
+all objects (each model on its own coverage),loop,recurrent,B_rand,reference,reference,193,2276,10,0.8602,0.8384,0.8854
+all objects (each model on its own coverage),loop,recurrent,B_rand,consensus12,reference,193,2276,10,0.6509,0.5819,0.7147
+all objects (each model on its own coverage),loop,recurrent,B_rand,base_refin@aml,no AML in training,193,2276,10,0.8647,0.8276,0.8943
+all objects (each model on its own coverage),loop,recurrent,B_rand,c12_refin,no AML in training,193,2276,10,0.5583,0.5186,0.5914
+all objects (each model on its own coverage),loop,recurrent,B_rand,c12_refres,no AML in training,193,2276,10,0.6177,0.5364,0.6864
+all objects (each model on its own coverage),loop,recurrent,B_rand,c12_diffcells,no AML in training,193,2276,10,0.5721,0.4663,0.6596
+all objects (each model on its own coverage),loop,recurrent,B_rand,corigami_q,"competitors (published models, no AML in training)",193,2276,10,0.6261,0.5671,0.6739
+all objects (each model on its own coverage),loop,recurrent,B_rand,corigami_raw,"competitors (published models, no AML in training)",193,2276,10,0.2744,0.2275,0.3197
+all objects (each model on its own coverage),loop,recurrent,B_rand,epiphany_zero,"competitors (published models, no AML in training)",193,2276,10,0.4567,0.3875,0.5293
+all objects (each model on its own coverage),loop,recurrent,B_rand,epiphany_mean,"competitors (published models, no AML in training)",193,2276,10,0.4427,0.3832,0.5067
+all objects (each model on its own coverage),loop,recurrent,B_rand,aml_refin,trained with AML patients (not comparable to competitors),193,2276,10,0.8627,0.8338,0.8885
+all objects (each model on its own coverage),loop,recurrent,B_rand,aml_diff,trained with AML patients (not comparable to competitors),193,2276,10,0.8692,0.8415,0.8953
+all objects (each model on its own coverage),loop,recurrent,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),193,2276,10,0.8753,0.8440,0.9019
+all objects (each model on its own coverage),loop,recurrent,A_refrand,measured,reference,93,93,10,0.8840,0.8404,0.9102
+all objects (each model on its own coverage),loop,recurrent,A_refrand,reference,reference,93,93,10,0.6519,0.6204,0.6833
+all objects (each model on its own coverage),loop,recurrent,A_refrand,consensus12,reference,93,93,10,0.6135,0.5361,0.6870
+all objects (each model on its own coverage),loop,recurrent,A_refrand,base_refin@aml,no AML in training,93,93,10,0.6970,0.6356,0.7536
+all objects (each model on its own coverage),loop,recurrent,A_refrand,c12_refin,no AML in training,93,93,10,0.5717,0.4840,0.6609
+all objects (each model on its own coverage),loop,recurrent,A_refrand,c12_refres,no AML in training,93,93,10,0.5919,0.5006,0.6931
+all objects (each model on its own coverage),loop,recurrent,A_refrand,c12_diffcells,no AML in training,93,93,10,0.5985,0.4796,0.7156
+all objects (each model on its own coverage),loop,recurrent,A_refrand,corigami_q,"competitors (published models, no AML in training)",93,93,10,0.5811,0.5008,0.6637
+all objects (each model on its own coverage),loop,recurrent,A_refrand,corigami_raw,"competitors (published models, no AML in training)",93,93,10,0.4267,0.3461,0.5054
+all objects (each model on its own coverage),loop,recurrent,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",93,93,10,0.4595,0.3854,0.5359
+all objects (each model on its own coverage),loop,recurrent,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",93,93,10,0.4575,0.3966,0.5301
+all objects (each model on its own coverage),loop,recurrent,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),93,93,10,0.7470,0.6936,0.8060
+all objects (each model on its own coverage),loop,recurrent,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),93,93,10,0.7192,0.6662,0.7718
+all objects (each model on its own coverage),loop,recurrent,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),93,93,10,0.7142,0.6659,0.7585
+all objects (each model on its own coverage),loop,shared1,B_rand,measured,reference,278,2276,10,0.8613,0.8456,0.8819
+all objects (each model on its own coverage),loop,shared1,B_rand,reference,reference,278,2276,10,0.8069,0.7766,0.8304
+all objects (each model on its own coverage),loop,shared1,B_rand,consensus12,reference,278,2276,10,0.7315,0.6995,0.7686
+all objects (each model on its own coverage),loop,shared1,B_rand,base_refin@aml,no AML in training,278,2276,10,0.8303,0.7955,0.8591
+all objects (each model on its own coverage),loop,shared1,B_rand,c12_refin,no AML in training,278,2276,10,0.6325,0.5673,0.6992
+all objects (each model on its own coverage),loop,shared1,B_rand,c12_refres,no AML in training,278,2276,10,0.6703,0.6150,0.7191
+all objects (each model on its own coverage),loop,shared1,B_rand,c12_diffcells,no AML in training,278,2276,10,0.6052,0.5577,0.6567
+all objects (each model on its own coverage),loop,shared1,B_rand,corigami_q,"competitors (published models, no AML in training)",278,2276,10,0.5740,0.5180,0.6380
+all objects (each model on its own coverage),loop,shared1,B_rand,corigami_raw,"competitors (published models, no AML in training)",278,2276,10,0.4388,0.3611,0.5130
+all objects (each model on its own coverage),loop,shared1,B_rand,epiphany_zero,"competitors (published models, no AML in training)",278,2276,10,0.4617,0.4089,0.5131
+all objects (each model on its own coverage),loop,shared1,B_rand,epiphany_mean,"competitors (published models, no AML in training)",278,2276,10,0.4419,0.3935,0.4843
+all objects (each model on its own coverage),loop,shared1,B_rand,aml_refin,trained with AML patients (not comparable to competitors),278,2276,10,0.8306,0.7946,0.8571
+all objects (each model on its own coverage),loop,shared1,B_rand,aml_diff,trained with AML patients (not comparable to competitors),278,2276,10,0.8579,0.8367,0.8760
+all objects (each model on its own coverage),loop,shared1,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),278,2276,10,0.8496,0.8278,0.8656
+all objects (each model on its own coverage),loop,shared1,A_refrand,measured,reference,211,211,10,0.8531,0.8233,0.8903
+all objects (each model on its own coverage),loop,shared1,A_refrand,reference,reference,211,211,10,0.6226,0.6028,0.6464
+all objects (each model on its own coverage),loop,shared1,A_refrand,consensus12,reference,211,211,10,0.6690,0.6284,0.7124
+all objects (each model on its own coverage),loop,shared1,A_refrand,base_refin@aml,no AML in training,211,211,10,0.6636,0.6098,0.7091
+all objects (each model on its own coverage),loop,shared1,A_refrand,c12_refin,no AML in training,211,211,10,0.6462,0.5914,0.7069
+all objects (each model on its own coverage),loop,shared1,A_refrand,c12_refres,no AML in training,211,211,10,0.6446,0.5888,0.7076
+all objects (each model on its own coverage),loop,shared1,A_refrand,c12_diffcells,no AML in training,211,211,10,0.6084,0.5477,0.6792
+all objects (each model on its own coverage),loop,shared1,A_refrand,corigami_q,"competitors (published models, no AML in training)",211,211,10,0.5570,0.5134,0.5999
+all objects (each model on its own coverage),loop,shared1,A_refrand,corigami_raw,"competitors (published models, no AML in training)",211,211,10,0.5240,0.4552,0.6106
+all objects (each model on its own coverage),loop,shared1,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",211,211,10,0.4640,0.4112,0.5228
+all objects (each model on its own coverage),loop,shared1,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",211,211,10,0.4509,0.3942,0.5109
+all objects (each model on its own coverage),loop,shared1,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),211,211,10,0.7134,0.6632,0.7505
+all objects (each model on its own coverage),loop,shared1,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),211,211,10,0.7377,0.6928,0.7814
+all objects (each model on its own coverage),loop,shared1,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),211,211,10,0.7177,0.6756,0.7573
+all objects (each model on its own coverage),loop,PE,B_rand,measured,reference,301,2276,10,0.8508,0.8305,0.8724
+all objects (each model on its own coverage),loop,PE,B_rand,reference,reference,301,2276,10,0.7435,0.7108,0.7713
+all objects (each model on its own coverage),loop,PE,B_rand,consensus12,reference,301,2276,10,0.7213,0.6992,0.7574
+all objects (each model on its own coverage),loop,PE,B_rand,base_refin@aml,no AML in training,301,2276,10,0.8009,0.7723,0.8297
+all objects (each model on its own coverage),loop,PE,B_rand,c12_refin,no AML in training,301,2276,10,0.6369,0.5456,0.7104
+all objects (each model on its own coverage),loop,PE,B_rand,c12_refres,no AML in training,301,2276,10,0.6368,0.5321,0.7229
+all objects (each model on its own coverage),loop,PE,B_rand,c12_diffcells,no AML in training,301,2276,10,0.5929,0.5037,0.6779
+all objects (each model on its own coverage),loop,PE,B_rand,corigami_q,"competitors (published models, no AML in training)",301,2276,10,0.5758,0.5267,0.6220
+all objects (each model on its own coverage),loop,PE,B_rand,corigami_raw,"competitors (published models, no AML in training)",301,2276,10,0.4402,0.3527,0.5022
+all objects (each model on its own coverage),loop,PE,B_rand,epiphany_zero,"competitors (published models, no AML in training)",301,2276,10,0.4852,0.3803,0.5663
+all objects (each model on its own coverage),loop,PE,B_rand,epiphany_mean,"competitors (published models, no AML in training)",301,2276,10,0.4829,0.3855,0.5668
+all objects (each model on its own coverage),loop,PE,B_rand,aml_refin,trained with AML patients (not comparable to competitors),301,2276,10,0.8130,0.7868,0.8346
+all objects (each model on its own coverage),loop,PE,B_rand,aml_diff,trained with AML patients (not comparable to competitors),301,2276,10,0.8326,0.8101,0.8546
+all objects (each model on its own coverage),loop,PE,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),301,2276,10,0.8253,0.8029,0.8481
+all objects (each model on its own coverage),loop,PE,A_refrand,measured,reference,255,255,10,0.8669,0.8471,0.8941
+all objects (each model on its own coverage),loop,PE,A_refrand,reference,reference,255,255,10,0.5943,0.5711,0.6196
+all objects (each model on its own coverage),loop,PE,A_refrand,consensus12,reference,255,255,10,0.6647,0.6380,0.7043
+all objects (each model on its own coverage),loop,PE,A_refrand,base_refin@aml,no AML in training,255,255,10,0.7104,0.6752,0.7416
+all objects (each model on its own coverage),loop,PE,A_refrand,c12_refin,no AML in training,255,255,10,0.6647,0.5944,0.7368
+all objects (each model on its own coverage),loop,PE,A_refrand,c12_refres,no AML in training,255,255,10,0.6468,0.5695,0.7213
+all objects (each model on its own coverage),loop,PE,A_refrand,c12_diffcells,no AML in training,255,255,10,0.6022,0.5331,0.6667
+all objects (each model on its own coverage),loop,PE,A_refrand,corigami_q,"competitors (published models, no AML in training)",255,255,10,0.5495,0.5211,0.5938
+all objects (each model on its own coverage),loop,PE,A_refrand,corigami_raw,"competitors (published models, no AML in training)",255,255,10,0.5066,0.4634,0.5522
+all objects (each model on its own coverage),loop,PE,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",255,255,10,0.5171,0.4248,0.6115
+all objects (each model on its own coverage),loop,PE,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",255,255,10,0.5164,0.4349,0.6066
+all objects (each model on its own coverage),loop,PE,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),255,255,10,0.7461,0.7123,0.7827
+all objects (each model on its own coverage),loop,PE,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),255,255,10,0.7540,0.7168,0.7900
+all objects (each model on its own coverage),loop,PE,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),255,255,10,0.7434,0.7073,0.7780
+all objects (each model on its own coverage),loop,PS,B_rand,measured,reference,103,2276,10,0.8529,0.8281,0.8754
+all objects (each model on its own coverage),loop,PS,B_rand,reference,reference,103,2276,10,0.7148,0.6804,0.7566
+all objects (each model on its own coverage),loop,PS,B_rand,consensus12,reference,103,2276,10,0.7317,0.6906,0.7745
+all objects (each model on its own coverage),loop,PS,B_rand,base_refin@aml,no AML in training,103,2276,10,0.7303,0.7037,0.7594
+all objects (each model on its own coverage),loop,PS,B_rand,c12_refin,no AML in training,103,2276,10,0.5397,0.3981,0.6568
+all objects (each model on its own coverage),loop,PS,B_rand,c12_refres,no AML in training,103,2276,10,0.6147,0.5070,0.6950
+all objects (each model on its own coverage),loop,PS,B_rand,c12_diffcells,no AML in training,103,2276,10,0.4768,0.3737,0.5658
+all objects (each model on its own coverage),loop,PS,B_rand,corigami_q,"competitors (published models, no AML in training)",103,2276,10,0.5022,0.4475,0.5528
+all objects (each model on its own coverage),loop,PS,B_rand,corigami_raw,"competitors (published models, no AML in training)",103,2276,10,0.3752,0.2373,0.4810
+all objects (each model on its own coverage),loop,PS,B_rand,epiphany_zero,"competitors (published models, no AML in training)",103,2276,10,0.4530,0.3547,0.5525
+all objects (each model on its own coverage),loop,PS,B_rand,epiphany_mean,"competitors (published models, no AML in training)",103,2276,10,0.4348,0.3451,0.5410
+all objects (each model on its own coverage),loop,PS,B_rand,aml_refin,trained with AML patients (not comparable to competitors),103,2276,10,0.7342,0.7000,0.7775
+all objects (each model on its own coverage),loop,PS,B_rand,aml_diff,trained with AML patients (not comparable to competitors),103,2276,10,0.7654,0.7207,0.8009
+all objects (each model on its own coverage),loop,PS,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),103,2276,10,0.7681,0.7269,0.8172
+all objects (each model on its own coverage),loop,PS,A_refrand,measured,reference,80,80,10,0.8617,0.8053,0.9196
+all objects (each model on its own coverage),loop,PS,A_refrand,reference,reference,80,80,10,0.5591,0.5287,0.6161
+all objects (each model on its own coverage),loop,PS,A_refrand,consensus12,reference,80,80,10,0.7341,0.6535,0.7898
+all objects (each model on its own coverage),loop,PS,A_refrand,base_refin@aml,no AML in training,80,80,10,0.6305,0.5603,0.6741
+all objects (each model on its own coverage),loop,PS,A_refrand,c12_refin,no AML in training,80,80,10,0.4906,0.3193,0.6332
+all objects (each model on its own coverage),loop,PS,A_refrand,c12_refres,no AML in training,80,80,10,0.5820,0.4315,0.6828
+all objects (each model on its own coverage),loop,PS,A_refrand,c12_diffcells,no AML in training,80,80,10,0.4556,0.3535,0.5447
+all objects (each model on its own coverage),loop,PS,A_refrand,corigami_q,"competitors (published models, no AML in training)",80,80,10,0.4161,0.3270,0.5140
+all objects (each model on its own coverage),loop,PS,A_refrand,corigami_raw,"competitors (published models, no AML in training)",80,80,10,0.4216,0.2848,0.5138
+all objects (each model on its own coverage),loop,PS,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",80,80,10,0.4424,0.3854,0.5076
+all objects (each model on its own coverage),loop,PS,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",80,80,10,0.4414,0.3768,0.5131
+all objects (each model on its own coverage),loop,PS,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),80,80,10,0.6831,0.6015,0.7475
+all objects (each model on its own coverage),loop,PS,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),80,80,10,0.6880,0.6105,0.7396
+all objects (each model on its own coverage),loop,PS,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),80,80,10,0.6934,0.6107,0.7428
+all objects (each model on its own coverage),loop,other,B_rand,measured,reference,1872,2276,10,0.8753,0.8644,0.8872
+all objects (each model on its own coverage),loop,other,B_rand,reference,reference,1872,2276,10,0.7196,0.7031,0.7353
+all objects (each model on its own coverage),loop,other,B_rand,consensus12,reference,1872,2276,10,0.6889,0.6670,0.7105
+all objects (each model on its own coverage),loop,other,B_rand,base_refin@aml,no AML in training,1872,2276,10,0.7574,0.7423,0.7699
+all objects (each model on its own coverage),loop,other,B_rand,c12_refin,no AML in training,1872,2276,10,0.6079,0.5616,0.6514
+all objects (each model on its own coverage),loop,other,B_rand,c12_refres,no AML in training,1872,2276,10,0.6423,0.6031,0.6761
+all objects (each model on its own coverage),loop,other,B_rand,c12_diffcells,no AML in training,1872,2276,10,0.5915,0.5525,0.6344
+all objects (each model on its own coverage),loop,other,B_rand,corigami_q,"competitors (published models, no AML in training)",1872,2276,10,0.5599,0.5305,0.5850
+all objects (each model on its own coverage),loop,other,B_rand,corigami_raw,"competitors (published models, no AML in training)",1872,2276,10,0.4437,0.3985,0.4815
+all objects (each model on its own coverage),loop,other,B_rand,epiphany_zero,"competitors (published models, no AML in training)",1872,2276,10,0.4960,0.4493,0.5323
+all objects (each model on its own coverage),loop,other,B_rand,epiphany_mean,"competitors (published models, no AML in training)",1872,2276,10,0.4832,0.4413,0.5249
+all objects (each model on its own coverage),loop,other,B_rand,aml_refin,trained with AML patients (not comparable to competitors),1872,2276,10,0.7553,0.7376,0.7693
+all objects (each model on its own coverage),loop,other,B_rand,aml_diff,trained with AML patients (not comparable to competitors),1872,2276,10,0.7694,0.7446,0.7844
+all objects (each model on its own coverage),loop,other,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),1872,2276,10,0.7614,0.7447,0.7759
+all objects (each model on its own coverage),loop,other,A_refrand,measured,reference,1255,1255,10,0.8776,0.8594,0.8962
+all objects (each model on its own coverage),loop,other,A_refrand,reference,reference,1255,1255,10,0.5774,0.5634,0.5940
+all objects (each model on its own coverage),loop,other,A_refrand,consensus12,reference,1255,1255,10,0.6523,0.6177,0.6794
+all objects (each model on its own coverage),loop,other,A_refrand,base_refin@aml,no AML in training,1255,1255,10,0.6587,0.6384,0.6769
+all objects (each model on its own coverage),loop,other,A_refrand,c12_refin,no AML in training,1255,1255,10,0.6169,0.5741,0.6568
+all objects (each model on its own coverage),loop,other,A_refrand,c12_refres,no AML in training,1255,1255,10,0.6269,0.5813,0.6630
+all objects (each model on its own coverage),loop,other,A_refrand,c12_diffcells,no AML in training,1255,1255,10,0.5889,0.5461,0.6303
+all objects (each model on its own coverage),loop,other,A_refrand,corigami_q,"competitors (published models, no AML in training)",1255,1255,10,0.5390,0.5080,0.5732
+all objects (each model on its own coverage),loop,other,A_refrand,corigami_raw,"competitors (published models, no AML in training)",1255,1255,10,0.5172,0.4953,0.5353
+all objects (each model on its own coverage),loop,other,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",1255,1255,10,0.5123,0.4836,0.5437
+all objects (each model on its own coverage),loop,other,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",1255,1255,10,0.5049,0.4773,0.5360
+all objects (each model on its own coverage),loop,other,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),1255,1255,10,0.6818,0.6642,0.6980
+all objects (each model on its own coverage),loop,other,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),1255,1255,10,0.6912,0.6682,0.7081
+all objects (each model on its own coverage),loop,other,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),1255,1255,10,0.6773,0.6581,0.6913
+all objects (each model on its own coverage),stripe,all,B_rand,measured,reference,1075,1075,10,0.7717,0.7496,0.7968
+all objects (each model on its own coverage),stripe,all,B_rand,reference,reference,1075,1075,10,0.6185,0.5867,0.6465
+all objects (each model on its own coverage),stripe,all,B_rand,consensus12,reference,1075,1075,10,0.5221,0.4816,0.5615
+all objects (each model on its own coverage),stripe,all,B_rand,base_refin@aml,no AML in training,1075,1075,10,0.6013,0.5695,0.6302
+all objects (each model on its own coverage),stripe,all,B_rand,c12_refin,no AML in training,1075,1075,10,0.5823,0.5535,0.6111
+all objects (each model on its own coverage),stripe,all,B_rand,c12_refres,no AML in training,1075,1075,10,0.6425,0.6030,0.6818
+all objects (each model on its own coverage),stripe,all,B_rand,c12_diffcells,no AML in training,1075,1075,10,0.5647,0.5395,0.5894
+all objects (each model on its own coverage),stripe,all,B_rand,corigami_q,"competitors (published models, no AML in training)",1075,1075,10,0.5320,0.5081,0.5566
+all objects (each model on its own coverage),stripe,all,B_rand,corigami_raw,"competitors (published models, no AML in training)",1075,1075,10,0.2722,0.2491,0.2979
+all objects (each model on its own coverage),stripe,all,B_rand,epiphany_zero,"competitors (published models, no AML in training)",1075,1075,10,0.4922,0.4427,0.5432
+all objects (each model on its own coverage),stripe,all,B_rand,epiphany_mean,"competitors (published models, no AML in training)",1075,1075,10,0.4524,0.4038,0.5044
+all objects (each model on its own coverage),stripe,all,B_rand,aml_refin,trained with AML patients (not comparable to competitors),1075,1075,10,0.5968,0.5606,0.6365
+all objects (each model on its own coverage),stripe,all,B_rand,aml_diff,trained with AML patients (not comparable to competitors),1075,1075,10,0.6246,0.5827,0.6657
+all objects (each model on its own coverage),stripe,all,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),1075,1075,10,0.6249,0.5822,0.6625
+all objects (each model on its own coverage),stripe,all,A_refrand,measured,reference,261,261,10,0.7368,0.7038,0.7670
+all objects (each model on its own coverage),stripe,all,A_refrand,reference,reference,261,261,10,0.5097,0.4892,0.5329
+all objects (each model on its own coverage),stripe,all,A_refrand,consensus12,reference,261,261,10,0.5865,0.5207,0.6449
+all objects (each model on its own coverage),stripe,all,A_refrand,base_refin@aml,no AML in training,261,261,10,0.5685,0.5163,0.6173
+all objects (each model on its own coverage),stripe,all,A_refrand,c12_refin,no AML in training,261,261,10,0.5669,0.5151,0.6150
+all objects (each model on its own coverage),stripe,all,A_refrand,c12_refres,no AML in training,261,261,10,0.6079,0.5624,0.6440
+all objects (each model on its own coverage),stripe,all,A_refrand,c12_diffcells,no AML in training,261,261,10,0.5413,0.4798,0.5954
+all objects (each model on its own coverage),stripe,all,A_refrand,corigami_q,"competitors (published models, no AML in training)",261,261,10,0.5497,0.4914,0.5995
+all objects (each model on its own coverage),stripe,all,A_refrand,corigami_raw,"competitors (published models, no AML in training)",261,261,10,0.5189,0.4752,0.5587
+all objects (each model on its own coverage),stripe,all,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",261,261,10,0.4563,0.4212,0.4898
+all objects (each model on its own coverage),stripe,all,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",261,261,10,0.4407,0.4088,0.4724
+all objects (each model on its own coverage),stripe,all,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),261,261,10,0.5791,0.5560,0.6012
+all objects (each model on its own coverage),stripe,all,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),261,261,10,0.5780,0.5383,0.6175
+all objects (each model on its own coverage),stripe,all,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),261,261,10,0.5621,0.5276,0.5930
+all objects (each model on its own coverage),stripe,private,B_rand,measured,reference,285,1075,10,0.7902,0.7466,0.8314
+all objects (each model on its own coverage),stripe,private,B_rand,reference,reference,285,1075,10,0.5779,0.5316,0.6242
+all objects (each model on its own coverage),stripe,private,B_rand,consensus12,reference,285,1075,10,0.5193,0.4655,0.5847
+all objects (each model on its own coverage),stripe,private,B_rand,base_refin@aml,no AML in training,285,1075,10,0.6138,0.5709,0.6540
+all objects (each model on its own coverage),stripe,private,B_rand,c12_refin,no AML in training,285,1075,10,0.6098,0.5546,0.6721
+all objects (each model on its own coverage),stripe,private,B_rand,c12_refres,no AML in training,285,1075,10,0.6465,0.5729,0.7247
+all objects (each model on its own coverage),stripe,private,B_rand,c12_diffcells,no AML in training,285,1075,10,0.5937,0.5417,0.6460
+all objects (each model on its own coverage),stripe,private,B_rand,corigami_q,"competitors (published models, no AML in training)",285,1075,10,0.5212,0.4903,0.5676
+all objects (each model on its own coverage),stripe,private,B_rand,corigami_raw,"competitors (published models, no AML in training)",285,1075,10,0.3404,0.3016,0.3717
+all objects (each model on its own coverage),stripe,private,B_rand,epiphany_zero,"competitors (published models, no AML in training)",285,1075,10,0.5193,0.4757,0.5709
+all objects (each model on its own coverage),stripe,private,B_rand,epiphany_mean,"competitors (published models, no AML in training)",285,1075,10,0.4925,0.4542,0.5390
+all objects (each model on its own coverage),stripe,private,B_rand,aml_refin,trained with AML patients (not comparable to competitors),285,1075,10,0.6060,0.5665,0.6541
+all objects (each model on its own coverage),stripe,private,B_rand,aml_diff,trained with AML patients (not comparable to competitors),285,1075,10,0.6259,0.5875,0.6657
+all objects (each model on its own coverage),stripe,private,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),285,1075,10,0.6088,0.5696,0.6492
+all objects (each model on its own coverage),stripe,private,A_refrand,measured,reference,128,128,10,0.7673,0.7161,0.8167
+all objects (each model on its own coverage),stripe,private,A_refrand,reference,reference,128,128,10,0.4713,0.4479,0.4887
+all objects (each model on its own coverage),stripe,private,A_refrand,consensus12,reference,128,128,10,0.5726,0.4659,0.6621
+all objects (each model on its own coverage),stripe,private,A_refrand,base_refin@aml,no AML in training,128,128,10,0.5923,0.5253,0.6439
+all objects (each model on its own coverage),stripe,private,A_refrand,c12_refin,no AML in training,128,128,10,0.6152,0.5344,0.7162
+all objects (each model on its own coverage),stripe,private,A_refrand,c12_refres,no AML in training,128,128,10,0.6618,0.5718,0.7477
+all objects (each model on its own coverage),stripe,private,A_refrand,c12_diffcells,no AML in training,128,128,10,0.6031,0.4921,0.7074
+all objects (each model on its own coverage),stripe,private,A_refrand,corigami_q,"competitors (published models, no AML in training)",128,128,10,0.5621,0.4582,0.6797
+all objects (each model on its own coverage),stripe,private,A_refrand,corigami_raw,"competitors (published models, no AML in training)",128,128,10,0.5388,0.4960,0.5883
+all objects (each model on its own coverage),stripe,private,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",128,128,10,0.5143,0.4711,0.5675
+all objects (each model on its own coverage),stripe,private,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",128,128,10,0.5119,0.4582,0.5816
+all objects (each model on its own coverage),stripe,private,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),128,128,10,0.5760,0.5235,0.6189
+all objects (each model on its own coverage),stripe,private,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),128,128,10,0.5740,0.5238,0.6101
+all objects (each model on its own coverage),stripe,private,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),128,128,10,0.5471,0.5015,0.5776
+all objects (each model on its own coverage),stripe,recurrent,B_rand,measured,reference,595,1075,10,0.7535,0.7232,0.7804
+all objects (each model on its own coverage),stripe,recurrent,B_rand,reference,reference,595,1075,10,0.6390,0.6037,0.6743
+all objects (each model on its own coverage),stripe,recurrent,B_rand,consensus12,reference,595,1075,10,0.5235,0.4865,0.5629
+all objects (each model on its own coverage),stripe,recurrent,B_rand,base_refin@aml,no AML in training,595,1075,10,0.5934,0.5619,0.6270
+all objects (each model on its own coverage),stripe,recurrent,B_rand,c12_refin,no AML in training,595,1075,10,0.5624,0.5336,0.5970
+all objects (each model on its own coverage),stripe,recurrent,B_rand,c12_refres,no AML in training,595,1075,10,0.6345,0.5888,0.6785
+all objects (each model on its own coverage),stripe,recurrent,B_rand,c12_diffcells,no AML in training,595,1075,10,0.5343,0.5113,0.5583
+all objects (each model on its own coverage),stripe,recurrent,B_rand,corigami_q,"competitors (published models, no AML in training)",595,1075,10,0.5468,0.5225,0.5676
+all objects (each model on its own coverage),stripe,recurrent,B_rand,corigami_raw,"competitors (published models, no AML in training)",595,1075,10,0.2400,0.2229,0.2567
+all objects (each model on its own coverage),stripe,recurrent,B_rand,epiphany_zero,"competitors (published models, no AML in training)",595,1075,10,0.4874,0.4215,0.5484
+all objects (each model on its own coverage),stripe,recurrent,B_rand,epiphany_mean,"competitors (published models, no AML in training)",595,1075,10,0.4451,0.3809,0.5150
+all objects (each model on its own coverage),stripe,recurrent,B_rand,aml_refin,trained with AML patients (not comparable to competitors),595,1075,10,0.5924,0.5555,0.6375
+all objects (each model on its own coverage),stripe,recurrent,B_rand,aml_diff,trained with AML patients (not comparable to competitors),595,1075,10,0.6257,0.5703,0.6786
+all objects (each model on its own coverage),stripe,recurrent,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),595,1075,10,0.6352,0.5798,0.6879
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,measured,reference,121,121,10,0.6535,0.6015,0.7020
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,reference,reference,121,121,10,0.5211,0.4784,0.5670
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,consensus12,reference,121,121,10,0.5684,0.4886,0.6475
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,base_refin@aml,no AML in training,121,121,10,0.5265,0.4672,0.5892
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,c12_refin,no AML in training,121,121,10,0.5099,0.4847,0.5266
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,c12_refres,no AML in training,121,121,10,0.5434,0.4936,0.5842
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,c12_diffcells,no AML in training,121,121,10,0.4516,0.4057,0.4961
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,corigami_q,"competitors (published models, no AML in training)",121,121,10,0.5860,0.4955,0.6893
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,corigami_raw,"competitors (published models, no AML in training)",121,121,10,0.4819,0.4002,0.5714
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",121,121,10,0.4746,0.4202,0.5248
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",121,121,10,0.4582,0.4023,0.5004
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),121,121,10,0.5654,0.5290,0.5902
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),121,121,10,0.5637,0.5049,0.6152
+all objects (each model on its own coverage),stripe,recurrent,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),121,121,10,0.5581,0.5207,0.5973
+all objects (each model on its own coverage),stripe,shared1,B_rand,measured,reference,195,1075,10,0.8010,0.7673,0.8371
+all objects (each model on its own coverage),stripe,shared1,B_rand,reference,reference,195,1075,10,0.6142,0.5661,0.6632
+all objects (each model on its own coverage),stripe,shared1,B_rand,consensus12,reference,195,1075,10,0.5223,0.4689,0.5730
+all objects (each model on its own coverage),stripe,shared1,B_rand,base_refin@aml,no AML in training,195,1075,10,0.6078,0.5691,0.6506
+all objects (each model on its own coverage),stripe,shared1,B_rand,c12_refin,no AML in training,195,1075,10,0.6031,0.5744,0.6292
+all objects (each model on its own coverage),stripe,shared1,B_rand,c12_refres,no AML in training,195,1075,10,0.6610,0.6291,0.6944
+all objects (each model on its own coverage),stripe,shared1,B_rand,c12_diffcells,no AML in training,195,1075,10,0.6152,0.5799,0.6496
+all objects (each model on its own coverage),stripe,shared1,B_rand,corigami_q,"competitors (published models, no AML in training)",195,1075,10,0.5052,0.4697,0.5384
+all objects (each model on its own coverage),stripe,shared1,B_rand,corigami_raw,"competitors (published models, no AML in training)",195,1075,10,0.2658,0.2239,0.3026
+all objects (each model on its own coverage),stripe,shared1,B_rand,epiphany_zero,"competitors (published models, no AML in training)",195,1075,10,0.4667,0.4385,0.5046
+all objects (each model on its own coverage),stripe,shared1,B_rand,epiphany_mean,"competitors (published models, no AML in training)",195,1075,10,0.4150,0.3818,0.4577
+all objects (each model on its own coverage),stripe,shared1,B_rand,aml_refin,trained with AML patients (not comparable to competitors),195,1075,10,0.5969,0.5402,0.6555
+all objects (each model on its own coverage),stripe,shared1,B_rand,aml_diff,trained with AML patients (not comparable to competitors),195,1075,10,0.6194,0.5624,0.6839
+all objects (each model on its own coverage),stripe,shared1,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),195,1075,10,0.6166,0.5599,0.6781
+all objects (each model on its own coverage),stripe,shared1,A_refrand,measured,reference,67,67,10,0.7656,0.7098,0.8199
+all objects (each model on its own coverage),stripe,shared1,A_refrand,reference,reference,67,67,10,0.5068,0.4584,0.5741
+all objects (each model on its own coverage),stripe,shared1,A_refrand,consensus12,reference,67,67,10,0.7202,0.6384,0.8004
+all objects (each model on its own coverage),stripe,shared1,A_refrand,base_refin@aml,no AML in training,67,67,10,0.5814,0.5104,0.6433
+all objects (each model on its own coverage),stripe,shared1,A_refrand,c12_refin,no AML in training,67,67,10,0.5371,0.4488,0.6353
+all objects (each model on its own coverage),stripe,shared1,A_refrand,c12_refres,no AML in training,67,67,10,0.6039,0.5088,0.6846
+all objects (each model on its own coverage),stripe,shared1,A_refrand,c12_diffcells,no AML in training,67,67,10,0.5487,0.4502,0.6408
+all objects (each model on its own coverage),stripe,shared1,A_refrand,corigami_q,"competitors (published models, no AML in training)",67,67,10,0.5362,0.4890,0.5991
+all objects (each model on its own coverage),stripe,shared1,A_refrand,corigami_raw,"competitors (published models, no AML in training)",67,67,10,0.4876,0.4008,0.5640
+all objects (each model on its own coverage),stripe,shared1,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",67,67,10,0.3721,0.2898,0.4502
+all objects (each model on its own coverage),stripe,shared1,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",67,67,10,0.3326,0.2471,0.4038
+all objects (each model on its own coverage),stripe,shared1,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),67,67,10,0.5781,0.5175,0.6367
+all objects (each model on its own coverage),stripe,shared1,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),67,67,10,0.6133,0.5344,0.6871
+all objects (each model on its own coverage),stripe,shared1,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),67,67,10,0.5669,0.4977,0.6435
+all objects (each model on its own coverage),stripe,enh,B_rand,measured,reference,326,1075,10,0.7913,0.7677,0.8122
+all objects (each model on its own coverage),stripe,enh,B_rand,reference,reference,326,1075,10,0.6998,0.6664,0.7294
+all objects (each model on its own coverage),stripe,enh,B_rand,consensus12,reference,326,1075,10,0.4060,0.3682,0.4452
+all objects (each model on its own coverage),stripe,enh,B_rand,base_refin@aml,no AML in training,326,1075,10,0.6054,0.5734,0.6343
+all objects (each model on its own coverage),stripe,enh,B_rand,c12_refin,no AML in training,326,1075,10,0.6154,0.5686,0.6546
+all objects (each model on its own coverage),stripe,enh,B_rand,c12_refres,no AML in training,326,1075,10,0.6290,0.5706,0.6772
+all objects (each model on its own coverage),stripe,enh,B_rand,c12_diffcells,no AML in training,326,1075,10,0.5572,0.5002,0.6065
+all objects (each model on its own coverage),stripe,enh,B_rand,corigami_q,"competitors (published models, no AML in training)",326,1075,10,0.5328,0.4926,0.5777
+all objects (each model on its own coverage),stripe,enh,B_rand,corigami_raw,"competitors (published models, no AML in training)",326,1075,10,0.2790,0.2294,0.3178
+all objects (each model on its own coverage),stripe,enh,B_rand,epiphany_zero,"competitors (published models, no AML in training)",326,1075,10,0.4975,0.4211,0.5738
+all objects (each model on its own coverage),stripe,enh,B_rand,epiphany_mean,"competitors (published models, no AML in training)",326,1075,10,0.4700,0.4017,0.5436
+all objects (each model on its own coverage),stripe,enh,B_rand,aml_refin,trained with AML patients (not comparable to competitors),326,1075,10,0.7038,0.6668,0.7465
+all objects (each model on its own coverage),stripe,enh,B_rand,aml_diff,trained with AML patients (not comparable to competitors),326,1075,10,0.7006,0.6565,0.7537
+all objects (each model on its own coverage),stripe,enh,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),326,1075,10,0.7107,0.6731,0.7454
+all objects (each model on its own coverage),stripe,enh,A_refrand,measured,reference,91,91,10,0.7268,0.6855,0.7733
+all objects (each model on its own coverage),stripe,enh,A_refrand,reference,reference,91,91,10,0.5411,0.5121,0.5738
+all objects (each model on its own coverage),stripe,enh,A_refrand,consensus12,reference,91,91,10,0.4670,0.3710,0.5548
+all objects (each model on its own coverage),stripe,enh,A_refrand,base_refin@aml,no AML in training,91,91,10,0.5429,0.4675,0.6105
+all objects (each model on its own coverage),stripe,enh,A_refrand,c12_refin,no AML in training,91,91,10,0.5608,0.4933,0.6377
+all objects (each model on its own coverage),stripe,enh,A_refrand,c12_refres,no AML in training,91,91,10,0.5618,0.4636,0.6469
+all objects (each model on its own coverage),stripe,enh,A_refrand,c12_diffcells,no AML in training,91,91,10,0.4800,0.3923,0.5868
+all objects (each model on its own coverage),stripe,enh,A_refrand,corigami_q,"competitors (published models, no AML in training)",91,91,10,0.6233,0.5002,0.6817
+all objects (each model on its own coverage),stripe,enh,A_refrand,corigami_raw,"competitors (published models, no AML in training)",91,91,10,0.5100,0.4460,0.5762
+all objects (each model on its own coverage),stripe,enh,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",91,91,10,0.4642,0.3625,0.5637
+all objects (each model on its own coverage),stripe,enh,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",91,91,10,0.4627,0.3661,0.5647
+all objects (each model on its own coverage),stripe,enh,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),91,91,10,0.6290,0.5799,0.6796
+all objects (each model on its own coverage),stripe,enh,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),91,91,10,0.6203,0.5441,0.6815
+all objects (each model on its own coverage),stripe,enh,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),91,91,10,0.6060,0.5517,0.6483
+all objects (each model on its own coverage),stripe,rep,B_rand,measured,reference,442,1075,10,0.7651,0.7263,0.8047
+all objects (each model on its own coverage),stripe,rep,B_rand,reference,reference,442,1075,10,0.5874,0.5637,0.6165
+all objects (each model on its own coverage),stripe,rep,B_rand,consensus12,reference,442,1075,10,0.5856,0.5396,0.6231
+all objects (each model on its own coverage),stripe,rep,B_rand,base_refin@aml,no AML in training,442,1075,10,0.6215,0.5915,0.6542
+all objects (each model on its own coverage),stripe,rep,B_rand,c12_refin,no AML in training,442,1075,10,0.5668,0.5289,0.6048
+all objects (each model on its own coverage),stripe,rep,B_rand,c12_refres,no AML in training,442,1075,10,0.6530,0.6036,0.7083
+all objects (each model on its own coverage),stripe,rep,B_rand,c12_diffcells,no AML in training,442,1075,10,0.5769,0.5430,0.6088
+all objects (each model on its own coverage),stripe,rep,B_rand,corigami_q,"competitors (published models, no AML in training)",442,1075,10,0.5680,0.5390,0.6032
+all objects (each model on its own coverage),stripe,rep,B_rand,corigami_raw,"competitors (published models, no AML in training)",442,1075,10,0.2779,0.2506,0.3130
+all objects (each model on its own coverage),stripe,rep,B_rand,epiphany_zero,"competitors (published models, no AML in training)",442,1075,10,0.4848,0.4316,0.5406
+all objects (each model on its own coverage),stripe,rep,B_rand,epiphany_mean,"competitors (published models, no AML in training)",442,1075,10,0.4344,0.3837,0.4919
+all objects (each model on its own coverage),stripe,rep,B_rand,aml_refin,trained with AML patients (not comparable to competitors),442,1075,10,0.5589,0.5138,0.6192
+all objects (each model on its own coverage),stripe,rep,B_rand,aml_diff,trained with AML patients (not comparable to competitors),442,1075,10,0.6038,0.5439,0.6554
+all objects (each model on its own coverage),stripe,rep,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),442,1075,10,0.6021,0.5488,0.6510
+all objects (each model on its own coverage),stripe,rep,A_refrand,measured,reference,121,121,10,0.7394,0.6780,0.7888
+all objects (each model on its own coverage),stripe,rep,A_refrand,reference,reference,121,121,10,0.4757,0.4249,0.5185
+all objects (each model on its own coverage),stripe,rep,A_refrand,consensus12,reference,121,121,10,0.6437,0.5855,0.6982
+all objects (each model on its own coverage),stripe,rep,A_refrand,base_refin@aml,no AML in training,121,121,10,0.5754,0.5220,0.6251
+all objects (each model on its own coverage),stripe,rep,A_refrand,c12_refin,no AML in training,121,121,10,0.5482,0.4616,0.6201
+all objects (each model on its own coverage),stripe,rep,A_refrand,c12_refres,no AML in training,121,121,10,0.6066,0.5269,0.6855
+all objects (each model on its own coverage),stripe,rep,A_refrand,c12_diffcells,no AML in training,121,121,10,0.5820,0.4769,0.6671
+all objects (each model on its own coverage),stripe,rep,A_refrand,corigami_q,"competitors (published models, no AML in training)",121,121,10,0.5736,0.4980,0.6427
+all objects (each model on its own coverage),stripe,rep,A_refrand,corigami_raw,"competitors (published models, no AML in training)",121,121,10,0.5137,0.4548,0.5735
+all objects (each model on its own coverage),stripe,rep,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",121,121,10,0.4644,0.4093,0.5193
+all objects (each model on its own coverage),stripe,rep,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",121,121,10,0.4351,0.3782,0.5035
+all objects (each model on its own coverage),stripe,rep,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),121,121,10,0.5293,0.4671,0.5841
+all objects (each model on its own coverage),stripe,rep,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),121,121,10,0.5400,0.4756,0.6043
+all objects (each model on its own coverage),stripe,rep,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),121,121,10,0.5073,0.4550,0.5540
+all objects (each model on its own coverage),stripe,other,B_rand,measured,reference,307,1075,10,0.7601,0.7027,0.8074
+all objects (each model on its own coverage),stripe,other,B_rand,reference,reference,307,1075,10,0.5760,0.5156,0.6347
+all objects (each model on its own coverage),stripe,other,B_rand,consensus12,reference,307,1075,10,0.5547,0.5183,0.5849
+all objects (each model on its own coverage),stripe,other,B_rand,base_refin@aml,no AML in training,307,1075,10,0.5673,0.5132,0.6070
+all objects (each model on its own coverage),stripe,other,B_rand,c12_refin,no AML in training,307,1075,10,0.5696,0.5385,0.6005
+all objects (each model on its own coverage),stripe,other,B_rand,c12_refres,no AML in training,307,1075,10,0.6416,0.6020,0.6848
+all objects (each model on its own coverage),stripe,other,B_rand,c12_diffcells,no AML in training,307,1075,10,0.5551,0.5250,0.5811
+all objects (each model on its own coverage),stripe,other,B_rand,corigami_q,"competitors (published models, no AML in training)",307,1075,10,0.4791,0.4279,0.5256
+all objects (each model on its own coverage),stripe,other,B_rand,corigami_raw,"competitors (published models, no AML in training)",307,1075,10,0.2563,0.2105,0.3014
+all objects (each model on its own coverage),stripe,other,B_rand,epiphany_zero,"competitors (published models, no AML in training)",307,1075,10,0.4969,0.4490,0.5521
+all objects (each model on its own coverage),stripe,other,B_rand,epiphany_mean,"competitors (published models, no AML in training)",307,1075,10,0.4589,0.4200,0.5052
+all objects (each model on its own coverage),stripe,other,B_rand,aml_refin,trained with AML patients (not comparable to competitors),307,1075,10,0.5363,0.4859,0.5814
+all objects (each model on its own coverage),stripe,other,B_rand,aml_diff,trained with AML patients (not comparable to competitors),307,1075,10,0.5729,0.5217,0.6259
+all objects (each model on its own coverage),stripe,other,B_rand,aml_diffhspc,trained with AML patients (not comparable to competitors),307,1075,10,0.5656,0.5198,0.6158
+all objects (each model on its own coverage),stripe,other,A_refrand,measured,reference,106,106,10,0.7303,0.6801,0.7802
+all objects (each model on its own coverage),stripe,other,A_refrand,reference,reference,106,106,10,0.4989,0.4594,0.5486
+all objects (each model on its own coverage),stripe,other,A_refrand,consensus12,reference,106,106,10,0.6273,0.5513,0.7018
+all objects (each model on its own coverage),stripe,other,A_refrand,base_refin@aml,no AML in training,106,106,10,0.5647,0.5098,0.6422
+all objects (each model on its own coverage),stripe,other,A_refrand,c12_refin,no AML in training,106,106,10,0.5410,0.4933,0.5937
+all objects (each model on its own coverage),stripe,other,A_refrand,c12_refres,no AML in training,106,106,10,0.6043,0.5725,0.6348
+all objects (each model on its own coverage),stripe,other,A_refrand,c12_diffcells,no AML in training,106,106,10,0.5102,0.4456,0.5745
+all objects (each model on its own coverage),stripe,other,A_refrand,corigami_q,"competitors (published models, no AML in training)",106,106,10,0.4931,0.4348,0.5724
+all objects (each model on its own coverage),stripe,other,A_refrand,corigami_raw,"competitors (published models, no AML in training)",106,106,10,0.5128,0.4479,0.5712
+all objects (each model on its own coverage),stripe,other,A_refrand,epiphany_zero,"competitors (published models, no AML in training)",106,106,10,0.4264,0.3675,0.4928
+all objects (each model on its own coverage),stripe,other,A_refrand,epiphany_mean,"competitors (published models, no AML in training)",106,106,10,0.4281,0.3676,0.4950
+all objects (each model on its own coverage),stripe,other,A_refrand,aml_refin,trained with AML patients (not comparable to competitors),106,106,10,0.5750,0.5276,0.6152
+all objects (each model on its own coverage),stripe,other,A_refrand,aml_diff,trained with AML patients (not comparable to competitors),106,106,10,0.5839,0.5230,0.6383
+all objects (each model on its own coverage),stripe,other,A_refrand,aml_diffhspc,trained with AML patients (not comparable to competitors),106,106,10,0.5609,0.5070,0.6338
