@@ -1,0 +1,7 @@
+[precompute] all12cohfix_refres_drop_25kb
+[cmd] /home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python -m hicmultiome.precompute --config /mnt/processed/wolffjoa/hic-multiome/runs/multicell_reference/all12cohfix_refres_drop_25kb.yaml --workers 4
+[done] all12cohfix_refres_drop_25kb (precompute)
+[precompute] all12cohfix_refres_drop_10kb
+[cmd] /home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python -m hicmultiome.precompute --config /mnt/processed/wolffjoa/hic-multiome/runs/multicell_reference/all12cohfix_refres_drop_10kb.yaml --workers 4
+[done] all12cohfix_refres_drop_10kb (precompute)
+MULTICELL_EXPANDED_DONE

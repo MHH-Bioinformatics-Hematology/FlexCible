@@ -1,0 +1,12 @@
+413 regions
+sd_ko                     0.218
+sd_degron                 0.255
+pearson_ko_vs_degron      0.137
+mean_ko_2_10              0.001
+mean_degron_2_10         -0.008
+mean_ko_10_25             0.018
+mean_degron_10_25        -0.021
+mean_ko_25_50             0.013
+mean_degron_25_50        -0.005
+mean_ko_50_1000000        0.013
+mean_degron_50_1000000   -0.005
