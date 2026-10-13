@@ -1,4 +1,4 @@
-Verbatim copies (registry section 73), made so that the original working trees ~/src/C.Origami and
+Verbatim copies (registry section 77), made so that the original working trees ~/src/C.Origami and
 ~/src/epiphany stay untouched:
   corigami_blocks.py, corigami_models.py   <- C.Origami src/corigami/model/{blocks,corigami_models}.py
                                               (one import line changed)

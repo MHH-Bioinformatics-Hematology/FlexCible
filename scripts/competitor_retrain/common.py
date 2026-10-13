@@ -1,4 +1,4 @@
-"""Shared definitions of the competitor retraining (registry section 73).
+"""Shared definitions of the competitor retraining (registry section 77).
 
 C.Origami and Epiphany retrained on our cell lines and our chromosome split, each with its own
 architecture and its own native input set:

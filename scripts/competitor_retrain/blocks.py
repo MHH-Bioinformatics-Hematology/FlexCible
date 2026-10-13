@@ -1,5 +1,5 @@
 """Scoring blocks and competitor registration of the retrained C.Origami and Epiphany
-(registry section 73), plugged into scripts/hic_measures.py (--chrho-competitor-retrain).
+(registry section 77), plugged into scripts/hic_measures.py (--chrho-competitor-retrain).
 
 A block is one cell, one grid (10 or 25 kb), one test chromosome (2, 3, 11, 14, 17) and one competitor
 family; its sources are our chrho models, the baselines of hic_measures, and for the family the

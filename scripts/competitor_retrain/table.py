@@ -1,4 +1,4 @@
-"""Tables of the retrained C.Origami and Epiphany (registry section 73).
+"""Tables of the retrained C.Origami and Epiphany (registry section 77).
 
 Reads results/hic_measures_chrho/chrho_competitor_retrain_{per_block,summary}.csv (written by
 `python scripts/hic_measures.py --stage chrho_score chrho_report --chrho-competitor-retrain`) and writes
@@ -61,7 +61,8 @@ def main() -> None:
     rows = []
     for (set_, res), g in D.groupby(["set", "res"]):
         held = FAM[set_][2]
-        sub = g[g.source.str.contains("_pre_")].copy()
+        sub = g[g.source.str.contains("_pre_") | g.source.isin(["corigami_imr90_8kb", "epiphany_gm12878_10kb"])].copy()
+        sub = sub[sub.groupby("source").chrom.transform(lambda c: not set(c) <= set(held))]   # released rows already on own held-out chromosomes only: no second row
         sub["src"] = sub.src + f", own held-out chromosomes ({', '.join(c.replace('chr', '') for c in held)})"
         rows.append(sub[sub.chrom.isin(held)])
     D = pd.concat([D] + rows, ignore_index=True)

@@ -1,5 +1,5 @@
 """ENCODE DNase-seq signal bigWigs (GRCh38, read-depth normalized signal) for the cells of the
-competitor retraining (registry section 73). One unperturbed experiment and one file per cell;
+competitor retraining (registry section 77). One unperturbed experiment and one file per cell;
 size and md5 are checked against the ENCODE file record before the .part file is renamed.
 
     python scripts/competitor_retrain/fetch_dnase.py [--only k562 ...]
