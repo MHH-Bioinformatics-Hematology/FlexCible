@@ -202,7 +202,7 @@ def stage_predict(a):
                 cmd = [py, "scripts/independent_validation_predict.py", "--config", str(ck / "config.yaml"),
                        "--checkpoint", str(ck), "--cell", cell, "--bigwig-dir", str(bw),
                        "--target", str(cool_of(cell, res)), "--tta", "--assay", assay,
-                       "--binsize", str(res), "--device", "cuda", "--regions", str(regs),
+                       "--binsize", str(res), "--device", a.device, "--regions", str(regs),
                        "--out-dir", str(out), "--save-pred", str(out / "{set}.npz"),
                        "--keep-sets", *ks]
                 if not m.startswith("honest"):
@@ -770,7 +770,7 @@ def _figure(D, P, a):
     a0.set_ylim(max(0, lo), 1.0)
     a0.set_ylabel("median per-window Pearson, 10 kb")
     a0.set_title("A  Test windows, identical pixels", loc="left", fontsize=10)
-    a0.legend(fontsize=7, loc="lower right", frameon=False, ncol=2)
+    a0.legend(fontsize=7, loc="upper center", bbox_to_anchor=(0.5, -0.08), frameon=False, ncol=3)
     # B: paired difference refin - consensus12 and refin - honest per window
     a1 = ax[0, 1]
     pos = 0
@@ -801,13 +801,15 @@ def _figure(D, P, a):
     meths2 = ["consensus12", "akita", "honest:all", "refin:all", "diff:all"]
     w2 = 0.8 / len(meths2)
     for j, m in enumerate(meths2):
-        v = [S[(S.method == m)][mm].median() for mm in mets]
+        v = [(S[(S.method == m)][mm].mean() if mm == "boundary_f1" else S[(S.method == m)][mm].median())
+             for mm in mets]
         a2.bar(np.arange(len(mets)) + j * w2, v, w2, color=cols[m], label=LABEL.get(m, m))
     a2.set_xticks(np.arange(len(mets)) + 0.4 - w2 / 2)
-    a2.set_xticklabels(["SCC", "insulation r", "boundary F1", "loop enrich r", "compartment r"], fontsize=8)
+    a2.set_xticklabels(["SCC", "insulation r", "boundary F1\n(mean)", "loop enrich\nr", "compartment r"], fontsize=8)
     a2.set_ylabel("median over windows and samples, 10 kb")
     a2.set_title("C  Structure measures (pooled over the samples)", loc="left", fontsize=10)
-    a2.legend(fontsize=7, frameon=False)
+    a2.legend(fontsize=7, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=3)
+    a2.set_ylim(0, 1.0)
     # D: whole-genome tiles vs held-out chromosomes with the chrho models
     a3 = ax[1, 1]
     H = D[(D.res == 10000) & (D.set == "tile") & D.chrom.isin(CHRHO_HELD)]
@@ -823,7 +825,7 @@ def _figure(D, P, a):
     a3.set_ylim(max(0, np.nanmin([H[H.method == m].groupby("cell").pearson.median().min() for m in meths3]) - 0.05), 1)
     a3.set_ylabel("median per-tile Pearson, 10 kb")
     a3.set_title("D  Chromosomes 2, 3, 11, 14, 17 (chrho models), 1 Mb tiles", loc="left", fontsize=10)
-    a3.legend(fontsize=7, frameon=False, loc="lower right")
+    a3.legend(fontsize=7, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=4)
     fig.savefig(RESULTS / "fig_independent_validation.png", dpi=200)
     log("figure written")
 
@@ -835,6 +837,7 @@ def main():
     ap.add_argument("--res", nargs="*", type=int, default=[10000, 25000])
     ap.add_argument("--models", nargs="*", default=list(MODELS))
     ap.add_argument("--gpu", default="0")
+    ap.add_argument("--device", default="cuda", help="predict: cuda, or cpu (set --threads <= 8)")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--procs", type=int, default=7)
     ap.add_argument("--limit", type=int, default=0, help="smoke test: random subset of regions")

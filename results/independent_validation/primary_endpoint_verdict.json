@@ -1,0 +1,24 @@
+{
+ "samples": [
+  "pc3",
+  "panc1",
+  "nk",
+  "caco2"
+ ],
+ "A_above_consensus12": {
+  "pc3": true,
+  "panc1": false,
+  "nk": true,
+  "caco2": true
+ },
+ "B_above_honest": {
+  "pc3": true,
+  "panc1": true,
+  "nk": true,
+  "caco2": true
+ },
+ "A_count": 3,
+ "n": 4,
+ "A_success": true,
+ "B_success": true
+}
