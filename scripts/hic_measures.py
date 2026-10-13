@@ -205,6 +205,8 @@ def slow_tools(b: dict) -> bool:
     through its pairs serially) and several times that at 10 kb. They run on
     every held-out-cell block at 25 kb, on chr18 for the training-cell blocks
     at 25 kb, and on chr18 of the held-out cells at 10 kb."""
+    if b["set"].startswith("chrho_rt"):      # retrained competitors (section 73): the measures of the table only
+        return False
     if b["res"] == 25000:
         return b["set"] == "heldout" or b["chrom"] == "chr18" or b["set"].startswith("chrho")
     return b["set"] == "heldout" and b["chrom"] == "chr18"
@@ -1426,7 +1428,7 @@ def score_block(b: dict, jobs: int) -> Path:
     def loops(k):
         # hicDetectLoops on every map at 10 kb, except the masked
         # trainstretch blocks (rank-matched loop measures only there)
-        if res != 10000 or b["set"] == "trainstretch":
+        if res != 10000 or b["set"] == "trainstretch" or b["set"].startswith("chrho_rt"):
             return k, None
         return k, run_detectloops(cd / f"{k}.cool", bd / "loops" / f"{k}.bedgraph", chrom)
 
@@ -1988,6 +1990,8 @@ CHRHO_CELLS = ["gm12878", "imr90", "k562"]
 CHRHO_25KB_COMPS = False      # --chrho-25kb-comps: C.Origami and Epiphany resampled onto the 25 kb grid
 CHRHO_RES = None              # --chrho-res 5000: only the 5 kb blocks, predictions and tables
 CHRHO_HICREG_RE = False       # --chrho-hicreg-retrained: HiC-Reg retrained on our split (registry 63)
+CHRHO_COMPRT = False          # --chrho-competitor-retrain: C.Origami and Epiphany retrained (registry 73)
+CHRHO_CELLS_ARG = None        # --chrho-cells: cells of chrho_predict (default CHRHO_CELLS)
 
 
 def chrho_blocks() -> list[dict]:
@@ -1997,6 +2001,9 @@ def chrho_blocks() -> list[dict]:
     window (Epiphany 990 kb, HiC-Reg 1 Mb)."""
     if CHRHO_HICREG_RE:
         return _finish_blocks(chrho_blocks_hicreg_retrained())
+    if CHRHO_COMPRT:
+        import competitor_retrain.blocks as rb
+        return _finish_blocks(rb.rows())
     if CHRHO_RES == 5000:
         rows = chrho_blocks_5kb()
         return _finish_blocks(rows)
@@ -2140,7 +2147,7 @@ def chrho_predict(threads: int, jobs: int, gpu: str = "") -> None:
     BIGWIG.setdefault("k562", HM / "hg38_k562")
     todo = [(m, res, c) for res in ([CHRHO_RES] if CHRHO_RES else RESOLUTIONS)
             for m in chrho_available(res)
-            for c in CHRHO_CELLS if not pred_cool(m, res, c).exists()]
+            for c in (CHRHO_CELLS_ARG or CHRHO_CELLS) if not pred_cool(m, res, c).exists()]
     log(f"[chrho predict] {len(todo)} predictions")
     per = max(1, threads // jobs)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
@@ -2148,14 +2155,20 @@ def chrho_predict(threads: int, jobs: int, gpu: str = "") -> None:
             f.result()
 
 
-def chrho_score(jobs: int) -> None:
+def chrho_score(jobs: int, only: list[str] | None = None) -> None:
     chrho_use_root()
     import hicreg_audit
     hicreg_audit.register()
     if CHRHO_HICREG_RE:
         import hicreg_retrain
         hicreg_retrain.register()
+    if CHRHO_COMPRT:
+        import competitor_retrain.blocks as rb
+        rb.register()
     todo = [b for b in chrho_blocks() if not (OUT / "blocks" / b["id"] / "measures.csv").exists()]
+    if only:
+        import re
+        todo = [b for b in todo if any(re.search(o, b["id"]) for o in only)]
     for b in todo:
         if not any(m in chrho_available(b["res"]) for m in CHRHO_MODELS):
             continue
@@ -2193,6 +2206,9 @@ def chrho_report() -> None:
     if CHRHO_HICREG_RE:                        # all three grids, own files
         D = D[D.set.isin(["chrho_hicregre", "chrho_hicregmc"])]
         tag = "chrho_hicregre"
+    elif CHRHO_COMPRT:                         # retrained C.Origami and Epiphany, own files
+        D = D[D.set.isin(["chrho_rtco", "chrho_rtep"])]
+        tag = "chrho_competitor_retrain"
     elif CHRHO_RES == 5000:                      # the 5 kb grid, own files
         D = D[D.res == 5000]
         tag = "chrho_5kb"
@@ -2232,10 +2248,16 @@ def main():
                     help="chrho_score/chrho_report: only the blocks of HiC-Reg retrained on our "
                          "chromosome split (chrho_hicregre_*, 25/10/5 kb, results in "
                          "chrho_hicregre_*.csv); default off")
+    ap.add_argument("--chrho-competitor-retrain", action="store_true",
+                    help="chrho_score/chrho_report: the blocks of C.Origami and Epiphany retrained on our "
+                         "cells and chromosome split (competitor_retrain/blocks.py; chrho_competitor_retrain_*.csv)")
+    ap.add_argument("--chrho-cells", nargs="*", default=None, help="chrho_predict: cells (default gm12878 imr90 k562)")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
-    global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE
+    global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE, CHRHO_COMPRT, CHRHO_CELLS_ARG
+    CHRHO_COMPRT = a.chrho_competitor_retrain
+    CHRHO_CELLS_ARG = a.chrho_cells
     CHRHO_25KB_COMPS = a.chrho_25kb_comps
     CHRHO_RES = a.chrho_res
     CHRHO_HICREG_RE = a.chrho_hicreg_retrained
@@ -2263,7 +2285,7 @@ def main():
         elif st == "chrho_predict":
             chrho_predict(a.threads, 1 if a.gpu else max(1, min(a.jobs, a.threads)), a.gpu)
         elif st == "chrho_score":
-            chrho_score(a.jobs)
+            chrho_score(a.jobs, a.only)
         elif st == "chrho_report":
             chrho_report()
 
