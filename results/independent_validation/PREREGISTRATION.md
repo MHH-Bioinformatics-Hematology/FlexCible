@@ -1,0 +1,15 @@
+# Pre-registration of the independent validation (written 2026-10-12, before any score of a new sample was computed)
+
+Question. Does the unseen-cell-type result (12-cell models with consensus12 as Hi-C reference input, marks of the new cell as ChIP input) hold on cell types that no part of the pipeline has touched?
+
+Samples (fixed before scoring; chosen by mark completeness, depth >= 300 M contacts where available, lineage not in the 17 samples, hg38). PC-3 (prostate adenocarcinoma, ENCODE intact Hi-C ENCSR038TZA), Panc1 (pancreatic carcinoma, ENCODE in situ Hi-C ENCSR440CTR, 200 M contacts, below the 300 M threshold but equal to A549 in training), natural killer cell (primary, ENCSR971CJS, ChIP of the same donor), Caco-2 (colorectal adenocarcinoma, ENCSR820DYU; colon lineage overlaps HCT116). HeLa-S3 (planned, 13 marks) was dropped before scoring: its only processed Hi-C is a 4DN mcool that the portal serves to logged-in users only. Inputs: the seven marks CTCF, H3K27ac, H3K27me3, H3K36me3, H3K4me1, H3K4me3, H3K9me3 for every sample (the intersection of the marks all four have; RAD21, SMC3 and further marks are absent and given to the models as absent values).
+
+Models, unchanged: all12refin_drop, all12refres_drop, all12honest_drop (no consensus), all12diffcells_refres_drop at 10 kb and 25 kb; chromosome-held-out variants (*_chrho) on chromosomes 2, 3, 11, 14, 17. Checkpoint-best, test-time reverse averaging, consensus12 (the 12 training cells; none of the new samples is in it) as Hi-C reference input. No retraining, no parameter or threshold change after seeing a score.
+
+Unit of analysis. Windows: the 413 Akita test sequences, central 917 504 bp, whole 10 kb (25 kb) bins inside it, pixels >= 2 bins off the diagonal finite in the target and in every compared predictor (identical pixels), windows with >= 100 such pixels. Score: per-window Pearson of log O/E; the sample score is the median over windows.
+
+Primary endpoint (10 kb, all seven marks, test windows). A: median Pearson of all12refin_drop_10kb minus that of consensus12 alone; B: all12refin_drop_10kb minus all12honest_drop_10kb. "Above" = difference of medians > 0 with the 95 percent paired bootstrap interval (2000 resamples of windows) excluding 0. Success = A above in >= 3 of the 4 samples (the 2/3 rule; 2 of 3 had the planned number of samples been 3) and B above in all 4.
+
+Secondary (reported whether or not the primary succeeds). 25 kb; the other three models; keep sets CTCF + H3K27ac, CTCF, none; SCC, insulation r, boundary F1, loop-enrichment r, APA ratio, compartment r; whole chromosomes (all autosomes, 1 Mb tiles) and chromosomes 2, 3, 11, 14, 17 with the chrho models; versus the best single other cell's measured map (chosen per sample on the test windows, an oracle choice), versus Akita (GM12878 head, sequence only); split-half reproducibility ceiling of each target. C.Origami is omitted (no ATAC or DNase signal downloaded).
+
+Negative outcomes (model not above consensus12 or not above the honest model in a sample) are reported as such.
