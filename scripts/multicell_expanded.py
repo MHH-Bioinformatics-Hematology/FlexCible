@@ -464,6 +464,34 @@ for _b in ("all12aml_refin_drop", "all12aml_honest_drop", "all12diff_refres_drop
             RUNS[_n] = (TRAIN12, None)
             HONEST_RUNS.add(_n)
 
+# Registry section 76 (hicmultiome/windowprior.py, scripts/window_prior.py): the positional consensus input
+# replaced by the output of the window prior network P (a function of the marks of the window, no
+# coordinates). The runs are the configuration of an existing run with other reference maps:
+#   all12wp_ref_drop   all12diffcells_refres_drop with P(reference marks) as the reference plane and the
+#                      residual base (the same object); all12wp_refm_drop: P with the CTCF motif planes
+#   all12wp_self_drop  all12refres_drop (no difference channels) with P(the sample's own marks)
+#   all12wp_both_drop  all12diffcells_refres_drop with the positional consensus kept AND P(reference
+#                      marks) as the prior plane (model.prior)
+# name -> (run whose configuration is used, tag of the P cooler folder)
+WP_BASE = {"all12wp_ref_drop": ("all12diffcells_refres_drop", "ref"),
+           "all12wp_refm_drop": ("all12diffcells_refres_drop", "ref_motif"),
+           "all12wp_self_drop": ("all12refres_drop", "own"),
+           "all12wp_both_drop": ("all12diffcells_refres_drop", "ref")}
+WP_PRIOR_PLANE = {"all12wp_both_drop"}          # P enters as prior_cool, the reference stays positional
+WP_DIR = HM / "window_prior"
+for _b in WP_BASE:
+    RUNS[_b] = (TRAIN12, None)
+    DROPOUT_RUNS[_b] = (0.5, 0.0)
+    REF_RUNS[_b] = "residual"
+    HONEST_RUNS.add(_b)
+
+
+def wp_cool(name: str, cell: str) -> Path:
+    """Cooler of P's output for `cell` (scripts/window_prior.py predict, cross-fitted by chromosome)."""
+    base, res = split_name(name)
+    return WP_DIR / f"{res // 1000}kb" / WP_BASE[base][1] / "cools" / f"{cell}.cool"
+
+
 
 def consensus_loo(cell: str, res: int) -> Path:
     """Mean of the proper O/E maps of the 11 training cells other than `cell`
@@ -508,6 +536,8 @@ def reference_of(name: str, cell: str) -> Path:
     """The reference map a reference run reads for `cell`."""
     if split_name(name)[0] == "all12reflearn":
         return learned_map(split_name(name)[1])
+    if split_name(name)[0] in WP_BASE and split_name(name)[0] not in WP_PRIOR_PLANE:
+        return wp_cool(name, cell)
     return measured_reference(name, SAMPLE_IDENT.get(cell, cell))
 # earlier models: name -> (run dir, cells trained on)
 OLD_RUNS = {"ref": (REF_RUN, ["gm12878"]), "gm1": (OLD / "gm1", ["gm12878"]),
@@ -532,6 +562,15 @@ def missing_marks(bw_dir: Path) -> list[str]:
 
 def run_config(name, val_per_cell, patience, max_epochs):
     base, res = split_name(name)
+    if base in WP_BASE:                         # section 76: another reference (or prior) map, own cache
+        cfg = run_config(run_name(WP_BASE[base][0], res), val_per_cell, patience, max_epochs)
+        cfg["train"]["output_dir"] = str(out_of(name) / name)
+        cfg["train"]["cache_dir"] = str(CACHE / f"mc_{name}")
+        for smp in cfg["data"]["samples"]:
+            smp["prior_cool" if base in WP_PRIOR_PLANE else "reference_cool"] = str(wp_cool(name, smp["name"]))
+        if base in WP_PRIOR_PLANE:
+            cfg["model"]["prior"] = True
+        return cfg
     if base in AML_SEEDED:                      # an AML seed replicate: the original's config, another seed
         orig, seed = AML_SEEDED[base]
         cfg = run_config(run_name(orig, res), val_per_cell, patience, max_epochs)
@@ -793,6 +832,9 @@ def crosscell(cfg_path, ckpt, out: Path, gpu: str, cells, res: int = 2000, ref_r
             extra = ["--reference", rf]
             if split_name(ref_run)[0] == "all12casc":
                 extra += ["--prior", cascade_prior(cell, CASCADE_FROM[res])]
+            if split_name(ref_run)[0] in WP_PRIOR_PLANE:
+                extra += ["--prior", wp_cool(ref_run, cell)]
+                others.append(f"learned={wp_cool(ref_run, cell)}")
         if ref_run is not None and split_name(ref_run)[0] in METH_RUNS:
             import methylation as me
             v2 = split_name(ref_run)[0] in METH_V2
