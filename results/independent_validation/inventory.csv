@@ -1,0 +1,33 @@
+sample,kind,mark,accession,experiment,size_gb,biosample_summary,lab,replicates,cell_cycle_phase,n_candidates,n_eligible
+pc3,chip,CTCF,ENCFF756ESH,ENCSR359LOD,1.716,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,3,3
+pc3,chip,H3K27ac,ENCFF537PUA,ENCSR826UTD,1.639,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,6,6
+pc3,chip,H3K27me3,ENCFF682MGB,ENCSR881TWJ,2.03,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,6,6
+pc3,chip,H3K36me3,ENCFF519YBG,ENCSR849APH,2.032,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,6,6
+pc3,chip,H3K4me1,ENCFF734QNV,ENCSR566UMF,1.848,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,6,6
+pc3,chip,H3K4me3,ENCFF319OET,ENCSR275NCH,1.715,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,6,6
+pc3,chip,H3K9me3,ENCFF302MER,ENCSR339ZMJ,2.038,Homo sapiens PC-3,"Bradley Bernstein, Broad","[1, 2]",False,6,6
+pc3,hic,Hi-C,ENCFF322IBI,ENCSR038TZA,26.15,"PC-3, intact MNase",,,,,
+panc1,chip,CTCF,ENCFF852QBZ,ENCSR203QEB,1.971,Homo sapiens Panc1,"Michael Snyder, Stanford",[2],False,6,2
+panc1,chip,H3K27ac,ENCFF493AZX,ENCSR000EXK,0.819,Homo sapiens Panc1,"Peggy Farnham, USC","[1, 2]",False,6,6
+panc1,chip,H3K27me3,ENCFF080YJR,ENCSR000FCO,0.865,Homo sapiens Panc1,"Peggy Farnham, USC","[1, 2]",False,6,6
+panc1,chip,H3K36me3,ENCFF754CHS,ENCSR000FCM,0.655,Homo sapiens Panc1,"Peggy Farnham, USC","[1, 2]",False,6,6
+panc1,chip,H3K4me1,ENCFF312AFB,ENCSR000EXJ,0.687,Homo sapiens Panc1,"Peggy Farnham, USC","[1, 2]",False,6,6
+panc1,chip,H3K4me3,ENCFF860FUS,ENCSR000DXB,0.425,Homo sapiens Panc1,"John Stamatoyannopoulos, UW","[1, 2]",False,12,12
+panc1,chip,H3K9me3,ENCFF501TAO,ENCSR000FCN,0.829,Homo sapiens Panc1,"Peggy Farnham, USC","[1, 2]",False,4,4
+panc1,hic,Hi-C,ENCFF168OXT,ENCSR440CTR,4.652,"Panc1, in situ HindIII, 2 replicates",,,,,
+nk,chip,CTCF,ENCFF956MZC,ENCSR856TKC,1.503,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,1,1
+nk,chip,H3K27ac,ENCFF802MJK,ENCSR067KOO,1.323,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,8,4
+nk,chip,H3K27me3,ENCFF340WMS,ENCSR477FRO,1.326,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,8,4
+nk,chip,H3K36me3,ENCFF884YQX,ENCSR036TAN,0.943,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,8,4
+nk,chip,H3K4me1,ENCFF094FIC,ENCSR240IEK,1.906,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,8,4
+nk,chip,H3K4me3,ENCFF070QLD,ENCSR139UDI,0.282,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,8,4
+nk,chip,H3K9me3,ENCFF038LUR,ENCSR025UNZ,1.401,Homo sapiens natural killer cell male adult (33 years),"Bradley Bernstein, Broad",[1],False,7,4
+nk,hic,Hi-C,ENCFF197OWW,ENCSR971CJS,48.828,"NK cell, primary, intact MNase",,,,,
+caco2,chip,CTCF,ENCFF227NGR,ENCSR000DQN,0.354,Homo sapiens Caco-2,"John Stamatoyannopoulos, UW","[1, 2]",False,7,7
+caco2,chip,H3K27ac,ENCFF766NLY,ENCSR571QQB,0.994,Homo sapiens Caco-2,"Bradley Bernstein, Broad",[1],False,1,1
+caco2,chip,H3K27me3,ENCFF120MMZ,ENCSR000DQL,0.446,Homo sapiens Caco-2,"John Stamatoyannopoulos, UW","[1, 2]",False,7,7
+caco2,chip,H3K36me3,ENCFF920MFN,ENCSR000DQK,0.383,Homo sapiens Caco-2,"John Stamatoyannopoulos, UW","[1, 2]",False,7,7
+caco2,chip,H3K4me1,ENCFF617MAB,ENCSR061UOM,2.439,Homo sapiens Caco-2,"Michael Snyder, Stanford",[1],False,4,3
+caco2,chip,H3K4me3,ENCFF027JAD,ENCSR000DQM,0.232,Homo sapiens Caco-2,"John Stamatoyannopoulos, UW","[1, 2]",False,7,7
+caco2,chip,H3K9me3,ENCFF323YOP,ENCSR401WUV,2.5,Homo sapiens Caco-2,"Michael Snyder, Stanford",[1],False,4,3
+caco2,hic,Hi-C,ENCFF234MDO,ENCSR820DYU,31.637,"Caco-2, intact MNase",,,,,
