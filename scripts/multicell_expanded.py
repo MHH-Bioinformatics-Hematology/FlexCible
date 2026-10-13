@@ -563,7 +563,9 @@ def missing_marks(bw_dir: Path) -> list[str]:
 def run_config(name, val_per_cell, patience, max_epochs):
     base, res = split_name(name)
     if base in WP_BASE:                         # section 76: another reference (or prior) map, own cache
-        cfg = run_config(run_name(WP_BASE[base][0], res), val_per_cell, patience, max_epochs)
+        # the module's own function, not the name run_single_gpu.py patches (its batch scale applies once,
+        # to the result of this call)
+        cfg = _run_config_unpatched(run_name(WP_BASE[base][0], res), val_per_cell, patience, max_epochs)
         cfg["train"]["output_dir"] = str(out_of(name) / name)
         cfg["train"]["cache_dir"] = str(CACHE / f"mc_{name}")
         for smp in cfg["data"]["samples"]:
@@ -773,6 +775,9 @@ def run_config(name, val_per_cell, patience, max_epochs):
     if base.endswith("_hard"):
         cfg["train"]["hard_split"] = str(HARD_SPLIT_DIR / f"{res // 1000}kb" / "split.json")
     return cfg
+
+
+_run_config_unpatched = run_config      # section 76: the unpatched function (see run_config)
 
 
 def logtext(name):
