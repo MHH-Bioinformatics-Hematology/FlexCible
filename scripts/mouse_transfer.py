@@ -65,7 +65,7 @@ SETS = {"all7": CORE7, "ctcf_k27ac": ["CTCF", "H3K27ac"], "ctcf": ["CTCF"], "non
 MODELS = {"honest": "all12honest_drop", "refin": "all12refin_drop", "refres": "all12refres_drop",
           "diff": "all12diffcells_refres_drop"}
 METRICS = ["pearson", "scc", "insulation_corr", "boundary_f1", "loop_enrich_corr", "loop_apa_ratio",
-           "compartment_corr", "eigenvector_abs_corr"]
+           "compartment_corr", "eigenvector_abs_corr", "stripe_corr"]
 
 
 def log(msg):
@@ -235,16 +235,17 @@ def stage_views(a):
             for fn in ("model.pt", "norm_tracks.json", "channels.json"):
                 t = dst / fn
                 if not t.exists():
-                    t.symlink_to(src / fn)
+                    shutil.copyfile(src / fn, t)
             nm = dst / "norm_matrix_mt_target.json"
             if not nm.exists():
                 shutil.copyfile(src / "norm_matrix_gm12878.json", nm)       # the matrix normaliser of the first
             cfg = yaml.safe_load((src / "config.yaml").read_text())            # sample, as for unseen human cells
             first = dict(cfg["data"]["samples"][0])
             first["reference_cool"] = None
+            refc = (lambda c: str(loo_cool(c, res))) if m != "honest" else (lambda c: None)
             tg = dict(first, name="mt_target", cool_path=str(oe_cool("heart", res)),
                       bigwig_dir=str(VM / MARKS["heart"]), missing_tracks=[], zeroed_tracks=[],
-                      assay="hic", fasta=None)
+                      assay="hic", fasta=None, reference_cool=refc("heart"))
             samples = [tg]
             have = {}
             for c in POOL:
@@ -252,7 +253,7 @@ def stage_views(a):
                 have[c] = {p.stem for p in d.glob("*.bigwig")}
                 samples.append(dict(first, name=c, cool_path=str(oe_cool(c, res)), bigwig_dir=str(d),
                                     missing_tracks=[t for t in ALL13 if t not in have[c]], zeroed_tracks=[],
-                                    assay=ASSAY[c], fasta=None))
+                                    assay=ASSAY[c], fasta=None, reference_cool=refc(c)))
             cfg["data"]["samples"] = samples
             if cfg["data"].get("diff_marks"):
                 cfg["data"]["diff_reference_sets"] = {"consensus": list(POOL)}
@@ -282,7 +283,7 @@ def stage_views(a):
         for fn in ("norm_tracks.json", "channels.json", "norm_matrix_mt_target.json", "config.yaml"):
             t = dst / fn
             if not t.exists():
-                t.symlink_to((base / fn).resolve())
+                shutil.copyfile(base / fn, t)
         log(f"view {dst} (untrained, seed 0)")
 
 
@@ -579,6 +580,20 @@ def _diag_mean_baseline(T):
     return out
 
 
+def stripe_profile(M, d0=3, d1=30):
+    """per bin mean O/E over d0..d1 bins downstream and upstream (the base of stripes), concatenated"""
+    n = M.shape[0]
+    dn, up = np.full(n, np.nan), np.full(n, np.nan)
+    for i in range(n):
+        v = M[i, i + d0:i + d1 + 1]
+        if np.isfinite(v).sum() >= 5:
+            dn[i] = np.nanmean(v)
+        v = M[max(0, i - d1):max(0, i - d0 + 1), i]
+        if np.isfinite(v).sum() >= 5:
+            up[i] = np.nanmean(v)
+    return np.concatenate([dn, up])
+
+
 def _score_chunk(rows):
     from hicmultiome.structure import structure_metrics
     W = _W
@@ -623,7 +638,12 @@ def _score_chunk(rows):
         base = {"cell": W["cell"], "res": res, "key": key, "chrom": chrom, "set": st, "n_px": n_px}
         maps["distance_oracle"] = _diag_mean_baseline(Tm)
         for m, M in maps.items():
-            r = structure_metrics(np.where(mask, M, np.nan), Tm, res)
+            Mm = np.where(mask, M, np.nan)
+            r = structure_metrics(Mm, Tm, res)
+            sp, st_ = stripe_profile(Mm), stripe_profile(Tm)
+            ok = np.isfinite(sp) & np.isfinite(st_)
+            r["stripe_corr"] = (float(np.corrcoef(sp[ok], st_[ok])[0, 1])
+                                if ok.sum() > 20 and sp[ok].std() > 0 and st_[ok].std() > 0 else np.nan)
             out.append({**base, "method": m, **{k: r.get(k, np.nan) for k in METRICS}})
         # chromosome-wide distance-decay of an O/E map is zero by construction: a constant predictor
         out.append({**base, "method": "distance_decay", **{k: (0.0 if k == "pearson" else np.nan) for k in METRICS}})

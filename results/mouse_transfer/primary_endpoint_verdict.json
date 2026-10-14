@@ -1,0 +1,105 @@
+{
+ "definition": "honest:all7 10 kb autosome windows above distance_decay and above honest_shuf:all7 in every sample (difference of medians, 95% paired bootstrap interval excludes 0)",
+ "samples": {
+  "mesc": {
+   "distance_decay": {
+    "cell": "mesc",
+    "res": 10000,
+    "m1": "honest:all7",
+    "m2": "distance_decay",
+    "metric": "pearson",
+    "n": 5629,
+    "stat_m1": 0.7328,
+    "stat_m2": 0.0,
+    "diff": 0.7328,
+    "lo": 0.72668,
+    "hi": 0.73774,
+    "frac_windows_m1_above": 0.9877420500977083
+   },
+   "honest_shuf:all7": {
+    "cell": "mesc",
+    "res": 10000,
+    "m1": "honest:all7",
+    "m2": "honest_shuf:all7",
+    "metric": "pearson",
+    "n": 5629,
+    "stat_m1": 0.7328,
+    "stat_m2": 0.3004,
+    "diff": 0.4324,
+    "lo": 0.42089975,
+    "hi": 0.44447175,
+    "frac_windows_m1_above": 0.925386391899094
+   },
+   "honest_median": 0.7328,
+   "ceiling_full_depth_median": 0.9443728537846935,
+   "fraction_of_ceiling": 0.775964701932305
+  },
+  "ch12": {
+   "distance_decay": {
+    "cell": "ch12",
+    "res": 10000,
+    "m1": "honest:all7",
+    "m2": "distance_decay",
+    "metric": "pearson",
+    "n": 5629,
+    "stat_m1": 0.63521,
+    "stat_m2": 0.0,
+    "diff": 0.63521,
+    "lo": 0.62385,
+    "hi": 0.6432382499999999,
+    "frac_windows_m1_above": 0.9596731213359389
+   },
+   "honest_shuf:all7": {
+    "cell": "ch12",
+    "res": 10000,
+    "m1": "honest:all7",
+    "m2": "honest_shuf:all7",
+    "metric": "pearson",
+    "n": 5629,
+    "stat_m1": 0.63521,
+    "stat_m2": 0.16177,
+    "diff": 0.4734400000000001,
+    "lo": 0.4592535,
+    "hi": 0.48548025,
+    "frac_windows_m1_above": 0.9046011724995559
+   },
+   "honest_median": 0.63521,
+   "ceiling_full_depth_median": 0.9344047163039835,
+   "fraction_of_ceiling": 0.6798017913614122
+  },
+  "heart": {
+   "distance_decay": {
+    "cell": "heart",
+    "res": 10000,
+    "m1": "honest:all7",
+    "m2": "distance_decay",
+    "metric": "pearson",
+    "n": 5629,
+    "stat_m1": 0.72153,
+    "stat_m2": 0.0,
+    "diff": 0.72153,
+    "lo": 0.71508,
+    "hi": 0.7305,
+    "frac_windows_m1_above": 0.9694439509682004
+   },
+   "honest_shuf:all7": {
+    "cell": "heart",
+    "res": 10000,
+    "m1": "honest:all7",
+    "m2": "honest_shuf:all7",
+    "metric": "pearson",
+    "n": 5629,
+    "stat_m1": 0.72153,
+    "stat_m2": 0.15027,
+    "diff": 0.57126,
+    "lo": 0.5591397499999999,
+    "hi": 0.58444025,
+    "frac_windows_m1_above": 0.9379996446971043
+   },
+   "honest_median": 0.72153,
+   "ceiling_full_depth_median": 0.9631660820003638,
+   "fraction_of_ceiling": 0.7491231403222601
+  }
+ },
+ "endpoint_met": true
+}

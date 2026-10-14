@@ -9370,7 +9370,7 @@ The pre-registered endpoint is met, but unevenly. The gain over consensus12 is l
 `scripts/independent_validation_fetch.py`, `scripts/independent_validation_predict.py`, `scripts/independent_validation.py`, `results/independent_validation/{PREREGISTRATION.md, inventory.csv, samples.csv, ceilings.csv, summary_*.csv, paired_contrasts.csv, primary_endpoint_verdict.json, tables.md, fig_independent_validation.png}`; per-window scores, predictions and inputs in `/mnt/processed/wolffjoa/hic-multiome/validation_new/`.
 
 
-## 75. Transfer of the human-trained models to mouse (mm10), unchanged models, three mouse cell types (PENDING; section 74 was the last number when this was written)
+## 75. Transfer of the human-trained models to mouse (mm10), unchanged models, three mouse cell types (FINAL; section 74 was the last number when this was written)
 
 ### Pre-registration (the file `results/mouse_transfer/PREREGISTRATION.md`, committed in 7e8e290 before any score of a mouse window existed; reproduced here)
 Question. Do the human-trained models, applied unchanged to mouse chromatin marks, predict mouse Hi-C? A positive
@@ -9460,6 +9460,57 @@ median measure of honest exceeds that of the shuffled-marks control with the int
 samples; classes with weaker or inconsistent results are reported as not transferring. Few samples, assay
 differences (in situ vs intact), strain mixing of the heart ChIP and the lack of species-specific retraining are
 stated as limits, not corrected.
+
+
+### Results (FINAL; scores in results/mouse_transfer/, tables.md, fig_mouse_transfer.png)
+Run exactly as pre-registered: no model, parameter or threshold changed. 5 629 autosome windows at 10 kb in every
+sample (5 579 at 25 kb); chrX (S6) was not run. Hi-C: mesc ENCFF092WXU (ENCSR051JZL, 14.4 GB .hic, 1 087 M cis
+contacts at MAPQ >= 30), ch12 ENCFF076GYR (ENCSR005UON, 8.7 GB, 533 M), heart ENCFF651SGY (ENCSR997TTD, 52.2 GB,
+749 M), mesc replicate ENCFF079MKO (ENCSR819XFA, 7.4 GB, 415 M); mm10 throughout; ChIP accessions in
+validation_mouse/inventory.csv. Mouse leave-one-out consensus = mean of the two other samples (3 samples).
+
+Primary endpoint (honest, 10 kb, median per-window Pearson; interval = 95 percent paired bootstrap): MET.
+| sample | honest | minus distance decay | minus shuffled marks | split-half ceiling | fraction of ceiling |
+|---|---|---|---|---|---|
+| mesc | 0.733 | +0.733 [+0.727, +0.738] | +0.432 [+0.421, +0.444] | 0.944 | 0.78 |
+| ch12 | 0.635 | +0.635 [+0.624, +0.643] | +0.473 [+0.459, +0.485] | 0.934 | 0.68 |
+| heart | 0.722 | +0.722 [+0.715, +0.731] | +0.571 [+0.559, +0.584] | 0.963 | 0.75 |
+Windows with honest above shuffled marks: 0.93, 0.91, 0.94. The same holds at 25 kb (0.759, 0.748, 0.775; above
+shuffled marks by +0.42 to +0.57).
+
+Medians, 10 kb (mesc / ch12 / heart): distance decay 0 / 0 / 0; in-sample per-diagonal mean 0.425 / 0.376 / 0.380;
+untrained network 0.031 / 0.007 / 0.026; shuffled marks 0.300 / 0.162 / 0.150; no marks (sequence only) 0.536 /
+0.386 / 0.452; CTCF 0.660 / 0.500 / 0.620; CTCF + H3K27ac 0.683 / 0.542 / 0.674; marks of another sample 0.722 /
+0.533 / 0.608; honest 0.733 / 0.635 / 0.722; mouse consensus alone 0.766 / 0.746 / 0.765; refin 0.833 / 0.803 /
+0.840; refres 0.829 / 0.808 / 0.835; diff 0.834 / 0.812 / 0.836.
+Secondary. S1: refin, refres, diff minus consensus alone are +0.057 to +0.076 (all intervals above 0, 10 and 25 kb);
+refin minus honest +0.100 / +0.168 / +0.119. Honest minus consensus alone is -0.033 / -0.111 / -0.043 (honest does
+not reach the consensus). S2 (mesc, 1 500-window subset, 10 kb): honest minus Akita v2 Bonev ES head +0.014
+[-0.001, +0.028], Hsieh mESC +0.023 [+0.008, +0.038], Bonev CN +0.067, NPC +0.036; refin minus Bonev ES +0.106.
+S3: honest minus CTCF + H3K27ac +0.050 / +0.094 / +0.047; CH12 with RAD21 and SMC3 +0.053 (honest), +0.014
+(refin); mesc with ES-Bruce4 marks: difference 0.000 [-0.005, +0.005]. Replicate experiment of mesc 0.921
+(honest -0.188 below it). Marks of another sample: honest minus it +0.011 [+0.006, +0.017] (mesc), +0.103 (ch12),
++0.114 (heart); at 25 kb mesc +0.006 [-0.001, +0.013].
+S4 structure classes (honest minus shuffled marks; every interval above 0 in all three samples, 10 kb): insulation
+r +0.46 to +0.60; boundary F1 +0.19 to +0.20; loop enrichment r +0.32 to +0.46; APA ratio +0.13 to +0.32;
+compartment r +0.18 to +0.21; stripe profile r +0.43 to +0.56. By the pre-registered rule all classes transfer.
+Honest values (mesc / ch12 / heart): insulation 0.79 / 0.75 / 0.81, boundary F1 0.29 / 0.27 / 0.26, loop
+enrichment 0.45 / 0.38 / 0.53, APA ratio 0.30 / 0.15 / 0.35, compartment 0.82 / 0.75 / 0.80. Against the marks of
+another sample the margin is near zero or negative for several classes in mesc (insulation -0.003, boundary
+-0.004, stripe -0.025, APA ratio -0.186), positive in ch12 and heart.
+
+Caveats. The shuffled-marks control is below the sequence-only model (0.15 to 0.30 against 0.39 to 0.54): a
+mismatched mark track is worse than none, so the margin over it overstates the information carried by marks; the
+margin over no marks (+0.20 to +0.27) and over the marks of another sample (+0.01 to +0.11) is the conservative
+reading. In mesc the marks of heart predict almost as well as its own. The mouse consensus alone beats the human
+model with mouse marks in every sample, so most of the mouse structure is shared across mouse tissues and the
+unchanged model recovers less of it than a map of another mouse tissue. Three samples; in situ vs intact Hi-C;
+heart ChIP of mixed strains; the human PWMs on mouse sequence; no species-specific retraining; chrX not run;
+Akita on a 1 500-window subset; the primary distance-decay comparator is a constant (Pearson 0 by construction).
+Interpretation under the pre-registered rule: the human-trained mapping from marks and local sequence to structure
+carries information in mouse above every control, at 68 to 78 percent of the replicate ceiling for the honest
+model, and each structure class transfers; the evidence does not separate conserved marks-to-structure biology
+from conserved sequence and chromatin-state composition, and cell-type-specific marks contribute least in mESC.
 
 ## 76. Window prior: the consensus as a function of window content instead of genomic position (PENDING; section 75 was the last number when this was written)
 
