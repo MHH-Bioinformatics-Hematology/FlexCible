@@ -9522,3 +9522,53 @@ Retraining raises the Pearson of C.Origami from 0.45 to 0.72 and of Epiphany fro
 
 ### Files
 `scripts/competitor_retrain/` (fetch_dnase, prep, train_corigami, train_epiphany, predict_*, finalize, blocks, table, score_workers.sh, vendor), `results/competitor_retrain/{table.md, per_cell.csv, summary.csv, vs_retrained.csv, dnase_picks.tsv, history_*.json}`, `results/hic_measures_chrho/chrho_competitor_retrain_{per_block,summary}.csv`; checkpoints and predictions on the share under `competitor_retrain/` and `runs/benchmark/competitor_oe/`. Hooks: `scripts/hic_measures.py` flags `--chrho-competitor-retrain`, `--chrho-cells`.
+
+## 78. Methylation as a proxy that replaces missing tracks (FINAL; section 77 was the last number when this was written)
+
+Question: when CTCF, cohesin or histone tracks are missing, how much of the Hi-C accuracy lost is returned by the methylation track (Meth), as a replacement and not as an addition to a complete set.
+
+### Design
+- Replacement fraction RF = (score with Meth - score without) / (score with all tracks - score without), median Pearson over the 413 Akita test regions per cell, mean over cells, in the same trained model with Meth present or absent (track dropout makes both states in-distribution). Group sets as in section 35 (CTCF; cohesin RAD21+SMC3; active H3K27ac/H3K4me1/me2/me3/H3K9ac; gene body H3K36me3/H3K79me2/H4K20me1; repressive H3K27me3/H3K9me3; cum1 to cum3; CTCF only; CTCF+H3K27ac; CTCF+H3K27ac+H3K27me3; sequence only).
+- Models (10 and 25 kb): all12refres_drop_meth (10 kb, + v2), all12refres_drop_motifmeth, all12honest_drop_meth (+ s1), all12honest_drop_motifmeth (+ s1 at 25 kb). Cells: seven WGBS training cells (honest meth), two for motifmeth models, K562 and HMEC held out.
+- Loss threshold: median over cells of the absolute difference of the median Pearson of the two seeds of the honest family without Meth: 0.0062 (10 kb), 0.0072 (25 kb), 0.0139 (25 kb motifmeth); 0.0062 for consensus models (section 51). `reference_summary.csv` holds no seed replicates, so the s1 models of this section supply the spread. RF is reported only where mean loss >= threshold and the bootstrap lower bound of the loss is above 0. Bootstrap: 500 draws of regions (paired across sets), cells resampled when >= 3 cells.
+- AML: aml_meth_refin folds 10 to 12, 8 test donors with WGBS (018, 027, 270, 168, 546, 629, 472, 773), own marks H3K27ac, H3K27me3, CTCF removed singly and together, with and without the patient's Meth; 10 and 25 kb; patient-specific windows; 10 kb loop and stripe objects of scripts/aml_loop_detection.py (1886 loops, 921 stripes against matched random pairs).
+
+### Results (10 kb, median Pearson; loss and gain in Pearson units; RF with 95 percent interval; - = loss below threshold)
+| set | honest held-out loss / gain / RF | honest training loss / gain / RF | consensus training loss / gain / RF |
+|---|---|---|---|
+| minus CTCF | 0.037 / 0.001 / 0.02 (-0.12 to 0.25) | 0.015 / 0.007 / 0.48 (-0.24 to 1.47) | 0.001 / 0.002 / - |
+| minus cohesin | 0.008 / 0.009 / 1.19 (-0.13 to 8.9) | 0.013 / 0.008 / 0.59 (0.15 to 2.08) | 0.017 / 0.016 / 0.93 (0.72 to 1.13) |
+| minus active | 0.024 / 0.011 / 0.48 (0.13 to 0.80) | 0.055 / 0.008 / 0.14 (-0.00 to 0.36) | 0.012 / 0.003 / 0.25 (-0.02 to 0.47) |
+| minus gene body | -0.003 / 0.010 / - | 0.016 / 0.007 / 0.44 (-0.02 to 1.21) | 0.000 / 0.001 / - |
+| minus repressive | 0.001 / 0.009 / - | 0.007 / 0.008 / 1.13 (-0.03 to 11) | 0.002 / 0.002 / - |
+| cum2 | 0.007 / 0.009 / - | 0.020 / 0.008 / 0.39 (0.08 to 0.86) | 0.017 / 0.015 / 0.86 (0.65 to 1.04) |
+| cum3 | 0.014 / 0.011 / 0.79 (0.09 to 2.7) | 0.039 / 0.007 / 0.19 (-0.02 to 0.42) | 0.018 / 0.014 / 0.76 (0.57 to 1.02) |
+| CTCF only | 0.092 / 0.033 / 0.36 (0.25 to 0.48) | 0.174 / 0.033 / 0.19 (0.06 to 0.34) | 0.044 / 0.017 / 0.39 (0.18 to 0.54) |
+| sequence only | 0.223 / 0.074 / 0.34 (0.24 to 0.38) | 0.254 / 0.048 / 0.19 (0.06 to 0.30) | 0.045 / 0.015 / 0.32 (0.12 to 0.47) |
+
+25 kb honest, held-out: minus CTCF loss 0.055, gain 0.009, RF 0.17 (0.03 to 0.34); CTCF only 0.084 / 0.043 / 0.51 (0.35 to 0.72); sequence only 0.199 / 0.066 / 0.33 (0.23 to 0.45). Every other single group is below the threshold. Seed s1 and motif-plane models agree within the intervals (minus CTCF RF 0.11 to 0.31; CTCF only 0.35 to 0.47; sequence only 0.26 to 0.34), motif planes at 25 kb training cells raise cohesin and active RF (1.17, 0.53; two cells only). Consensus-input models on held-out cells lose at most 0.005 for any single group, so no RF exists there.
+
+AML test donors (pooled over 8 donors): global Pearson loss from removing any of the three marks is at most 0.005 at 10 and 25 kb and the patient's Meth adds at most 0.001, so RF is undefined. In patient-specific windows removing H3K27ac costs 0.019 (10 kb) and 0.027 (25 kb) Pearson and Meth returns 0.014 (RF 0.71, -1.65 to 1.55) and 0.003; residual correlation with the AML reference in these windows: loss 0.041 and 0.155, gain 0.022 and 0.067, RF 0.52 (-0.17 to 1.32) and 0.43 (0.07 to 1.09). Removing H3K27me3 or CTCF alone costs nothing measurable. All three removed: 0.014 (10 kb) and 0.021 (25 kb) specific-window Pearson lost, 0.006 and 0.004 returned. Loops and stripes: removal of the three marks lowers the residual AUROC from 0.555 to 0.482 (loops) and from 0.542 to 0.451 (stripes); Meth gives +0.004 (RF 0.05, -0.39 to 0.39) and +0.028 (RF 0.31, -0.37 to 0.66). Share of AML-specific loops above the 90th percentile of random pairs: 0.482 full, 0.459 without the three marks, 0.466 with Meth; all RF intervals include 0.
+
+### Mark summary (results/meth_proxy/mark_summary.csv; unseen-cell signal Pearson sequence -> sequence + Meth, gradient boosting; CNN gain in brackets)
+| mark | signal Pearson seq -> seq+Meth | Hi-C loss when group removed (honest 10 kb, held-out / training) | Hi-C gain from Meth |
+|---|---|---|---|
+| CTCF | 0.42 -> 0.52 (+0.11) | 0.037 / 0.015 | 0.001 / 0.007 |
+| RAD21, SMC3 | 0.43 -> 0.48, 0.45 -> 0.55 (+0.05, -0.01) | 0.008 / 0.013 | 0.009 / 0.008 |
+| H3K27ac | 0.33 -> 0.65 (+0.22) | 0.024 / 0.055 | 0.011 / 0.008 |
+| H3K4me1/me2/me3, H3K9ac | 0.34-0.49 -> 0.59-0.76 (+0.08 to +0.16) | same group | same group |
+| H3K36me3, H3K79me2, H4K20me1 | 0.25-0.37 -> 0.44-0.68 (+0.02 to +0.17) | -0.003 / 0.016 | 0.010 / 0.007 |
+| H3K27me3 | 0.39 -> 0.52 (+0.13) | 0.000 / 0.007 | 0.009 / 0.008 |
+| H3K9me3 | 0.30 -> 0.33 (+0.08) | same group | same group |
+
+### Findings (paragraph-ready)
+Methylation returns a fraction of the Pearson lost after tracks are removed that depends on how much is removed and on whether the consensus is an input. Without the consensus the gain is 0.007 to 0.011 whichever single group is removed, including groups whose removal costs nothing, and grows to 0.033 (CTCF only) and 0.048 to 0.074 (sequence only), which is 0.19 to 0.36 of the loss at 10 kb and 0.33 to 0.51 at 25 kb. With the consensus as input the fractions are 0.32 to 0.39 for CTCF only and sequence only and 0.76 to 0.93 for cohesin, cum2 and cum3 on training cells, where the losses are 0.017 to 0.018. On the held-out cell types K562 and HMEC the consensus models lose at most 0.005 for any single group and cohesin, active and repressive losses are inside the seed spread; CTCF removal is not replaced (RF 0.02 at 10 kb, 0.17 at 25 kb). In the AML donors the three own marks carry at most 0.005 of the global Pearson given the AML reference, the patient's Meth adds at most 0.001, and in the patient-specific windows it returns about half of the H3K27ac loss at 25 kb (residual RF 0.43, 0.07 to 1.09); the loop and stripe recovery is not distinguishable from zero. Signal-level predictability from methylation is highest for H3K4me2, H3K9ac, H3K36me3 and H3K27ac and lowest for H3K9me3, H4K20me1, RAD21, and does not rank the Hi-C gain, which is flat across groups.
+
+### Verdict and rule
+Partial proxy, not a replacement. Never a full substitute for CTCF. Practical rule: with the reference consensus present, drop cohesin or active/repressive/gene-body marks and add Meth (loss stays <= 0.02); with a CTCF track missing or few marks available keep Meth as an input for roughly one third to one half of the lost Pearson; do not expect Meth to recover patient-specific loops or stripes.
+
+### Caveats
+(i) Only two held-out cells (K562, HMEC): the interval over regions does not cover the cell-to-cell variation, no cell bootstrap. (ii) Seed spread from two seeds of the honest family (0.006 to 0.007, per-set maxima up to 0.018); most single-group losses are below it, so their RF is undefined or unstable (RF above 1 with wide intervals reflects a Meth gain of 0.007 to 0.011 that is present without any removal and is additive). (iii) Group-level sets give the same gain to marks of one group, so the mark summary ranks groups. (iv) Motif-plane models: two training cells. (v) AML: eight donors, fold-wise references, the three marks are the whole AML panel.
+
+### Files
+`scripts/meth_proxy_analysis.py` (stages predict, aml, aml_loops, summary; run with the hicdiff env), `results/meth_proxy/{replacement_pooled.csv, replacement_by_cell.csv, seed_noise.csv, signal_level.csv, mark_summary.csv, aml_replacement_pooled.csv, aml_replacement_by_donor.csv, aml_loops_replacement.csv, aml_regions.csv.gz, aml_object_scores.csv.gz, meth_proxy.png}`; predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/meth_proxy`.
