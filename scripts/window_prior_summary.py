@@ -95,6 +95,15 @@ def boot(frames: dict, a: str, b: str, ref: str | None = None, seed: int = 0):
     return out
 
 
+def _md(df, index):
+    """Pipe table without the tabulate dependency."""
+    d = df.reset_index() if index else df
+    rows = [list(map(str, d.columns))] + [[str(v) for v in r] for r in d.itertuples(index=False)]
+    out = ["| " + " | ".join(rows[0]) + " |", "|" + "---|" * len(rows[0])]
+    out += ["| " + " | ".join(r) + " |" for r in rows[1:]]
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--res", type=int, default=10000)
@@ -154,11 +163,11 @@ def main():
     T = pd.DataFrame(rows)
     cols = [c for c in ["honest", "refres", "diff", "wp_ref", "wp_self", "wp_both", "wp_refm", "consensus",
                         "P_wp_ref", "P_wp_self", "n_regions"] if c in T]
-    md.append(T.set_index("cell")[["group"] + cols].to_markdown())
+    md.append(_md(T.set_index("cell")[["group"] + cols], True))
     md.append("\n## Pooled paired contrasts (difference of medians, 95 percent bootstrap interval)\n")
     show = [c for c in ["group", "contrast", "n_cells", "n_windows", "median_a", "median_b", "diff", "lo", "hi",
                         "above", "gap_closed", "gap_lo", "gap_hi"] if c in C]
-    md.append(C[show].round(4).to_markdown(index=False))
+    md.append(_md(C[show].round(4), False))
     md.append("\n## Primary endpoint\n\n```\n" + json.dumps(prim, indent=1) + "\n```\n")
     (OUT / f"tables_{k}kb.md").write_text("\n".join(md))
     # figure

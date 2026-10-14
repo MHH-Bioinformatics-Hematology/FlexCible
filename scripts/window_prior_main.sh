@@ -30,9 +30,19 @@ for R in "$@"; do
       --cmd "run_single_gpu $R $RES" > /dev/null
   rc=$?
   if [ $rc -eq 0 ]; then
-    say "train $NAME"
-    python scripts/run_single_gpu.py multicell_expanded --runs $R --res $RES --stage train --gpus 0 \
-      > $HM/runs/multicell_reference/$NAME.remote.out 2>&1 || { say "TRAIN FAILED $NAME"; python scripts/claim_job.py release windowprior_main_$NAME; exit 1; }
+    ok=0
+    for TRY in $(seq 1 40); do      # the GPU is shared: wait for 4.3 GB free, retry after a CUDA OOM
+      until [ "$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)" -ge "$(cat $HOME/wp_min_free_mib 2>/dev/null || echo 4300)" ]; do sleep 60; done
+      say "train $NAME (try $TRY)"
+      if python scripts/run_single_gpu.py multicell_expanded --runs $R --res $RES --stage train --gpus 0 \
+           > $HM/runs/multicell_reference/$NAME.remote.out 2>&1; then ok=1; break; fi
+      if grep -q "out of memory" $HM/runs/multicell_reference/$NAME.log 2>/dev/null; then
+        say "OOM $NAME, waiting"; sleep 300
+      else
+        break
+      fi
+    done
+    if [ $ok -ne 1 ]; then say "TRAIN FAILED $NAME"; python scripts/claim_job.py release windowprior_main_$NAME; exit 1; fi
   else
     say "train skipped $NAME rc=$rc"
   fi

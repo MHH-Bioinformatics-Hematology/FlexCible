@@ -9512,7 +9512,7 @@ carries information in mouse above every control, at 68 to 78 percent of the rep
 model, and each structure class transfers; the evidence does not separate conserved marks-to-structure biology
 from conserved sequence and chromatin-state composition, and cell-type-specific marks contribute least in mESC.
 
-## 76. Window prior: the consensus as a function of window content instead of genomic position (PENDING; section 75 was the last number when this was written)
+## 76. Window prior: the consensus as a function of window content instead of genomic position (FINAL; section 75 was the last number when this was written)
 
 ### Pre-registration (the file `results/window_prior/PREREGISTRATION.md`, committed before any score of a prior-based model existed; reproduced here)
 Question. The consensus input of the reference models is positional: the mean of the other cells' Hi-C at the same genomic coordinates. It cannot be built for another organism, whose syntenic regions differ. Can the consensus be replaced by a function learned from windows across the genome that maps the content of a window (chromatin marks, no coordinates) to the typical Hi-C of such a window, so that the main model learns from it and the same function transfers to an organism without reference Hi-C?
@@ -9540,6 +9540,35 @@ Expectation, stated before the score exists. The prior is a function of the mark
 Fixed in advance: P architecture and hyperparameters as above (no tuning on a score; a change after seeing a score is a new run that is reported next to this one), one seed (0) for every model, no model selection on the held-out cells or new samples, 10 kb checkpoint-best of each main run chosen by its own honest validation.
 
 Limits (to be stated with the results): one seed; reference marks pool of 12 cell lines, assay differences between the cells (in situ, intact, Micro-C); the new samples carry seven marks; the models are human-trained and the mouse samples test transfer only.
+
+### Results (FINAL, 2026-10-14; the pre-registration above is unchanged; all numbers from results/window_prior/, scripts/window_prior_summary.py, window_prior_indep.py, window_prior_mouse.py)
+
+Training and evaluation: P (ref and own, odd / even / full folds) and the three main models trained and evaluated at 10 kb and 25 kb, one seed (0), no run repeated or tuned. All five held-out cells and four independent samples scored on identical windows (413 Akita test regions).
+
+Median Pearson per region, median of the per-cell medians (10 kb; tables_10kb.md, cells_10kb.csv)
+
+| group | no consensus | positional (refres) | positional (diff) | wp_ref | wp_self | wp_both | consensus alone | ceiling |
+|---|---|---|---|---|---|---|---|---|
+| held-out cells (5) | 0.761 | 0.897 | 0.905 | 0.778 | 0.754 | 0.901 | 0.859 | 0.906 |
+| independent samples (4) | 0.706 | 0.839 | 0.850 | 0.719 | 0.719 | 0.855 | 0.764 | 0.942 |
+
+25 kb: held-out 0.775 / 0.907 / 0.924 / 0.798 / 0.757 / 0.922 / 0.898; independent 0.747 / 0.897 / 0.898 / 0.779 / 0.777 / 0.898 / 0.877. Ceiling = Spearman-Brown corrected split-half replicate (replicate_ceiling and independent_validation/ceilings.csv). Positional (refres) is the consensus model that wp_self is compared with, positional (diff) the one for wp_ref and wp_both.
+
+Primary endpoint (10 kb, paired bootstrap, 2000 resamples, difference of pooled medians vs all12honest_drop): E1 held-out wp_ref +0.0229 [0.0141, 0.0317] above; E1 wp_self -0.0054 [-0.0121, 0.0023] not above; E2 independent wp_ref +0.0111 [0.0020, 0.0213] above; E2 wp_self +0.0001 [-0.0100, 0.0087] not above. The primary endpoint is NOT met (wp_self fails both). 25 kb: wp_ref +0.0279 [0.0209, 0.0395] and +0.0298 [0.0189, 0.0374]; wp_self -0.0197 [-0.0270, -0.0113] and +0.0092 [-0.0008, 0.0166].
+
+Fraction of the gap closed (S1, 10 kb pooled): wp_ref 0.156 [0.100, 0.207] held-out, 0.074 [0.015, 0.138] independent; wp_self -0.039 [-0.093, 0.016] and 0.000 [-0.071, 0.059]. 25 kb: wp_ref 0.202 [0.156, 0.269] and 0.203 [0.135, 0.250]; wp_self -0.152 and 0.064. Of the 12 training cells at 10 kb wp_ref closes 0.036 and wp_self 0.020.
+
+Additive value (S2): wp_both minus all12diffcells_refres_drop is -0.0081 [-0.0105, -0.0054] on the held-out cells and +0.0046 [-0.0024, 0.0080] on the independent samples at 10 kb (25 kb: -0.0005 and -0.0009, intervals include 0). No gain from adding P to the positional consensus.
+
+P alone (S4, 10 kb, held-out cells, median Pearson): P(reference marks) 0.723 with the cell's own Hi-C and 0.850 with the leave-one-out consensus; P(own marks) 0.732 and 0.787; the consensus alone 0.859 with the own Hi-C. Medians over the 12 training cells: 0.757 / 0.772 / consensus 0.887.
+
+Controls. C1 position-free: maximum absolute difference of the log O/E maps after undoing a random whole-window roll and permuting chromosome labels, over 17 cells and 6 chromosome pairs each: P at most 1.4e-4 (float16 rounding), positional consensus 1.8 to 2.8. The prior is a function of window content only. C2 P-only baseline: as above; P alone is 0.14 below the consensus alone on the own Hi-C.
+
+Mouse (10 kb, human-trained models and P unchanged, 5629 windows per sample, mm10; mouse_contrasts_10kb.csv; windows overlap, intervals treat windows as independent and are optimistic): median Pearson no consensus / wp_ref / wp_self / wp_both / positional diff / consensus alone: mESC 0.733 / 0.736 / 0.747 / 0.827 / 0.834 / 0.766; CH12 0.635 / 0.637 / 0.675 / 0.811 / 0.812 / 0.746; heart 0.722 / 0.714 / 0.719 / 0.818 / 0.836 / 0.765. wp_self minus honest: +0.014 [0.010, 0.018], +0.040 [0.035, 0.048], -0.002 [-0.008, 0.002]; wp_ref minus honest: +0.004 [-0.002, 0.008], +0.002 [-0.005, 0.011], -0.008 [-0.014, -0.001]. The transfer of the human-trained P closes under 10 percent of the gap to the positional model.
+
+Verdict. The window prior does not replace the positional consensus. wp_ref (P of the reference marks) closes 16 percent (held-out) and 7 percent (independent) of the gap at 10 kb and 20 percent at 25 kb, a small but reproducible gain over no consensus; wp_self does not exceed the model without consensus; wp_both adds nothing to the positional model. The locus-specific structure shared by cells is not recoverable from the marks of the window, as stated in the expectation. On mouse the prior gives small gains only for CH12 with own marks.
+
+Caveats. One seed for every model; the held-out cells HMEC / HMEC deep and HUVEC / HUVEC deep share inputs; the independent samples carry seven marks (P and the main models see missing marks as zero); 25 kb and mouse intervals are windows within sample, not independent samples; mouse positional models use the mouse pool consensus at identical mm10 coordinates; the ceiling is the replicate ceiling, not a bound for a function of marks. Motif-plane ablation (S5) and the chromosome-held-out variant (S8) were not run (GPU time); wp_refm is not reported.
 
 
 ## 77. C.Origami and Epiphany retrained on our cell lines and our chromosome split (FINAL; section 76 was the last number when this was written)
