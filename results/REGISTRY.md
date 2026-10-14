@@ -9652,3 +9652,38 @@ Partial proxy, not a replacement. Never a full substitute for CTCF. Practical ru
 
 ### Files
 `scripts/meth_proxy_analysis.py` (stages predict, aml, aml_loops, summary; run with the hicdiff env), `results/meth_proxy/{replacement_pooled.csv, replacement_by_cell.csv, seed_noise.csv, signal_level.csv, mark_summary.csv, aml_replacement_pooled.csv, aml_replacement_by_donor.csv, aml_loops_replacement.csv, aml_regions.csv.gz, aml_object_scores.csv.gz, meth_proxy.png}`; predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/meth_proxy`.
+
+
+## 78. Akita retrained on our cell lines and our chromosome splits (FINAL; section 77 was the last number when this was written)
+
+Question: does the original Akita (architecture of manuscripts/akita/params.json of ~/src/basenji, one output head per cell, hg38 sequence only), trained on the same cells and the same O/E targets as our models, approach our chromosome-held-out models, and how does it compare with the released Akita on identical pixels?
+
+### Design
+- Data: 12 training cells (GM12878, IMR-90, HCT116, HFF, H1, HepG2, A549, NHEK, GM23248, MCF-7, CD14+ monocytes, PC-9), our O/E maps resampled onto Akita's 2048 bp grid (1 048 576 bp input, 448 x 448 target bins, 99 681 upper-triangle values per head, NaN pixels masked out of the loss); 12 heads, one per cell. Training windows lie inside the merged Akita training regions and do not overlap the Akita validation/test stretches (the regions and holdout BED of our chrho models), stride 229 376 bp.
+- Split A: train 1, 5-10, 13, 15, 16, 18-22 (4 306 windows); validation chr4 and chr12 (691 windows, 150 per epoch used); test chr2, 3, 11, 14, 17 (the chromosomes held out of both chrho models). Split B: train odd chromosomes except 5 and 13 (2 725 windows); validation chr5 and chr13 (589); test even chromosomes. No window of any split overlaps another role.
+- Scoring: scripts/akita_retrain/evaluate.py plugs the predictions into the blocks of scripts/hic_measures.py (10 kb grid, band 900 kb, pixels finite in the target and in every source, whole chromosome; hicFindTADs / hicDetectLoops of HiCExplorer 3.7.6, HiCRep and the other measures as in sections 37, 58 and 77). Sources per block: ours (all12refin_drop_chrho, all12honest_drop_chrho), Akita retrained A (and B on chr2 and chr14, where all models are held out), the released Akita for the five cells it has heads for (hff, h1, gm12878, imr90, hct116), and the consensus, best-other-map and replicate baselines. 173 blocks (12 cells x 5 chromosomes of A, 12 cells x 9 further even chromosomes of B, K562 x 5 for ours).
+- Cells median over the 12 cells of the mean over chromosomes; per-cell values in `per_cell.csv`.
+
+### Deviations from the original recipe (all forced by the data or the hardware)
+- Optimizer: the original SGD (learning rate 0.0065, momentum 0.99575) did not train on our targets in the 12 min screening runs (validation Pearson 0.06 after 2 630 steps in fp32; bf16 and micro-batch variants ran out of memory or were released); Adam 3e-4 with batch size 2, gradient clipping 10, and a cosine decay over the wall-clock budget to 5 percent (lr-cosine 0.05) was used instead. Every layer of the trunk and the heads is unchanged except the number of output units (12 instead of 5).
+- Epoch = one pass over the windows of build_data.py instead of the original TFRecord epochs; the loss is the MSE over finite pixels; patience 100 (effectively the wall-clock budget); the model of the best validation Pearson (mean over heads) is used for scoring.
+- Schedule shortened: split A 6.5 h (25 epochs, 52 480 steps, best epoch 24, validation Pearson 0.451), split B 4.5 h (33 epochs, 44 240 steps, best epoch 15, validation Pearson 0.345). Pilot GM12878 single head: 1.5 h for 12 201 steps (2.7 to 4.4 steps/s on one RTX 4090), validation Pearson 0.29 at epoch 3, unstable afterwards (0.12 at epoch 5), which gave the 12-head budget estimate of about 6.5 h for 25 epochs. GPU time of the full runs 11.0 h in total (limit 14 h per full run); pilot and screening runs 3 h in addition.
+
+### Results (median over cells, Pearson per 1 Mb region on O/E; the full measure set in `results/akita_retrain/summary_tables.md`)
+| set | ours refin | ours honest (ChIP only) | Akita retrained A | Akita retrained B | Akita released | consensus of other cells |
+|---|---|---|---|---|---|---|
+| chr2, 3, 11, 14, 17, 12 cells | 0.928 | 0.789 | 0.461 | | | 0.893 |
+| chr2, 3, 11, 14, 17, 5 cells of the released Akita | 0.942 | 0.824 | 0.474 | | 0.682 | 0.911 |
+| chr2, 14, 12 cells (held out by all) | 0.931 | 0.812 | 0.437 | 0.217 | | 0.904 |
+| chr2, 14, 5 cells | 0.945 | 0.849 | 0.437 | 0.264 | 0.671 | 0.911 |
+| even chromosomes 4-22 (split B test), 12 cells | not scored (trained on these) | | | 0.225 | | 0.889 |
+
+Other measures on chr2, 3, 11, 14, 17 (12 cells; SCC / insulation r / boundary recall / loop recall): ours refin 0.908 / 0.869 / 0.670 / 0.412; ours honest 0.745 / 0.702 / 0.504 / 0.208; Akita retrained A 0.446 / 0.509 / 0.339 / 0.077.
+
+Verdict. Retrained on our cells with sequence as the only input, Akita reaches Pearson 0.46 on the held-out chromosomes of split A, below our ChIP-only model (0.79), below our model with Hi-C reference (0.93), and below the released Akita on its five cells (0.47 retrained against 0.68 released, same pixels). With the odd/even split the score is lower (0.22 to 0.26) because fewer training windows are available and the training chromosomes are only 2 725 windows. The retrained model also scores below the consensus of the other cells (0.89), which needs no model.
+
+### Caveats
+(i) Akita has one head per training cell and cannot predict an unseen cell type; K562 (no head) is scored for our models only, rows in `summary_unseen_cell_k562.csv`. Our models predict K562 with Pearson 0.889 (refin) and 0.738 (honest). (ii) Optimizer and schedule differ from the original (see Deviations); the released Akita was trained on 5 cells for far longer on the Akita authors' own target preparation (5 cells, different normalization and 2048 bp bins, the same genome), so the retrained scores are an upper bound of what our short schedule delivered, not of what Akita can reach with its original training budget; the SGD recipe did not train on our targets within the screening time and was not tuned further. (iii) Validation Pearson of the retrained models fluctuates by 0.01 to 0.03 between epochs, one seed, no variance estimate. (iv) The retrained Akita is fitted on a 2048 bp grid and sampled bilinearly onto the 10 kb pixels as for the released Akita; band 900 kb. (v) Our models receive the consensus12 or the cell-type Hi-C reference as input (refin) or the ChIP marks (honest) and the retrained Akita receives sequence only; the honest rows are the closest in information but still carry ChIP marks.
+
+### Files
+`scripts/akita_retrain/` (build_data, common, train, predict, evaluate, run_local.sh, run_remote.sh), `results/akita_retrain/{summary_tables.md, summary_*.csv, per_cell.csv, per_block.csv}`; runs, predictions and logs in /mnt/processed/wolffjoa/hic-multiome/akita_retrain/{runs,preds,logs}; blocks in the chrho root of hic_measures as chrhoakitaA_* and chrhoakitaB_*.

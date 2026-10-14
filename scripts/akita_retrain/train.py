@@ -12,7 +12,10 @@ Differences from the original training script, all forced by the data:
     unmappable pixels (NaN) are masked out of the loss and the metrics,
   * the loss is the MSE over the finite pixels of all heads,
   * an epoch is one pass over the training windows of build_data.py,
-  * a wall-clock budget (--max-minutes) ends training at the end of an epoch.
+  * a wall-clock budget (--max-minutes) ends training at the end of an epoch
+    (inside the epoch with --pilot),
+  * optional (--lr-cosine) learning-rate decay over that budget, and Adam instead of
+    SGD where the parameter file says so (params_adam_*.json; see the registry).
 
     python train.py --split A --cells all --run akita_A_all12 --max-minutes 420
 """
@@ -215,6 +218,10 @@ def main():
     ap.add_argument("--micro", type=int, default=0, help="micro-batch size (0 = whole batch)")
     ap.add_argument("--pilot", action="store_true", help="stop at --max-minutes inside an epoch")
     ap.add_argument("--bf16", action="store_true", help="mixed precision (not the original)")
+    ap.add_argument("--lr-cosine", type=float, default=0.0, metavar="FINAL_FRACTION",
+                    help="learning rate decays on a cosine of the elapsed wall-clock fraction of "
+                         "--max-minutes down to this fraction of the initial rate (0 = constant, "
+                         "as in the original)")
     a = ap.parse_args()
 
     import tensorflow as tf
@@ -273,6 +280,10 @@ def main():
         t0 = time.time()
         losses, tl = [], time.time()
         for k, (codes, y) in enumerate(tr):
+            if a.lr_cosine and a.max_minutes:
+                f = min(1.0, (time.time() - t_start) / (a.max_minutes * 60))
+                opt.learning_rate.assign(tp["learning_rate"] * (
+                    a.lr_cosine + (1 - a.lr_cosine) * 0.5 * (1 + np.cos(np.pi * f))))
             losses.append(float(train_step(codes, y)))
             steps_total += 1
             if (k + 1) % 200 == 0:
