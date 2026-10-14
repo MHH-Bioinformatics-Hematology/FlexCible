@@ -9654,7 +9654,7 @@ Partial proxy, not a replacement. Never a full substitute for CTCF. Practical ru
 `scripts/meth_proxy_analysis.py` (stages predict, aml, aml_loops, summary; run with the hicdiff env), `results/meth_proxy/{replacement_pooled.csv, replacement_by_cell.csv, seed_noise.csv, signal_level.csv, mark_summary.csv, aml_replacement_pooled.csv, aml_replacement_by_donor.csv, aml_loops_replacement.csv, aml_regions.csv.gz, aml_object_scores.csv.gz, meth_proxy.png}`; predictions under `/mnt/processed/wolffjoa/hic-multiome/runs/meth_proxy`.
 
 
-## 78. Akita retrained on our cell lines and our chromosome splits (FINAL; section 77 was the last number when this was written)
+## 79. Akita retrained on our cell lines and our chromosome splits (FINAL; section 78 was the last number when this was written)
 
 Question: does the original Akita (architecture of manuscripts/akita/params.json of ~/src/basenji, one output head per cell, hg38 sequence only), trained on the same cells and the same O/E targets as our models, approach our chromosome-held-out models, and how does it compare with the released Akita on identical pixels?
 
