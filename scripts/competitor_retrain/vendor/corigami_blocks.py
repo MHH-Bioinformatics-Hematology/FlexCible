@@ -53,14 +53,16 @@ class Encoder(nn.Module):
 
     def get_res_blocks(self, n, his, hs):
         blocks = []
+        st = getattr(self, "strides", None) or [2] * n      # registry 77b: per-block strides for exact 2/5/10/25 kb bins
         for i, h, hi in zip(range(n), hs, his):
-            blocks.append(ConvBlock(self.filter_size, hidden_in = hi, hidden = h))
+            blocks.append(ConvBlock(self.filter_size, stride = st[i], hidden_in = hi, hidden = h))
         res_blocks = nn.Sequential(*blocks)
         return res_blocks
 
 class EncoderSplit(Encoder):
-    def __init__(self, num_epi, output_size = 256, filter_size = 5, num_blocks = 12):
+    def __init__(self, num_epi, output_size = 256, filter_size = 5, num_blocks = 12, strides = None):
         super(Encoder, self).__init__()
+        self.strides = strides
         self.filter_size = filter_size
         self.conv_start_seq = nn.Sequential(
                                     nn.Conv1d(5, 16, 3, 2, 1),

@@ -31,6 +31,8 @@ import common as C                                     # noqa: E402
 import corigami_models                                 # noqa: E402
 
 STRIDE, SPAN = 500_000, 5_000_000
+if C.WIN > 2_200_000:                          # registry 77b: interval span keeps the original ratio 2.4 to the window
+    SPAN = int(round(2.4 * C.WIN / STRIDE)) * STRIDE
 
 
 def omit_regions():
@@ -68,11 +70,15 @@ class DS(torch.utils.data.Dataset):
         cell, ch, s0, e0 = self.items[k]
         rng = np.random.default_rng((k * 7919 + int.from_bytes(os.urandom(4), "little")) & 0xFFFFFFFF)
         s = int(rng.integers(s0, e0 - C.WIN + 1)) if self.mode == "train" else s0
+        if C.PIX == C.RES:
+            s -= s % C.PIX                      # exact bins: windows on the bin grid of the target
         for _ in range(5):                    # a window without a single measured pixel is redrawn
             tgt, ok = C.co_target(C.load_band(cell, ch), s)
             if ok.mean() > 0.2 or self.mode != "train":
                 break
             s = int(rng.integers(s0, e0 - C.WIN + 1))
+            if C.PIX == C.RES:
+                s -= s % C.PIX
         seq = np.asarray(C.hg38_seq(ch)[s:s + C.WIN], np.int8)
         F = self.feat.get((cell, ch))
         if F is None:
@@ -134,6 +140,11 @@ def main():
     ap.add_argument("--val-every", type=int, default=2000)
     ap.add_argument("--workers", type=int, default=14)
     ap.add_argument("--max-minutes", type=float, default=0)
+    ap.add_argument("--epochs", type=int, default=0,
+                    help="original stopping rule (registry 77b): cap on epochs, 1 epoch = one pass over the training "
+                         "intervals; warm-up 10 of 80 epochs and cosine to the cap as the original; validation every "
+                         "epoch, patience --patience epochs on the validation loss, best-loss weights kept")
+    ap.add_argument("--patience", type=int, default=12)
     ap.add_argument("--cells", nargs="*", default=C.TRAIN_CELLS)
     ap.add_argument("--max-val-windows", type=int, default=12, help="validation windows per cell")
     ap.add_argument("--seed", type=int, default=2077)
@@ -142,7 +153,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(a.seed)
     dev = torch.device("cuda")
-    model = corigami_models.ConvTransModel(2, mid_hidden=256).to(dev)
+    model = corigami_models.ConvTransModel(2, mid_hidden=256, strides=corigami_models.BIN_STRIDES[C.PIX]).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=a.lr, weight_decay=0)
     tr = DS(a.cells, C.TRAIN, "train", a.seed)
     va = DS(a.cells, C.VALID, "val")
@@ -165,7 +176,13 @@ def main():
         opt.load_state_dict(st["opt"])
         step, best, hist = st["step"], st["best"], st["hist"]
         print(f"resumed at step {step}", flush=True)
+    spe = len(tr) // a.batch                       # steps per epoch
+    if a.epochs:
+        a.steps = a.epochs * spe
+        a.val_every = spe
     warm = int(0.125 * a.steps)
+    since_best = hist[-1].get("since_best", 0) if hist else 0
+    stopped_early = False
     t0 = time.time()
     t_start = t0
     seen = 0
@@ -208,16 +225,27 @@ def main():
             print("VAL", json.dumps(hist[-1]), flush=True)
             if vloss < best:
                 best = vloss
+                since_best = 0
                 torch.save(model.state_dict(), out / "best.pt")
+            else:
+                since_best += 1
+            hist[-1]["epoch"] = step / spe
+            hist[-1]["since_best"] = since_best
             torch.save(dict(model=model.state_dict(), opt=opt.state_dict(), step=step, best=best, hist=hist),
                        str(state_f) + ".tmp")
             os.replace(str(state_f) + ".tmp", state_f)
             (out / "history.json").write_text(json.dumps(hist, indent=1))
+        if a.epochs and since_best >= a.patience and step % spe == 0:
+            stopped_early = True
+            print(f"early stop at epoch {step // spe}: no improvement for {a.patience} epochs", flush=True)
+            break
         if stop:
             print(f"stopped at step {step} after {a.max_minutes} min (pilot)", flush=True)
             break
     (out / "done.json").write_text(json.dumps(dict(steps=step, minutes=(time.time() - t_start) / 60,
-                                                   samples=seen, best_val_mse=best, cells=a.cells)))
+                                                   samples=seen, best_val_mse=best, cells=a.cells,
+                                                   epochs_run=step / spe, steps_per_epoch=spe,
+                                                   early_stop=stopped_early, cap_reached=bool(a.epochs and not stopped_early and step >= a.steps))))
 
 
 if __name__ == "__main__":

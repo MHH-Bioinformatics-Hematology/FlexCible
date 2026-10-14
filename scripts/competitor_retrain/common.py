@@ -110,10 +110,13 @@ def hg38_seq(chrom: str) -> np.ndarray:
 # targets: banded 10 kb O/E arrays
 # --------------------------------------------------------------------------- #
 BAND = 212          # diagonals 0..211 of the 10 kb O/E (the cool holds 200)
+_BIN = int(os.environ.get("COMPRT_BIN", 8192))
+RES = int(os.environ.get("COMPRT_RES") or os.environ.get("COMPRT_EPI_RES") or (_BIN if _BIN in (2000, 5000, 25000) else 10000))     # grid of the targets (registry 77b: 2000, 5000, 10000, 25000)
+BAND_RES = 260 if (RES != 10000 or _BIN == 10000) else BAND           # >= 256 diagonals of the 256-bin C.Origami windows
 
 
 def band_file(cell: str, chrom: str) -> Path:
-    return RT / "targets" / f"{cell}_{chrom}.npy"
+    return RT / "targets" / (f"{cell}_{chrom}.npy" if BAND_RES == BAND else f"{cell}_{chrom}_{RES // 1000}kb_b{BAND_RES}.npy")
 
 
 def make_band(cell: str, chrom: str) -> Path:
@@ -123,19 +126,20 @@ def make_band(cell: str, chrom: str) -> Path:
     f = band_file(cell, chrom)
     if f.exists():
         return f
-    clr = cooler.Cooler(str(target_cool(cell)))
+    clr = cooler.Cooler(str(target_cool(cell, RES)))
     n = int(np.ceil(clr.chromsizes[chrom] / clr.binsize))
     o = clr.offset(chrom)
     px = clr.matrix(balance=False, as_pixels=True).fetch(chrom)
     i = px.bin1_id.values - o
     d = px.bin2_id.values - px.bin1_id.values
     v = px["count"].values.astype(np.float32)
-    ok = (d >= 0) & (d < BAND) & (v != 0) & np.isfinite(v)
-    B = np.full((n, BAND), np.nan, np.float32)
+    ok = (d >= 0) & (d < BAND_RES) & (v != 0) & np.isfinite(v)
+    B = np.full((n, BAND_RES), np.nan, np.float32)
     B[i[ok], d[ok]] = v[ok]
     f.parent.mkdir(parents=True, exist_ok=True)
-    np.save(str(f) + ".tmp.npy", B.astype(np.float16))
-    os.replace(str(f) + ".tmp.npy", f)
+    tmp = f"{f}.{os.getpid()}.tmp.npy"            # one name per process: dataloader workers build the same band
+    np.save(tmp, B.astype(np.float16))
+    os.replace(tmp, f)
     return f
 
 
@@ -146,9 +150,9 @@ def load_band(cell: str, chrom: str) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 # C.Origami input conventions
 # --------------------------------------------------------------------------- #
-WIN = 2_097_152
-PIX = 8192
 NPIX = 256
+PIX = _BIN      # C.Origami output bin: 8192 native; 2000/5000/10000/25000 exact (strides 5)
+WIN = PIX * NPIX                                   # 2 097 152 native
 CO_FEATS = RT / "reference"      # copies of the released IMR-90 ctcf_log2fc.bw and atac.bw
 REF_CTCF = CO_FEATS / "ctcf_log2fc.bw"
 REF_ATAC = CO_FEATS / "atac.bw"
@@ -225,10 +229,11 @@ def co_features(bw_ctcf, bw_acc, qm, chrom: str, s: int, e: int):
     return c, a
 
 
-def area_weights(s: int, nsrc: int, src_res: int = 10000, out_res: int = PIX, nout: int = NPIX
+def area_weights(s: int, nsrc: int, src_res: int = None, out_res: int = PIX, nout: int = NPIX
                  ) -> tuple[np.ndarray, int]:
     """Matrix W (nout, nsrc') of overlap fractions of the output bins [s + k * out_res, ...) with
     the source bins of size src_res, and the index of the first source bin."""
+    src_res = src_res or (PIX if PIX in (2000, 5000, 10000, 25000) else 10000)
     b0 = s // src_res
     b1 = -(-(s + nout * out_res) // src_res)
     W = np.zeros((nout, b1 - b0), np.float32)
@@ -250,7 +255,7 @@ def co_target(band: np.ndarray, s: int):
     m = W.shape[1]
     b1 = b0 + m
     X = np.full((m, m), np.nan, np.float32)
-    for d in range(min(BAND, m)):
+    for d in range(min(band.shape[1], m)):
         r = np.arange(max(0, -b0), min(m - d, n - b0))      # source rows b0 + r in [0, n)
         if len(r) == 0:
             continue

@@ -9603,6 +9603,30 @@ Retraining raises the Pearson of C.Origami from 0.45 to 0.72 and of Epiphany fro
 ### Files
 `scripts/competitor_retrain/` (fetch_dnase, prep, train_corigami, train_epiphany, predict_*, finalize, blocks, table, score_workers.sh, vendor), `results/competitor_retrain/{table.md, per_cell.csv, summary.csv, vs_retrained.csv, dnase_picks.tsv, history_*.json}`, `results/hic_measures_chrho/chrho_competitor_retrain_{per_block,summary}.csv`; checkpoints and predictions on the share under `competitor_retrain/` and `runs/benchmark/competitor_oe/`. Hooks: `scripts/hic_measures.py` flags `--chrho-competitor-retrain`, `--chrho-cells`.
 
+## 77b. Equal-data retraining of C.Origami and Epiphany at 2, 5, 10 and 25 kb with the original stopping rules (PENDING; follow-up to section 77, GPU capacity exhausted)
+
+Question (author): is the gap of section 77 an artefact of resolution (C.Origami at 8 kb, Epiphany at 10 kb only) or of the shortened C.Origami schedule? Rules: same split, cells, targets and per-method input sets as section 77; original stopping rule of each method; no wall-clock budget; claims only at resolutions at which the retrained model was trained.
+
+### Original stopping rules (read from the code)
+- C.Origami (`src/corigami/training/main.py`): max_epochs 80, EarlyStopping(monitor val_loss, patience 80), ModelCheckpoint on val_loss; warm-up 10 epochs then cosine to epoch 80. The patience equals the epoch cap, so the effective rule is 80 epochs with the best-val-loss checkpoint.
+- Epiphany (`epiphany/adversarial.py`): 55 epochs of 1 250 chunks, learning rate halved every 16 epochs, no early stopping, one checkpoint per epoch.
+- Since neither has an active early-stopping criterion, the follow-up applies the author's rule on top of the original epoch schedule: validation loss every epoch, patience 12 epochs, best-loss weights kept, cap = the original epoch count (80 and 55; hit-the-cap is reported). One epoch = one pass over the training intervals of all 11 cells (C.Origami: 39 369 intervals = 4 921 steps of batch 8 at 8 kb) or 1 250 chunks (Epiphany).
+- Consequence for section 77: the Epiphany 10 kb run (69 000 steps = 55 epochs, validation every 2 epochs, best validation MSE at step 30 000, epoch 24) already satisfies this rule (patience 12 would stop at epoch 36 with the same weights). The C.Origami 8 kb run of section 77 (4.9 passes) does not; it is being retrained to its stop.
+
+### Resolution adaptation (implemented, `scripts/competitor_retrain/`)
+- C.Origami keeps 256 bins, the 12 residual blocks, the transformer and the decoder unchanged. The encoder downsampling is the product of the input convolution (stride 2) and the block strides, and ConvBlock takes the stride as a parameter, so exact bins are possible: 8 192 bp = 2 x 2^12 (native); 2 000 = 2 x (2,2,2,5,5,5); 5 000 = 2 x (2,2,5,5,5,5); 10 000 = 2 x (2,2,2,5,5,5,5); 25 000 = 2 x (2,2,5,5,5,5,5), remaining blocks stride 1 (`BIN_STRIDES` in `vendor/corigami_models.py`). Windows: 0.512, 1.28, 2.56 and 6.4 Mb (256 bins each); no resampling, the output cools are on our grids. Deviations: stride-5 convolutions with kernel 5 (no overlap) and fewer blocks with receptive-field growth. Targets: our O/E at that grid; diagonals beyond those stored in the O/E cools (200) are masked. Interval span 5 Mb (2.4 x window above 2.2 Mb). Built and forward-tested at all four bins (12.84 M parameters, output 256 x 256).
+- Epiphany keeps 200 rows per chunk and 100 diagonals, the Net of model_10kb.py, with input bins of 100 bp and the row stride and window scaled with the row grid (same number of bins, reach scales: 2 kb 200 kb, 5 kb 500 kb, 10 kb 1 Mb, 25 kb 2.5 Mb; windows 0.28, 0.7, 1.4, 3.5 Mb). The separate 5 kb architecture of the original (model_5kb.py, 30 input channels, 200 diagonals) is not used because it needs the original 30-track input set; Epiphany is therefore native only at 10 kb.
+- Native resolutions: C.Origami 8 192 bp, Epiphany 10 kb. 10 and 25 kb of C.Origami and 2, 5 and 25 kb of Epiphany are adaptations trained natively at that grid; the 8 kb C.Origami output scored at 10 or 25 kb (section 77) is a resampled output and carries no claim.
+
+### Our models at the four grids
+chrho models exist at 25, 10 and 5 kb (`all12{refin,honest,refres}_drop_chrho`; 5 kb predicted for GM12878, IMR-90 and K562 only). No chrho model exists at 2 kb: `all12honest_drop_chrho_2kb` and `all12refin_drop_chrho_2kb` must be trained from the 5 kb chrho configs; the non-chrho 2 kb model saw the test chromosomes and is not scored on them.
+
+### Status when this entry was written
+- Running: C.Origami 8 192 bp to its stop, remote 4090, claim `competitor_retrain_corigami_8kb_native_epochs80`, 393 680 steps at the 80-epoch cap (9.5 to 12.8 samples/s depending on the other jobs on that GPU: 70 to 95 GPU hours).
+- Epiphany 25 kb: two pilot starts failed (wrong target grid: the band reader ignored the row grid; then a tmp-file race of the dataloader workers on the target band files), both fixed in `common.py`; the third start was killed by an out-of-memory error when the Akita retraining occupied the second local GPU (17 GB used on each local GPU, 22.5 GB on the remote). No adapted model has been trained yet; no score exists.
+- Queue ready, `scripts/competitor_retrain/queue_local_gpu1.sh`: Epiphany 25, 5, 2 kb (each about 6.4 h at 3.3 steps/s), then C.Origami 10, 25, 5, 2 kb (80-epoch cap each, estimated 70 to 100 GPU hours each). Estimated total 330 to 450 GPU hours without the 2 kb chrho models and the scoring.
+- Not yet built: prediction names and block lists for 5 and 2 kb in `blocks.py`, the 2 kb scoring grid in `hic_measures.py`, the chrho 2 kb models.
+
 ## 78. Methylation as a proxy that replaces missing tracks (FINAL; section 77 was the last number when this was written)
 
 Question: when CTCF, cohesin or histone tracks are missing, how much of the Hi-C accuracy lost is returned by the methylation track (Meth), as a replacement and not as an addition to a complete set.

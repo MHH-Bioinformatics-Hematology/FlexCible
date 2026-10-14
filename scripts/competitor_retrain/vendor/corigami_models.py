@@ -38,10 +38,10 @@ class ConvModel(nn.Module):
 
 class ConvTransModel(ConvModel):
     
-    def __init__(self, num_genomic_features, mid_hidden = 256, record_attn = False):
+    def __init__(self, num_genomic_features, mid_hidden = 256, record_attn = False, strides = None):
         super(ConvTransModel, self).__init__(num_genomic_features)
         print('Initializing ConvTransModel')
-        self.encoder = blocks.EncoderSplit(num_genomic_features, output_size = mid_hidden, num_blocks = 12)
+        self.encoder = blocks.EncoderSplit(num_genomic_features, output_size = mid_hidden, num_blocks = 12, strides = strides)
         self.attn = blocks.AttnModule(hidden = mid_hidden, record_attn = record_attn)
         self.decoder = blocks.Decoder(mid_hidden * 2)
         self.record_attn = record_attn
@@ -68,3 +68,13 @@ class ConvTransModel(ConvModel):
 
 if __name__ == '__main__':
     main()
+
+
+# registry 77b: block strides (after the stride-2 input convolution) giving the output bin in bp
+BIN_STRIDES = {
+    8192:  [2] * 12,                                  # native: 2 * 2^12 = 8192
+    2000:  [2, 2, 2, 5, 5, 5, 1, 1, 1, 1, 1, 1],      # 2 * 8 * 125
+    5000:  [2, 2, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1],      # 2 * 4 * 625
+    10000: [2, 2, 2, 5, 5, 5, 5, 1, 1, 1, 1, 1],      # 2 * 8 * 625
+    25000: [2, 2, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1],      # 2 * 4 * 3125
+}

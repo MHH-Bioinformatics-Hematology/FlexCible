@@ -59,7 +59,7 @@ def _stub_omegaconf():
 
 
 def load_model(mode, ckpt, dev):
-    m = corigami_models.ConvTransModel(2, mid_hidden=256)
+    m = corigami_models.ConvTransModel(2, mid_hidden=256, strides=corigami_models.BIN_STRIDES[C.PIX])
     if mode == "pretrained":
         _stub_omegaconf()
         sd = torch.load(PRETRAINED, map_location="cpu", weights_only=False)["state_dict"]

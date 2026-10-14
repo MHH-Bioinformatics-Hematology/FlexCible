@@ -34,7 +34,12 @@ import common as C                          # noqa: E402
 import prep                                 # noqa: E402
 from epiphany_model_10kb import Net, Disc   # noqa: E402
 
-SEQ, WINDOW, NDIAG = 200, 14000, 100
+import os as _os
+RES = int(_os.environ.get("COMPRT_EPI_RES", 10000))     # row grid (registry 77b): same 200 rows, 100 diagonals, reach 100 bins
+UNIT = 100                                              # bp of one input bin
+STRIDE_U = RES // UNIT                                  # input bins per row
+SEQ, NDIAG = 200, 100
+WINDOW = 14000 * RES // 10000                           # window per row in input bins: 1.4 Mb at 10 kb, scales with the row grid
 K = np.arange(NDIAG)
 HALF = K // 2 + K % 2                       # pixel (t - HALF[k], t - HALF[k] + k)
 
@@ -53,8 +58,8 @@ def chunk_label(band, s: int):
 
 def chunk_input(X, s: int):
     """(5, 34000) 100 bp means for the windows of rows s .. s + 199, zero outside the chromosome."""
-    a = 100 * s - WINDOW // 2
-    L = (SEQ - 1) * 100 + WINDOW + 100
+    a = STRIDE_U * s - WINDOW // 2
+    L = (SEQ - 1) * STRIDE_U + WINDOW + STRIDE_U
     out = np.zeros((X.shape[0], L), np.float32)
     lo, hi = max(a, 0), min(a + L, X.shape[1])
     if hi > lo:
@@ -65,7 +70,7 @@ def chunk_input(X, s: int):
 class Chunks(torch.utils.data.Dataset):
     def __init__(self, cells, chroms, mode, n, seed=0, per_cell_val=40):
         self.cells, self.chroms, self.mode, self.n, self.seed = list(cells), list(chroms), mode, n, seed
-        self.size = {ch: C.chrom_size(ch) // 10000 for ch in self.chroms}
+        self.size = {ch: C.chrom_size(ch) // RES for ch in self.chroms}
         self.w = np.array([self.size[c] for c in self.chroms], float)
         self.w /= self.w.sum()
         self.cache = {}
@@ -133,14 +138,22 @@ def main():
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--cells", nargs="*", default=C.TRAIN_CELLS)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--epochs", type=int, default=0,
+                    help="original rule (registry 77b): epochs of --steps-per-epoch chunks (original 55, lr halved "
+                         "every 16), validation every epoch, patience --patience, best-loss weights kept")
+    ap.add_argument("--patience", type=int, default=12)
     a = ap.parse_args()
+    if a.epochs:
+        a.steps, a.val_every = a.epochs * a.steps_per_epoch, a.steps_per_epoch
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(a.seed)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     dev = torch.device("cuda")
-    model = Net(1, 5, WINDOW).to(dev)
+    model = Net(1, 5, WINDOW)
+    model.stride_units = STRIDE_U
+    model = model.to(dev)
     disc = Disc().to(dev)
     params = list(model.parameters())
     tr = Chunks(a.cells, C.TRAIN, "train", a.steps * 1, a.seed)
@@ -149,7 +162,7 @@ def main():
                                      prefetch_factor=4, pin_memory=True)
     vl = torch.utils.data.DataLoader(va, batch_size=1, shuffle=False, num_workers=2)
     print(f"{len(a.cells)} cells, {len(va)} validation chunks", flush=True)
-    step, best, hist = 0, float("inf"), []
+    step, best, hist, since_best = 0, float("inf"), [], 0
     state_f = out / "latest.pt"
     cur_lr = None
     opt = dopt = None
@@ -163,6 +176,7 @@ def main():
         model.load_state_dict(st["model"])
         disc.load_state_dict(st["disc"])
         step, best, hist = st["step"], st["best"], st["hist"]
+        since_best = hist[-1].get("since_best", 0) if hist else 0
         print(f"resumed at step {step}", flush=True)
     t0 = time.time()
     run, rd = [], []
@@ -207,16 +221,24 @@ def main():
             print("VAL", json.dumps(hist[-1]), flush=True)
             if vm < best:
                 best = vm
+                since_best = 0
                 torch.save(model.state_dict(), out / "best.pt")
+            else:
+                since_best += 1
+            hist[-1]["since_best"] = since_best
             torch.save(dict(model=model.state_dict(), disc=disc.state_dict(), step=step, best=best, hist=hist),
                        str(state_f) + ".tmp")
             os.replace(str(state_f) + ".tmp", state_f)
             (out / "history.json").write_text(json.dumps(hist, indent=1))
+        if a.epochs and since_best >= a.patience and step % a.steps_per_epoch == 0:
+            print(f"early stop at epoch {step // a.steps_per_epoch}", flush=True)
+            break
         if stop:
             print(f"stopped at step {step} after {a.max_minutes} min (pilot)", flush=True)
             break
     (out / "done.json").write_text(json.dumps(dict(steps=step, minutes=(time.time() - t0) / 60,
-                                                   best_val_mse=best, cells=a.cells, lam=a.lam)))
+                                                   best_val_mse=best, cells=a.cells, lam=a.lam, res=RES,
+                                                   epochs_run=step / a.steps_per_epoch, cap_reached=bool(a.epochs and step >= a.steps))))
 
 
 if __name__ == "__main__":

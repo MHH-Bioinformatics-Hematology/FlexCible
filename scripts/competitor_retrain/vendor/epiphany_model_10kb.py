@@ -56,7 +56,7 @@ class Net(nn.Module):
     def forward(self, x, hidden_state=None, seq_length=200):
 
         assert x.shape[0] == self.input_channels
-        x = torch.as_strided(x, (seq_length, self.input_channels, self.window_size), (100, x.shape[1], 1))
+        x = torch.as_strided(x, (seq_length, self.input_channels, self.window_size), (getattr(self, 'stride_units', 100), x.shape[1], 1))
         x = self.conv1(x)
         x = self.do1(x)
         x = self.conv2(x)

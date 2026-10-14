@@ -32,6 +32,7 @@ PRETRAINED = Path("/mnt/processed/wolffjoa/galaxy-hic-models/epiphany/pretrained
 
 def load_model(mode, ckpt, dev):
     net = Net(1, 5, te.WINDOW)
+    net.stride_units = te.STRIDE_U
     if mode == "pretrained":
         sd = torch.load(PRETRAINED, map_location="cpu")
     else:
@@ -82,11 +83,11 @@ def main():
                 continue
             t0 = time.time()
             X = np.load(prep.epi_file(cell, ch))
-            n = C.chrom_size(ch) // 10000 + 1
+            n = C.chrom_size(ch) // te.RES + 1
             M = predict_chrom(net, dev, X, n, pre)
             if pre:
                 M = np.where(np.isfinite(M), 2.0 ** M - 1.0, np.nan)
-            C.band_to_cool(M, ch, 10000, dst)
+            C.band_to_cool(M, ch, te.RES, dst)
             print(f"{name} {ch}: {time.time() - t0:.0f} s -> {dst}", flush=True)
 
 
