@@ -50,10 +50,16 @@ sys.path.insert(0, str(REPO / "scripts"))
 import common as C  # noqa: E402
 import hic_measures as hm  # noqa: E402
 
-RES = 10000
-D = 90                                               # 900 kb, inside Akita's 917 504 bp
+RES = int(os.environ.get("AKITA_EVAL_RES", "10000"))   # 10000 or 25000 (registry 79b)
+D = 900_000 // RES                                   # 900 kb band: 90 bins at 10 kb, 36 at 25 kb
+FULL = os.environ.get("AKITA_EVAL_FULL", "0") == "1"  # 79b: full-schedule runs, set chrhoakitaF*
 OURS = ["all12refin_drop_chrho", "all12honest_drop_chrho"]
-RUNS = {"akitaA": "akita_A_all12", "akitaB": "akita_B_all12", "akitapre": "akita_pretrained"}
+# source prefix -> (run, bin size, bins per window map)
+RUNS = {"akitaA": ("akita_A_all12", 2048, 448), "akitaB": ("akita_B_all12", 2048, 448),
+        "akitapre": ("akita_pretrained", 2048, 448),
+        # 79b: full-schedule runs (original stopping rule) and the native 8 kb / 32 kb models
+        "akitaFA": ("akita_orig_A_2kb", 2048, 448), "akitaFB": ("akita_orig_B_2kb", 2048, 448),
+        "akitaN8": ("akita_orig_A_8kb", 8192, 448), "akitaN32": ("akita_orig_A_32kb", 32768, 112)}
 PRE_CELLS = ["gm12878", "imr90", "hct116", "hff", "h1"]
 RESULTS = Path(os.environ.get("AKITA_RETRAIN_RESULTS", str(HERE.parents[1] / "results/akita_retrain")))
 EVEN_B = [c for c in C.SPLITS["B"]["test"] if c not in ("chr2", "chr14")]
@@ -70,7 +76,7 @@ _CACHE: dict = {}
 
 def akita_band(name: str, chrom: str, n: int, Dn: int, res: int):
     kind, cell = name.split("_", 1)
-    run = RUNS[kind]
+    run, abin, anb = RUNS[kind]
     f = C.W / "preds" / run / f"{chrom}.npy"
     cj = C.W / "preds" / run / "cells.json"
     if not f.exists() or not cj.exists():
@@ -80,8 +86,8 @@ def akita_band(name: str, chrom: str, n: int, Dn: int, res: int):
         return None
     k = cells.index(cell)
     R = np.asarray(np.load(f, mmap_mode="r")[:, :, k], dtype=float)
-    M = hm.resample_band(R, C.BIN, n, Dn, res)
-    reach = min(Dn, (C.NB - 1) * C.BIN // res)
+    M = hm.resample_band(R, abin, n, Dn, res)
+    reach = min(Dn, (anb - 1) * abin // res)
     M[:, reach + 1:] = np.nan
     return M
 
@@ -100,10 +106,23 @@ def source_list(b):
     return [s for s in src if s["name"] != hm.CASCFOLD]
 
 
+def _have(kind: str, chrom: str) -> bool:
+    return (C.W / "preds" / RUNS[kind][0] / f"{chrom}.npy").exists()
+
+
 def blocks() -> list[dict]:
     rows = []
     for cell in C.CELLS:
         for ch in A_CHROMS:
+            if FULL:                                 # all A-run sources in one block
+                comps = [f"{k}_{cell}" for k in ("akitaA", "akitaFA", "akitaN8", "akitaN32")
+                         if _have(k, ch)]
+                if ch in ("chr2", "chr14"):
+                    comps += [f"{k}_{cell}" for k in ("akitaB", "akitaFB") if _have(k, ch)]
+                if cell in PRE_CELLS:
+                    comps.append(f"akitapre_{cell}")
+                rows.append(("chrhoakitaFA", cell, ch, comps))
+                continue
             comps = [f"akitaA_{cell}"]
             if ch in ("chr2", "chr14"):
                 comps.append(f"akitaB_{cell}")
@@ -111,9 +130,13 @@ def blocks() -> list[dict]:
                 comps.append(f"akitapre_{cell}")
             rows.append(("chrhoakitaA", cell, ch, comps))
         for ch in EVEN_B:
-            rows.append(("chrhoakitaB", cell, ch, [f"akitaB_{cell}"]))
+            if FULL:
+                comps = [f"{k}_{cell}" for k in ("akitaB", "akitaFB") if _have(k, ch)]
+                rows.append(("chrhoakitaFB", cell, ch, comps))
+            else:
+                rows.append(("chrhoakitaB", cell, ch, [f"akitaB_{cell}"]))
     for ch in A_CHROMS:                              # unseen cell: ours only
-        rows.append(("chrhoakitaA", "k562", ch, []))
+        rows.append(("chrhoakitaFA" if FULL else "chrhoakitaA", "k562", ch, []))
     out = []
     for set_, cell, ch, comps in rows:
         out.append(dict(set=set_, cell=cell, res=RES, chrom=ch, D=D, comps=comps,
@@ -152,12 +175,11 @@ def stage_score(jobs: int, only: list[str] | None):
         srcs = source_list(b)
         miss = [s["name"] for s in srcs if s["kind"] == "model"
                 and not Path(s["path"]).exists()
-                and b["set"] == "chrhoakitaA"]
+                and b["set"] in ("chrhoakitaA", "chrhoakitaFA")]
         if miss:
             log(f"{b['id']}: predictions missing {miss}")
             continue
-        if not all((C.W / "preds" / RUNS[c.split("_", 1)[0]] / f"{b['chrom']}.npy").exists()
-                   for c in b["comps"]):
+        if not all(_have(c.split("_", 1)[0], b["chrom"]) for c in b["comps"]):
             log(f"{b['id']}: Akita predictions missing")
             continue
         if not hm.claim(f):
@@ -184,14 +206,21 @@ def label(s: str) -> str:
 
 def group(s: str) -> str:
     for k, v in (("akitaA_", "Akita retrained, split A"), ("akitaB_", "Akita retrained, split B"),
-                 ("akitapre_", "Akita released")):
+                 ("akitapre_", "Akita released"),
+                 ("akitaFA_", "Akita full schedule 2 kb, split A"),
+                 ("akitaFB_", "Akita full schedule 2 kb, split B"),
+                 ("akitaN8_", "Akita full schedule native 8 kb, split A"),
+                 ("akitaN32_", "Akita full schedule native 32 kb, split A")):
         if s.startswith(k):
             return v
     return label(s)
 
 
 GROUP_ORDER = ["ours refin_drop_chrho", "ours honest_drop_chrho (ChIP only)",
-               "Akita retrained, split A", "Akita retrained, split B", "Akita released",
+               "Akita retrained, split A", "Akita retrained, split B",
+               "Akita full schedule 2 kb, split A", "Akita full schedule 2 kb, split B",
+               "Akita full schedule native 8 kb, split A", "Akita full schedule native 32 kb, split A",
+               "Akita released",
                "consensus of the other cells", "best other measured map", "replicate map (ceiling)"]
 SHOW = [("oe_pearson_tile_median", "Pearson, median per 1 Mb region"), ("oe_scc", "SCC"),
         ("insulation_r", "insulation r"), ("bnd_recall", "boundary recall"),
@@ -233,12 +262,12 @@ def tables(per_block: pd.DataFrame) -> dict[str, pd.DataFrame]:
             rows.append(r)
         return pd.DataFrame(rows)
 
-    A = per_block[per_block.set == "chrhoakitaA"]
-    B = per_block[per_block.set == "chrhoakitaB"]
+    A = per_block[per_block.set.isin(["chrhoakitaA", "chrhoakitaFA"])]
+    B = per_block[per_block.set.isin(["chrhoakitaB", "chrhoakitaFB"])]
     seen = A[A.cell != "k562"]
-    out["A_12cells"] = agg(seen[~seen.group.isin(["Akita retrained, split B"])])
+    out["A_12cells"] = agg(seen[~seen.group.str.contains("split B")])
     out["A_5cells_with_released_akita"] = agg(
-        seen[seen.cell.isin(PRE_CELLS) & ~seen.group.isin(["Akita retrained, split B"])])
+        seen[seen.cell.isin(PRE_CELLS) & ~seen.group.str.contains("split B")])
     both = seen[seen.chrom.isin(["chr2", "chr14"])]
     out["chr2_chr14_even_held_out_by_all"] = agg(both)
     out["chr2_chr14_5cells"] = agg(both[both.cell.isin(PRE_CELLS)])
@@ -251,19 +280,21 @@ def tables(per_block: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 def stage_report():
-    RESULTS.mkdir(parents=True, exist_ok=True)
-    fs = sorted((hm.CHRHO_ROOT / "blocks").glob("chrhoakita*/measures.csv"))
+    out = RESULTS / (f"full_{RES // 1000}kb" if FULL else "")
+    out.mkdir(parents=True, exist_ok=True)
+    pat = f"chrhoakitaF*_{RES // 1000}kb_*" if FULL else "chrhoakita[AB]_*_10kb_*"
+    fs = sorted((hm.CHRHO_ROOT / "blocks").glob(pat + "/measures.csv"))
     if not fs:
         log("no blocks")
         return
     D_ = pd.concat([pd.read_csv(f) for f in fs], ignore_index=True)
     D_ = D_[D_.kind.isin(["model", "cool", "competitor"])].copy()
     D_["group"] = D_.source.map(group)
-    D_.to_csv(RESULTS / "per_block.csv", index=False, float_format="%.4f")
+    D_.to_csv(out / "per_block.csv", index=False, float_format="%.4f")
     cols = [c for c in COLS if c in D_.columns]
     pc = D_.groupby(["set", "cell", "group"])[cols].mean().reset_index()
     pc["n_chromosomes"] = D_.groupby(["set", "cell", "group"]).chrom.nunique().values
-    pc.to_csv(RESULTS / "per_cell.csv", index=False, float_format="%.4f")
+    pc.to_csv(out / "per_cell.csv", index=False, float_format="%.4f")
     md = ""
     titles = {"A_12cells": "Split A chromosomes (2, 3, 11, 14, 17), the 12 training cells",
               "A_5cells_with_released_akita":
@@ -275,10 +306,10 @@ def stage_report():
                   "Split B test chromosomes 4, 6, 8, 10, 12, 16, 18, 20, 22 (our models trained on these)",
               "unseen_cell_k562": "Unseen cell K562 on chr2, 3, 11, 14, 17 (no Akita head exists)"}
     for name, t in tables(D_).items():
-        t.to_csv(RESULTS / f"summary_{name}.csv", index=False, float_format="%.4f")
+        t.to_csv(out / f"summary_{name}.csv", index=False, float_format="%.4f")
         md += md_table(t, titles[name])
-    (RESULTS / "summary_tables.md").write_text(md)
-    log(f"report: {len(fs)} blocks -> {RESULTS}")
+    (out / "summary_tables.md").write_text(md)
+    log(f"report: {len(fs)} blocks -> {out}")
 
 
 def main():

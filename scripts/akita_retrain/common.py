@@ -23,10 +23,26 @@ TRAIN_REGIONS_BED = Path("/home/mh-hannover.local/wolffjoa/data/hic-multiome/aki
 BASENJI_SRC = W / "basenji_src"          # copy of ~/src/basenji/basenji (commit in COMMIT), unmodified
 PYLIB = W / "pylib"                      # natsort (pure python) for the TensorFlow env
 
-SEQ_LEN, BIN, NB, DIAG, CROP = 1_048_576, 2048, 448, 2, 65_536
-NV = NB * (NB - 1) // 2 - (NB - 1)       # 99 681
-STRIDE_TRAIN = 112 * BIN                 # 229 376 bp: a quarter of the 917 504 bp target span
-STRIDE_EVAL = 224 * BIN                  # 458 752 bp: half of it (validation windows, tiling)
+# Resolution configurations (registry 79b). "2kb" is the original Akita geometry. "8kb" and
+# "32kb" add pooling (first block pool 8, tower 10 / 12 blocks) so that the output bin is
+# 2^13 / 2^15 bp, on a 4 194 304 bp input; at 32 kb 128 bins remain, 8 are cropped per side
+# (112 target bins = 3.67 Mb). Targets come from our 10 kb / 25 kb O/E maps (SRC_RES).
+CFGS = {
+    "2kb": dict(SEQ_LEN=1_048_576, BIN=2048, NB=448, CROP=65_536, SRC_RES=2000),
+    "8kb": dict(SEQ_LEN=4_194_304, BIN=8192, NB=448, CROP=262_144, SRC_RES=10000),
+    "32kb": dict(SEQ_LEN=4_194_304, BIN=32768, NB=112, CROP=262_144, SRC_RES=25000),
+}
+CFG = os.environ.get("AKITA_CFG", "2kb")
+SEQ_LEN, BIN, NB, CROP, SRC_RES = (CFGS[CFG][k] for k in ("SEQ_LEN", "BIN", "NB", "CROP", "SRC_RES"))
+DIAG = 2
+NV = NB * (NB - 1) // 2 - (NB - 1)       # 99 681 at 2 kb and 8 kb, 6 105 at 32 kb
+STRIDE_TRAIN = NB // 4 * BIN             # a quarter of the target span (229 376 bp at 2 kb)
+STRIDE_EVAL = NB // 2 * BIN              # half of it (validation windows, tiling)
+SUFFIX = "" if CFG == "2kb" else f"_{CFG}"
+
+
+def windows_file(split: str) -> Path:
+    return W / "data" / f"windows{SUFFIX}_{split}.tsv"
 
 CELLS = ["gm12878", "imr90", "hct116", "hff", "h1", "hepg2", "a549", "nhek",
          "gm23248", "mcf7", "cd14mono", "pc9"]          # TRAIN12 of hic_measures.py
@@ -50,7 +66,7 @@ def iu():
 
 def band_dir() -> Path:
     """AKITA_DATA_LOCAL: a local-disk copy of data/ (faster than the share)."""
-    return Path(os.environ.get("AKITA_DATA_LOCAL", str(W / "data"))) / "bands"
+    return Path(os.environ.get("AKITA_DATA_LOCAL", str(W / "data"))) / f"bands{SUFFIX}"
 
 
 def seq_dir() -> Path:

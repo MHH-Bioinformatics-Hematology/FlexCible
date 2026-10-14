@@ -101,8 +101,9 @@ def main():
 
     if a.kind == "retrained":
         out = C.W / "runs" / a.run
-        cells = json.loads((out / "args.json").read_text())["cells_list"]
-        p = json.load(open(C.W / "params_akita_original.json"))
+        ja = json.loads((out / "args.json").read_text())
+        cells = ja["cells_list"]
+        p = json.load(open(ja.get("params", C.W / "params_akita_original.json")))
         p["model"]["head_hic"][-1]["units"] = len(cells)
         m = seqnn.SeqNN(p["model"])
         m.model.load_weights(str(out / a.weights))

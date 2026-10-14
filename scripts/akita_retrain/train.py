@@ -46,7 +46,7 @@ def log(m):
 
 def load_split(split: str, cells: list[str], roles=("train", "val")):
     """windows table (kept windows) and in-memory chromosome arrays."""
-    d = pd.read_csv(C.W / "data" / f"windows_{split}.tsv", sep="\t")
+    d = pd.read_csv(C.windows_file(split), sep="\t")
     d = d[d.keep & d.role.isin(roles)].reset_index(drop=True)
     ci = [C.CELLS.index(c) for c in cells]
     seq, band = {}, {}
@@ -214,6 +214,10 @@ def main():
     ap.add_argument("--patience", type=int, default=None, help="default: params train.patience (12)")
     ap.add_argument("--val-windows", type=int, default=None, help="cap on validation windows")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--select", choices=["loss", "pearson"], default="loss",
+                    help="early stopping and best weights on the validation loss (original rule, "
+                         "default) or on the mean validation Pearson (section 79)")
+    ap.add_argument("--warmup", type=int, default=0, help="linear learning-rate warm-up steps")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--micro", type=int, default=0, help="micro-batch size (0 = whole batch)")
     ap.add_argument("--pilot", action="store_true", help="stop at --max-minutes inside an epoch")
@@ -266,11 +270,13 @@ def main():
         f"val windows {len(dv)}, heads {len(cells)}, patience {patience}")
 
     lc = out / "learning_curve.csv"
-    rows, best, bad, epoch0 = [], -np.inf, 0, 0
+    rows, best, bad, epoch0 = [], np.inf if a.select == "loss" else -np.inf, 0, 0
+    best_loss_r, best_r = np.inf, -np.inf
     if a.resume and (out / "latest.weights.h5").exists():
         model.load_weights(str(out / "latest.weights.h5"))
         st = json.loads((out / "state.json").read_text())
         best, bad, epoch0 = st["best"], st["bad"], st["epoch"]
+        best_loss_r, best_r = st.get("best_loss", np.inf), st.get("best_r", -np.inf)
         rows = pd.read_csv(lc).to_dict("records")
         log(f"resumed at epoch {epoch0}, best {best:.4f}")
 
@@ -284,6 +290,8 @@ def main():
                 f = min(1.0, (time.time() - t_start) / (a.max_minutes * 60))
                 opt.learning_rate.assign(tp["learning_rate"] * (
                     a.lr_cosine + (1 - a.lr_cosine) * 0.5 * (1 + np.cos(np.pi * f))))
+            if a.warmup and steps_total < a.warmup:
+                opt.learning_rate.assign(tp["learning_rate"] * (steps_total + 1) / a.warmup)
             losses.append(float(train_step(codes, y)))
             steps_total += 1
             if (k + 1) % 200 == 0:
@@ -306,19 +314,23 @@ def main():
         log(f"epoch {ep}: train {row['train_loss']:.4f} val {vloss:.4f} r {vmean:.4f} "
             f"({row['seconds_total']:.0f} s, {row['steps_per_s']:.2f} steps/s)")
         model.save_weights(str(out / "latest.weights.h5"))
-        if vmean > best:
-            best, bad = vmean, 0
+        best_loss_r, best_r = min(best_loss_r, vloss), max(best_r, vmean)
+        score = vloss if a.select == "loss" else vmean
+        if (score < best) if a.select == "loss" else (score > best):
+            best, bad = score, 0
             model.save_weights(str(out / "best.weights.h5"))
+            (out / "best_epoch.txt").write_text(f"{ep}\n")
         else:
             bad += 1
-        (out / "state.json").write_text(json.dumps(dict(best=best, bad=bad, epoch=ep)))
+        (out / "state.json").write_text(json.dumps(dict(best=best, bad=bad, epoch=ep,
+                                                        best_loss=best_loss_r, best_r=best_r)))
         if bad >= patience:
             log(f"early stop: no improvement for {patience} epochs")
             break
         if a.max_minutes and (time.time() - t_start) > a.max_minutes * 60:
             log(f"time budget of {a.max_minutes} min reached")
             break
-    log(f"done: best val Pearson {best:.4f}, {steps_total} steps, "
+    log(f"done: best val {a.select} {best:.4f}, {steps_total} steps, "
         f"{(time.time() - t_start) / 3600:.2f} h")
     (out / "DONE").write_text(f"{best}\n")
 

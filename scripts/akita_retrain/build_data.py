@@ -70,7 +70,7 @@ def bands_one(chrom: str) -> str:
     size = None
     mm = None
     for k, cell in enumerate(C.CELLS):
-        path = C.OE / f"{cell}_proper_2kb.cool"
+        path = C.OE / f"{cell}_proper_{C.SRC_RES // 1000}kb.cool"
         if size is None:
             size = int(cooler.Cooler(str(path)).chromsizes[chrom])
             n = int(np.ceil(size / C.BIN))
@@ -78,7 +78,7 @@ def bands_one(chrom: str) -> str:
             tmp = C.band_dir() / f"{chrom}.tmp.npy"
             mm = np.lib.format.open_memmap(tmp, mode="w+", dtype=np.float16,
                                            shape=(n, C.NB, len(C.CELLS)))
-        B = hm.load_band(path, chrom, n, C.NB - 1, C.BIN)
+        B = hm.load_band(path, chrom, n, C.NB - 1, C.BIN)    # bilinear at the bin centres when SRC_RES != BIN
         if B is None:
             raise SystemExit(f"{chrom} missing in {path}")
         mm[:, :, k] = B.astype(np.float16)
@@ -153,7 +153,7 @@ def windows():
                     rows.append((split, role, ch, int(s), round(a, 4), round(b, 4), bool(o)))
         d = pd.DataFrame(rows, columns=["split", "role", "chrom", "start", "n_frac",
                                         "finite_frac", "keep"])
-        d.to_csv(C.W / "data" / f"windows_{split}.tsv", sep="\t", index=False)
+        d.to_csv(C.windows_file(split), sep="\t", index=False)
         k = d[d.keep]
         log(f"split {split}: " + ", ".join(
             f"{ro} {int((k.role == ro).sum())}/{int((d.role == ro).sum())} windows"
