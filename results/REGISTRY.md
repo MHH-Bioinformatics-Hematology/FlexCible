@@ -9627,6 +9627,12 @@ chrho models exist at 25, 10 and 5 kb (`all12{refin,honest,refres}_drop_chrho`; 
 - Queue ready, `scripts/competitor_retrain/queue_local_gpu1.sh`: Epiphany 25, 5, 2 kb (each about 6.4 h at 3.3 steps/s), then C.Origami 10, 25, 5, 2 kb (80-epoch cap each, estimated 70 to 100 GPU hours each). Estimated total 330 to 450 GPU hours without the 2 kb chrho models and the scoring.
 - Not yet built: prediction names and block lists for 5 and 2 kb in `blocks.py`, the 2 kb scoring grid in `hic_measures.py`, the chrho 2 kb models.
 
+### One-epoch smoke test of the 5 and 2 kb adaptations (2026-10-15; `results/competitor_retrain/test_5kb_2kb.md`)
+- Both adapted C.Origami models train without error at the settings of the 8 kb run (4 921 steps per epoch; 66 min at 5 kb, 104 min at 2 kb under CPU contention; 5.4 and 4.7 GB; data-loader bound; 80 epochs about 88 h and 85 to 140 h).
+- Validation after epoch 1 (chr18, chr21): Pearson 0.224 (5 kb) and 0.073 (2 kb) against 0.420 at 8 kb; MSE 6.6 % and 10 % below the zero prediction (8 kb: 15 %). Held-out block GM12878 chr14: Pearson 0.29 (5 kb), 0.04 (2 kb) against consensus 0.82 and 0.71 and our chrho models 0.77 to 0.90 (5 kb; none at 2 kb). One epoch decides no ranking; a rise needs the continuation of the two test directories.
+- Bug: transient EAGAIN (`BlockingIOError`) of the band-file mmap on the share killed one attempt at step 4 400; `common.load_band` now retries. No error in the target grid.
+- Added behind `COMPRT_BIN=5000|2000`: test rows and specs in `blocks.py`, 2 kb grid in `hic_measures.py` and `benchmark_blocks.params`, `score_test.py`, `--run-steps`. This closes the "not yet built" item for block lists and the 2 kb grid; the 2 kb chrho models are still missing.
+
 ## 78. Methylation as a proxy that replaces missing tracks (FINAL; section 77 was the last number when this was written)
 
 Question: when CTCF, cohesin or histone tracks are missing, how much of the Hi-C accuracy lost is returned by the methylation track (Meth), as a replacement and not as an addition to a complete set.

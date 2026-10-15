@@ -147,7 +147,7 @@ TRAIN12 = ["gm12878", "imr90", "hct116", "hff", "h1", "hepg2", "a549", "nhek",
            "gm23248", "mcf7", "cd14mono", "pc9"]
 HELDOUT = ["k562", "hmec_deep", "huvec_deep"]
 BIGWIG = {"k562": HM / "hg38_k562", "hmec_deep": HM / "hg38_hmec", "huvec_deep": HM / "hg38_huvec"}
-WINDOW = {25000: 80, 10000: 192, 5000: 384}   # 5000: chromosome-held-out 5 kb (--chrho-res 5000)
+WINDOW = {25000: 80, 10000: 192, 5000: 384, 2000: 256}   # 5000: chromosome-held-out 5 kb (--chrho-res 5000); 2000: C.Origami 2 kb test only (registry 77b)
 RESOLUTIONS = [25000, 10000]
 CHROMS = {"heldout": ["chr2", "chr12", "chr18"], "trainchrom": ["chr2", "chr18"],
           "trainstretch": ["chr2", "chr18"]}
@@ -171,6 +171,7 @@ BEST_OTHER = {
             "gm23248": "hff", "mcf7": "h1", "cd14mono": "gm12878", "pc9": "a549",
             "k562": "hct116", "hmec_deep": "nhek", "huvec_deep": "imr90"},
 }
+BEST_OTHER[2000] = dict(BEST_OTHER[10000])      # 2 kb: C.Origami test of registry 77b
 BEST_OTHER[5000] = dict(BEST_OTHER[10000])      # 5 kb: the 10 kb table (only used for the baseline row)
 # an independent replicate map of the same cell (proper O/E), the ceiling
 REPLICATE = {"gm12878": "intact_gm12878_ENCSR965OVH_r75_ice",
@@ -1124,7 +1125,7 @@ def tad_measures(pred: Path | None, truth: Path | None, res: int) -> dict:
         out["TAD Fraction"] = len(bp) / len(bt)
         ex = bp[["chromosome", "start", "end"]].merge(bt[["chromosome", "start", "end"]])
         out["TAD Fraction Exact Match"] = len(ex) / len(bt)
-        tol = 2 if res == 5000 else 1                 # 5 kb: the 10 kb tolerance in bp (10 kb)
+        tol = {5000: 2, 2000: 5}.get(res, 1)                 # 5 kb: the 10 kb tolerance in bp (10 kb)
         hr, hp = match_points(bt.start.values // res, bp.start.values // res, tol)
         out["bnd_recall"] = hr / len(bt)
         out["bnd_precision"] = hp / len(bp) if len(bp) else np.nan
@@ -1307,7 +1308,7 @@ def score_block(b: dict, jobs: int) -> Path:
     Tm = masked(T, mask)
     Mm = {k: masked(v, mask) for k, v in maps.items()}
     W = WINDOW[res]
-    ins_w = {25000: 3, 10000: 5, 5000: 10}[res]    # 50 kb square at 10 and 5 kb
+    ins_w = {25000: 3, 10000: 5, 5000: 10, 2000: 25}[res]    # 50 kb square at 10 and 5 kb
     tile = 1_000_000 // res
     e1 = e1_bins(cell, chrom, n, res)
     lab = compartment_labels(e1)

@@ -145,6 +145,9 @@ def main():
                          "intervals; warm-up 10 of 80 epochs and cosine to the cap as the original; validation every "
                          "epoch, patience --patience epochs on the validation loss, best-loss weights kept")
     ap.add_argument("--patience", type=int, default=12)
+    ap.add_argument("--run-steps", type=int, default=0,
+                    help="smoke test: stop (after a validation) once this many optimizer steps are done; the "
+                         "schedule of --epochs is kept, so the learning rate is that of the first epochs of a full run")
     ap.add_argument("--cells", nargs="*", default=C.TRAIN_CELLS)
     ap.add_argument("--max-val-windows", type=int, default=12, help="validation windows per cell")
     ap.add_argument("--seed", type=int, default=2077)
@@ -217,7 +220,7 @@ def main():
             print(f"step {step}/{a.steps} loss {np.mean(run_loss[-50:]):.4f} lr {opt.param_groups[0]['lr']:.2e} "
                   f"{seen / el:.1f} samples/s elapsed {(time.time() - t_start) / 60:.1f} min "
                   f"gpu_mem {torch.cuda.max_memory_allocated() / 2**30:.1f} GB", flush=True)
-        stop = a.max_minutes and (time.time() - t_start) / 60 > a.max_minutes
+        stop = bool(a.max_minutes and (time.time() - t_start) / 60 > a.max_minutes) or bool(a.run_steps and step >= a.run_steps)
         if step % a.val_every == 0 or step == a.steps or stop:
             vloss, vr = validate(model, vl, dev)
             hist.append(dict(step=step, train_loss=float(np.mean(run_loss[-200:])), val_mse=vloss, val_pearson=vr,

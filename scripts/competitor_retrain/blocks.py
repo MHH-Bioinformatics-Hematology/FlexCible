@@ -34,9 +34,16 @@ def comps(family: str, cell: str) -> list[str]:
     return out
 
 
+TEST_BIN = C.PIX in (2000, 5000)      # COMPRT_BIN=5000|2000: one-epoch smoke test of registry 77b (names corigami_t<k>kb_<cell>)
+TEST_TAG = f"t{C.PIX // 1000}kb"
+
+
 def rows(res_list=RES, cells=None, chroms=None):
     """(set, cell, res, chrom, band bins, competitors) as hic_measures.chrho_blocks()."""
     out = []
+    if TEST_BIN:
+        return [("chrho_rtco", cell, C.PIX, ch, None, [f"corigami_{TEST_TAG}_{cell}"])
+                for cell in (cells or C.ALL_CELLS) for ch in (chroms or C.HELD)]
     for res in res_list:
         for cell in (cells or C.ALL_CELLS):
             for ch in (chroms or C.HELD):
@@ -48,6 +55,13 @@ def rows(res_list=RES, cells=None, chroms=None):
 def specs():
     """benchmark_competitors.COMPETITORS entries of every name used by rows()."""
     d = {}
+    if TEST_BIN:
+        for cell in C.ALL_CELLS:
+            d[f"corigami_{TEST_TAG}_{cell}"] = dict(
+                label=f"C.Origami {C.PIX // 1000} kb, 1 epoch", path=C.COMP_OE / f"corigami_{TEST_TAG}_{cell}_{{chrom}}.cool",
+                per_chrom=True, build="hg38", res=C.PIX, reach=C.WIN, space="counts",
+                heldout=C.HELD, cell=cell, chroms=C.HELD)
+        return d
     for cell in C.ALL_CELLS:
         for tag, lab in (("pre", "pretrained"), ("re", "retrained (our split)")):
             d[f"corigami_{tag}_{cell}"] = dict(

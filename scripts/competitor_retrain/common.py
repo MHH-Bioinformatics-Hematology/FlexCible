@@ -144,7 +144,15 @@ def make_band(cell: str, chrom: str) -> Path:
 
 
 def load_band(cell: str, chrom: str) -> np.ndarray:
-    return np.load(make_band(cell, chrom), mmap_mode="r")
+    f = make_band(cell, chrom)
+    for k in range(6):                      # the share raises a transient EAGAIN (BlockingIOError) on mmap now and then
+        try:
+            return np.load(f, mmap_mode="r")
+        except BlockingIOError:
+            if k == 5:
+                raise
+            import time
+            time.sleep(1 + 2 * k)
 
 
 # --------------------------------------------------------------------------- #

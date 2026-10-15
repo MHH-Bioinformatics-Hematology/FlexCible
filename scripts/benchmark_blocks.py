@@ -54,6 +54,12 @@ def params(res: int) -> dict:
                     loop=bs.BioParams(loop_coarsen=5, donut_inner=1, donut_outer=3,
                                       loop_min_dist=3, loop_max_dist=80, loop_match_tol=1,
                                       apa_half=3, apa_corner=1, loop_nms=1))
+    if res == 2000:
+        # the 10 kb row with every window in bins multiplied by 5 (spans in bp equal to the 10 kb row)
+        return dict(ins=25, btol=5, flank=25,
+                    loop=bs.BioParams(loop_coarsen=1, donut_inner=5, donut_outer=15,
+                                      loop_min_dist=15, loop_max_dist=500, loop_match_tol=5,
+                                      apa_half=15, apa_corner=5, loop_nms=5))
     if res == 10000:
         return dict(ins=5, btol=1, flank=5,
                     loop=bs.BioParams(loop_coarsen=1, donut_inner=1, donut_outer=3,
