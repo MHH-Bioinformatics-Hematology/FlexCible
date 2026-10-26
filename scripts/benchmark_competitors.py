@@ -133,6 +133,15 @@ for _res, _dir in ((10000, HICGAN_X10), (25000, HICGAN_X25)):
             heldout="even", cell=_c, model_cell=_m,
             chroms=(["chr2", "chr3"] if _c == "imr90" else EVEN))
 
+# C.Origami de novo on a cell type it was not trained on (registry 81): the released IMR-90 model with the
+# authors' own GM12878 CTCF and ATAC tracks (corigami_data_gm12878_add_on), on C.Origami's held-out
+# chromosomes 2 (test) and 3 (validation). Registered only on request (BENCH_CORIGAMI_DENOVO=1).
+if os.environ.get("BENCH_CORIGAMI_DENOVO") == "1":
+    COMPETITORS["corigami_gm12878_denovo_8kb"] = dict(
+        label="C.Origami", path=Path.home() / "src/C.Origami/denovo/gm12878/{chrom}.cool",
+        per_chrom=True, build="hg38", res=8192, reach=2_097_152, space="log1p",
+        heldout=["chr2", "chr3"], chroms=["chr2", "chr3"], cell="gm12878", model_cell="imr90")
+
 # 5 kb extension of the chromosome-held-out comparison (registry section 58); registered only
 # on request (BENCH_5KB=1) so that the default competitor list is unchanged. Hi-cGAN has a
 # 5 kb record for GM12878 only (best_plus_two: RAD21, H3K4me3, SMC3; window 512 bins).

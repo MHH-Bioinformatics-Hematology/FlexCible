@@ -9746,3 +9746,30 @@ at 25, 10 and 5 kb in HiCRep SCC and loop recall, and below the best single othe
 resolution (0.950, 0.933, 0.872 against 0.844, 0.860, 0.815) but below it in boundary recall (0.752, 0.473, 0.348
 against 0.788, 0.641, 0.581) and loop recall (0.313, 0.162, 0.164 against 0.374, 0.383, 0.339). On Akita's 413 regions
 (section 73) the four-cell consensus is above Akita in SCC, loop and boundary recall. Manuscript Fig. 1.
+
+## 81. C.Origami on a cell type it was not trained on: GM12878 de novo (FINAL)
+
+Question: does the advantage of C.Origami over the consensus on IMR-90 (section 80) hold on a cell type outside its
+training set? The released `corigami_base.ckpt` (trained on IMR-90) was applied to GM12878 with the C.Origami authors'
+own processed GM12878 inputs (`corigami_data/data/hg38/gm12878/genomic_features/{ctcf_log2fc,atac}.bw`), whole
+chromosomes 2 and 3 (its held-out test and validation chromosomes) through the whole-chromosome cool writer on the
+hic-prediction-workbench branch (`--full-chr`, 2 Mb windows every 32 kb, 8192 bp bins). Reproducibility: chr21 of
+IMR-90 rerun with the same code is identical to the earlier prediction. Scored with the chrho pipeline (O/E stage
+`benchmark_competitors.run_oe`, then `hic_measures.py --chrho-corigami-denovo`, opt-in competitor
+`corigami_gm12878_denovo_8kb` behind `BENCH_CORIGAMI_DENOVO=1`) at 25, 10 and 5 kb, blocks `chrho_codenovo`.
+
+| | 25 kb | 10 kb | 5 kb |
+|---|---|---|---|
+| HiCRep SCC, C.Origami | 0.661 | 0.654 | 0.640 |
+| HiCRep SCC, consensus | 0.823 | 0.822 | 0.812 |
+| HiCRep SCC, best single other cell (K562) | 0.748 | 0.749 | 0.708 |
+| HiCRep SCC, ours (all12refin_drop) | 0.931 | 0.920 | 0.917 |
+| boundary recall, C.Origami / consensus | 0.586 / 0.782 | 0.379 / 0.613 | 0.319 / 0.527 |
+| loop recall, C.Origami / consensus | 0.202 / 0.405 | 0.089 / 0.386 | 0.078 / 0.350 |
+
+Verdict. On GM12878 C.Origami falls below the consensus and the best single other cell in SCC, boundary and loop
+recall at every resolution; its advantage in SCC on IMR-90 is specific to its training cell type. Caveat: two
+chromosomes, one cell type, inputs as processed by the C.Origami authors.
+
+`results/hic_measures_chrho/chrho_corigami_denovo_{summary,per_block}.csv`, log `results/chrho_corigami_denovo.log`;
+predictions `~/src/C.Origami/denovo/gm12878/chr{2,3}.cool`. Manuscript Fig. 1c, d.

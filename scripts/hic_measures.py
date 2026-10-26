@@ -1993,6 +1993,7 @@ CHRHO_RES = None              # --chrho-res 5000: only the 5 kb blocks, predicti
 CHRHO_HICREG_RE = False       # --chrho-hicreg-retrained: HiC-Reg retrained on our split (registry 63)
 CHRHO_COMPRT = False          # --chrho-competitor-retrain: C.Origami and Epiphany retrained (registry 73)
 CHRHO_CELLS_ARG = None        # --chrho-cells: cells of chrho_predict (default CHRHO_CELLS)
+CHRHO_CO_DENOVO = False       # --chrho-corigami-denovo: C.Origami IMR-90 model on GM12878 (registry 81)
 
 
 def chrho_blocks() -> list[dict]:
@@ -2005,6 +2006,12 @@ def chrho_blocks() -> list[dict]:
     if CHRHO_COMPRT:
         import competitor_retrain.blocks as rb
         return _finish_blocks(rb.rows())
+    if CHRHO_CO_DENOVO:
+        # C.Origami's held-out chromosomes; band = C.Origami's 2 Mb window (None = our model window at
+        # 25 and 10 kb, 383 bins at 5 kb as in the 5 kb C.Origami block)
+        return _finish_blocks([("chrho_codenovo", "gm12878", res, c, 383 if res == 5000 else None,
+                                ["corigami_gm12878_denovo_8kb"])
+                               for res in (25000, 10000, 5000) for c in ("chr2", "chr3")])
     if CHRHO_RES == 5000:
         rows = chrho_blocks_5kb()
         return _finish_blocks(rows)
@@ -2207,6 +2214,9 @@ def chrho_report() -> None:
     if CHRHO_HICREG_RE:                        # all three grids, own files
         D = D[D.set.isin(["chrho_hicregre", "chrho_hicregmc"])]
         tag = "chrho_hicregre"
+    elif CHRHO_CO_DENOVO:                      # C.Origami de novo on GM12878, own files
+        D = D[D.set == "chrho_codenovo"]
+        tag = "chrho_corigami_denovo"
     elif CHRHO_COMPRT:                         # retrained C.Origami and Epiphany, own files
         D = D[D.set.isin(["chrho_rtco", "chrho_rtep"])]
         tag = "chrho_competitor_retrain"
@@ -2252,12 +2262,18 @@ def main():
     ap.add_argument("--chrho-competitor-retrain", action="store_true",
                     help="chrho_score/chrho_report: the blocks of C.Origami and Epiphany retrained on our "
                          "cells and chromosome split (competitor_retrain/blocks.py; chrho_competitor_retrain_*.csv)")
+    ap.add_argument("--chrho-corigami-denovo", action="store_true",
+                    help="chrho_score/chrho_report: the released IMR-90 C.Origami on GM12878 with the authors' "
+                         "GM12878 tracks, chr2 and chr3, 25/10/5 kb (chrho_corigami_denovo_*.csv; registry 81)")
     ap.add_argument("--chrho-cells", nargs="*", default=None, help="chrho_predict: cells (default gm12878 imr90 k562)")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
-    global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE, CHRHO_COMPRT, CHRHO_CELLS_ARG
+    global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE, CHRHO_COMPRT, CHRHO_CELLS_ARG, CHRHO_CO_DENOVO
     CHRHO_COMPRT = a.chrho_competitor_retrain
+    CHRHO_CO_DENOVO = a.chrho_corigami_denovo
+    if a.chrho_corigami_denovo:          # registers the de novo C.Origami competitor
+        os.environ["BENCH_CORIGAMI_DENOVO"] = "1"
     CHRHO_CELLS_ARG = a.chrho_cells
     CHRHO_25KB_COMPS = a.chrho_25kb_comps
     CHRHO_RES = a.chrho_res
