@@ -9773,3 +9773,40 @@ chromosomes, one cell type, inputs as processed by the C.Origami authors.
 
 `results/hic_measures_chrho/chrho_corigami_denovo_{summary,per_block}.csv`, log `results/chrho_corigami_denovo.log`;
 predictions `~/src/C.Origami/denovo/gm12878/chr{2,3}.cool`. Manuscript Fig. 1c, d.
+
+## 82. Prediction time and memory, whole chromosome into a cool file (FINAL)
+
+Question: what does it cost to predict a whole chromosome, and on how little hardware can each method run? Every
+method predicts all of GM12878 chromosome 2 (242 Mb) into one cool file, one job at a time, on one RTX 4090 or on 8
+threads of a Ryzen 9 7950X without GPU. Wall time from process start to exit (model loading and cool writing
+included); peak GPU memory from nvidia-smi and peak resident memory from psutil, both over the process tree (all
+tools run in one process, so no shared pages are counted twice). "Default" is each tool's default batch, "lowest"
+batch 1 (C.Origami: 452 data batches instead of 16). Ours: reference-input model with test-time reverse complement
+(two forward passes per window), stride half a window. Released competitors cannot write whole chromosomes; each run
+uses the whole-chromosome cool writer on our forks: C.Origami 7e6f197 (2 Mb window every 32 kb, pixels collected in
+Python lists, first window kept per pixel), Epiphany 9be0ab4 (2 Mb chunks every 2 Mb, Hann taper), Akita/basenji
+9c1fcd9 (head 2, GM12878). Epiphany has no batch setting (one chunk at a time; `--batch` is the progress step), so one
+run. Akita first measured 22.5 GB at both batches because TensorFlow reserves the whole card; rerun with
+`TF_FORCE_GPU_ALLOW_GROWTH=true` (allocator high-water mark), first rows discarded.
+
+`scripts/inference_benchmark.py`; `results/inference_benchmark/runs.csv`; logs and coolers in
+/mnt/processed/wolffjoa/hic-multiome/runs/inference_benchmark/.
+
+| method | grid | device | setting | time (s) | peak GPU (MiB) | peak RAM (MiB) | cool (MB) |
+|---|---|---|---|---|---|---|---|
+| ours | 25 kb | GPU | default / lowest | 11.7 / 11.3 | 836 / 722 | 1164 / 1146 | 3.0 |
+| ours | 10 kb | GPU | default / lowest | 21.4 / 22.3 | 1382 / 724 | 1643 / 1361 | 16.0 |
+| ours | 5 kb | GPU | default / lowest | 45.4 / 47.5 | 3226 / 948 | 3026 / 2972 | 62.2 |
+| ours | 2 kb | GPU | default / lowest | 118.3 / 113.3 | 4976 / 1190 | 6616 / 6556 | 208.9 |
+| ours | 25 kb | CPU | lowest | 20.7 | 0 | 816 | 3.0 |
+| ours | 10 kb | CPU | lowest | 49.6 | 0 | 1210 | 16.0 |
+| Epiphany | 10 kb | GPU | only | 17.9 | 2682 | 1424 | 7.9 |
+| Akita | 2048 bp | GPU | default / lowest | 124.0 / 119.3 | 8736 / 6592 | 4288 / 4050 | 116.3 |
+| C.Origami | 8192 bp | GPU | default / lowest | 3970 / 3693 | 3624 / 3624 | 58547 / 45504 | 24.9 |
+
+Verdict. At its lowest setting our model needs less than 1 GB of GPU memory from 25 to 5 kb and 1.2 GB at 2 kb, less
+than every competitor at its lowest (Epiphany 2.6 GB, C.Origami 3.5 GB, Akita 6.4 GB), and runs without GPU at 25 and
+10 kb within a minute per chromosome and 1.2 GB RAM. Time is comparable to Epiphany at 10 kb and to Akita at 2 kb
+(both with fewer forward passes: Epiphany non-overlapping, no reverse complement); C.Origami takes an hour per
+chromosome and 45 GB RAM, a cost of the 32 kb window stride and pixel lists of its cool writer rather than of its
+model. Caveats: one chromosome, one run per job, warm file cache; competitor writers are ours, not the authors'.
