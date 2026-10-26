@@ -9717,3 +9717,32 @@ Verdict. Retrained on our cells with sequence as the only input, Akita reaches P
 
 ### Files
 `scripts/akita_retrain/` (build_data, common, train, predict, evaluate, run_local.sh, run_remote.sh), `results/akita_retrain/{summary_tables.md, summary_*.csv, per_cell.csv, per_block.csv}`; runs, predictions and logs in /mnt/processed/wolffjoa/hic-multiome/akita_retrain/{runs,preds,logs}; blocks in the chrho root of hic_measures as chrhoakitaA_* and chrhoakitaB_*.
+
+## 80. Contact structure shared between cell types: pairwise SCC of 15 measured maps (FINAL)
+
+Question: how similar are the measured contact maps of different cell types, the basis of the consensus
+reference? Stratum-adjusted correlation (HiCRep definition, smoothing h 5, 1 Mb band) between the O/E target maps
+`crosscell_oe/<cell>_proper_<res>kb.cool` of the 12 training cells, K562, HMEC (deep) and HUVEC (deep), all 105
+pairs, on the held-out chromosomes 2, 3, 11, 14 and 17, at 25 and 10 kb; per pair the mean over the five
+chromosomes. `hicmultiome.evaluate.scc_streaming` per chromosome (the hicrep package refuses the pairs because the
+4DN and ENCODE maps differ in their chromosome sets). No training, CPU only.
+
+`scripts/pairwise_celltype_scc.py` (hicdiff env, 16 workers, about 15 min); `results/pairwise_celltype_scc/pairs_{25,10}kb.csv`.
+
+| | 25 kb | 10 kb |
+|---|---|---|
+| median over 105 pairs | 0.777 | 0.778 |
+| interquartile range | 0.746 to 0.818 | 0.748 to 0.812 |
+| share of pairs above 0.7 | 0.85 | 0.87 |
+| minimum (H1 vs CD14+ monocytes) | 0.330 | 0.367 |
+| maximum (IMR-90 vs GM23248) | 0.910 | 0.908 |
+| minimum without CD14+ monocytes and H1 (78 pairs) | 0.688 | 0.704 |
+
+For scale (sections 37, 73, HiCRep column): replicate pairs 0.93 to 0.99 in the three benchmark blocks, the
+consensus of the other cells against the left-out cell 0.83 to 0.86. Published predictors against the consensus
+and the best single other cell on the held-out chromosomes (same tables): Epiphany and Hi-cGAN below the consensus
+at 25, 10 and 5 kb in HiCRep SCC and loop recall, and below the best single other cell except Hi-cGAN loop recall at
+5 kb (0.068 against 0.020); C.Origami (IMR-90, its training cell type) above the consensus in HiCRep SCC at every
+resolution (0.950, 0.933, 0.872 against 0.844, 0.860, 0.815) but below it in boundary recall (0.752, 0.473, 0.348
+against 0.788, 0.641, 0.581) and loop recall (0.313, 0.162, 0.164 against 0.374, 0.383, 0.339). On Akita's 413 regions
+(section 73) the four-cell consensus is above Akita in SCC, loop and boundary recall. Manuscript Fig. 1.
