@@ -480,7 +480,11 @@ def main():
     zt = [t.strip() for t in args.zero_tracks.split(",")] if args.zero_tracks else None
     zr = []
     for spec in args.zero_region:
-        track, chrom, span = spec.split(":")
+        parts = spec.split(":")
+        if parts[0] == "motif":                       # motif:ID:chrom:start-end
+            track, chrom, span = f"motif:{parts[1]}", parts[2], parts[3]
+        else:                                         # TRACK:chrom:start-end
+            track, chrom, span = parts
         a, b = (int(x) for x in span.replace(",", "").split("-"))
         zr.append((track, chrom, a, b))
     predict(Config.load(args.config), args.chroms, args.out, args.checkpoint,
