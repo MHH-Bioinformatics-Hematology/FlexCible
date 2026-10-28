@@ -1,0 +1,126 @@
+2026-10-28T16:24:37 prefetch.3.2.1: 1) Resolving 'SRR5266526'...
+2026-10-28T16:24:38 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-10-28T16:24:38 prefetch.3.2.1: 1) Downloading 'SRR5266526'...
+2026-10-28T16:24:38 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-10-28T16:24:38 prefetch.3.2.1:  Downloading via HTTPS...
+2026-10-28T16:25:13 prefetch.3.2.1:  HTTPS download succeed
+2026-10-28T16:25:23 prefetch.3.2.1:  'SRR5266526' is valid: 706148654 bytes were streamed from 706139430
+2026-10-28T16:25:23 prefetch.3.2.1: 1) 'SRR5266526' was downloaded successfully
+spots read      : 21,549,390
+reads read      : 21,549,390
+reads written   : 21,549,390
+[bam_sort_core] merging from 4 files and 4 in-memory blocks...
+2026-10-28T16:32:20 prefetch.3.2.1: 1) Resolving 'SRR5266522'...
+2026-10-28T16:32:20 prefetch.3.2.1: Current preference is set to retrieve SRA Normalized Format files with full base quality scores
+2026-10-28T16:32:21 prefetch.3.2.1: 1) Downloading 'SRR5266522'...
+2026-10-28T16:32:21 prefetch.3.2.1:  SRA Normalized Format file is being retrieved
+2026-10-28T16:32:21 prefetch.3.2.1:  Downloading via HTTPS...
+2026-10-28T16:33:03 prefetch.3.2.1:  HTTPS download succeed
+2026-10-28T16:33:11 prefetch.3.2.1:  'SRR5266522' is valid: 902321028 bytes were streamed from 902315732
+2026-10-28T16:33:11 prefetch.3.2.1: 1) 'SRR5266522' was downloaded successfully
+spots read      : 27,533,253
+reads read      : 27,533,253
+reads written   : 27,533,253
+[bam_sort_core] merging from 4 files and 4 in-memory blocks...
+INFO  @ 28 Oct 2026 17:41:59: [33 MB] Execution: requested=8, source=default, available=32, threads=8 (including caller), process_backend=auto, max_process_workers=7 
+INFO  @ 28 Oct 2026 17:41:59: [33 MB] 
+# Command line: callpeak -t SRR5266526.bam -c SRR5266522.bam -f BAM -g hs -n hap1_ctcf --nomodel --extsize 200 --keep-dup 1 -B -p 1e-2 --outdir macs
+# ARGUMENTS LIST:
+# name = hap1_ctcf
+# format = BAM
+# ChIP-seq file = ['SRR5266526.bam']
+# control file = ['SRR5266522.bam']
+# effective genome size = 2.91e+09
+# band width = 300
+# model fold = [5, 50]
+# pvalue cutoff = 1.00e-02
+# qvalue will not be calculated and reported as -1 in the final output.
+# The maximum gap between significant sites is assigned as the read length/tag size.
+# The minimum length of peaks is assigned as the predicted fragment length "d".
+# Larger dataset will be scaled towards smaller dataset.
+# Range for calculating regional lambda is: 1000 bps and 10000 bps
+# Broad region calling is off
+# Paired-End mode is off
+ 
+INFO  @ 28 Oct 2026 17:41:59: [33 MB] #1 read tag files... 
+INFO  @ 28 Oct 2026 17:41:59: [33 MB] #1 read treatment tags... 
+INFO  @ 28 Oct 2026 17:41:59: [86 MB]  1000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:00: [87 MB]  2000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:00: [97 MB]  3000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:00: [97 MB]  4000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:01: [103 MB]  5000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:01: [103 MB]  6000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:02: [108 MB]  7000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:02: [112 MB]  8000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:03: [115 MB]  9000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:03: [119 MB]  10000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:03: [124 MB]  11000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:04: [129 MB]  12000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:04: [136 MB]  13000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:05: [137 MB]  14000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:05: [140 MB]  15000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:06: [145 MB]  16000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:06: [150 MB]  17000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:07: [157 MB]  18000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:07: [177 MB] 18556045 reads have been read. 
+INFO  @ 28 Oct 2026 17:42:07: [177 MB] #1.2 read input tags... 
+INFO  @ 28 Oct 2026 17:42:07: [203 MB]  1000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:08: [213 MB]  2000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:08: [213 MB]  3000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:09: [219 MB]  4000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:09: [221 MB]  5000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:10: [225 MB]  6000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:10: [231 MB]  7000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:10: [231 MB]  8000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:11: [237 MB]  9000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:11: [243 MB]  10000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:12: [243 MB]  11000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:12: [246 MB]  12000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:13: [248 MB]  13000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:13: [252 MB]  14000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:14: [260 MB]  15000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:14: [265 MB]  16000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:15: [270 MB]  17000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:15: [270 MB]  18000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:15: [275 MB]  19000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:16: [279 MB]  20000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:16: [286 MB]  21000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:17: [289 MB]  22000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:17: [295 MB]  23000000 reads parsed 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] 23780938 reads have been read. 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 tag size is determined as 65 bps 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 tag size = 65.0 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1  total tags in treatment: 18556045 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 user defined the maximum tags... 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 filter out redundant tags at the same location and the same strand by allowing at most 1 tag(s) 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1  tags after filtering in treatment: 17569419 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1  Redundant rate of treatment: 0.05 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1  total tags in control: 23780938 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 user defined the maximum tags... 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 filter out redundant tags at the same location and the same strand by allowing at most 1 tag(s) 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1  tags after filtering in control: 22896040 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1  Redundant rate of control: 0.04 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #1 finished! 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #2 Build Peak Model... 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #2 Skipped... 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #2 Use 200 as fragment length 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #3 Call peaks... 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #3 Call peaks with given -log10pvalue cutoff: 2.00000 ... 
+INFO  @ 28 Oct 2026 17:42:18: [327 MB] #3 Pre-compute pvalue-qvalue table... 
+INFO  @ 28 Oct 2026 17:42:18: [328 MB] Peak process backend: fork, workers=7 
+INFO  @ 28 Oct 2026 17:42:18: [328 MB] #3 In the peak calling step, the following will be performed simultaneously: 
+INFO  @ 28 Oct 2026 17:42:18: [328 MB] #3   Write bedGraph files for treatment pileup (after scaling if necessary)... hap1_ctcf_treat_pileup.bdg 
+INFO  @ 28 Oct 2026 17:42:18: [328 MB] #3   Write bedGraph files for control lambda (after scaling if necessary)... hap1_ctcf_control_lambda.bdg 
+INFO  @ 28 Oct 2026 17:42:18: [328 MB] #3   Pileup will be based on sequencing depth in treatment. 
+INFO  @ 28 Oct 2026 17:42:18: [328 MB] #3 Call peaks for each chromosome... 
+INFO  @ 28 Oct 2026 17:42:59: [458 MB] #4 Write output xls file... macs/hap1_ctcf_peaks.xls 
+INFO  @ 28 Oct 2026 17:42:59: [458 MB] #4 Write peak in narrowPeak format file... macs/hap1_ctcf_peaks.narrowPeak 
+INFO  @ 28 Oct 2026 17:42:59: [458 MB] #4 Write summits bed file... macs/hap1_ctcf_summits.bed 
+INFO  @ 28 Oct 2026 17:42:59: [458 MB] Done! 
+INFO  @ 28 Oct 2026 17:43:00: [33 MB] Read and build treatment bedGraph... 
+INFO  @ 28 Oct 2026 17:43:11: [293 MB] Read and build control bedGraph... 
+INFO  @ 28 Oct 2026 17:43:31: [709 MB] Build ScoreTrackII... 
+INFO  @ 28 Oct 2026 17:43:45: [1718 MB] Calculate scores comparing treatment and control by 'FE'... 
+INFO  @ 28 Oct 2026 17:43:57: [2053 MB] Write bedGraph of scores... 
+INFO  @ 28 Oct 2026 17:44:12: [2054 MB] Finished 'FE'! Please check 'macs/hap1_ctcf_FE.bdg'! 
+input file (/dev/fd/63) must be a regular file.  Pipes or other special devices can't be used here.

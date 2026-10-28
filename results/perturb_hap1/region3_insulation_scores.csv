@@ -1,0 +1,17 @@
+model,region,deletion,unit,site,window,meas_wt,meas_del,meas_change,pred_wt,pred_del,pred_change,ctrl_pred_change,sign_agree
+10kb,region3,H_fwd,clone:4DNESTZUCQH5,H_fwd,100kb,-0.2146,0.2597,0.4743,-0.1072,0.0421,0.1493,0.0000,True
+10kb,region3,H_fwd,clone:4DNES8TLFCMQ,H_fwd,100kb,-0.2146,0.2839,0.4985,-0.1072,0.0421,0.1493,0.0000,True
+10kb,region3,H_fwd,mean_of_clones,H_fwd,100kb,-0.2146,0.2718,0.4864,-0.1072,0.0421,0.1493,0.0000,True
+10kb,region3,H_fwd,pooled_counts,H_fwd,100kb,-0.2146,0.2893,0.5039,-0.1072,0.0421,0.1493,0.0000,True
+10kb,region3,H_fwd,clone:4DNESTZUCQH5,H_fwd,200kb,0.3202,0.7542,0.4340,0.0064,0.1221,0.1157,0.0000,True
+10kb,region3,H_fwd,clone:4DNES8TLFCMQ,H_fwd,200kb,0.3202,0.7723,0.4522,0.0064,0.1221,0.1157,0.0000,True
+10kb,region3,H_fwd,mean_of_clones,H_fwd,200kb,0.3202,0.7633,0.4431,0.0064,0.1221,0.1157,0.0000,True
+10kb,region3,H_fwd,pooled_counts,H_fwd,200kb,0.3202,0.7826,0.4625,0.0064,0.1221,0.1157,0.0000,True
+5kb,region3,H_fwd,clone:4DNESTZUCQH5,H_fwd,100kb,-0.4203,0.0201,0.4404,-0.1456,0.1021,0.2476,0.0000,True
+5kb,region3,H_fwd,clone:4DNES8TLFCMQ,H_fwd,100kb,-0.4203,-0.1619,0.2584,-0.1456,0.1021,0.2476,0.0000,True
+5kb,region3,H_fwd,mean_of_clones,H_fwd,100kb,-0.4203,-0.0709,0.3494,-0.1456,0.1021,0.2476,0.0000,True
+5kb,region3,H_fwd,pooled_counts,H_fwd,100kb,-0.4203,0.0801,0.5004,-0.1456,0.1021,0.2476,0.0000,True
+5kb,region3,H_fwd,clone:4DNESTZUCQH5,H_fwd,200kb,0.0907,0.4625,0.3717,0.1229,0.3299,0.2070,0.0000,True
+5kb,region3,H_fwd,clone:4DNES8TLFCMQ,H_fwd,200kb,0.0907,0.2897,0.1990,0.1229,0.3299,0.2070,0.0000,True
+5kb,region3,H_fwd,mean_of_clones,H_fwd,200kb,0.0907,0.3761,0.2854,0.1229,0.3299,0.2070,0.0000,True
+5kb,region3,H_fwd,pooled_counts,H_fwd,200kb,0.0907,0.5477,0.4570,0.1229,0.3299,0.2070,0.0000,True
