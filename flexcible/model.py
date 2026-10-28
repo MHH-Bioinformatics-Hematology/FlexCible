@@ -298,7 +298,7 @@ class HiCModel(nn.Module):
                  encoder: SeqEncoder | None = None, dist_bias: int = 0,
                  reference: str = "none", resolutions: list[int] | None = None,
                  res_embed_dim: int = 16, default_resolution: int | None = None,
-                 prior: bool = False):
+                 prior: bool = False, res_embed_mode: str = "lookup"):
         super().__init__()
         self.prior = bool(prior)   # cascade prior plane (config model.prior)
         # resolution conditioning (config model.resolutions): a learned
@@ -307,8 +307,17 @@ class HiCModel(nn.Module):
         # omitted. Off (None): no parameters, old checkpoints load unchanged.
         self.resolutions = list(resolutions) if resolutions else None
         self.default_resolution = default_resolution
-        self.res_embed = (nn.Embedding(len(self.resolutions), res_embed_dim)
-                          if self.resolutions else None)
+        if res_embed_mode not in ("lookup", "continuous"):
+            raise ValueError(f"unknown res_embed_mode {res_embed_mode!r}")
+        self.res_embed_mode = res_embed_mode
+        # "lookup": one vector per trained bin size; "continuous": a small network of
+        # log2(bin size / 1 kb), defined for every bin size (config model.res_embed_mode)
+        self.res_embed = None
+        if self.resolutions:
+            if res_embed_mode == "lookup":
+                self.res_embed = nn.Embedding(len(self.resolutions), res_embed_dim)
+            else:
+                self.res_embed = nn.Sequential(nn.Linear(1, 32), nn.SiLU(), nn.Linear(32, res_embed_dim))
         self.backbone = backbone
         self.encoder = encoder
         self.cond_mode = cond_mode
@@ -324,6 +333,21 @@ class HiCModel(nn.Module):
         # without it load unchanged
         self.dist_bias = (nn.Parameter(torch.zeros(dist_bias)) if dist_bias
                           else None)
+
+    def res_log2(self, res, batch: int, device) -> torch.Tensor:
+        """(B, 1) float tensor of log2(bin size / 1000) for the continuous embedding."""
+        if res is None:
+            res = self.default_resolution
+        if res is None:
+            raise ValueError("resolution-conditioned model called without res")
+        if isinstance(res, torch.Tensor):
+            vals = res.tolist() if res.dim() else [float(res)] * batch
+        elif isinstance(res, (list, tuple)):
+            vals = list(res)
+        else:
+            vals = [float(res)] * batch
+        v = torch.tensor(vals, device=device, dtype=torch.float32)
+        return torch.log2(v / 1000.0)[:, None]
 
     def res_index(self, res, batch: int, device) -> torch.Tensor:
         if res is None:
@@ -363,7 +387,10 @@ class HiCModel(nn.Module):
             planes = pr if planes is None else torch.cat([planes, pr], dim=1)
         x = build_spatial_cond(sym, pairs, planes, self.cond_mode)
         if self.res_embed is not None:
-            film = self.res_embed(self.res_index(res, cond.shape[0], cond.device))
+            if self.res_embed_mode == "continuous":
+                film = self.res_embed(self.res_log2(res, cond.shape[0], cond.device))
+            else:
+                film = self.res_embed(self.res_index(res, cond.shape[0], cond.device))
             out = self.backbone(x, film)
         else:
             out = self.backbone(x)
@@ -405,4 +432,5 @@ def make_model(cfg, in_ch: int, out_ch: int = 1, encoder: SeqEncoder | None = No
     return HiCModel(backbone, m.cond_mode, encoder,
                     cfg.window.size if m.dist_bias else 0, reference=m.reference,
                     resolutions=m.resolutions, res_embed_dim=m.res_embed_dim,
+                    res_embed_mode=m.res_embed_mode,
                     default_resolution=int(cfg.data.resolution), prior=m.prior)

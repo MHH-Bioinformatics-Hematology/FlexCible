@@ -182,10 +182,16 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
     if sorted(reslist) != sorted(base.model.resolutions):
         raise ValueError(f"configs cover {reslist}, model.resolutions {base.model.resolutions}")
 
-    if any(c.train.reference_dropout > 0 or c.train.track_dropout > 0 or c.train.hard_split
-           or c.train.sv_mask for c in cfgs):
-        raise NotImplementedError("track / reference dropout are not supported in "
+    if any(c.train.reference_dropout > 0 or c.train.hard_split or c.train.sv_mask for c in cfgs):
+        raise NotImplementedError("reference dropout, hard split and SV masks are not supported in "
                                   "multi-resolution training")
+    if any(c.data.cohesin_unknown or c.data.diff_marks or c.motifs.motif_meth for c in cfgs):
+        raise NotImplementedError("track dropout with cohesin_unknown, diff_marks or motif_meth is "
+                                  "not supported in multi-resolution training")
+    # track dropout (train.track_dropout of the first config): per window the ChIP rows drawn as
+    # absent get the cache's absent value of that row, exactly as in flexcible.train
+    drop_p = float(base.train.track_dropout)
+    drop_mode = base.train.track_dropout_mode
     if base.model.prior:
         raise NotImplementedError("model.prior is not supported in multi-resolution training")
     use_ref = base.model.reference != "none"
@@ -205,6 +211,15 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
             log.info("resolution %d: %s", r, c.train.cache_dir)
             log_val_split(co, vi, ti, c.train.val_exclude_overlap)
         rows, offset, n_motifs, n_sym = _select_rows(c, ds.channels)
+        absent_t, n_chip = None, 0
+        if drop_p > 0:
+            from .tracks import TrackNormalizer
+            from .train import dropout_chip_rows
+
+            chip_rows = dropout_chip_rows(c, ds.channels)
+            n_chip = len(chip_rows)
+            tn = TrackNormalizer.load(Path(c.train.cache_dir) / "norm_tracks.json")
+            absent_t = torch.from_numpy(tn.absent_values()[chip_rows]).to(device)
         stripe = ti[rank::world]
         if stage_dir is not None:
             src = open_stage(stage_dir, c, len(ds), rows)
@@ -229,7 +244,8 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
         in_ch = ich
         info[r] = {"offset": offset, "n_motifs": n_motifs, "n_train": len(ti),
                    "n_stripe": len(stripe), "batch": c.train.batch_size,
-                   "cache": c.train.cache_dir, "W": ds.window_size}
+                   "cache": c.train.cache_dir, "W": ds.window_size,
+                   "absent": absent_t, "n_chip": n_chip}
     model = make_model(base, in_ch, 1).to(device)
     if is_ddp:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
@@ -241,10 +257,10 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
     total_train = sum(v["n_train"] for v in info.values())
     steps_per_epoch = max(1, total_train // (world * int(np.mean([v["batch"] for v in info.values()]))))
     if is_main:
-        log.info("multi-resolution model %s: %.2fM params, %d cond channels, %d steps per "
-                 "epoch (one resolution per step, drawn uniformly), world %d",
-                 reslist, sum(p.numel() for p in core.parameters()) / 1e6, in_ch,
-                 steps_per_epoch, world)
+        log.info("multi-resolution model %s (%s embedding): %.2fM params, %d cond channels, %d steps "
+                 "per epoch (one resolution per step, drawn uniformly), world %d, track dropout %s",
+                 reslist, base.model.res_embed_mode, sum(p.numel() for p in core.parameters()) / 1e6,
+                 in_ch, steps_per_epoch, world, f"{drop_mode}" if drop_p > 0 else "off")
     step = epoch = 0
     best = float("-inf")
     curve = []
@@ -321,6 +337,20 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
                     tgt = torch.where(m[:, None, None], torch.flip(tgt, dims=[-1, -2]), tgt)
                     if ref is not None:
                         ref = torch.where(m[:, None, None], torch.flip(ref, dims=[-1, -2]), ref)
+            absent_t, n_chip = info[r]["absent"], info[r]["n_chip"]
+            if absent_t is not None and n_chip > 0:
+                if drop_mode == "uniform_count":
+                    k = torch.randint(1, n_chip + 1, (bs, 1), device=device)
+                    rk = torch.rand(bs, n_chip, device=device).argsort(1).argsort(1)
+                    drop = rk >= k
+                else:
+                    drop = torch.rand(bs, n_chip, device=device) < drop_p
+                if drop.any():
+                    cond = cond.clone()
+                    cond[:, :n_chip] = torch.where(
+                        drop[:, :, None],
+                        absent_t[None, :, None].expand(bs, n_chip, cond.shape[-1]).to(cond.dtype),
+                        cond[:, :n_chip])
             sym, pairs = split_cond(cond, off, nm)
             with torch.autocast("cuda", dtype=amp_dtype, enabled=amp_dtype is not None):
                 pred = model(sym, pairs, None, None, ref, res=r)

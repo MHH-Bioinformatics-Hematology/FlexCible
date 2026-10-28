@@ -410,6 +410,11 @@ class ModelConfig:
     # single-resolution view of such a model predicts at. None = off.
     resolutions: list[int] | None = None
     res_embed_dim: int = 16
+    # How the bin size enters the FiLM conditioning: "lookup" = one learned vector per trained
+    # resolution (only those bin sizes can be predicted); "continuous" = a small network of
+    # log2(bin size / 1 kb), so any bin size is accepted at prediction time (accuracy is only
+    # established near the trained sizes).
+    res_embed_mode: str = "lookup"
     # Coarse-to-fine cascade: one more 2D input plane holding a prior map (a
     # coarser model's prediction, data.prior_cool / samples[].prior_cool),
     # appended after the reference plane. False = off.
@@ -815,7 +820,8 @@ class Config:
                                  f"samples[].prior_cool; none for {lack}")
             if self.window.transform != "prescaled":
                 raise ValueError("model.prior needs window.transform 'prescaled'")
-        if self.model.resolutions and int(self.data.resolution) not in self.model.resolutions:
+        if (self.model.resolutions and self.model.res_embed_mode == "lookup"
+                and int(self.data.resolution) not in self.model.resolutions):
             raise ValueError(f"data.resolution {self.data.resolution} not in "
                              f"model.resolutions {self.model.resolutions}")
         if self.has_reference and self.window.transform != "prescaled":
