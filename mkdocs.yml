@@ -1,0 +1,28 @@
+site_name: FlexCible
+site_description: Flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix
+repo_url: https://github.com/joachimwolff/hic-multiome-unet
+docs_dir: docs
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue grey
+  features:
+    - navigation.sections
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+nav:
+  - Overview: index.md
+  - Installation: installation.md
+  - Quickstart (toy data, minutes): quickstart.md
+  - Tutorial, A to Z: tutorial.md
+  - Predicting with the released models: pretrained.md
+  - Configuration reference: configuration.md
+  - Command line: cli.md
+  - Troubleshooting: troubleshooting.md

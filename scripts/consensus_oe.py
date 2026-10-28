@@ -27,7 +27,8 @@ import h5py
 import numpy as np
 import pandas as pd
 
-OE = Path("/mnt/processed/wolffjoa/hic-multiome/crosscell_oe")
+import os
+OE = Path(os.environ.get("FLEXCIBLE_OE_DIR", "/mnt/processed/wolffjoa/hic-multiome/crosscell_oe"))  # --dir overrides
 CHUNK = 20_000_000
 
 
@@ -38,12 +39,16 @@ def cell_cool(cell: str, res: int) -> Path:
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--res", type=int, required=True)
+    ap.add_argument("--dir", default=None, help="folder of the <cell>_proper_<k>kb.cool maps (default: $FLEXCIBLE_OE_DIR)")
     ap.add_argument("--cells", nargs="+", required=True)
     ap.add_argument("--grid", default=None,
                     help="cool whose bin table the output uses (default: the "
                          "GM12878 proper map at --res, the training target grid)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    global OE
+    if a.dir:
+        OE = Path(a.dir)
     paths = [cell_cool(c, a.res) for c in a.cells]
     clrs = [cooler.Cooler(str(p)) for p in paths]
     grid = cooler.Cooler(a.grid or str(cell_cool("gm12878", a.res)))

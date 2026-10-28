@@ -51,7 +51,10 @@ def write_track_bedgraph(bw_path: str, chrom_out: str, chrom_bw: str,
 
 
 def build_ini(track_name, track_bedgraph, truth_cool, pred_cool, depth,
-              ini_path: Path) -> None:
+              ini_path: Path, log_counts: bool = True) -> None:
+    """log_counts: the maps hold counts (log1p for display); False for log O/E maps, which already
+    hold signed values and are shown as they are."""
+    transform = "log1p" if log_counts else "no"
     ini = f"""
 [ctcf]
 file = {track_bedgraph}
@@ -67,7 +70,7 @@ height = 0.3
 file = {truth_cool}
 title = Ground truth Hi-C
 depth = {depth}
-transform = log1p
+transform = {transform}
 file_type = hic_matrix
 colormap = RdYlBu_r
 show_masked_bins = false
@@ -79,7 +82,7 @@ height = 0.3
 file = {pred_cool}
 title = Predicted Hi-C
 depth = {depth}
-transform = log1p
+transform = {transform}
 file_type = hic_matrix
 colormap = RdYlBu_r
 show_masked_bins = false
@@ -128,7 +131,8 @@ def plot(cfg: Config, pred_cool: str, region: str, out_path: str,
         depth = int(min(reliable, (end - start) // 2))
 
     ini = out.with_suffix(".tracks.ini")
-    build_ini(track_name, bedgraph, smp.cool_path, pred_cool, depth, ini)
+    build_ini(track_name, bedgraph, smp.cool_path, pred_cool, depth, ini,
+              log_counts=cfg.window.transform != "prescaled")
 
     region_str = f"{chrom_cool}:{start}-{end}"
     cmd = ["pyGenomeTracks", "--tracks", str(ini), "--region", region_str,

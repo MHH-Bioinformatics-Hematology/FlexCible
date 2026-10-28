@@ -26,7 +26,8 @@ import h5py
 import numpy as np
 import pandas as pd
 
-OE = Path("/mnt/processed/wolffjoa/hic-multiome/crosscell_oe")
+import os
+OE = Path(os.environ.get("FLEXCIBLE_OE_DIR", "/mnt/processed/wolffjoa/hic-multiome/crosscell_oe"))  # --dir overrides
 CHUNK = 20_000_000
 
 
@@ -37,11 +38,15 @@ def cool_of(cell, res):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--res", type=int, required=True)
+    ap.add_argument("--dir", default=None, help="folder of the <cell>_proper_<k>kb.cool maps (default: $FLEXCIBLE_OE_DIR)")
     ap.add_argument("--cells", nargs="+", required=True)
     ap.add_argument("--full-name", default=None,
                     help="output name of the full consensus (default consensus<N>)")
     ap.add_argument("--tmp", required=True, help="staging folder for the per-chunk arrays")
     a = ap.parse_args()
+    global OE
+    if a.dir:
+        OE = Path(a.dir)
     k = a.res // 1000
     N = len(a.cells)
     full = OE / f"{a.full_name or f'consensus{N}'}_proper_{k}kb.cool"
