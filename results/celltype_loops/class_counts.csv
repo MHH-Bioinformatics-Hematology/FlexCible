@@ -1,0 +1,9 @@
+threshold,class,n_loops
+1.0,unclassified,2171
+1.0,shared,936
+1.0,imr90_specific,121
+1.0,gm12878_specific,21
+0.5,unclassified,1585
+0.5,shared,936
+0.5,imr90_specific,582
+0.5,gm12878_specific,146

@@ -1,0 +1,33 @@
+threshold,predictor,positives,negatives,auroc,n_pos,n_neg
+1.0,measured (ceiling),imr90_specific,shared,0.9999205340114431,121,936
+1.0,measured (ceiling),imr90_specific,gm12878_specific,1.0,121,21
+1.0,measured (ceiling),gm12878_specific,shared,1.0,21,936
+1.0,measured (ceiling),gm12878_specific,imr90_specific,1.0,21,121
+1.0,ours with consensus,imr90_specific,shared,0.7944921240375786,121,936
+1.0,ours with consensus,imr90_specific,gm12878_specific,0.9850452577725306,121,21
+1.0,ours with consensus,gm12878_specific,shared,0.9378815628815629,21,936
+1.0,ours with consensus,gm12878_specific,imr90_specific,0.9850452577725305,21,121
+1.0,ours ChIP only,imr90_specific,shared,0.8238768806950626,121,936
+1.0,ours ChIP only,imr90_specific,gm12878_specific,0.9641873278236914,121,21
+1.0,ours ChIP only,gm12878_specific,shared,0.8129324379324379,21,936
+1.0,ours ChIP only,gm12878_specific,imr90_specific,0.9641873278236914,21,121
+1.0,consensus alone,imr90_specific,shared,0.00029137529137529035,121,936
+1.0,consensus alone,imr90_specific,gm12878_specific,0.0,121,21
+1.0,consensus alone,gm12878_specific,shared,0.0,21,936
+1.0,consensus alone,gm12878_specific,imr90_specific,0.0,21,121
+0.5,measured (ceiling),imr90_specific,shared,0.9520442329720681,582,936
+0.5,measured (ceiling),imr90_specific,gm12878_specific,1.0,582,146
+0.5,measured (ceiling),gm12878_specific,shared,0.997987647816415,146,936
+0.5,measured (ceiling),gm12878_specific,imr90_specific,1.0,146,582
+0.5,ours with consensus,imr90_specific,shared,0.681185199870767,582,936
+0.5,ours with consensus,imr90_specific,gm12878_specific,0.961469660594078,582,146
+0.5,ours with consensus,gm12878_specific,shared,0.9229964289895797,146,936
+0.5,ours with consensus,gm12878_specific,imr90_specific,0.961469660594078,146,582
+0.5,ours ChIP only,imr90_specific,shared,0.7061818956148853,582,936
+0.5,ours ChIP only,imr90_specific,gm12878_specific,0.9405568893282493,582,146
+0.5,ours ChIP only,gm12878_specific,shared,0.8479613042969207,146,936
+0.5,ours ChIP only,gm12878_specific,imr90_specific,0.9405568893282492,146,582
+0.5,consensus alone,imr90_specific,shared,0.04918752019267483,582,936
+0.5,consensus alone,imr90_specific,gm12878_specific,0.0,582,146
+0.5,consensus alone,gm12878_specific,shared,0.0018806345861140314,146,936
+0.5,consensus alone,gm12878_specific,imr90_specific,0.0,146,582
