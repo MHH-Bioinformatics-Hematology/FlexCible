@@ -17,8 +17,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config          # noqa: E402
-from hicmultiome.matrix import open_cool        # noqa: E402
+from flexcible.config import Config          # noqa: E402
+from flexcible.matrix import open_cool        # noqa: E402
 
 MAN = Path.home() / "src/Hi-cGAN/manuscript_gigascience/data"
 WIN = 1_048_576                                  # Akita's region size
@@ -37,7 +37,7 @@ def akita_transform(m: np.ndarray) -> np.ndarray:
 
 def lifted_akita_regions(ak: pd.DataFrame, chain: str):
     """Akita's hg38 regions lifted to hg19 so the SAME loci can be scored."""
-    from hicmultiome.liftover import LiftOver
+    from flexcible.liftover import LiftOver
 
     lo = LiftOver(chain)
     rows = []
@@ -72,7 +72,7 @@ def score_regions(cfg: Config, pred_cool: str, regions: pd.DataFrame):
     print(f"  already in Akita space: truth={t_done} pred={p_done}"
           " (transform skipped where True)")
     vals = []
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     for _, r in regions.iterrows():
         # cools differ on 'chr1' vs '1'; resolve against the file, don't guess
         try:

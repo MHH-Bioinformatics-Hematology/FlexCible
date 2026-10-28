@@ -26,7 +26,7 @@ the geometry. Edits large enough to move bins (tens of kb and up) change the
 map structurally. Both are supported; only the second rearranges the matrix.
 
 CLI:
-  python -m hicmultiome.variants --config configs/multiome_25kb.yaml \
+  python -m flexcible.variants --config configs/multiome_25kb.yaml \
       --region chr13:28000000-28600000 \
       --edit chr13:28034000-28034060:dup --out runs/flt3_itd.png
 """

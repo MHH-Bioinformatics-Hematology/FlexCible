@@ -72,8 +72,8 @@ def _launch(base, cache, tracks, val_regions, patience, max_epochs, out_root, gp
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
     torchrun = str(Path(py).parent / "torchrun")
     cmd = ([torchrun, "--standalone", f"--nproc_per_node={len(gpus)}",
-            "-m", "hicmultiome.train", "--config", str(cfg_path)] if len(gpus) > 1
-           else [py, "-m", "hicmultiome.train", "--config", str(cfg_path)])
+            "-m", "flexcible.train", "--config", str(cfg_path)] if len(gpus) > 1
+           else [py, "-m", "flexcible.train", "--config", str(cfg_path)])
     p = subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT, env=env)
     p._fh = fh
     return p, log_path

@@ -119,7 +119,7 @@ def chain_arrays(chain: Path = CHAIN19):
     """Per source chromosome numpy arrays of the chain blocks: starts, ends,
     target chromosome, target start, strand."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from hicmultiome.liftover import LiftOver
+    from flexcible.liftover import LiftOver
     lo = LiftOver(chain)
     out = {}
     for c, v in lo.blocks.items():

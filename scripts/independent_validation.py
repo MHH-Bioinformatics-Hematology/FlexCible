@@ -13,7 +13,7 @@ Stages
   predict   crosscell_predict.py of every model x resolution x sample, four mark sets (all seven, CTCF +
             H3K27ac, CTCF, none), predictions saved on the target grid (GPU, claims by job name)
   akita     Akita (GM12878 head, sequence only) on every window (basenji environment, CPU)
-  score     per-region measures of every predictor on identical pixels (hicmultiome.structure:
+  score     per-region measures of every predictor on identical pixels (flexcible.structure:
             Pearson, SCC, insulation r, boundary F1, loop enrichment r, APA ratio, compartment r)
   ceiling   split-half (binomial) reproducibility ceiling of every target (Spearman-Brown)
   summary   tables (medians, paired bootstrap), endpoint verdicts, figure
@@ -338,13 +338,13 @@ def _init_worker(cell, res, sets, methods, akita_file, others, full_others=False
 
 
 def _pearson(x, y):
-    from hicmultiome.structure import _corr
+    from flexcible.structure import _corr
     return _corr(x, y)
 
 
 def _score_chunk(rows):
     """rows: list of (key, chrom, lo, hi, seqkey, set). Returns metric rows of the common-pixel scoring."""
-    from hicmultiome.structure import structure_metrics
+    from flexcible.structure import structure_metrics
     W = _W
     res = W["res"]
     out = []

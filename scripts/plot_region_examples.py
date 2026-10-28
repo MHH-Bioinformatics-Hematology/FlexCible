@@ -25,12 +25,12 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc          # load_model, resample, region_onehot, TARGET
 
-from hicmultiome.config import Config
-from hicmultiome.genome import match_name
-from hicmultiome.matrix import MatrixNormalizer, open_cool
-from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-from hicmultiome.tracks import TrackNormalizer
-from hicmultiome.train import _select_rows
+from flexcible.config import Config
+from flexcible.genome import match_name
+from flexcible.matrix import MatrixNormalizer, open_cool
+from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+from flexcible.tracks import TrackNormalizer
+from flexcible.train import _select_rows
 
 load_model, resample, region_onehot = sc.load_model, sc.resample, sc.region_onehot
 
@@ -56,7 +56,7 @@ def predict_region(cfg, model, channels, sel_rows, offset, n_motifs, use_seq,
     with torch.no_grad():
         out = model(cond, pairs, None, seq)
         if tta:
-            from hicmultiome.dataset import reverse_cond, split_cond
+            from flexcible.dataset import reverse_cond, split_cond
             cr = reverse_cond(cond, offset, n_motifs)
             sr, pr = split_cond(cr, offset, n_motifs)
             seqr = region_onehot(fasta, name, st, size, res, device, revcomp=True) if use_seq else None
@@ -134,7 +134,7 @@ def main():
         if bc == 0:
             ax.set_ylabel(band, fontsize=11, fontweight="bold")
         ax.set_xticks([]); ax.set_yticks([])
-    fig.suptitle("upper = original Hi-C  |  lower = hic-multiome-unet "
+    fig.suptitle("upper = original Hi-C  |  lower = flexcible "
                  "(RAD21+H3K4me1+H3K4me2), log obs/exp", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(a.out, dpi=150)

@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import multicell_expanded as mx                                   # noqa: E402
 import score_like_hicgan as sc                                    # noqa: E402
 from crosscell_predict import coarse_score                        # noqa: E402
-from hicmultiome.genome import match_name                         # noqa: E402
+from flexcible.genome import match_name                         # noqa: E402
 
 
 def main():

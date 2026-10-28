@@ -18,7 +18,7 @@ Rows (appended after the other sequence-feature rows, before the motif rows; `da
 for every mark of the model (all ChIP tracks and Meth; copy-number and annotation tracks have no
 reference). A mark the sample lacks (missing_tracks / zeroed_tracks), or that no member of its
 reference set has, gives 0 in all of its rows ("no information"); track dropout does the same in the
-trainer (hicmultiome.train, diff_coupling).
+trainer (flexcible.train, diff_coupling).
 
 Per-sample normalisation of a mark (quantile anchoring): v = log1p(max(raw, 0)); z = (v - q50) / (q99 - q50)
 with the quantiles over the autosomal bins of the sample, so that a deep and a shallow track of the same
@@ -28,7 +28,7 @@ different, shared normalisation and is not used here; the diff rows bypass it (T
 Reference sets (`data.diff_reference_sets`, name -> list of sample names of data.samples; the pool of a
 sample is `samples[].diff_set`, default `data.diff_default_set`). The reference of a sample is its pool
 without the sample itself and without every sample of the same cell identity
-(hicmultiome.reference.cell_identity); the sample's own track never enters its reference
+(flexcible.reference.cell_identity); the sample's own track never enters its reference
 (`reference_members`, tested). No label (Hi-C) is read, so held-out chromosomes cannot leak through the
 per-sample statistics, which use marks only.
 

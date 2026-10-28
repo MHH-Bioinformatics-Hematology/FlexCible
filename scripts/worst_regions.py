@@ -119,7 +119,7 @@ def parse_region(s):
 
 
 def fetch(clr, region, balance=False):
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     c, s, e = parse_region(region)
     nm = match_name(c, list(clr.chromnames))
     return np.asarray(clr.matrix(balance=balance).fetch(f"{nm}:{s}-{e}"), float)
@@ -778,7 +778,7 @@ def mappable_bins(cell, region, res, with_cov=False):
     src = source_cool(cell, res)
     if src is None:
         return (None, None) if with_cov else None
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     c, s, e = parse_region(region)
     nm = match_name(c, list(src.chromnames))
     w = src.bins().fetch(f"{nm}:{s}-{e}")["weight"].values
@@ -1153,7 +1153,7 @@ def region_panel(a, region, cells, res, tag, fname, title):
                    alpha=0.6, zorder=0)
         src = source_cool(cell, res)
         if src is not None:
-            from hicmultiome.genome import match_name
+            from flexcible.genome import match_name
             c, s, e = parse_region(region)
             w = src.bins().fetch(f"{match_name(c, list(src.chromnames))}:{s}-{e}")["weight"].values
             lc = np.log2((1 / w) / np.nanmedian(1 / src.bins()[:]["weight"].values))

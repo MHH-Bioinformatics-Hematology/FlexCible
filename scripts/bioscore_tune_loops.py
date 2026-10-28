@@ -37,7 +37,7 @@ import pyBigWig                                                     # noqa: E402
 from scipy.stats import mannwhitneyu                                # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome import bioscore as bs                              # noqa: E402
+from flexcible import bioscore as bs                              # noqa: E402
 
 AKITA_RES, AKITA_CROP = 2048, 32
 CTCF = ("/home/mh-hannover.local/wolffjoa/data/hic-multiome/hg38_gm12878/"

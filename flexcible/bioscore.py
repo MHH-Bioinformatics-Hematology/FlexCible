@@ -38,7 +38,7 @@ TAD structure
                             the discrete question -- would you have drawn the
                             same TADs -- which a profile correlation can pass
                             while still misplacing every boundary by 20 kb.
-    Both come from :mod:`hicmultiome.loops`, unchanged.
+    Both come from :mod:`flexcible.loops`, unchanged.
 
 Loops
     Loops are called in the MEASURED map (local maximum of a donut/local
@@ -460,7 +460,7 @@ def region_metrics(true_log: np.ndarray, pred_log: np.ndarray,
     to[~np.isfinite(T)] = np.nan
     po[~np.isfinite(P)] = np.nan
 
-    # --- TADs (functions reused from hicmultiome.loops, unmodified) ---
+    # --- TADs (functions reused from flexcible.loops, unmodified) ---
     pt = insulation_profile(np.nan_to_num(to), p.insulation_window)
     pp = insulation_profile(np.nan_to_num(po), p.insulation_window)
     good = np.isfinite(pt) & np.isfinite(pp)

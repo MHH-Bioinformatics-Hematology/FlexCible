@@ -21,7 +21,7 @@ from scipy.signal import find_peaks
 from scipy.stats import rankdata
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome import bioscore as bs  # noqa: E402
+from flexcible import bioscore as bs  # noqa: E402
 
 KMIN, KMAX = 2, 250          # distances used for curves / SCC (bins, 2 kb) -> 4-500 kb
 INS_W = (25, 50)             # 50 kb, 100 kb diamond

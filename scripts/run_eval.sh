@@ -21,11 +21,11 @@ if [ "$WITH_CAP" = "--with-capture" ]; then
     LOOP_CAP_ARGS=(--pred-capture "$RUN_DIR/pred_even_capture.cool")
 fi
 
-$PY -m hicmultiome.predict  --config "$CFG" --chroms test --out "$PRED" "${CAP_ARGS[@]}"
-$PY -m hicmultiome.evaluate --config "$CFG" --pred "$PRED" --chroms test \
+$PY -m flexcible.predict  --config "$CFG" --chroms test --out "$PRED" "${CAP_ARGS[@]}"
+$PY -m flexcible.evaluate --config "$CFG" --pred "$PRED" --chroms test \
     --out "$RUN_DIR/scc.json"
-$PY -m hicmultiome.loops    --config "$CFG" --pred "$PRED" "${LOOP_CAP_ARGS[@]}" \
+$PY -m flexcible.loops    --config "$CFG" --pred "$PRED" "${LOOP_CAP_ARGS[@]}" \
     --chroms test --out "$RUN_DIR/loops_tads.json"
-$PY -m hicmultiome.diagnose --config "$CFG" --chrom 2 --pred "$PRED" \
+$PY -m flexcible.diagnose --config "$CFG" --chrom 2 --pred "$PRED" \
     --out-dir "$RUN_DIR"
 echo "=== $CFG done -> $RUN_DIR ==="

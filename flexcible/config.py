@@ -1,4 +1,4 @@
-"""Configuration schema for hic-multiome-unet.
+"""Configuration schema for flexcible.
 
 A single YAML file fully specifies a run: the Hi-C cool target, the protein
 tracks (each DNA-binding protein MUST declare its binding motif), the genome
@@ -81,7 +81,7 @@ class SampleSpec:
     zeroed_tracks:  tracks deliberately forced to raw zero, e.g. RAD21+SMC3
         for a cohesin-degron condition whose Hi-C shows the protein-free
         genome. This teaches the model what absence looks like, so in-silico
-        deletions (hicmultiome.perturb) are grounded in real perturbation data.
+        deletions (flexcible.perturb) are grounded in real perturbation data.
     capture_interactions: optional per-sample capture Hi-C file (format/score
         options come from the global `capture` section).
     capture_baits: optional BED of every baited fragment of the capture
@@ -226,7 +226,7 @@ class DataConfig:
     # Objects table of the training cell lines (scripts/cell_objects_table.py), same columns as the
     # AML table; read when train.object_scope is "all". None = off.
     cell_objects_table: str | None = None
-    # Differential mark channels (registry section 66; hicmultiome/diffmarks.py), all off by
+    # Differential mark channels (registry section 66; flexcible/diffmarks.py), all off by
     # default. diff_marks: per mark of the model the reference mark (dref rows, unless
     # diff_ref_channels is false) and the sample-minus-reference difference at the radii diff_scales
     # (bp; 0 = the native bin), standardised per sample. The reference of a sample is the mean over
@@ -294,7 +294,7 @@ class MotifConfig:
     score_frac: float = 0.80             # hit = log-odds >= frac * max score
     directed_pairs: bool = True          # add fwd_i*rev_j / rev_i*fwd_j channels
                                          # (captures convergent CTCF loop anchors)
-    # methylation-aware directed motif strength (hicmultiome.motifmeth): one
+    # methylation-aware directed motif strength (flexcible.motifmeth): one
     # more fwd/rev pair of the motif `motif_meth_id` with every site weighted
     # by (1 - methylated fraction of the CpGs inside it), plus a covered row.
     # Needs the cell's CpG.npz in samples[].extra_bigwig_dirs (cells without
@@ -397,7 +397,7 @@ class ModelConfig:
     #             from the reference
     reference: str = "none"
     # Reference map to embed in every checkpoint (copied once as
-    # embedded_reference.cool, hicmultiome.reference.embed_reference), so that
+    # embedded_reference.cool, flexcible.reference.embed_reference), so that
     # prediction for a NEW cell needs only its ChIP: predict.py and
     # crosscell_predict.py look windows up in the embedded map by chromosome
     # and bin. Typically the consensus of all training cells; training itself
@@ -406,7 +406,7 @@ class ModelConfig:
     # Resolution conditioning: bin sizes the model is trained on together
     # (e.g. [2000, 5000, 10000, 25000]); each gets a learned embedding
     # (res_embed_dim) that modulates every U-Net block by FiLM
-    # (hicmultiome.train_multires). data.resolution selects the resolution a
+    # (flexcible.train_multires). data.resolution selects the resolution a
     # single-resolution view of such a model predicts at. None = off.
     resolutions: list[int] | None = None
     res_embed_dim: int = 16
@@ -469,7 +469,7 @@ class TrainConfig:
     # windows, and the honest validation (val_regions) is logged alongside.
     # Needs val_regions. None = off.
     hard_split: str | None = None
-    # Loop-centric recipe (registry section 63; hicmultiome/aml_objects.py; needs
+    # Loop-centric recipe (registry section 63; flexcible/aml_objects.py; needs
     # data.aml_objects_table, val_regions and a model.reference model). All off by default.
     # aml_object_oversample > 1: training windows that hold an AML-specific object and an equal
     # number of one-to-one matched control windows enter every epoch that many times (on top of
@@ -506,7 +506,7 @@ class TrainConfig:
     # loops and stripes of every training cell line, with the same oversampling, batches and losses.
     object_scope: str = "aml"
     # Memory-mapped training windows: the train split of cache_dir staged
-    # uncompressed on local disk (python -m hicmultiome.train --stage-only)
+    # uncompressed on local disk (python -m flexcible.train --stage-only)
     # and read batch by batch, so DDP ranks share the page cache instead of
     # each holding the whole split in RAM and its stripe on the GPU (2 kb
     # runs with a reference plane). None = resident (previous behaviour).
@@ -528,13 +528,13 @@ class TrainConfig:
     # Checkpoint selection on the validation windows (needs val_regions).
     # "dist_pearson": median per-window Pearson (previous behaviour).
     # "combined": per measure (Pearson, distance-stratified correlation,
-    # insulation-profile correlation, loop APA agreement; hicmultiome.
+    # insulation-profile correlation, loop APA agreement; flexcible.
     # structure) the rank of this evaluation among all evaluations of the run
     # so far, scaled to [0, 1], averaged; a checkpoint is kept when its
     # combined score is the highest so far. "hic_measures": the combined
     # score of scripts/hic_measures.py (combined_score(maps, res)).
     select_metric: str = "dist_pearson"
-    # log the hicmultiome.structure medians on the validation windows at
+    # log the flexcible.structure medians on the validation windows at
     # every validation (always on with select_metric other than dist_pearson)
     log_structure: bool = False
     # Restrict training/validation to these chromosomes only (e.g. ["chr1","chr2"]).
@@ -549,7 +549,7 @@ class TrainConfig:
     # loss scaler is needed. Numerics differ from fp32, so a run trained this
     # way is not bit-comparable with fp32 results.
     amp: str = "none"                    # none | bf16 | fp16
-    # Training objective, '+'-joined with optional weights (hicmultiome.losses):
+    # Training objective, '+'-joined with optional weights (flexcible.losses):
     # 'l1+mse' is the historical default; terms l1, mse, scc, ssim. Adding scc
     # optimises the stratum-adjusted correlation we actually report, which L1
     # does not -- L1 is dominated by the near-diagonal pixels that carry the

@@ -1,6 +1,6 @@
 """Three-model split-map figure on Akita's test regions.
 
-Rows = models (Akita, hic-multiome-unet 3-track, hic-multiome-unet all-tracks);
+Rows = models (Akita, flexcible 3-track, flexcible all-tracks);
 columns = a good / medium / bad region (by the all-tracks model's per-region
 Pearson). Each panel is one region as a split map: upper triangle = original
 Hi-C (Akita's target), lower triangle = that model's prediction, log(obs/exp),
@@ -23,22 +23,22 @@ from scipy.stats import pearsonr
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc
 
-from hicmultiome.config import Config
-from hicmultiome.genome import match_name
-from hicmultiome.matrix import MatrixNormalizer, open_cool
-from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-from hicmultiome.tracks import TrackNormalizer
-from hicmultiome.train import _select_rows
+from flexcible.config import Config
+from flexcible.genome import match_name
+from flexcible.matrix import MatrixNormalizer, open_cool
+from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+from flexcible.tracks import TrackNormalizer
+from flexcible.train import _select_rows
 
 NPZ = "/mnt/processed/wolffjoa/restart_of_prediction_project/akita_normalization/akita_testset_rasters.npz"
 CELL = 1  # cells = ['HFF', 'GM12878']
 
 # our models: (row label, config, checkpoint)
 MODELS = [
-    ("hic-multiome-unet (RAD21+H3K4me1+H3K4me2)",
+    ("flexcible (RAD21+H3K4me1+H3K4me2)",
      "configs/combo_rad21_full.yaml",
      "/mnt/processed/wolffjoa/hic-multiome/runs/combo_rad21_full/checkpoint-best"),
-    ("hic-multiome-unet (all 13 ChIP)",
+    ("flexcible (all 13 ChIP)",
      "configs/akita_native.yaml",
      "runs/akita_native/checkpoint-best"),
 ]
@@ -87,7 +87,7 @@ def predict_map(m, chrom, reg_start, n_out, out_res, device, tta=True):
     with torch.no_grad():
         out = m["model"](cond, pairs, None, seq)
         if tta:
-            from hicmultiome.dataset import reverse_cond, split_cond
+            from flexcible.dataset import reverse_cond, split_cond
             cr = reverse_cond(cond, m["offset"], m["n_motifs"])
             sr, pr = split_cond(cr, m["offset"], m["n_motifs"])
             seqr = sc.region_onehot(m["fasta"], name, st, size, res, device, revcomp=True) if m["use_seq"] else None

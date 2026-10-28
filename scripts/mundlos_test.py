@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.loops import boundaries, insulation_profile   # noqa: E402
+from flexcible.loops import boundaries, insulation_profile   # noqa: E402
 
 MUN = Path.home() / "data/hic-multiome/mundlos"
 RES_M, LO_M9 = 10000, 109010000          # measured: mm9, 10 kb

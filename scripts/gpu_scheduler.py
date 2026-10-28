@@ -93,7 +93,7 @@ def jobs():
         loaded = None
         if cfg["train"].get("stage_dir"):
             st = Path(cfg["train"]["stage_dir"]) / cache / "train" / "meta.json"
-            J.append(Job(f"stage_{cache}", f"{PY} -m hicmultiome.train --config "
+            J.append(Job(f"stage_{cache}", f"{PY} -m flexcible.train --config "
                                            f"{MR / (mx.run_name(run, res) + '.stage.yaml')} --stage-only",
                          lambda: cache_ok(cache),
                          (lambda st=st, r=run, k=res: st.exists() or trained(r, k))))

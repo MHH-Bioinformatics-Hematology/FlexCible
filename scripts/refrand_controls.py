@@ -176,7 +176,7 @@ def band_enrichment(clr, chrom: str, dmax: int = MAX_BINS) -> np.ndarray:
     (i, i + d) of a log O/E cool, NaN where unmeasured; windows as aml_loop_classifier.hic_one."""
     import aml_loop_classifier as lc
     from scipy.ndimage import maximum_filter
-    from hicmultiome.bioscore import BioParams, local_enrichment
+    from flexcible.bioscore import BioParams, local_enrichment
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
     n = int(clr.chromsizes[chrom]) // lc.RES + 1
     B = np.full((n, dmax + 1), np.nan, np.float32)

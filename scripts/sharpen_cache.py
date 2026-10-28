@@ -18,12 +18,12 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc
-from hicmultiome.config import Config
-from hicmultiome.dataset import reverse_cond, split_cond
-from hicmultiome.genome import match_name
-from hicmultiome.matrix import MatrixNormalizer
-from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-from hicmultiome.tracks import TrackNormalizer
+from flexcible.config import Config
+from flexcible.dataset import reverse_cond, split_cond
+from flexcible.genome import match_name
+from flexcible.matrix import MatrixNormalizer
+from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+from flexcible.tracks import TrackNormalizer
 
 
 def main():

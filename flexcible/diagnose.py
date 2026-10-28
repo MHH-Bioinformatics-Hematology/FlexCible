@@ -12,7 +12,7 @@ dominated by distance decay):
 If --pred is given, the trained model's prediction is scored on the same axis so
 all three curves are directly comparable. A PNG of Pearson-vs-distance is written.
 
-CLI:  python -m hicmultiome.diagnose --config configs/ctcf_256.yaml --chrom 2 \
+CLI:  python -m flexcible.diagnose --config configs/ctcf_256.yaml --chrom 2 \
           --pred runs/ctcf_256/pred_even.cool --out-dir runs/diag_256
 """
 from __future__ import annotations

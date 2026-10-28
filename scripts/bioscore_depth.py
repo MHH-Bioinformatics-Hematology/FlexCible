@@ -68,8 +68,8 @@ import numpy as np                                                  # noqa: E402
 import pandas as pd                                                 # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome import bioscore as bs                              # noqa: E402
-from hicmultiome.utils import get_logger                            # noqa: E402
+from flexcible import bioscore as bs                              # noqa: E402
+from flexcible.utils import get_logger                            # noqa: E402
 
 DEEP = ("/mnt/processed/wolffjoa/restart_of_prediction_project/originalData/"
         "4Dnucleosome/GM12878_4DNFIXP4QG5B.mcool::/resolutions/2000")

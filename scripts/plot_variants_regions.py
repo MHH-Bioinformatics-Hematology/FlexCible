@@ -17,7 +17,7 @@ import numpy as np                    # noqa: E402
 import pandas as pd                   # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                        # noqa: E402
+from flexcible.config import Config                        # noqa: E402
 from scripts.plot_regions_three_models import (RAST, GM, dense,
                                                our_prediction)  # noqa: E402
 

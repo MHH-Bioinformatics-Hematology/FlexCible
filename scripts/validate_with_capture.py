@@ -29,8 +29,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome import bioscore as bs                    # noqa: E402
-from hicmultiome.liftover import LiftOver                 # noqa: E402
+from flexcible import bioscore as bs                    # noqa: E402
+from flexcible.liftover import LiftOver                 # noqa: E402
 from scripts.plot_regions_three_models import RAST, GM, dense   # noqa: E402
 
 PCHIC = (Path.home() / "data/hic-multiome/pchic"

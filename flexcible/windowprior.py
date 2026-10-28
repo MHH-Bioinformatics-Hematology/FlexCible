@@ -17,7 +17,7 @@ Position-free by construction and by test (tests/test_windowprior.py):
     with a Hann taper; the result is the same function of the signal when the signal is rolled by whole
     windows or the chromosome is renamed (controls in scripts/window_prior.py, max abs difference 0).
 
-Inputs (the same representation as the dref channels of registry 66, hicmultiome.diffmarks):
+Inputs (the same representation as the dref channels of registry 66, flexcible.diffmarks):
   ref   mode "ref": per mark the mean over the reference set (without the sample and its cell
         identity) of the per-sample quantile-anchored track (q50 -> 0, q99 -> 1), 0 for a mark the sample
         or its reference lacks. The reference of a training cell is its leave-one-out set, that of a
@@ -108,7 +108,7 @@ def reference_z(dm, members: list, chrom: str):
 def mark_rows(dm, sample, chrom: str, nb: int, mode: str = "ref", members: list | None = None) -> np.ndarray:
     """(M, nb) float32 input rows of one sample chromosome.
 
-    mode 'ref': the dref rows of hicmultiome.diffmarks (identical values: the same reference set, the same
+    mode 'ref': the dref rows of flexcible.diffmarks (identical values: the same reference set, the same
     zero for a mark the sample or the whole reference lacks). `members` overrides the reference set
     (SampleSpec list, e.g. the other samples of another organism); default dm.members(sample).
     mode 'own': the sample's own anchored marks, 0 for a missing mark."""
@@ -202,7 +202,7 @@ def predict_chrom(net, marks: np.ndarray, pairs: np.ndarray | None, size: int, s
 def write_prior_cool(out: str | Path, template: str | Path, accs: dict, meta: dict) -> Path:
     """Cooler of the blended prior maps (chrom -> BandedAccumulator), bin table of `template`, float32
     counts, written to <out>.part and renamed; <out>.json = meta (key 'cells': the cells whose Hi-C is in
-    the map's INPUT, for hicmultiome.reference.assert_reference_excludes)."""
+    the map's INPUT, for flexcible.reference.assert_reference_excludes)."""
     import cooler
     import pandas as pd
 

@@ -708,7 +708,7 @@ def stage_predict(devices: list[str], threads: int, jobs: list | None = None) ->
 # all AML patients. The reference models use it in place of consensus12 at
 # inference, without retraining. The cell list is written to <cool>.json as
 # "amlxu<patient>" and the prediction runs as cell "amlxu<patient>", so
-# hicmultiome.reference.assert_reference_excludes rejects a reference that
+# flexcible.reference.assert_reference_excludes rejects a reference that
 # contains the scored patient.
 CONS_DIR = PRIM / "consensus"
 REF_MODELS = [m for m, s in PMODELS.items() if s[3]]
@@ -1254,8 +1254,8 @@ def stage_fischer(res_list: list[int]) -> None:
     import benchmark_metrics as bm
     from scipy.stats import pearsonr, spearmanr
     from aml_eval import fetch_region, pred_matrix, loop_params, insulation_log
-    from hicmultiome.bioscore import call_loops, coarsen, local_enrichment
-    from hicmultiome.loops import boundaries
+    from flexcible.bioscore import call_loops, coarsen, local_enrichment
+    from flexcible.loops import boundaries
     rows, chg, loops, bnds = [], [], [], []
     for res in res_list:
         k = res // 1000

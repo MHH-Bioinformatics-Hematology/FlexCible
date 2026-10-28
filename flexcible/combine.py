@@ -9,7 +9,7 @@ coordinates), the shorter side is padded so the diagonal still lines up and
 the inserted or deleted stretch shows as a gap in the unedited side.
 
 CLI:
-  python -m hicmultiome.combine --upper measured.cool --lower predicted.cool \
+  python -m flexcible.combine --upper measured.cool --lower predicted.cool \
       --chrom 2 --out combined.cool
 """
 from __future__ import annotations

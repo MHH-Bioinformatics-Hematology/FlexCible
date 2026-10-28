@@ -19,13 +19,13 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                      # noqa: E402
-from hicmultiome.loops import insulation_profile           # noqa: E402
-from hicmultiome.matrix import (BandedAccumulator, MatrixNormalizer,  # noqa: E402
+from flexcible.config import Config                      # noqa: E402
+from flexcible.loops import insulation_profile           # noqa: E402
+from flexcible.matrix import (BandedAccumulator, MatrixNormalizer,  # noqa: E402
                                 hann2d, plan_windows)
-from hicmultiome.model import HiCUNet, build_spatial_cond, n_cond_channels
-from hicmultiome.simulate import SimParams, duplicate, invert, simulate
-from hicmultiome.tracks import TrackNormalizer                # noqa: E402
+from flexcible.model import HiCUNet, build_spatial_cond, n_cond_channels
+from flexcible.simulate import SimParams, duplicate, invert, simulate
+from flexcible.tracks import TrackNormalizer                # noqa: E402
 
 
 def rows_of(sim):

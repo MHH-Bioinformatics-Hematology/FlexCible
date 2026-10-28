@@ -16,7 +16,7 @@ object (positives and controls):
 Further maps in the same windows: measured patient, AML reference alone ('reference baseline'),
 measured HSPC consensus.
 
-Scores per object: loops, log2 donut enrichment (hicmultiome.bioscore.local_enrichment, inner 1,
+Scores per object: loops, log2 donut enrichment (flexcible.bioscore.local_enrichment, inner 1,
 outer 4, 10 kb, as in the classifier labels) as the maximum over the 3x3 pixels around the
 annotated pixel (the annotation and the local maximum can differ by one bin) and at the exact
 pixel; stripes, the mean log O/E over the stripe rectangle (anchor rows x extent columns).
@@ -251,7 +251,7 @@ def stage_predict(gpu: str, threads: int, only: list[str] | None) -> None:
 
 # ===================================================================== scoring
 def enrich_maps(M: np.ndarray, prm) -> np.ndarray:
-    from hicmultiome.bioscore import local_enrichment
+    from flexcible.bioscore import local_enrichment
     with np.errstate(invalid="ignore", divide="ignore"):
         return np.log2(local_enrichment(np.exp(M), prm))
 
@@ -261,7 +261,7 @@ def stage_score(only: list[str] | None = None) -> pd.DataFrame:
     from aml_eval import fetch_region, pred_matrix
     import aml_primary_explain as ex
     import aml_train as at
-    from hicmultiome.bioscore import BioParams
+    from flexcible.bioscore import BioParams
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
     items = pd.read_csv(ITEMS, dtype={"patient": str})
     hspc = cooler.Cooler(str(ex.hspc_consensus_path(RES)))

@@ -97,14 +97,14 @@ def consensus_of(cell: str, res: int) -> Path:
 
 
 def fetch(clr, chrom, s, e, balance=False):
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     nm = match_name(chrom, list(clr.chromnames))
     m = np.asarray(clr.matrix(balance=balance).fetch(f"{nm}:{s}-{e}"), np.float64)
     return m
 
 
 def masked_bins(raw, chrom, s, e):
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     nm = match_name(chrom, list(raw.chromnames))
     b = raw.bins().fetch(f"{nm}:{s}-{e}")
     if "weight" in b.columns:
@@ -177,9 +177,9 @@ def model_runs(res, families=None):
 def load_bundle(run: Path, device, cell: str, res: int):
     import torch
     import score_like_hicgan as sc
-    from hicmultiome.config import Config
-    from hicmultiome.matrix import MatrixNormalizer
-    from hicmultiome.train import _select_rows
+    from flexcible.config import Config
+    from flexcible.matrix import MatrixNormalizer
+    from flexcible.train import _select_rows
 
     ck = run / (run / "best").read_text().strip()
     cfg = Config.load(ck / "config.yaml")
@@ -200,7 +200,7 @@ def load_bundle(run: Path, device, cell: str, res: int):
 def predict_region(b, sym_full, st, ref_block, device, reg_start, n_out, res, tgt_bin):
     import torch
     import score_like_hicgan as sc
-    from hicmultiome.dataset import reverse_cond, split_cond
+    from flexcible.dataset import reverse_cond, split_cond
 
     size, off, nm = b["size"], b["offset"], b["n_motifs"]
     s = sym_full if b["sel"] is None else sym_full[b["sel"]]
@@ -231,9 +231,9 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
     import cooler
     import torch
     import score_like_hicgan as sc
-    from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-    from hicmultiome.reference import reference_block
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+    from flexcible.reference import reference_block
+    from flexcible.tracks import TrackNormalizer
     sys.path.insert(0, str(REPO / "scripts"))
     import benchmark_metrics as bm
 
@@ -276,7 +276,7 @@ def quick_task(cell: str, res: int, device: str, regions=None, families=None, ou
                               names=["chrom", "start", "end"])
     rows = []
     for chrom, grp in regions.groupby("chrom"):
-        from hicmultiome.genome import match_name
+        from flexcible.genome import match_name
         if match_name(chrom, list(tgt.chromnames)) is None:
             continue
         nb = chrom_nbins_of(tgt, match_name(chrom, list(tgt.chromnames)))
@@ -475,7 +475,7 @@ def cache_windows(res: int) -> dict:
 def band(clr, chrom, W):
     """(nbins, W) array of a banded O/E map, [i, d] = value at (i, i + d);
     NaN where no pixel is stored."""
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     nm = match_name(chrom, list(clr.chromnames))
     lo, hi = clr.extent(nm)
     n = hi - lo
@@ -509,7 +509,7 @@ def score_task(cell: str, res: int):
     iw, dw = np.indices((W, W))
     tri_band = (dw >= 2) & (iw + dw < W)            # [local row, offset] inside the window
     rows = []
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     for chrom in sorted({c for c, _ in wins}, key=lambda c: (len(c), c)):
         T, C = band(tgt, chrom, W), band(cons, chrom, W)
         R = [band(x, chrom, W) for x in reps] if reps else None

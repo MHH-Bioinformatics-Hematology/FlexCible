@@ -84,7 +84,7 @@ def cell_dir(cell):
 
 
 def norm_stats():
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.tracks import TrackNormalizer
     tn = TrackNormalizer.load(mx.best_ckpt(NORM) / "norm_tracks.json")
     return tn
 
@@ -93,10 +93,10 @@ def build_cell(cell: str):
     """Feature and target table of one cell, saved as parquet-free npz."""
     import pyBigWig
     from scipy.ndimage import uniform_filter1d
-    from hicmultiome.config import Config
-    from hicmultiome.motifs import cached_motif_tracks
-    from hicmultiome.sequence import cached_sequence_features
-    from hicmultiome.tracks import read_track_binned
+    from flexcible.config import Config
+    from flexcible.motifs import cached_motif_tracks
+    from flexcible.sequence import cached_sequence_features
+    from flexcible.tracks import read_track_binned
     f = OUT / "tables" / f"{cell}.npz"
     if f.exists():
         return

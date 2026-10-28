@@ -17,7 +17,7 @@ from scipy.stats import pearsonr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc                       # noqa: E402
-from hicmultiome.genome import match_name           # noqa: E402
+from flexcible.genome import match_name           # noqa: E402
 
 warnings.filterwarnings("ignore")
 OUT = Path("/mnt/processed/wolffjoa/hic-multiome/crosscell_oe")

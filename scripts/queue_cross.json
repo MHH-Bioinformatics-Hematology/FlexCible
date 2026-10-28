@@ -4,7 +4,7 @@
     {
       "name": "crossspecies_25kb",
       "config": "configs/crossspecies_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/crossspecies_25kb",
       "cache_manifest": "cache/crossspecies_25kb/manifest.json",
       "pred_out": "runs/crossspecies_25kb/pred_even.cool",

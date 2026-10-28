@@ -499,13 +499,13 @@ def anchor_marks(p: str, chrom: str, a: int) -> dict:
 
 
 def stage_features() -> None:
-    """Loop pixels: log2 donut enrichment (hicmultiome.bioscore.local_enrichment,
+    """Loop pixels: log2 donut enrichment (flexcible.bioscore.local_enrichment,
     10 kb, no coarsening) in the patient map, each prediction, the HSPC
     consensus and consensus12. Stripes: mean log O/E over the stripe band
     (anchor rows x extent columns) minus the same band's mean in the reference."""
     import cooler
     from aml_eval import fetch_region, pred_matrix
-    from hicmultiome.bioscore import local_enrichment
+    from flexcible.bioscore import local_enrichment
     W = pd.read_csv(ap.WORK / "feature_windows.csv")
     from aml_eval import loop_params
     prm = loop_params(FEAT_RES)

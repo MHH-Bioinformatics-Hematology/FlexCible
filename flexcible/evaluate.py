@@ -5,7 +5,7 @@ standard for Hi-C reproducibility. If the ``hicrep`` package is installed we use
 it; otherwise we fall back to a self-contained SCC implementation so evaluation
 always runs. We also report distance-stratified Pearson and a log-MSE.
 
-CLI:  python -m hicmultiome.evaluate --config configs/gm12878_25kb.yaml \
+CLI:  python -m flexcible.evaluate --config configs/gm12878_25kb.yaml \
           --pred predicted_25kb.cool --chroms even
 """
 from __future__ import annotations

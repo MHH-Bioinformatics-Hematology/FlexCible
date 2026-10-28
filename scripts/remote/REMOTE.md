@@ -1,8 +1,8 @@
 # Running Hi-C U-Net jobs on this machine (single RTX 4090)
 
-Repo copy: ~/hic-multiome-unet (rsync of the local working tree, see SYNCED_FROM.txt for the
+Repo copy: ~/flexcible (rsync of the local working tree, see SYNCED_FROM.txt for the
 git HEAD and the uncommitted files at sync time). Environment: ~/hicenv (python 3.12,
-torch 2.12.0+cu130, same as the local hicdiff env; hicmultiome is importable through a .pth
+torch 2.12.0+cu130, same as the local hicdiff env; flexcible is importable through a .pth
 file). Data on the shared drive (/mnt/processed/wolffjoa/hic-multiome: caches, targets, runs) is
 identical to the local view. The local-home data tree that configs reference with absolute
 /home/mh-hannover.local/wolffjoa/data/hic-multiome/... paths (hg38_gm12878 bigWigs, genome,
@@ -15,7 +15,7 @@ genome_cache, motifs, akita regions, holdout bed, chain, meth, annotation, pchic
     export HICMULTI_PY=$HOME/hicenv/bin/python          # optional, defaults to the running interpreter
     export HICMULTI_STAGE=$HOME/scratch/hicmx_stage     # staging dir for 2 kb runs (local disk)
     export https_proxy=http://proxy.mh-hannover.de:8080 # only for pip
-    cd ~/hic-multiome-unet
+    cd ~/flexcible
 
 Overridable paths (defaults = the values on the original machine): HICMULTI_PY, HICMULTI_TORCHRUN,
 HICMULTI_DATA (default ~/data/hic-multiome), HICMULTI_HM (default /mnt/processed/wolffjoa/hic-multiome),
@@ -50,9 +50,9 @@ A job from the multicell_expanded family (output folder runs/multicell_reference
         || python scripts/claim_job.py release $NAME
 
 `--gpus 0` makes multicell_expanded call `torchrun --standalone --nproc_per_node=1 -m
-hicmultiome.train --config <run>.yaml`. The same step by hand:
+flexcible.train --config <run>.yaml`. The same step by hand:
 
-    torchrun --standalone --nproc_per_node=1 -m hicmultiome.train --config <config.yaml>
+    torchrun --standalone --nproc_per_node=1 -m flexcible.train --config <config.yaml>
 
 The yaml is written by the stage into the output folder on the share; any other config
 (configs/*.yaml, configs/scenario/*.yaml) can be passed directly. A config is pointed at its
@@ -108,7 +108,7 @@ queue then skips them, because dedicated_done() sees the finished run on the sha
   about 97 MB/s).
 - GPU training smoke not done: the sequence CNN was at 93 to 95 percent GPU utilization.
 
-## Runners added 2026-10-10 (all started with `setsid nohup ~/hicenv/bin/python <file> > <file>.out 2>&1 &` in ~/hic-multiome-unet)
+## Runners added 2026-10-10 (all started with `setsid nohup ~/hicenv/bin/python <file> > <file>.out 2>&1 &` in ~/flexcible)
 
 - aml_prep.py: CPU preparation (references, caches, hard split) of the AML folds 10, 11, 12 (registry 52).
 - remote_queue_aml.py (PID file remote_queue_aml.pid): waits for the CNN and the earlier runners, 60-step smoke, then per fold the

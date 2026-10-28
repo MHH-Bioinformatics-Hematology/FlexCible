@@ -39,7 +39,7 @@ FIELDS = ["job", "method", "res", "device", "setting", "wall_s", "peak_gpu_mib",
 def ours(res_kb: int, device: str, batch: int, setting: str):
     run = "all12refin_drop" if res_kb == 2 else f"all12refin_drop_{res_kb}kb"
     out = WORK / f"ours_{res_kb}kb_{device}_{setting}.cool"
-    cmd = [str(ENV / "hicdiff/bin/python"), "-m", "hicmultiome.predict",
+    cmd = [str(ENV / "hicdiff/bin/python"), "-m", "flexcible.predict",
            "--config", str(MR / f"{run}.yaml"), "--checkpoint", str(MR / run / "checkpoint-best"),
            "--chroms", CHROM, "--tta", "--sample", "gm12878", "--batch-size", str(batch),
            "--reference", str(OE / f"consensus_loo_gm12878_proper_{res_kb}kb.cool"), "--out", str(out)]

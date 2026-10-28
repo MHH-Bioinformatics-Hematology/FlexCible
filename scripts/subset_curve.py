@@ -26,11 +26,11 @@ from scipy.stats import pearsonr
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc
 
-from hicmultiome.config import Config
-from hicmultiome.genome import match_name
-from hicmultiome.matrix import MatrixNormalizer, open_cool
-from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-from hicmultiome.tracks import TrackNormalizer
+from flexcible.config import Config
+from flexcible.genome import match_name
+from flexcible.matrix import MatrixNormalizer, open_cool
+from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+from flexcible.tracks import TrackNormalizer
 
 # correlation-informed keep-sets, shrinking; one representative per group as it shrinks
 KEEP_SETS = {
@@ -124,7 +124,7 @@ def main():
                 with torch.no_grad():
                     o = model(cond, pairs, None, seq_oh)
                     if a.tta:
-                        from hicmultiome.dataset import reverse_cond, split_cond
+                        from flexcible.dataset import reverse_cond, split_cond
                         cr = reverse_cond(cond, offset, n_motifs)
                         sr, pr = split_cond(cr, offset, n_motifs)
                         seqr = (sc.region_onehot(fasta, name, st, size, res, device, revcomp=True)

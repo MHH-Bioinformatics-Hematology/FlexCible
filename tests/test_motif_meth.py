@@ -19,8 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_pipeline import (BINSIZE, CHROMS, MOTIF, _ref_raw, _write_bigwig,  # noqa: E402,F401
                            workdir)
 
-from hicmultiome import motifmeth as mm  # noqa: E402
-from hicmultiome.config import Config  # noqa: E402
+from flexcible import motifmeth as mm  # noqa: E402
+from flexcible.config import Config  # noqa: E402
 
 NB = {c: n // BINSIZE for c, n in CHROMS.items()}
 
@@ -44,7 +44,7 @@ def _cpg_file(path: Path, meth_by_site: dict[int, float], cov: int = 20) -> Path
 
 def _expected(fasta, chrom, workdir, cpg_file, nb):
     """Independent per-site loop (no searchsorted/cumsum) for the three rows."""
-    from hicmultiome.motifs import cached_motif_positions
+    from flexcible.motifs import cached_motif_positions
     fwd, rev = cached_motif_positions(fasta, chrom, MOTIF, str(workdir), 0.8,
                                       str(workdir / "gcache"))
     z = np.load(cpg_file)
@@ -88,7 +88,7 @@ def test_site_weights_and_covered_fraction(workdir):
 def test_no_cpg_file_equals_unmodified_hits(workdir):
     """A cell without CpG data: weighted planes equal the plain hit counts,
     covered = 0 (the state the model sees for HUVEC, NHEK, PC-9)."""
-    from hicmultiome.motifs import cached_motif_tracks
+    from flexcible.motifs import cached_motif_tracks
     nb = NB["chr1"]
     got = mm.methylated_motif_tracks(str(workdir / "genome.fa"), "chr1", MOTIF, str(workdir),
                                      nb, BINSIZE, 0.8, str(workdir / "gcache"), None)
@@ -126,7 +126,7 @@ def _samples(workdir, raw):
 
 
 def test_layout_default_off_and_on(workdir):
-    from hicmultiome.precompute import seq_feature_names, sym_row_names
+    from flexcible.precompute import seq_feature_names, sym_row_names
     off = Config.from_dict(_cfg(workdir, "lay_off", False))
     on = Config.from_dict(_cfg(workdir, "lay_on", True))
     assert off.active_motif_ids == [MOTIF] and not off.motif_meth_active
@@ -146,7 +146,7 @@ def test_layout_default_off_and_on(workdir):
 def test_assemble_rows_and_off_is_unchanged(workdir):
     """The three new rows come out of assemble_chrom; every other row equals
     the motif_meth-off assembly."""
-    from hicmultiome.precompute import assemble_chrom, sample_track_files, sym_row_names
+    from flexcible.precompute import assemble_chrom, sample_track_files, sym_row_names
     raw_on = _samples(workdir, _cfg(workdir, "asm_on", True))
     raw_off = _samples(workdir, _cfg(workdir, "asm_off", False))
     on, off = Config.from_dict(raw_on), Config.from_dict(raw_off)
@@ -172,10 +172,10 @@ def test_meth_dropout_equals_cell_without_cpg(workdir):
     cell without CpG data (unmodified planes, covered absent) in the model's
     normalisation, for the numpy path (inference) and the torch path (training)
     including reverse-augmented windows."""
-    from hicmultiome import train as htrain
-    from hicmultiome.dataset import reverse_cond
-    from hicmultiome.precompute import assemble_chrom, sample_track_files, sym_row_names
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible import train as htrain
+    from flexcible.dataset import reverse_cond
+    from flexcible.precompute import assemble_chrom, sample_track_files, sym_row_names
+    from flexcible.tracks import TrackNormalizer
     raw = _samples(workdir, _cfg(workdir, "drop_eq", True))
     c = Config.from_dict(raw)
     names = sym_row_names(c)
@@ -214,8 +214,8 @@ def test_select_tracks_keeps_the_methylation_rows(workdir):
     the list dropped its row): with Meth in the list the methylation-weighted
     pair and the covered row reach the model input; without it the covered row
     remains (sequence-feature block) and the Meth track row is gone."""
-    from hicmultiome import train as htrain
-    from hicmultiome.precompute import sym_row_names, seq_feature_names
+    from flexcible import train as htrain
+    from flexcible.precompute import sym_row_names, seq_feature_names
     raw = _cfg(workdir, "sel", True, select_tracks=["CTCF", "H3K27ac", "Meth"])
     raw["train"]["select_motifs"] = [MOTIF]
     c = Config.from_dict(raw)
@@ -233,8 +233,8 @@ def test_select_tracks_keeps_the_methylation_rows(workdir):
 
 
 def _random_model(c, channels):
-    from hicmultiome import train as htrain
-    from hicmultiome.model import make_model, n_cond_channels
+    from flexcible import train as htrain
+    from flexcible.model import make_model, n_cond_channels
     rows, offset, n_motifs, n_sym = htrain._select_rows(c, channels)
     torch.manual_seed(0)
     model = make_model(c, n_cond_channels(n_sym, n_motifs, 0, c.model.cond_mode), 1, None)
@@ -248,10 +248,10 @@ def test_methylation_channels_change_model_input_and_output(workdir):
     """Changing the CpG-derived rows (motif pair + covered) changes the cond the
     model receives and its prediction; changing the Meth track row does too; a
     model built with motif_meth off has fewer input channels."""
-    from hicmultiome.dataset import split_cond
-    from hicmultiome.model import n_cond_channels
-    from hicmultiome.precompute import assemble_chrom, sample_track_files, sym_row_names, seq_feature_names
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.dataset import split_cond
+    from flexcible.model import n_cond_channels
+    from flexcible.precompute import assemble_chrom, sample_track_files, sym_row_names, seq_feature_names
+    from flexcible.tracks import TrackNormalizer
     raw = _samples(workdir, _cfg(workdir, "net", True, select_tracks=["CTCF", "H3K27ac", "Meth"]))
     raw["train"]["select_motifs"] = [MOTIF]
     c = Config.from_dict(raw)
@@ -294,8 +294,8 @@ def test_precompute_and_train_with_motif_meth(workdir, caplog):
     import json
     import logging
 
-    from hicmultiome import precompute as hprep
-    from hicmultiome import train as htrain
+    from flexcible import precompute as hprep
+    from flexcible import train as htrain
     raw = _samples(workdir, _cfg(workdir, "e2e", True, select_tracks=["CTCF", "H3K27ac", "Meth"],
                                  track_dropout=0.5, track_dropout_mode="uniform_count",
                                  max_steps=6, eval_every=3, val_regions=2))

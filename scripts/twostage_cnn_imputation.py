@@ -110,11 +110,11 @@ def stage_cnn(cells, gpu, force=False):
     import torch
     PRED.mkdir(parents=True, exist_ok=True)
     clr = cooler.Cooler(str(mx.target("k562", RES)))
-    from hicmultiome.genome import match_name
-    from hicmultiome.precompute import chrom_nbins_of
+    from flexcible.genome import match_name
+    from flexcible.precompute import chrom_nbins_of
     nb_cool = {c: chrom_nbins_of(clr, match_name(c, list(clr.chromnames)))
                for c in regions_table().chrom.unique()}
-    from hicmultiome.config import Config
+    from flexcible.config import Config
     size = 192
     need = needed_bins(nb_cool, size)
     a = S.parse_args(["--config", str(REPO / "configs/seq_cnn.yaml"), "--stage", "eval",
@@ -164,7 +164,7 @@ def stage_cnn(cells, gpu, force=False):
 # ----------------------------------------------------------------------------
 
 def hic_norm():
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.tracks import TrackNormalizer
     ck = mx.best_ckpt(mx.out_of(MODEL) / MODEL)
     tn = TrackNormalizer.load(ck / "norm_tracks.json")
     names = [t for t in __import__("yaml").safe_load(open(ck / "config.yaml"))["data"]["tracks"]]

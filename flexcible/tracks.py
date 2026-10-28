@@ -100,7 +100,7 @@ class TrackNormalizer:
     std: list[float] | None = None
     vmin: list[float] | None = None
     vmax: list[float] | None = None
-    # rows that are already final inputs (the differential mark rows, hicmultiome.diffmarks):
+    # rows that are already final inputs (the differential mark rows, flexcible.diffmarks):
     # they are neither transformed nor standardised, apply() returns them unchanged. None = none
     # (every previous normaliser).
     passthrough: list[int] | None = None

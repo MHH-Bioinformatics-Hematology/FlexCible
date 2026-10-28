@@ -8,7 +8,7 @@ Objects
   stripes  positives: AML-specific stripes (Suppl. Table 4; anchor 40 kb, extent block).
 
 Negatives (labels only use Hi-C; no feature uses the Hi-C of the target pair)
-  A_full   shared loops (log2 enrichment >= 0.6 in both): local-maximum donut enrichment (hicmultiome.bioscore, 10 kb, same
+  A_full   shared loops (log2 enrichment >= 0.6 in both): local-maximum donut enrichment (flexcible.bioscore, 10 kb, same
            parameters as the AML scripts) in the patient map AND in the HSPC consensus,
            not within 2 bins of an AML-specific loop of the patient; matched 1:1 within the
            patient on distance, CTCF motif orientation class and the anchors' mean H3K27ac
@@ -130,7 +130,7 @@ def hic_one(p: str) -> str:
     maximum of the patient map (distance 6 to 150 bins), mappable bins, and stripe-rectangle
     integral images are NOT stored; stripes are scored in `stripe_scores`."""
     import cooler
-    from hicmultiome.bioscore import BioParams, local_enrichment
+    from flexcible.bioscore import BioParams, local_enrichment
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
     cp = cooler.Cooler(str(OE / f"xu_{p}_proper_10kb.cool"))
     ch = cooler.Cooler(str(CONS / "hspccons_10kb.cool"))
@@ -253,8 +253,8 @@ def _scan_chunk(codes, lut, thresh, L):
 
 
 def motif_one(chrom: str) -> str:
-    from hicmultiome.motifs import pwm_logodds, read_jaspar, revcomp_pwm
-    from hicmultiome.sequence import read_chrom_codes
+    from flexcible.motifs import pwm_logodds, read_jaspar, revcomp_pwm
+    from flexcible.sequence import read_chrom_codes
     dest = CACHE / f"motif70_{chrom}.npz"
     if dest.exists():
         return chrom

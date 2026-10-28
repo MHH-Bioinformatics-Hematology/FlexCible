@@ -13,7 +13,7 @@ Two questions the plain SCC metric does not answer:
    the true and predicted profiles and a boundary-overlap F1 (minima of the
    insulation profile).
 
-CLI:  python -m hicmultiome.loops --config ... --pred pred.cool \
+CLI:  python -m flexcible.loops --config ... --pred pred.cool \
           [--pred-capture pred_pchic.cool] --chroms test --out metrics.json
 """
 from __future__ import annotations

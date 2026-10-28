@@ -4,7 +4,7 @@
     {
       "name": "akita_space_2kb",
       "config": "configs/akita_space_2kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/akita_space_2kb",
       "cache_manifest": "cache/akita_space_2kb/manifest.json",
       "pred_out": "runs/akita_space_2kb/pred_holdout.cool",

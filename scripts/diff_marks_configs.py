@@ -18,7 +18,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 
 import multicell_expanded as mx  # noqa: E402
-from hicmultiome.config import Config  # noqa: E402
+from flexcible.config import Config  # noqa: E402
 
 FOLDS = (10, 11, 12)
 PRIMARY = [f"all12diff_loopfocus_refres_drop_f{f}" for f in FOLDS]

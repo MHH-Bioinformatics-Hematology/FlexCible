@@ -1,4 +1,4 @@
-"""Window prior network P (registry section 76; hicmultiome/windowprior.py).
+"""Window prior network P (registry section 76; flexcible/windowprior.py).
 
 P maps the CONTENT of a window (reference marks, no coordinates) to the typical Hi-C of such a window
 (the leave-one-out consensus O/E map). Its output replaces the positional consensus of the reference
@@ -70,7 +70,7 @@ def base_run(res: int) -> str:
 
 
 def base_cfg(res: int):
-    from hicmultiome.config import Config
+    from flexcible.config import Config
     return Config.load(str(MR / f"{base_run(res)}.yaml"))
 
 
@@ -94,7 +94,7 @@ def local_marks_cache(cfg, res: int):
 def cell_sample(cfg, cell: str):
     """SampleSpec of `cell` for the mark rows: the configured sample of a training cell; a copy of the
     first sample pointed at the cell's bigWigs for a held-out cell or a new sample (the reference of
-    which is the 12-cell pool without the cell's identity, as hicmultiome.diffmarks.configure_unseen)."""
+    which is the 12-cell pool without the cell's identity, as flexcible.diffmarks.configure_unseen)."""
     import copy
 
     import multicell_expanded as me
@@ -126,9 +126,9 @@ def load_windows(res: int, mode: str, chroms: list[str], motifs: bool):
     """Training-split windows of the 12 cells on `chroms`: marks (n, M, W) float16, target (n, W, W)
     float16 = raw leave-one-out consensus / PRIOR_SCALE clipped, pairs (n, K, 2, W) or None,
     coords (chrom list, start array, sample list)."""
-    from hicmultiome import diffmarks as dmk
-    from hicmultiome.matrix import MatrixNormalizer
-    from hicmultiome.windowprior import PRIOR_SCALE, mark_rows
+    from flexcible import diffmarks as dmk
+    from flexcible.matrix import MatrixNormalizer
+    from flexcible.windowprior import PRIOR_SCALE, mark_rows
 
     cfg = local_marks_cache(base_cfg(res), res)
     cache = CACHE / f"mc_all12ref_diff_{res // 1000}kb"
@@ -192,8 +192,8 @@ def stage_train(a):
     import torch
     import torch.nn.functional as F
 
-    from hicmultiome.train import split_val_regions
-    from hicmultiome.windowprior import (drop_marks, make_prior_net, prior_forward, reverse_inputs,
+    from flexcible.train import split_val_regions
+    from flexcible.windowprior import (drop_marks, make_prior_net, prior_forward, reverse_inputs,
                                          train_chroms_of)
 
     tag = tag_of(a.mode, a.motifs, a.chrho)
@@ -291,7 +291,7 @@ def stage_train(a):
 def load_net(path: Path, device: str):
     import torch
 
-    from hicmultiome.windowprior import make_prior_net
+    from flexcible.windowprior import make_prior_net
     ck = torch.load(path / "model.pt", map_location="cpu", weights_only=False)
     net = make_prior_net(ck["n_marks"], ck["n_motifs"], ck["base"], ck["depth"])
     net.load_state_dict(ck["state"])
@@ -300,8 +300,8 @@ def load_net(path: Path, device: str):
 
 def motif_pairs(cfg, res: int, chrom: str, nb: int, memo: dict):
     """Normalised motif fwd / rev rows (K, 2, nb) of a chromosome, as the model's cond rows."""
-    from hicmultiome.motifs import cached_motif_tracks
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.motifs import cached_motif_tracks
+    from flexcible.tracks import TrackNormalizer
     if chrom in memo:
         return memo[chrom]
     ck = MR / base_run(res) / "checkpoint-best"
@@ -326,8 +326,8 @@ def stage_predict(a):
     import cooler
     import torch
 
-    from hicmultiome import diffmarks as dmk
-    from hicmultiome.windowprior import mark_rows, predict_chrom, predictor_fold, write_prior_cool
+    from flexcible import diffmarks as dmk
+    from flexcible.windowprior import mark_rows, predict_chrom, predictor_fold, write_prior_cool
 
     tag = tag_of(a.mode, a.motifs, a.chrho)
     cfg = local_marks_cache(base_cfg(a.res), a.res)
@@ -430,8 +430,8 @@ def stage_controls(a):
     import cooler
     import torch
 
-    from hicmultiome import diffmarks as dmk
-    from hicmultiome.windowprior import mark_rows, shift_difference
+    from flexcible import diffmarks as dmk
+    from flexcible.windowprior import mark_rows, shift_difference
 
     tag = tag_of(a.mode, a.motifs, a.chrho)
     cfg = local_marks_cache(base_cfg(a.res), a.res)

@@ -4,7 +4,7 @@
     {
       "name": "min3_25kb",
       "config": "configs/min3_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/min3_25kb",
       "cache_manifest": "cache/min3_25kb/manifest.json",
       "pred_out": "runs/min3_25kb/pred_even.cool",

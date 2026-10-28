@@ -1,6 +1,6 @@
 import numpy as np
 
-from hicmultiome.matrix import MatrixNormalizer
+from flexcible.matrix import MatrixNormalizer
 
 
 def test_prescaled_roundtrip_keeps_negatives():

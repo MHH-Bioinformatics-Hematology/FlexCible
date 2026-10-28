@@ -127,7 +127,7 @@ def main():
                 with open(log, "w") as fh:
                     subprocess.run([torchrun, "--standalone",
                                     f"--nproc_per_node={len(gpus)}", "-m",
-                                    "hicmultiome.train", "--config", str(cp)],
+                                    "flexcible.train", "--config", str(cp)],
                                    stdout=fh, stderr=subprocess.STDOUT, env=env, cwd=REPO)
             if not finished(log):
                 print(f"[skip] {name} not finished", flush=True)

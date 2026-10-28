@@ -35,16 +35,16 @@ from scipy.ndimage import map_coordinates
 from scipy.stats import pearsonr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                                # noqa: E402
-from hicmultiome.genome import match_name                            # noqa: E402
-from hicmultiome.matrix import MatrixNormalizer, open_cool           # noqa: E402
-from hicmultiome.model import (HiCModel, SeqEncoder, build_backbone,
+from flexcible.config import Config                                # noqa: E402
+from flexcible.genome import match_name                            # noqa: E402
+from flexcible.matrix import MatrixNormalizer, open_cool           # noqa: E402
+from flexcible.model import (HiCModel, SeqEncoder, build_backbone,
                                build_spatial_cond, n_cond_channels)  # noqa: E402
-from hicmultiome.sequence import window_codes                        # noqa: E402
-from hicmultiome.precompute import (assemble_chrom, chrom_nbins_of,
+from flexcible.sequence import window_codes                        # noqa: E402
+from flexcible.precompute import (assemble_chrom, chrom_nbins_of,
                                     sample_track_files)              # noqa: E402
-from hicmultiome.tracks import TrackNormalizer                       # noqa: E402
-from hicmultiome.utils import get_logger                             # noqa: E402
+from flexcible.tracks import TrackNormalizer                       # noqa: E402
+from flexcible.utils import get_logger                             # noqa: E402
 
 AK = Path("/mnt/processed/wolffjoa/restart_of_prediction_project/akita_normalization")
 REGIONS = AK / "akita_validation/sequences_test_list.tsv"
@@ -57,7 +57,7 @@ def load_model(cfg, ckpt, device):
     channels = json.loads((ckpt / "channels.json").read_text())
     emb = cfg.sequence.embed_dim if cfg.sequence.uses_encoder else 0
     if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:  # subset model
-        from hicmultiome.train import _select_rows
+        from flexcible.train import _select_rows
         _, _, n_motifs, n_sym = _select_rows(cfg, channels)
     else:
         n_sym, n_motifs = len(channels["sym_rows"]), len(channels["motif_ids"])
@@ -67,7 +67,7 @@ def load_model(cfg, ckpt, device):
                             cfg.model.cond_mode)
     encoder = (SeqEncoder(embed_dim=emb, width=cfg.sequence.enc_width)
                if cfg.sequence.uses_encoder else None)
-    from hicmultiome.model import make_model
+    from flexcible.model import make_model
     model = make_model(cfg, in_ch, 2 if channels.get("has_capture") else 1,
                        encoder).to(device)
     sd = torch.load(ckpt / "model.pt", map_location=device)
@@ -134,7 +134,7 @@ def main():
     size, res = cfg.window.size, cfg.data.resolution
     sel_rows = None
     if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
-        from hicmultiome.train import _select_rows
+        from flexcible.train import _select_rows
         sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
     else:
         n_motifs = len(channels["motif_ids"])
@@ -154,11 +154,11 @@ def main():
     src = open_cool(a.sample_cool or sample.cool_path)   # only for chromosome sizes
     ref_clr = None
     if cfg.model.reference != "none":
-        from hicmultiome.reference import open_reference, reference_block, resolve_reference
+        from flexcible.reference import open_reference, reference_block, resolve_reference
         ref_path = resolve_reference(cfg, ckpt, "gm12878", a.reference)
         ref_clr = open_reference(ref_path, res)
         log.info("reference map %s (%s)", ref_path, cfg.model.reference)
-    from hicmultiome.reference import assert_reference_excludes
+    from flexcible.reference import assert_reference_excludes
     baselines = {}
     for kv in a.baseline:
         k, v = kv.split("=", 1)
@@ -208,7 +208,7 @@ def main():
             with torch.no_grad():
                 out = model(cond, pairs, None, seq_oh, ref)
                 if a.tta:
-                    from hicmultiome.dataset import reverse_cond, split_cond
+                    from flexcible.dataset import reverse_cond, split_cond
                     cr = reverse_cond(cond, offset, n_motifs)
                     sr, pr = split_cond(cr, offset, n_motifs)
                     seq_r = (region_onehot(fasta, name, st, size, res, device,

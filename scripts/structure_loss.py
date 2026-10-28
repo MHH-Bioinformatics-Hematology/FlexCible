@@ -40,7 +40,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 import multicell_expanded as mx                                     # noqa: E402
-from hicmultiome.structure import SELECT_KEYS, rank_combined        # noqa: E402
+from flexcible.structure import SELECT_KEYS, rank_combined        # noqa: E402
 
 OUT = mx.HM / "runs/structure_eval"
 RES_OUT = REPO / "results/structure_loss"

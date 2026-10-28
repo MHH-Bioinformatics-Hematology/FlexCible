@@ -20,7 +20,7 @@ Stages
 Metric definitions (all maps log O/E; higher = better)
   pearson, scc          Pearson over the mask pixels; HiCRep stratum-adjusted correlation (benchmark_metrics)
   ins_r_<w>             Pearson between the insulation profiles (mean log O/E in the square
-                        [i-w, i) x (i, i+w], hicmultiome.structure.insulation) of prediction and
+                        [i-w, i) x (i, i+w], flexcible.structure.insulation) of prediction and
                         target; w in bins (2 kb grid 5, 12, 25, 50, 122 = 10, 25, 51, 102, 250 kb;
                         10 kb grid 5, 10, 25 = 50, 100, 250 kb)
   bnd_*                 boundaries = local minima of the 51 kb (2 kb grid) / 50 kb (10 kb grid)
@@ -45,7 +45,7 @@ Metric definitions (all maps log O/E; higher = better)
                         (benchmark_metrics.loop_counts / pool_loops; parameters of
                         benchmark_blocks.params(2048))
   loop_enrich_corr, compartment_corr, eigenvector_abs_corr, bnd_f1_struct, ins_r_250k
-                        hicmultiome.structure.structure_metrics (the definition behind the
+                        flexcible.structure.structure_metrics (the definition behind the
                         insulation_corr / boundary_f1 columns of the AML eval tables)
   stripe_r              Pearson over bins between the anchor profiles (mean log O/E of the pixels
                         20 to 200 kb from the bin, both sides) of prediction and target; a simple
@@ -196,7 +196,7 @@ def symmetrize(M, mask):
 def region_scores(T, P, mask, res, ref_bnd=None, ref_loops=None, seed=0, hft=True):
     """All metrics of map P against target T (both symmetric, NaN outside the shared mask)."""
     import benchmark_metrics as bm
-    from hicmultiome import structure as st
+    from flexcible import structure as st
     g = GRID[res]
     out = {}
     out["pearson"] = bm.pearson(P, T, mask)
@@ -276,7 +276,7 @@ def _akita_worker(i):
 def stage_akita(threads, boot, seed, limit=0):
     import benchmark_blocks as bb
     import benchmark_competitors as bc
-    from hicmultiome import bioscore as bs
+    from flexcible import bioscore as bs
     Z = np.load(RASTER, allow_pickle=True)
     side, off = int(Z["side"]), int(Z["offset"])
     crop = (512 - side) // 2
@@ -340,7 +340,7 @@ REGION_METRICS = ["pearson", "scc", "ins_r_10k", "ins_r_25k", "ins_r_50k", "ins_
 
 def akita_tables(df, lcs, boot, seed):
     import benchmark_blocks as bb
-    from hicmultiome import bioscore as bs
+    from flexcible import bioscore as bs
     prm = bb.params(2048)["loop"]
     rng = np.random.default_rng(seed)
     regions = sorted(df.region.unique())
@@ -530,7 +530,7 @@ def _aml_worker(task):
 def stage_aml(threads):
     import cooler
     import multicell_expanded as mx
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     global _JOBS
     c12 = cooler.Cooler(str(mx.consensus12(10000)))
     all_rows = []
@@ -710,7 +710,7 @@ Akita table (GM12878, 413 Akita test regions, 2048 bp bins, 448-bin crop = 917 k
 - hFT bnd recall: pooled recall of the hicFindTADs boundaries of the measured count map (10 kb) by the K strongest insulation minima of the map, K = number of reference boundaries in the region, tolerance 5 bins; K-matched, so recall equals precision.
 - loop recall, APA ratio: hicDetectLoops loops of the measured count map as reference; K strongest donut enrichments of the map (K-matched); APA ratio = (APA of prediction - 1) / (APA of target - 1) at the reference anchors. Pooled over regions with a reference loop.
 - stripe r: Pearson over bins between the anchor profiles (mean log O/E of the pixels 20 to 200 kb from the bin) of prediction and target. A proxy; there is no stripe caller in the benchmark.
-- compart. r, eigenvector |r|, loop enrichment r: hicmultiome/structure.py (correlation of the within-window correlation matrices; first eigenvector; donut enrichment). Within 917 kb these are local measures: the compartment values are a checkerboard proxy, the 2 kb donut (4 to 10 kb) is smaller than a loop.
+- compart. r, eigenvector |r|, loop enrichment r: flexcible/structure.py (correlation of the within-window correlation matrices; first eigenvector; donut enrichment). Within 917 kb these are local measures: the compartment values are a checkerboard proxy, the 2 kb donut (4 to 10 kb) is smaller than a loop.
 - Paired columns: ours minus Akita per region; interval = 2.5 and 97.5 percentiles of 2000 region bootstrap resamples; ahead = regions with ours strictly higher; ties excluded from the fraction.
 Chromosome table: values of results/hic_measures_chrho (scripts/hic_measures.py), mean over the held-out chromosomes listed, 10 or 25 kb, own band per block (C.Origami 2 Mb at 25 kb and 1.92 Mb at 10 kb, Epiphany 990 kb, Hi-cGAN 2 Mb). Boundaries are hicFindTADs boundaries of the prediction against those of the measured map (1 bin tolerance), the insulation square is 50 kb (10 kb) or 75 kb (25 kb), loop recall is K-matched against hicDetectLoops of the measured map. These definitions differ from the Akita table (Akita has no whole-chromosome prediction) and the two tables are not comparable in value.
 AML windows: 10 kb, 192 bins, windows centred on AML-specific loops and stripes of 8 donors (C.Origami patients), saved predictions of scripts/aml_competitors_loops.py, measured patient map as target; same definitions as the Akita table at 10 kb (insulation squares 50, 100 and 250 kb; boundary tolerance 1 bin; no external reference calls).

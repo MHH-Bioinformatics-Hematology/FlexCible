@@ -53,7 +53,7 @@ def build_tasks(spec: dict) -> list[Task]:
     for job in spec["jobs"]:
         name = job["name"]
         cwd = str((ROOT / job.get("cwd", ".")).resolve())
-        mod = job.get("module", "hicmultiome")
+        mod = job.get("module", "flexcible")
         cfg = job["config"]
         cache = job.get("cache_dir") or f"{cwd}:{cfg}"
         log = f"{logdir}/{name}"

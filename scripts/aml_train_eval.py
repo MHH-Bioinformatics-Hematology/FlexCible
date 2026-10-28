@@ -351,7 +351,7 @@ def stage_features(fold: int):
     import cooler
     from aml_eval import fetch_region, loop_params, pred_matrix
     import aml_primary_explain as ex
-    from hicmultiome.bioscore import local_enrichment
+    from flexcible.bioscore import local_enrichment
     res = 10000
     W = ex.feature_windows()
     tp = {at.label(p) for p in at.test_patients(fold)}

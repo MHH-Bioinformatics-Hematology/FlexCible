@@ -14,7 +14,7 @@ Stages
   predict   scripts/crosscell_predict.py --tta --save-pred on the CPU (threads
             <= 8 in total) for every model x input set x resolution (MODELS,
             INPUTS); reference models read consensus12, which holds none of the
-            AML maps (hicmultiome.reference guard).
+            AML maps (flexcible.reference guard).
   score     per region of the 413 Akita test regions, on one pixel mask shared
             by every method of a (cell, resolution) block: Pearson and HiCRep
             SCC (scripts/benchmark_metrics.py) of each model prediction, each
@@ -592,7 +592,7 @@ def load_preds(inp: str, res: int) -> dict[str, dict]:
 
 
 def fetch_region(clr, region: str, cache: dict) -> np.ndarray | None:
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     key = (clr.filename, region)
     if key in cache:
         return cache[key]
@@ -787,7 +787,7 @@ DELTA_REP = [(("u937_ko_c1", "u937_wt_c1"), ("u937_ko_c2", "u937_wt_c2")),
 
 def loop_params(res: int):
     """Loop calling on a ~10 kb grid (bioscore.call_loops), 60 to 600 kb."""
-    from hicmultiome.bioscore import BioParams
+    from flexcible.bioscore import BioParams
     f = max(1, 10000 // res)
     cres = res * f
     return BioParams(loop_coarsen=f, donut_inner=1, donut_outer=4,
@@ -811,8 +811,8 @@ def perturb(res_list: list[int]) -> None:
     import cooler
     import benchmark_metrics as bm
     from scipy.stats import pearsonr, spearmanr
-    from hicmultiome.bioscore import call_loops, coarsen, local_enrichment
-    from hicmultiome.loops import boundaries
+    from flexcible.bioscore import call_loops, coarsen, local_enrichment
+    from flexcible.loops import boundaries
     regions = pd.read_csv(REGIONS, sep="\t", usecols=[0, 1, 2], names=["chrom", "start", "end"])
     region_rows, loop_rows, bnd_rows, agg = [], [], [], {}
     for res in res_list:

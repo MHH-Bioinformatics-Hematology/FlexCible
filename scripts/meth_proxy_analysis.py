@@ -574,7 +574,7 @@ def aml_object_scores() -> pd.DataFrame:
     import aml_train as at
     import aml_train_eval as te
     import aml_loop_detection as ald
-    from hicmultiome.bioscore import BioParams
+    from flexcible.bioscore import BioParams
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
     items = pd.read_csv(ald.ITEMS, dtype={"patient": str})
     hspc = cooler.Cooler(str(ex.hspc_consensus_path(ald.RES)))

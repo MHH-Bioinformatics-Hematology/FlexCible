@@ -16,13 +16,13 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hicmultiome.cohesin import (CohesinAugmenter, DegronOperator, fraction_z,   # noqa: E402
+from flexcible.cohesin import (CohesinAugmenter, DegronOperator, fraction_z,   # noqa: E402
                                  load_operator, save_operator)
-from hicmultiome.config import Config                                            # noqa: E402
-from hicmultiome.precompute import (FRACTION_ROW, assemble_chrom, fix_fraction_norm,   # noqa: E402
+from flexcible.config import Config                                            # noqa: E402
+from flexcible.precompute import (FRACTION_ROW, assemble_chrom, fix_fraction_norm,   # noqa: E402
                                     fraction_row_value, sample_track_files,
                                     seq_feature_names, sym_row_names)
-from hicmultiome.tracks import TrackNormalizer                                   # noqa: E402
+from flexcible.tracks import TrackNormalizer                                   # noqa: E402
 from test_pipeline import BINSIZE, CHROMS, _cohesin_raw, workdir                 # noqa: E402,F401
 
 
@@ -188,8 +188,8 @@ def test_fraction_row_layout_and_values(workdir):
 
 
 def test_precompute_shares_scale_and_trains_with_augmentation(workdir, tmp_path, caplog):
-    from hicmultiome import precompute as hprep
-    from hicmultiome import train as htrain
+    from flexcible import precompute as hprep
+    from flexcible import train as htrain
 
     op = DegronOperator(width=4, dilations=(1, 2))
     save_operator(tmp_path / "op.pt", op, 0.26, BINSIZE)

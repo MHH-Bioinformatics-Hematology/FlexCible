@@ -1,6 +1,6 @@
 """Fit the degron operator for the cohesin-loss augmentation (registry section 55).
 
-The operator (hicmultiome.cohesin.DegronOperator) maps a control log O/E window
+The operator (flexcible.cohesin.DegronOperator) maps a control log O/E window
 to the change that cohesin depletion causes. It is fitted on the measured
 HCT116 RAD21-mAC pair (untreated and 6 h auxin Hi-C) and nothing else:
 
@@ -31,7 +31,7 @@ import torch
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-from hicmultiome.cohesin import DegronOperator, save_operator            # noqa: E402
+from flexcible.cohesin import DegronOperator, save_operator            # noqa: E402
 
 HM = Path("/mnt/processed/wolffjoa/hic-multiome")
 AUX_FRACTION = 0.26          # scripts/multicell_expanded.COHFIX_AUX_FRACTION

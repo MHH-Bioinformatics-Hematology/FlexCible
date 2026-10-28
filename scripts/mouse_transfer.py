@@ -267,7 +267,7 @@ def stage_views(a):
     # untrained control: same architecture, default initialisation, same normalisers
     import torch
     import score_like_hicgan as sc
-    from hicmultiome.config import Config
+    from flexcible.config import Config
     res = 10000
     dst = view_dir("untrained", res) / "checkpoint-best"
     base = view_dir("honest", res) / "checkpoint-best"
@@ -595,7 +595,7 @@ def stripe_profile(M, d0=3, d1=30):
 
 
 def _score_chunk(rows):
-    from hicmultiome.structure import structure_metrics
+    from flexcible.structure import structure_metrics
     W = _W
     res = W["res"]
     out = []

@@ -23,15 +23,15 @@ def _bw(path: Path, value: float):
 
 
 def _cfg(tracks, sample):
-    from hicmultiome.config import Config, SampleSpec, TrackSpec
+    from flexcible.config import Config, SampleSpec, TrackSpec
     cfg = Config.__new__(Config)
-    from hicmultiome.config import DataConfig
+    from flexcible.config import DataConfig
     cfg.data = DataConfig(tracks=[TrackSpec(**t) for t in tracks], samples=[SampleSpec(**sample)])
     return cfg
 
 
 def test_extra_bigwig_dirs_resolution(tmp_path):
-    from hicmultiome.precompute import sample_track_files
+    from flexcible.precompute import sample_track_files
     chip, meth, other = tmp_path / "chip", tmp_path / "meth", tmp_path / "other"
     for d in (chip, meth, other):
         d.mkdir()
@@ -76,7 +76,7 @@ def test_methylation_binning(tmp_path):
 def test_sv_mask_rows(tmp_path):
     import json
 
-    from hicmultiome.train import sv_mask_rows
+    from flexcible.train import sv_mask_rows
     p = tmp_path / "bp.json"
     # breakpoint at bin 12 of chr1 (res 1000) for sample a only
     p.write_text(json.dumps({"breakpoints": {"a": [["chr1", 12_500]]}}))
@@ -113,7 +113,7 @@ def test_hg19_vectorised_lift_matches_liftover(tmp_path):
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     import methylation as me
-    from hicmultiome.liftover import LiftOver
+    from flexcible.liftover import LiftOver
 
     chain = tmp_path / "t.chain.gz"
     with gzip.open(chain, "wt") as fh:

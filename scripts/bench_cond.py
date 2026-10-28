@@ -22,7 +22,7 @@ import time
 import torch
 import torch.nn as nn
 
-from hicmultiome.model import build_spatial_cond, n_cond_channels
+from flexcible.model import build_spatial_cond, n_cond_channels
 
 
 def build_preallocated(sym, pairs, planes, out):

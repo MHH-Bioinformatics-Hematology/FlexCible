@@ -22,9 +22,9 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hicmultiome import diffmarks as dm  # noqa: E402
-from hicmultiome.config import Config  # noqa: E402
-from hicmultiome.tracks import TrackNormalizer  # noqa: E402
+from flexcible import diffmarks as dm  # noqa: E402
+from flexcible.config import Config  # noqa: E402
+from flexcible.tracks import TrackNormalizer  # noqa: E402
 from test_pipeline import BINSIZE, CHROMS, workdir  # noqa: E402,F401  (fixture)
 
 MARKS = ["H3K27ac", "H3K4me1"]
@@ -276,7 +276,7 @@ def test_track_normalizer_passthrough(tmp_path):
 
 # --------------------------------------------------------------------------- cache layout
 def test_cache_layout_and_other_rows_unchanged(world):
-    from hicmultiome import precompute as hp
+    from flexcible import precompute as hp
 
     c_diff = cfg_of(world, name="lay_d", reference=True)
     c_off = cfg_of(world, name="lay_o", reference=True, diff=False)
@@ -303,8 +303,8 @@ def test_cache_layout_and_other_rows_unchanged(world):
 
 
 def test_select_tracks_keeps_only_the_diff_rows_of_kept_marks(world):
-    from hicmultiome import precompute as hp
-    from hicmultiome.train import _select_rows, cond_row_map
+    from flexcible import precompute as hp
+    from flexcible.train import _select_rows, cond_row_map
 
     cfg = cfg_of(world, name="sel", extra_train={"select_tracks": ["H3K27ac"]})
     man = hp.build(cfg)
@@ -319,8 +319,8 @@ def test_select_tracks_keeps_only_the_diff_rows_of_kept_marks(world):
 
 # --------------------------------------------------------------------------- dropout semantics
 def test_track_dropout_blanks_reference_and_difference_rows(world):
-    from hicmultiome import precompute as hp
-    from hicmultiome.train import apply_diff_drop, diff_coupling
+    from flexcible import precompute as hp
+    from flexcible.train import apply_diff_drop, diff_coupling
 
     cfg = cfg_of(world, name="drop")
     man = hp.build(cfg)
@@ -364,11 +364,11 @@ def test_difference_channel_reaches_the_network(world):
     """Regression of the select_tracks lesson: after training with select_tracks in force, changing any
     difference or reference row the model reads changes its output; the rows of an unselected mark are not
     inputs at all."""
-    from hicmultiome import precompute as hp
-    from hicmultiome import train as htrain
-    from hicmultiome.dataset import WindowDataset
-    from hicmultiome.predict import build_model
-    from hicmultiome.train import _select_rows
+    from flexcible import precompute as hp
+    from flexcible import train as htrain
+    from flexcible.dataset import WindowDataset
+    from flexcible.predict import build_model
+    from flexcible.train import _select_rows
 
     cfg = cfg_of(world, name="reach", reference=True,
                  extra_train={"select_tracks": ["H3K27ac"], "track_dropout": 0.5,
@@ -523,7 +523,7 @@ def test_objects_table_leakage_for_all_cells(tmp_path):
     import cell_objects_table as cot
     import multicell_expanded as mx
 
-    from hicmultiome import aml_objects as ao
+    from flexcible import aml_objects as ao
 
     c = _synthetic_calls(0)
     for cell in ("gm12878", "pc9"):
@@ -562,7 +562,7 @@ def test_conversion_of_the_rule_transfer_objects(tmp_path):
     import cell_objects_table as cot
     import multicell_expanded as mx
 
-    from hicmultiome import aml_objects as ao
+    from flexcible import aml_objects as ao
 
     rows = []
 
@@ -648,7 +648,7 @@ def test_aml_leakage_still_holds_in_the_joint_table_set(tmp_path):
 
 
 def test_object_tables_and_scope_validation(world):
-    from hicmultiome.train import object_tables
+    from flexcible.train import object_tables
 
     cfg = cfg_of(world, name="scope", diff=False)
     assert object_tables(cfg) == []
@@ -776,8 +776,8 @@ def _object_table(path, cell, shift=0):
 
 
 def test_smoke_training_with_all_flags(world, tmp_path, caplog):
-    from hicmultiome import precompute as hp
-    from hicmultiome import train as htrain
+    from flexcible import precompute as hp
+    from flexcible import train as htrain
 
     ta, tc = tmp_path / "aml.csv", tmp_path / "cells.csv"
     _object_table(ta, "s0")

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # One-time environment setup on the HPC login node.
 #   bash scripts/hpc/setup_env.sh [env-name]
-# Creates a conda env with everything hicmultiome needs (CUDA torch via pip).
+# Creates a conda env with everything flexcible needs (CUDA torch via pip).
 set -euo pipefail
-ENV="${1:-hicmultiome}"
+ENV="${1:-flexcible}"
 
 conda create -y -n "$ENV" python=3.12
 conda run -n "$ENV" pip install \

@@ -14,7 +14,7 @@ a549, nhek, gm23248, mcf7, cd14mono, pc9) with the leave-one-out consensus of th
 with the consensus of the 12 (consensus12). Cancer lines: k562, hct116, mcf7, a549, hepg2, pc9.
 
 Definitions (10 kb, log O/E maps from scripts/oe_proper.py as for the AML patients)
-  enrichment   log2 donut enrichment (hicmultiome.bioscore.local_enrichment, inner 1, outer 4) at the local
+  enrichment   log2 donut enrichment (flexcible.bioscore.local_enrichment, inner 1, outer 4) at the local
                maxima of the cell map (> 0.4, distance MIN_BINS to 150 bins), consensus value = 3x3 maximum
                around the pixel; gain = cell enrichment minus consensus enrichment (as aml_loop_classifier.hic_one).
   candidates   pairs of peak bins (top 8 percent of H3K27ac or CTCF, in the cell or in the consensus track).
@@ -283,7 +283,7 @@ def hic_cell(cell: str) -> str:
     """Loop candidates (local maxima of the donut enrichment with both anchors on peak bins) and stripe
     scores of one cell and of its consensus."""
     import cooler
-    from hicmultiome.bioscore import BioParams, local_enrichment
+    from flexcible.bioscore import BioParams, local_enrichment
     from scipy.ndimage import maximum_filter
     dest_l, dest_s = WORK / f"loops_{cell}.csv.gz", WORK / f"stripes_{cell}.csv.gz"
     if dest_l.exists() and dest_s.exists():

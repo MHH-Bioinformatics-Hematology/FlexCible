@@ -112,7 +112,7 @@ def stage1(res, gpu, workers):
     if not (cache / "manifest.json").exists():
         cp = OUT / f"{cache.name}.precompute.yaml"
         yaml.safe_dump(stage1_config(res, "all"), open(cp, "w"), sort_keys=False)
-        if sh([PY, "-m", "hicmultiome.precompute", "--config", cp, "--workers", workers],
+        if sh([PY, "-m", "flexcible.precompute", "--config", cp, "--workers", workers],
               OUT / f"{cache.name}.precompute.log"):
             raise SystemExit("precompute failed")
     for fold in FOLDS:
@@ -122,7 +122,7 @@ def stage1(res, gpu, workers):
             cp = OUT / f"{name}.yaml"
             yaml.safe_dump(stage1_config(res, fold), open(cp, "w"), sort_keys=False)
             log.write_text("")
-            sh([PY, "-m", "hicmultiome.train", "--config", cp], log, env)
+            sh([PY, "-m", "flexcible.train", "--config", cp], log, env)
             if not finished(log):
                 raise SystemExit(f"training failed: {name}")
     # predictions: each fold model on the other chromosomes, "all" everywhere
@@ -135,7 +135,7 @@ def stage1(res, gpu, workers):
         if not out.exists():
             part = out.with_name(out.name + ".part.cool")
             part.unlink(missing_ok=True)
-            if sh([PY, "-m", "hicmultiome.predict", "--config", ck / "config.yaml",
+            if sh([PY, "-m", "flexcible.predict", "--config", ck / "config.yaml",
                    "--checkpoint", ck, "--chroms", chroms, "--out", part, "--tta"],
                   OUT / f"{stage1_name(res, fold)}.predict.log", env):
                 raise SystemExit(f"prediction failed: {fold}")
@@ -273,7 +273,7 @@ def embedcheck(res, gpu):
     for mode in ("embedded", "explicit"):
         out = d / f"k562_chr2_{mode}.cool"
         if not out.exists():
-            cmd = [PY, "-m", "hicmultiome.predict", "--config", ck / "config.yaml",
+            cmd = [PY, "-m", "flexcible.predict", "--config", ck / "config.yaml",
                    "--checkpoint", ck, "--chroms", "chr2", "--bigwig-dir", bw,
                    "--cell", "k562", "--out", out, "--tta"]
             if mode == "explicit":

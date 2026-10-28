@@ -1,8 +1,8 @@
-"""Window prior network (registry section 76, hicmultiome/windowprior.py).
+"""Window prior network (registry section 76, flexcible/windowprior.py).
 
 Position-free (architecture, rolled signal, relabelled chromosomes), leakage (the reference of a sample
 never holds the sample, cooler metadata, cross-fitting folds), dref construction (identical to the
-reference rows of hicmultiome.diffmarks, own-marks mode, missing marks), production (blend, cooler
+reference rows of flexcible.diffmarks, own-marks mode, missing marks), production (blend, cooler
 round trip), the run configs of scripts/multicell_expanded.py (new families only, nothing else changes)."""
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hicmultiome import diffmarks as dm  # noqa: E402
-from hicmultiome import windowprior as wp  # noqa: E402
+from flexcible import diffmarks as dm  # noqa: E402
+from flexcible import windowprior as wp  # noqa: E402
 from test_diffmarks import MARKS, SAMPLES, cfg_of, world, _tracks, _write_bw  # noqa: E402,F401
 from test_pipeline import BINSIZE, CHROMS, workdir  # noqa: E402,F401
 
@@ -184,7 +184,7 @@ def test_crossfitting_folds_never_train_on_the_predicted_chromosome():
 def test_cooler_round_trip_and_leakage_guard(workdir, tmp_path):
     import cooler
 
-    from hicmultiome.reference import assert_reference_excludes, reference_block
+    from flexcible.reference import assert_reference_excludes, reference_block
     net = _net(2, 0, seed=3)
     rng = np.random.default_rng(2)
     accs, sizes = {}, {}
@@ -195,7 +195,7 @@ def test_cooler_round_trip_and_leakage_guard(workdir, tmp_path):
     out = wp.write_prior_cool(tmp_path / "p.cool", workdir / "target.cool", accs,
                               {"cells": ["s1", "s2"], "mode": "ref"})
     clr = cooler.Cooler(str(out))
-    from hicmultiome.matrix import MatrixNormalizer
+    from flexcible.matrix import MatrixNormalizer
     mn = MatrixNormalizer(transform="prescaled", scale=2.0)
     blk = reference_block(clr, "chr1", 20, 16, mn)
     acc = accs["chr1"]

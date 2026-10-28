@@ -16,7 +16,7 @@ planes) and, for reference models, the reference map:
   ('-+', one chromosome) repeat the segment, inversion junctions reverse a
   piece and translocations fuse two chromosomes. A reversed piece has its rows
   reversed and each motif's forward and reverse planes swapped
-  (hicmultiome.dataset.reverse_cond). The reference plane of the derivative
+  (flexcible.dataset.reverse_cond). The reference plane of the derivative
   holds each piece's own reference block (reversed with it) and the expected
   level (log O/E 0) between pieces.
 
@@ -72,8 +72,8 @@ def bundle(model: str, device: str, cell: str):
 def patient_rows(b, p: str):
     """sym rows per chromosome for patient p (crosscell_predict assembly)."""
     import cooler
-    from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+    from flexcible.tracks import TrackNormalizer
     cfg = b["cfg"]
     tn = TrackNormalizer.load(b["ck"] / "norm_tracks.json")
     absent = tn.absent_values()
@@ -129,7 +129,7 @@ def piece_cols(rows_of, piece, b):
 
 
 def piece_ref(cons, piece, b):
-    from hicmultiome.matrix import fetch_diagonal_window
+    from flexcible.matrix import fetch_diagonal_window
     chrom, s, e, rev = piece
     m = fetch_diagonal_window(cons, chrom, s, e - s)
     if rev:
@@ -139,7 +139,7 @@ def piece_ref(cons, piece, b):
 
 def run_model(b, cond_np, ref_np, device):
     import torch
-    from hicmultiome.dataset import reverse_cond, split_cond
+    from flexcible.dataset import reverse_cond, split_cond
     off, nm, size = b["offset"], b["n_motifs"], b["size"]
     cond = torch.from_numpy(np.ascontiguousarray(cond_np)[None]).to(device)
     pairs = cond[:, off:off + 2 * nm].reshape(1, nm, 2, size) if nm else None
@@ -173,7 +173,7 @@ def derivative_prediction(b, rows_of, cons, L, R, device):
 
 def normal_prediction(b, rows_of, cons, chrom, centre_bin, device):
     """Naive prediction of the reference window centred on a bin."""
-    from hicmultiome.matrix import fetch_diagonal_window
+    from flexcible.matrix import fetch_diagonal_window
     X = rows_of(chrom)
     size = b["size"]
     st = max(0, min(X.shape[1] - size, centre_bin - size // 2))
@@ -343,7 +343,7 @@ def run_patient(p: str, device: str) -> list[dict]:
                         ib = ib if B_ is L else ib + h
                         hits.append((min(ia, ib), max(ia, ib), x.gene))
             if hits:
-                from hicmultiome.bioscore import local_enrichment
+                from flexcible.bioscore import local_enrichment
                 from aml_eval import loop_params
                 prm = loop_params(RES)
                 eP = local_enrichment(np.exp(Pd), prm)

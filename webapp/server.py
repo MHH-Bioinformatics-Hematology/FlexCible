@@ -8,7 +8,7 @@ Endpoints
 A prediction returns both triangles of one square: the upper triangle is the
 comparison baseline (measured Hi-C, or the reference-sequence prediction) and
 the lower is the prediction for the requested edit/knockout, which is the
-layout `hicmultiome.combine` writes for HiGlass. The response also carries the
+layout `flexcible.combine` writes for HiGlass. The response also carries the
 edited-coordinate bookkeeping so the UI can draw the inserted or deleted
 stretch as a gap on the unedited side.
 
@@ -29,9 +29,9 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from hicmultiome.config import Config          # noqa: E402
-from hicmultiome.matrix import fetch_chrom_matrix  # noqa: E402
-from hicmultiome.utils import get_logger        # noqa: E402
+from flexcible.config import Config          # noqa: E402
+from flexcible.matrix import fetch_chrom_matrix  # noqa: E402
+from flexcible.utils import get_logger        # noqa: E402
 
 log = get_logger("webapp")
 app = FastAPI(title="Hi-C prediction explorer")
@@ -95,8 +95,8 @@ def api_config():
 
 @app.post("/api/predict")
 def api_predict(req: PredictIn):
-    from hicmultiome.combine import combine_matrices
-    from hicmultiome.predict import predict as run_predict
+    from flexcible.combine import combine_matrices
+    from flexcible.predict import predict as run_predict
 
     c = cfg()
     chrom, s, e = _parse_region(req.region)

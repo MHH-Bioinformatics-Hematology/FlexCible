@@ -33,7 +33,7 @@ def wd(tmp_path_factory):
 
 
 def test_bait_bed_adds_baits_without_interactions(wd):
-    from hicmultiome.capture import CaptureData
+    from flexcible.capture import CaptureData
 
     old = CaptureData(str(wd / "capture.txt"), "mifsud", 0.0)
     new = CaptureData(str(wd / "capture.txt"), "mifsud", 0.0,
@@ -46,7 +46,7 @@ def test_bait_bed_adds_baits_without_interactions(wd):
 
 
 def test_capture_planes_absent_encoding():
-    from hicmultiome.train import capture_planes
+    from flexcible.train import capture_planes
 
     tgt = torch.zeros(2, 2, 8, 8)
     tgt[:, 1] = 0.3
@@ -61,8 +61,8 @@ def test_capture_planes_absent_encoding():
 def test_capin_trains_with_val_regions_and_reverse(wd):
     """Capture-input model with Akita-style validation (val_regions) and
     reverse augmentation: validation feeds absent capture planes."""
-    from hicmultiome import precompute, train
-    from hicmultiome.config import Config
+    from flexcible import precompute, train
+    from flexcible.config import Config
 
     raw = {
         "data": {"samples": [{"name": "s", "cool_path": str(wd / "target.cool"),

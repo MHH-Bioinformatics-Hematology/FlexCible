@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import benchmark_competitors as bc                                   # noqa: E402
 import benchmark_metrics as bm                                       # noqa: E402
 import multicell_expanded as mx                                      # noqa: E402
-from hicmultiome import bioscore as bs                               # noqa: E402
-from hicmultiome.liftover import LiftOver                            # noqa: E402
+from flexcible import bioscore as bs                               # noqa: E402
+from flexcible.liftover import LiftOver                            # noqa: E402
 
 BLK = bc.OUT / "blocks"
 _LIFT = None

@@ -14,7 +14,7 @@ Normalisers: one shared TrackNormalizer across all samples (so signal levels
 are comparable and zero stays "absent"), one MatrixNormalizer per sample
 (sequencing depth differs), one CaptureNormalizer per capture-bearing sample.
 
-CLI:  python -m hicmultiome.precompute --config configs/multicell_25kb.yaml
+CLI:  python -m flexcible.precompute --config configs/multicell_25kb.yaml
 """
 from __future__ import annotations
 
@@ -228,7 +228,7 @@ def assemble_chrom(
         parts.append(np.full((1, nb), float(sample.lab == c), dtype=np.float32))
     mmeth = None
     if cfg.motif_meth_active:
-        # methylation-weighted motif pair + covered fraction (hicmultiome.motifmeth)
+        # methylation-weighted motif pair + covered fraction (flexcible.motifmeth)
         mmeth = (mm.methylated_motif_tracks(
             fasta, chrom, cfg.motifs.motif_meth_id, cfg.motifs.dir, nb, cfg.data.resolution,
             cfg.motifs.score_frac, cfg.sequence.cache_dir,
@@ -236,7 +236,7 @@ def assemble_chrom(
             if fasta else np.zeros((3, nb), dtype=np.float32))
         parts.append(mmeth[2:3])
     if cfg.data.diff_marks:
-        # reference and differential mark rows (hicmultiome.diffmarks); final values, they bypass
+        # reference and differential mark rows (flexcible.diffmarks); final values, they bypass
         # the track normaliser (TrackNormalizer.passthrough)
         parts.append(dm.diff_rows(cfg, sample, chrom, nb))
     if not fasta and cfg.any_fasta and cfg.active_motif_ids:

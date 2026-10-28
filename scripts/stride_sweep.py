@@ -133,8 +133,8 @@ def main():
               f"{a.minutes} min on GPU(s) {gpus}", flush=True)
         t0 = time.time()
         cmd = ([torchrun, "--standalone", f"--nproc_per_node={ngpu}",
-                "-m", "hicmultiome.train", "--config", str(cfg_path)] if ngpu > 1
-               else [py, "-m", "hicmultiome.train", "--config", str(cfg_path)])
+                "-m", "flexcible.train", "--config", str(cfg_path)] if ngpu > 1
+               else [py, "-m", "flexcible.train", "--config", str(cfg_path)])
         tlog = _run(cmd, outdir / f"s{stride}.train.log", env)
         train_min = (time.time() - t0) / 60.0
 

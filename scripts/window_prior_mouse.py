@@ -50,8 +50,8 @@ def pcool(res: int, tag: str, cell: str) -> Path:
 def stage_cools(a):
     import cooler
 
-    from hicmultiome import diffmarks as dmk
-    from hicmultiome.windowprior import mark_rows, predict_chrom, write_prior_cool
+    from flexcible import diffmarks as dmk
+    from flexcible.windowprior import mark_rows, predict_chrom, write_prior_cool
     cfg = wpr.base_cfg(a.res)
     base = copy.deepcopy(cfg.data.samples[0])
     samples = []

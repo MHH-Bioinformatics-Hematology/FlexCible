@@ -140,7 +140,7 @@ def ensure_cache(res, kind, workers=8) -> Path:
         cp = OUT / f"{cache.name}.precompute.yaml"
         yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
         print(f"[precompute] {cache.name}", flush=True)
-        if ri.sh([PY, "-m", "hicmultiome.precompute", "--config", cp, "--workers", workers],
+        if ri.sh([PY, "-m", "flexcible.precompute", "--config", cp, "--workers", workers],
                  OUT / f"{cache.name}.precompute.log", mode="w"):
             raise RuntimeError(f"precompute failed for {cache.name}")
     return cache
@@ -215,7 +215,7 @@ def train_one(name, gpu, a):
         cp = OUT / f"{name}.yaml"
         yaml.safe_dump(run_config(name, a), open(cp, "w"), sort_keys=False)
         print(f"[train] {name} on GPU {gpu}", flush=True)
-        ri.sh([PY, "-m", "hicmultiome.train", "--config", cp], log_of(name), env, mode="w")
+        ri.sh([PY, "-m", "flexcible.train", "--config", cp], log_of(name), env, mode="w")
         if not finished(name):
             print(f"[FAILED] {name}", flush=True)
             return

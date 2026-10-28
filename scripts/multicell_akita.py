@@ -263,7 +263,7 @@ def main():
         cache = Path(cfg["train"]["cache_dir"])
         if a.stage in ("precompute", "all") and not (cache / "manifest.json").exists():
             print(f"[precompute] {name}", flush=True)
-            if sh([PY, "-m", "hicmultiome.precompute", "--config", cp],
+            if sh([PY, "-m", "flexcible.precompute", "--config", cp],
                   OUT / f"{name}.precompute.log"):
                 raise SystemExit(f"precompute failed for {name}")
         log = OUT / f"{name}.log"
@@ -273,7 +273,7 @@ def main():
             log.write_text("")
             env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
             sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
-                "-m", "hicmultiome.train", "--config", cp], log, env)
+                "-m", "flexcible.train", "--config", cp], log, env)
             if not done(log):
                 raise SystemExit(f"training failed for {name}; see {log}")
         # a run cut off by the max_epochs cap while still improving continues
@@ -304,7 +304,7 @@ def main():
             n0 = len(STOP_RE.findall((OUT / f"{name}.cont.log").read_text(errors="replace"))
                      if (OUT / f"{name}.cont.log").exists() else [])
             sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
-                "-m", "hicmultiome.train", "--config", ccp], OUT / f"{name}.cont.log", env)
+                "-m", "flexcible.train", "--config", ccp], OUT / f"{name}.cont.log", env)
             if len(STOP_RE.findall((OUT / f"{name}.cont.log").read_text(errors="replace"))) <= n0:
                 raise SystemExit(f"continuation failed for {name}")
         if a.stage in ("eval", "all"):

@@ -1,5 +1,5 @@
 """Per-cell CpG files for the methylation-aware CTCF motif planes
-(motifs.motif_meth, hicmultiome.motifmeth; registry section 43).
+(motifs.motif_meth, flexcible.motifmeth; registry section 43).
 
 The planes read <HM>/meth/<cell>/CpG.npz next to the cell's Meth.bigwig (a
 sample's extra_bigwig_dirs). The file is the CpG-level methylation table that
@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 import methylation as me                                            # noqa: E402
 import multicell_expanded as mx                                     # noqa: E402
-from hicmultiome.motifmeth import CPG_FILE                          # noqa: E402
+from flexcible.motifmeth import CPG_FILE                          # noqa: E402
 
 SRC = mx.HM / "runs/chip_meth_rel/cpg"
 

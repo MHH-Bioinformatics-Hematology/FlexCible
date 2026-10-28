@@ -9,7 +9,7 @@ HBM=/home/mh-hannover.local/wolffjoa/src/HiCExplorer-v4/cpp/build/tools/hicBuild
 IDX=/mnt/processed/wolffjoa/hic-multiome/minibwa_index/hg38
 W=/mnt/processed/wolffjoa/hic-multiome/crosscell_raw
 OUT=/mnt/processed/wolffjoa/hic-multiome/crosscell_oe
-CODE=/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet
+CODE=/home/mh-hannover.local/wolffjoa/src/flexcible
 mkdir -p "$W"
 cd "$CODE"
 
@@ -64,7 +64,7 @@ build rep2 ENCFF126WCO ENCFF244GNV
 import cooler,numpy as np,pandas as pd,warnings; warnings.filterwarnings('ignore')
 from scipy.stats import pearsonr
 import sys; sys.path.insert(0,'scripts'); import score_like_hicgan as sc
-from hicmultiome.genome import match_name
+from flexcible.genome import match_name
 OUT="/mnt/processed/wolffjoa/hic-multiome/crosscell_oe"
 a=cooler.Cooler(f"{OUT}/hmec_rep1_proper_2kb.cool"); b=cooler.Cooler(f"{OUT}/hmec_rep2_proper_2kb.cool")
 reg=pd.read_csv(sc.REGIONS,sep='\t',names=['chrom','start','end']); rs=[]

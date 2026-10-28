@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hicmultiome import bioscore as bs
+from flexcible import bioscore as bs
 
 
 # --------------------------------------------------------------------------- #

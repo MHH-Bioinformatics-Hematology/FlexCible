@@ -1,14 +1,14 @@
 """Cell-specific loops and stripes of every training cell line, with matched shared controls (registry 66).
 
 All-cell generalisation of the AML objects table (scripts/aml_objects_table.py, registry section 63):
-the same table columns, so hicmultiome/aml_objects.py and the trainer read it unchanged
+the same table columns, so flexcible/aml_objects.py and the trainer read it unchanged
 (train.object_scope "all": data.cell_objects_table beside data.aml_objects_table).
 
 The rule "this chromatin pattern leads to a loop / stripe" is cell-type independent, so the objects
 of a cell are defined by one cell-agnostic procedure from its own Hi-C and its reference, the map the
 model also reads (leave-one-out consensus of the other 11 training cells; the 12-cell consensus for a
 held-out cell). Definitions follow scripts/aml_loop_classifier.py (donut enrichment of
-hicmultiome.bioscore, 10 kb, inner 1 / outer 4, local maxima, 6 to 150 bins; stripe rectangle of an
+flexcible.bioscore, 10 kb, inner 1 / outer 4, local maxima, 6 to 150 bins; stripe rectangle of an
 anchor and an extent block, mean log O/E) with the thresholds below. The functions are separable on
 purpose: `loop_peaks`, `stripe_scores`, `classify_*` and `match_controls` take arrays, so that a
 unified object definition (scripts/crosscell_rule_transfer.py, being developed elsewhere; not present
@@ -105,7 +105,7 @@ def table_path(heldout: bool = False) -> Path:
 # =============================================================== pure functions (arrays in, arrays out)
 def donut_log2(M: np.ndarray) -> np.ndarray:
     """log2 donut enrichment of a log O/E window (the classifier's setting: no coarsening, ring 1 to 4)."""
-    from hicmultiome.bioscore import BioParams, local_enrichment
+    from flexcible.bioscore import BioParams, local_enrichment
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
     with np.errstate(invalid="ignore", divide="ignore"):
         return np.log2(local_enrichment(np.exp(M), prm))
@@ -224,7 +224,7 @@ def near_any(chrom_bins: np.ndarray, centers: np.ndarray, rad: int = NEAR) -> np
 
 # =============================================================== Hi-C stage (one cell)
 def _fetch(clr, chrom: str, s: int, e: int, size_bins: int) -> np.ndarray:
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     name = match_name(chrom, list(clr.chromnames))
     size = int(clr.chromsizes[name])
     M = np.asarray(clr.matrix(balance=False).fetch(f"{name}:{s * RES}-{min(e * RES, size)}"), np.float64)
@@ -241,7 +241,7 @@ def call_cell(target: str, reference: str, chroms: list[str] = AUTOSOMES) -> dic
     (autosomes). Returns {"loops": DataFrame(chrom, i, j, e_cell, e_ref),
     "stripes": {chrom: (s_cell_right, s_cell_left, s_ref_right, s_ref_left)}}."""
     import cooler
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     ct, cr = cooler.Cooler(str(target)), cooler.Cooler(str(reference))
     loops, stripes = [], {}
     for chrom in chroms:
@@ -284,7 +284,7 @@ def calls_path(cell: str, work: Path = WORK) -> Path:
 # =============================================================== tables
 def marks_of(cell: str, chrom: str, nb: int, bw_dir: Path) -> dict:
     """10 kb means of the cell's CTCF and H3K27ac (NaN arrays when a mark is absent)."""
-    from hicmultiome.tracks import read_track_binned
+    from flexcible.tracks import read_track_binned
     out = {}
     for m in ("CTCF", "H3K27ac"):
         f = Path(bw_dir) / f"{m}.bigwig"
@@ -417,7 +417,7 @@ def assert_no_leak(d: pd.DataFrame, heldout: bool = False) -> None:
         assert not got & set(mx.TRAIN12), f"held-out table with training cells {sorted(got & set(mx.TRAIN12))}"
     else:
         assert got <= set(mx.TRAIN12), f"training table with non-training cells {sorted(got - set(mx.TRAIN12))}"
-        from hicmultiome.reference import cell_identity
+        from flexcible.reference import cell_identity
         held = {cell_identity(c) for c in mx.TEST}
         assert not {cell_identity(c) for c in got} & held, "training table with a held-out cell identity"
     assert set(d.role) <= {"pos", "ctrl"}

@@ -8,7 +8,7 @@ then calls pyGenomeTracks. Handles the cool('2') vs bigwig('chr2') naming
 mismatch by resolving each file's convention and writing the track as a bedgraph
 with the cool's chromosome name.
 
-CLI:  python -m hicmultiome.plot --config configs/ctcf_256.yaml \
+CLI:  python -m flexcible.plot --config configs/ctcf_256.yaml \
           --pred runs/ctcf_256/pred_even.cool \
           --region chr2:18000000-25000000 --out runs/ctcf_256/chr2_18-25Mb.png
 """

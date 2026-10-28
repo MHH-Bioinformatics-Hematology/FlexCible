@@ -47,7 +47,7 @@ target ("measured map, balanced counts") is the cost of the round trip
 through the clipped, smoothed O/E target.
 
 Whole chromosomes. Predictions are tiled over whole chromosomes by
-hicmultiome.predict (half-window stride, Hann-weighted averaging, test-time
+flexcible.predict (half-window stride, Hann-weighted averaging, test-time
 reverse averaging). Every map is limited to the model window's band (2.0 Mb at
 25 kb, 1.92 Mb at 10 kb), so a chromosome-wide E1 of a prediction can only be
 built from contacts within the band (the compartment measures above).
@@ -556,7 +556,7 @@ def parse_subset(name: str) -> list[str]:
 # = "hic_measures"; API fixed: combined_score(maps, res) -> float)
 # ===================================================================== #
 COMBINED_GROUPS = {
-    # structure level: window measures (hicmultiome.structure, plus the
+    # structure level: window measures (flexcible.structure, plus the
     # pooled per-distance Pearson AUC and the boundary-count agreement)
     "pixels": ("pearson", "scc", "pearson_auc"),
     "tads": ("insulation_corr", "boundary_f1", "tad_fraction_agreement"),
@@ -567,8 +567,8 @@ COMBINED_GROUPS = {
 
 def combined_parts(maps, res: int) -> dict:
     """Every term of combined_score: per-window medians of the
-    hicmultiome.structure measures and two pooled terms."""
-    from hicmultiome.structure import boundaries, insulation, structure_metrics
+    flexcible.structure measures and two pooled terms."""
+    from flexcible.structure import boundaries, insulation, structure_metrics
     rows, nt, npb = [], 0, 0
     pd_x: dict[int, list] = {}
     pd_y: dict[int, list] = {}
@@ -751,7 +751,7 @@ def predict_one(model: str, res: int, cell: str, threads: int, gpu: str = "") ->
     try:
         cfg = MR / f"{model}_{res // 1000}kb.yaml"
         ck = run_dir(model, res) / "checkpoint-best"
-        cmd = [PY, "-m", "hicmultiome.predict", "--config", str(cfg), "--checkpoint", str(ck),
+        cmd = [PY, "-m", "flexcible.predict", "--config", str(cfg), "--checkpoint", str(ck),
                "--chroms", ",".join(pred_chroms(cell)), "--tta", "--out", str(out) + ".tmp"]
         if cell in HELDOUT:
             cmd += ["--sample", "gm12878", "--bigwig-dir", str(BIGWIG[cell]), "--cell", cell]
@@ -2125,7 +2125,7 @@ def chrho_predict_one(model: str, res: int, cell: str, threads: int, gpu: str = 
     try:
         cfg = MR / f"{model}_{res // 1000}kb.yaml"
         ck = run_dir(model, res) / "checkpoint-best"
-        cmd = [PY, "-m", "hicmultiome.predict", "--config", str(cfg), "--checkpoint", str(ck),
+        cmd = [PY, "-m", "flexcible.predict", "--config", str(cfg), "--checkpoint", str(ck),
                "--chroms", ",".join(CHRHO_HELD), "--tta", "--out", str(out) + ".tmp"]
         if cell in HELDOUT:
             cmd += ["--sample", "gm12878", "--bigwig-dir", str(BIGWIG[cell]), "--cell", cell]

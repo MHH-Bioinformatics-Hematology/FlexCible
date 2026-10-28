@@ -212,7 +212,7 @@ def precompute(workers):
         cp = OUT / f"{cache.name}.precompute.yaml"
         yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
         print(f"[precompute] {cache.name}", flush=True)
-        if sh([PY, "-m", "hicmultiome.precompute", "--config", cp, "--workers", workers],
+        if sh([PY, "-m", "flexcible.precompute", "--config", cp, "--workers", workers],
               OUT / f"{cache.name}.precompute.log"):
             raise SystemExit(f"precompute failed for {cache.name}")
 
@@ -229,7 +229,7 @@ def train_one(name, tracks, motifs, gpu, a):
         cp = OUT / f"{name}.yaml"
         yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
         print(f"[train] {name} on GPU {gpu}", flush=True)
-        sh([PY, "-m", "hicmultiome.train", "--config", cp], log_of(name), env, mode="w")
+        sh([PY, "-m", "flexcible.train", "--config", cp], log_of(name), env, mode="w")
         if not finished(name):
             print(f"[FAILED] {name}", flush=True)
             return

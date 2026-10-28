@@ -255,9 +255,9 @@ def stage_train(run: str, gpus: str):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpus)
     if len(g) > 1:
         cmd = [TORCHRUN, "--standalone", f"--nproc_per_node={len(g)}", "-m",
-               "hicmultiome.train", "--config", cp]
+               "flexcible.train", "--config", cp]
     else:
-        cmd = [PY, "-m", "hicmultiome.train", "--config", cp]
+        cmd = [PY, "-m", "flexcible.train", "--config", cp]
     rc = sh(cmd, lf, env)
     log(f"train {run} rc={rc}")
     if rc:

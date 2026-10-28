@@ -29,14 +29,14 @@ import numpy as np                                                  # noqa: E402
 import torch                                                        # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                               # noqa: E402
-from hicmultiome.genome import match_name                           # noqa: E402
-from hicmultiome.matrix import MatrixNormalizer, open_cool          # noqa: E402
-from hicmultiome.model import build_spatial_cond                    # noqa: E402
-from hicmultiome.precompute import (assemble_chrom, chrom_nbins_of,
+from flexcible.config import Config                               # noqa: E402
+from flexcible.genome import match_name                           # noqa: E402
+from flexcible.matrix import MatrixNormalizer, open_cool          # noqa: E402
+from flexcible.model import build_spatial_cond                    # noqa: E402
+from flexcible.precompute import (assemble_chrom, chrom_nbins_of,
                                     sample_track_files)             # noqa: E402
-from hicmultiome.tracks import TrackNormalizer                      # noqa: E402
-from hicmultiome.utils import get_logger                            # noqa: E402
+from flexcible.tracks import TrackNormalizer                      # noqa: E402
+from flexcible.utils import get_logger                            # noqa: E402
 from scripts.score_like_hicgan import load_model                    # noqa: E402
 
 RAST = ("/mnt/processed/wolffjoa/restart_of_prediction_project/"

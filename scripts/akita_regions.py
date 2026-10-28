@@ -24,8 +24,8 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                                  # noqa: E402
-from hicmultiome.genome import (merge_regions, read_bed_regions,
+from flexcible.config import Config                                  # noqa: E402
+from flexcible.genome import (merge_regions, read_bed_regions,
                                 resolve_chroms, window_region_state)   # noqa: E402
 
 URL = "https://storage.googleapis.com/basenji_hic/1m/data/sequences.bed"
@@ -87,7 +87,7 @@ def main():
     if a.config:
         import cooler
 
-        from hicmultiome.matrix import open_cool, plan_windows
+        from flexcible.matrix import open_cool, plan_windows
 
         cfg = Config.load(a.config)
         hold = read_bed_regions(cfg.data.holdout_bed) if cfg.data.holdout_bed else None

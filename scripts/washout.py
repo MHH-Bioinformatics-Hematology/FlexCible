@@ -137,9 +137,9 @@ def stage_predict():
     import hard_split as hs
     import perturb_validate as pv
     import score_like_hicgan as sc
-    from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-    from hicmultiome.reference import reference_block
-    from hicmultiome.tracks import TrackNormalizer
+    from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+    from flexcible.reference import reference_block
+    from flexcible.tracks import TrackNormalizer
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     regs = pd.read_csv(sc.REGIONS, sep="\t", usecols=[0, 1, 2], names=["chrom", "start", "end"])

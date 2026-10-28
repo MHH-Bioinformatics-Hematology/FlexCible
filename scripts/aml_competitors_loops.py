@@ -510,7 +510,7 @@ def stage_score(only) -> None:
     import cooler
     from aml_eval import fetch_region, pred_matrix
     from aml_loop_detection import enrich_maps
-    from hicmultiome.bioscore import BioParams
+    from flexcible.bioscore import BioParams
     import multicell_expanded as mx
     prm = BioParams(loop_coarsen=1, donut_inner=1, donut_outer=4)
     T = pd.read_csv(SRC, dtype={"patient": str})

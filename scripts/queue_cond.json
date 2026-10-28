@@ -4,7 +4,7 @@
     {
       "name": "cond_full_25kb",
       "config": "configs/cond_full_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/cond_full_25kb/pred_even.cool",
@@ -13,7 +13,7 @@
     {
       "name": "cond_pair_dist_25kb",
       "config": "configs/cond_pair_dist_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/cond_pair_dist_25kb/pred_even.cool",
@@ -22,7 +22,7 @@
     {
       "name": "cond_pair_25kb",
       "config": "configs/cond_pair_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/cond_pair_25kb/pred_even.cool",
@@ -31,7 +31,7 @@
     {
       "name": "cond_tile_dist_25kb",
       "config": "configs/cond_tile_dist_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/cond_tile_dist_25kb/pred_even.cool",
@@ -40,7 +40,7 @@
     {
       "name": "cond_tile_25kb",
       "config": "configs/cond_tile_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/cond_tile_25kb/pred_even.cool",
@@ -49,7 +49,7 @@
     {
       "name": "flipref_25kb",
       "config": "configs/flipref_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/flipref_25kb/pred_even.cool",

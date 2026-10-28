@@ -42,7 +42,7 @@ def main():
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=GPUS)
     torchrun = str(Path(PY).parent / "torchrun")
     cmd = [torchrun, "--standalone", "--nproc_per_node=2",
-           "-m", "hicmultiome.train", "--config", CONFIG]
+           "-m", "flexcible.train", "--config", CONFIG]
     print("  " + " ".join(cmd), flush=True)
     rc = subprocess.run(cmd, cwd=ROOT, env=env).returncode
     print(f"[retrain] training exit {rc}", flush=True)

@@ -39,13 +39,13 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 import score_like_hicgan as slh  # noqa: E402
 
-from hicmultiome.config import Config  # noqa: E402
-from hicmultiome.genome import match_name  # noqa: E402
-from hicmultiome.matrix import MatrixNormalizer, open_cool  # noqa: E402
-from hicmultiome.model import build_spatial_cond  # noqa: E402
-from hicmultiome.precompute import (assemble_chrom, chrom_nbins_of,  # noqa: E402
+from flexcible.config import Config  # noqa: E402
+from flexcible.genome import match_name  # noqa: E402
+from flexcible.matrix import MatrixNormalizer, open_cool  # noqa: E402
+from flexcible.model import build_spatial_cond  # noqa: E402
+from flexcible.precompute import (assemble_chrom, chrom_nbins_of,  # noqa: E402
                                     sample_track_files)
-from hicmultiome.tracks import TrackNormalizer  # noqa: E402
+from flexcible.tracks import TrackNormalizer  # noqa: E402
 
 RASTERS = Path("/mnt/processed/wolffjoa/restart_of_prediction_project/"
                "akita_normalization/akita_testset_rasters.npz")

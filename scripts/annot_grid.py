@@ -112,7 +112,7 @@ def main():
             env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
             with open(log, "w") as fh:
                 subprocess.run([torchrun, "--standalone", f"--nproc_per_node={len(gpus)}",
-                                "-m", "hicmultiome.train", "--config", str(cp)],
+                                "-m", "flexcible.train", "--config", str(cp)],
                                stdout=fh, stderr=subprocess.STDOUT, env=env)
             t = log.read_text(errors="replace")
         v = best_val(t)

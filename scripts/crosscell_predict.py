@@ -30,13 +30,13 @@ from scipy.stats import pearsonr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc
-from hicmultiome import motifmeth as mm
-from hicmultiome.config import Config
-from hicmultiome.genome import match_name
-from hicmultiome.matrix import MatrixNormalizer, open_cool
-from hicmultiome.reference import assert_reference_excludes
-from hicmultiome.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
-from hicmultiome.tracks import TrackNormalizer
+from flexcible import motifmeth as mm
+from flexcible.config import Config
+from flexcible.genome import match_name
+from flexcible.matrix import MatrixNormalizer, open_cool
+from flexcible.reference import assert_reference_excludes
+from flexcible.precompute import assemble_chrom, chrom_nbins_of, sample_track_files
+from flexcible.tracks import TrackNormalizer
 
 
 def coarse_score(M, start, end, fine_res, cres, cclr, chrom):
@@ -108,7 +108,7 @@ def main():
                          "for this cell (default: the cell's own samples[].prior_cool)")
     ap.add_argument("--structure", action="store_true",
                     help="also score TAD, loop and compartment measures per region "
-                         "(hicmultiome.structure), for the model (struct_*) and for "
+                         "(flexcible.structure), for the model (struct_*) and for "
                          "every --others map named consensus* (struct_<name>_*)")
     ap.add_argument("--save-pred", default=None,
                     help="also write every region's prediction (target grid) to this npz")
@@ -159,7 +159,7 @@ def main():
     row_of = {t: i for i, t in enumerate(channels["tracks"])}
     sel_rows = None                              # model trained on a subset of the cond rows
     if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
-        from hicmultiome.train import _select_rows
+        from flexcible.train import _select_rows
         sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
     mat_norm = MatrixNormalizer.load(ckpt / f"norm_matrix_{cfg.get_sample(None).name}.json")
     track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
@@ -224,7 +224,7 @@ def main():
 
     def frac_z(f):
         return float(track_norm.apply(np.full((len(track_norm.mean), 1), f, np.float32))[frac_i, 0])
-    import hicmultiome.diffmarks as dmk
+    import flexcible.diffmarks as dmk
     if cfg.data.diff_marks:
         dmk.configure_unseen(cfg, sample, a.cell, a.diff_group)
 
@@ -238,8 +238,8 @@ def main():
         # --reference, else the cell's own training reference (a leave-one-out
         # map for a training cell), else the map embedded in the checkpoint
         # (model.embed_reference), else data.reference_cool; never a map that
-        # contains this cell (hicmultiome.reference.resolve_reference)
-        from hicmultiome.reference import open_reference, resolve_reference
+        # contains this cell (flexcible.reference.resolve_reference)
+        from flexcible.reference import open_reference, resolve_reference
         try:
             ref_path = resolve_reference(cfg, ckpt, a.cell, a.reference)
         except ValueError as e:
@@ -342,12 +342,12 @@ def main():
             st = max(0, min(nb - size, centre - size // 2))
             ref = None
             if ref_clr is not None:
-                from hicmultiome.reference import reference_block
+                from flexcible.reference import reference_block
                 ref = torch.from_numpy(
                     reference_block(ref_clr, chrom, st, size, mat_norm)[None]).to(device)
             prior = None
             if prior_clr is not None:
-                from hicmultiome.reference import prior_block
+                from flexcible.reference import prior_block
                 prior = torch.from_numpy(
                     prior_block(prior_clr, chrom, st, size, res, mat_norm)[None]).to(device)
             seq = (sc.region_onehot(fasta, tname, st, size, res, device) if use_seq else None)
@@ -364,7 +364,7 @@ def main():
                 except Exception:
                     continue
                 if O.shape == T.shape and a.structure and oc.startswith("consensus"):
-                    from hicmultiome.structure import structure_metrics
+                    from flexcible.structure import structure_metrics
                     sm_o = structure_metrics(np.where(O == 0, np.nan, O),
                                              np.where(T == 0, np.nan, T), tgt.binsize)
                     base_rec.update({f"struct_{oc}_{k}": v for k, v in sm_o.items()})
@@ -384,7 +384,7 @@ def main():
                 with torch.no_grad():
                     o = model(cond, pairs, None, seq, ref, prior=prior)
                     if a.tta:
-                        from hicmultiome.dataset import reverse_cond, split_cond
+                        from flexcible.dataset import reverse_cond, split_cond
                         cr = reverse_cond(cond, offset, n_motifs)
                         srr, prr = split_cond(cr, offset, n_motifs)
                         refr = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
@@ -406,7 +406,7 @@ def main():
                 if ok.sum() > 100 and M[ok].std() > 0 and Tm[ok].std() > 0:
                     rec["model"] = float(pearsonr(M[ok], Tm[ok]).statistic)
                 if a.structure:
-                    from hicmultiome.structure import structure_metrics
+                    from flexcible.structure import structure_metrics
                     rec.update({f"struct_{k}": v for k, v in
                                 structure_metrics(M, Tm, tgt.binsize).items()})
                 # the same prediction averaged onto coarser grids, scored there; only

@@ -25,7 +25,7 @@ from scipy.stats import pearsonr
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score_like_hicgan as sc          # REGIONS, match_name
-from hicmultiome.genome import match_name
+from flexcible.genome import match_name
 
 
 def region_mat(clr, chrom, start, end):

@@ -4,7 +4,7 @@
     {
       "name": "multiome_5kb",
       "config": "configs/multiome_5kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_5kb",
       "cache_manifest": "cache/multiome_5kb/manifest.json",
       "pred_out": "runs/multiome_5kb/pred_even.cool",
@@ -16,7 +16,7 @@
     {
       "name": "multiome_2kb",
       "config": "configs/multiome_2kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_2kb",
       "cache_manifest": "cache/multiome_2kb/manifest.json",
       "pred_out": "runs/multiome_2kb/pred_even.cool",

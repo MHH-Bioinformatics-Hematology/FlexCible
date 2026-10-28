@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from hicmultiome.losses import build_loss, dcorr, scc, scc_loss, ssim
+from flexcible.losses import build_loss, dcorr, scc, scc_loss, ssim
 
 
 def _reference_scc(pred, target, max_dist=None):
@@ -160,14 +160,14 @@ def test_hicrep_weighting_chases_noise_in_obs_exp_space():
 
 
 def _strata_index_for_test(w, device):
-    from hicmultiome.losses import _strata_index
+    from flexcible.losses import _strata_index
     return _strata_index(w, w, 1, device)
 
 
 def test_grad_loss_punishes_blur():
     """A blurred version of the target must cost more than the target itself."""
     from scipy.ndimage import gaussian_filter
-    from hicmultiome.losses import grad_loss, hf_energy_loss
+    from flexcible.losses import grad_loss, hf_energy_loss
     t = torch.from_numpy(_maps(20))
     blurred = torch.from_numpy(
         np.stack([gaussian_filter(m, 2.0) for m in t.numpy()]))
@@ -180,7 +180,7 @@ def test_grad_loss_punishes_blur():
 def test_grad_loss_also_punishes_invented_texture():
     """Not just a blur detector: adding noise the target does not have must
     also cost, or the model would be rewarded for hallucinating detail."""
-    from hicmultiome.losses import grad_loss
+    from flexcible.losses import grad_loss
     t = torch.from_numpy(_maps(21))
     g = np.random.default_rng(0)
     noisy = t + torch.from_numpy(g.normal(scale=0.3, size=t.shape).astype("float32"))
@@ -188,7 +188,7 @@ def test_grad_loss_also_punishes_invented_texture():
 
 
 def test_grad_term_composes_and_is_differentiable():
-    from hicmultiome.losses import build_loss
+    from flexcible.losses import build_loss
     p = torch.from_numpy(_maps(22)).requires_grad_(True)
     t = torch.from_numpy(_maps(23))
     loss = build_loss("l1+mse+0.5*grad+0.2*hf")(p, t)
@@ -209,7 +209,7 @@ def _tad_map(n=64, bnd=(20, 42), seed=0):
 
 
 def test_insulation_profile_dips_at_a_boundary():
-    from hicmultiome.losses import insulation_profile_t
+    from flexcible.losses import insulation_profile_t
     m = torch.from_numpy(_tad_map()[None])
     prof = insulation_profile_t(m, window=8)[0].numpy()
     # boundaries sit at bins 20 and 42; the profile is offset by `window`
@@ -218,7 +218,7 @@ def test_insulation_profile_dips_at_a_boundary():
 
 
 def test_insulation_loss_zero_on_identity_and_positive_otherwise():
-    from hicmultiome.losses import insulation_loss
+    from flexcible.losses import insulation_loss
     a = torch.from_numpy(_tad_map(seed=1)[None])
     b = torch.from_numpy(_tad_map(bnd=(10, 55), seed=2)[None])
     assert insulation_loss(a, a).item() < 1e-5
@@ -229,7 +229,7 @@ def test_donut_loss_sees_a_focal_peak_that_l1_barely_notices():
     """A sharp loop and a smooth bump of equal mass look similar to L1 but
     must not look similar to the donut term."""
     from scipy.ndimage import gaussian_filter
-    from hicmultiome.losses import donut_loss
+    from flexcible.losses import donut_loss
     base = _tad_map(seed=3)
     focal = base.copy()
     focal[30, 50] += 2.0
@@ -243,7 +243,7 @@ def test_donut_loss_sees_a_focal_peak_that_l1_barely_notices():
 
 
 def test_structure_terms_compose_and_backprop():
-    from hicmultiome.losses import build_loss
+    from flexcible.losses import build_loss
     p = torch.from_numpy(_tad_map(seed=4)[None]).requires_grad_(True)
     t = torch.from_numpy(_tad_map(seed=5)[None])
     loss = build_loss("l1+mse+0.3*insul+0.3*donut")(p, t)
@@ -255,8 +255,8 @@ def test_compartment_loss_and_structure_measures():
     import numpy as np
     import torch
 
-    from hicmultiome.losses import build_loss, compartment_loss
-    from hicmultiome.structure import rank_combined, selection_values, structure_metrics
+    from flexcible.losses import build_loss, compartment_loss
+    from flexcible.structure import rank_combined, selection_values, structure_metrics
     g = torch.Generator().manual_seed(0)
     n = 48
     sign = torch.tensor([1.0 if (i // 8) % 2 == 0 else -1.0 for i in range(n)])

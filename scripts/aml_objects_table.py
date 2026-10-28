@@ -2,7 +2,7 @@
 
 Per fold (10, 11, 12 of results/aml_train/split_v2.json) the AML-specific loops and stripes of
 the TRAINING patients of the fold and their matched shared controls, with genomic coordinates,
-for train.aml_object_* (hicmultiome/aml_objects.py).
+for train.aml_object_* (flexcible/aml_objects.py).
 
 Source: the objects and matched controls of the loop classifier (scripts/aml_loop_classifier.py,
 results/aml_loop_classifier/features.csv.gz, 10 kb): AML-specific loops of Xu et al. 2022

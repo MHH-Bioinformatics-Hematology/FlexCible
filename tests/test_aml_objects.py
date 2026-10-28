@@ -16,8 +16,8 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hicmultiome import aml_objects as ao  # noqa: E402
-from hicmultiome.config import Config  # noqa: E402
+from flexcible import aml_objects as ao  # noqa: E402
+from flexcible.config import Config  # noqa: E402
 from test_pipeline import BINSIZE, MOTIF, workdir  # noqa: E402,F401  (fixture)
 
 FOLD_TEST = {10: ["018", "027", "270"], 11: ["168", "546", "629", "1360"], 12: ["472", "773", "1916"]}
@@ -331,8 +331,8 @@ def _smoke_table(path):
 def test_smoke_training_with_all_flags(workdir, caplog):
     import logging
 
-    from hicmultiome import precompute as hprep
-    from hicmultiome import train as htrain
+    from flexcible import precompute as hprep
+    from flexcible import train as htrain
 
     tab = workdir / "objects_smoke.csv"
     _smoke_table(tab)

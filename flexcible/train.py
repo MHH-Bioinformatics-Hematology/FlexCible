@@ -3,9 +3,9 @@
 Multi-GPU: launch with torchrun, one process per GPU; the window cache is small
 enough that every rank keeps its own stripe fully resident on its GPU:
 
-    torchrun --nproc_per_node=2 -m hicmultiome.train --config configs/multiome_25kb.yaml
+    torchrun --nproc_per_node=2 -m flexcible.train --config configs/multiome_25kb.yaml
 
-Single GPU:  python -m hicmultiome.train --config configs/multiome_25kb.yaml
+Single GPU:  python -m flexcible.train --config configs/multiome_25kb.yaml
 
 Loss: L1+MSE on the Hi-C channel, plus (when capture data is configured) a
 bait-masked L1+MSE on the capture-Hi-C channel weighted by
@@ -161,7 +161,7 @@ def _stack(cache_dir, split, val_fraction, want_val, seed, chroms=None,
     if stage_dir is not None:
         d = Path(stage_dir) / Path(cache_dir).name / split
         if not (d / "meta.json").exists():
-            raise RuntimeError(f"{d}: not staged; run python -m hicmultiome.train "
+            raise RuntimeError(f"{d}: not staged; run python -m flexcible.train "
                                "--config <cfg> --stage-only first")
         meta = json.loads((d / "meta.json").read_text())
         man = Path(cache_dir) / "manifest.json"
@@ -461,7 +461,7 @@ def cond_row_map(cfg: Config, channels: dict) -> dict:
 
 
 def diff_coupling(cfg: Config, channels: dict, chip_rows: list[int]):
-    """Track dropout of a mark also blanks its reference and difference rows (hicmultiome.diffmarks:
+    """Track dropout of a mark also blanks its reference and difference rows (flexcible.diffmarks:
     a missing mark gives a missing reference and difference, value 0). Returns None without diff
     rows, else (cond rows of all diff rows, matrix (len(chip_rows), len(rows)) with 1 where the
     dropped track j owns the row)."""
@@ -571,7 +571,7 @@ def object_tables(cfg: Config) -> list[str]:
 
 
 def _aml_object_rows(cfg: Config, ds, ti, os_idx, data, is_main: bool):
-    """Loop-centric recipe (hicmultiome/aml_objects.py): the objects of the table in every
+    """Loop-centric recipe (flexcible/aml_objects.py): the objects of the table in every
     training window row, the matched-pair oversampling rows appended to `data`. Returns
     (data, per-row object lists, per-row roles) aligned to the returned data."""
     import pandas as pd
@@ -679,7 +679,7 @@ def val_akita_median(model, data, device, batch, offset, n_motifs,
 def val_structure(model, data, device, batch, offset, n_motifs, res: int,
                   cond_mode="full", seq_fn=None, capin=False, use_ref=False,
                   hic_measures=None) -> dict:
-    """Median over the validation windows of every hicmultiome.structure
+    """Median over the validation windows of every flexcible.structure
     measure, plus the per-window maps' selection values; with hic_measures
     (a callable on the list of (pred, target) maps and res) also its
     combined score as 'hic_measures'."""
@@ -768,7 +768,7 @@ def _build_cohesin_aug(cfg: Config, ds, ti, data, chip_rows, offset, sl, device,
     seqf = ds.channels["seq_features"]
     if FRACTION_ROW not in seqf:
         raise RuntimeError("train.cohesin_aug but the cache has no cohesin_fraction row: "
-                           "set data.cohesin_fraction and re-run hicmultiome.precompute")
+                           "set data.cohesin_fraction and re-run flexcible.precompute")
     if ds.channels.get("has_capture") or ds.channels.get("capture_input"):
         raise ValueError("train.cohesin_aug is not supported with capture data")
     tracks_all = ds.channels["tracks"]
@@ -871,7 +871,7 @@ def train(cfg: Config):
             data = {k: v[idx] for k, v in data.items()}
             ds._index = [ds._index[i] for i in idx]
     if data is None:
-        raise RuntimeError("no training windows; run hicmultiome.precompute first")
+        raise RuntimeError("no training windows; run flexcible.precompute first")
     use_ref = cfg.model.reference != "none"
     if use_ref:
         ds.check_reference_leakage()
@@ -880,13 +880,13 @@ def train(cfg: Config):
     if cfg.model.prior and "prior" not in data:
         raise RuntimeError(f"model.prior but the cache {cache_dir} holds no prior "
                            "windows: set data.prior_cool / samples[].prior_cool and "
-                           "re-run hicmultiome.precompute")
+                           "re-run flexcible.precompute")
     if not cfg.model.prior:
         data.pop("prior", None)
     if use_ref and "ref" not in data:
         raise RuntimeError(f"model.reference={cfg.model.reference!r} but the cache "
                            f"{cache_dir} holds no reference windows: set "
-                           "data.reference_cool and re-run hicmultiome.precompute")
+                           "data.reference_cool and re-run flexcible.precompute")
 
     # greedy feature selection: keep only the chosen ChIP tracks' cond rows
     n_sym_eff = ds.n_sym
@@ -1065,7 +1065,7 @@ def train(cfg: Config):
         tracks_all = ds.channels["tracks"]
         if COHESIN_ROW not in ds.channels["seq_features"]:
             raise RuntimeError("data.cohesin_unknown but the cache has no cohesin_unknown "
-                               "row: re-run hicmultiome.precompute")
+                               "row: re-run flexcible.precompute")
         keep = [t for t in COHESIN_TRACKS if t in tracks_all]
         pos = [chip_rows.index(tracks_all.index(t)) for t in keep
                if tracks_all.index(t) in chip_rows]
@@ -1113,7 +1113,7 @@ def train(cfg: Config):
             log.info("torch.compile enabled (first steps include compilation)")
     if is_main:
         log.info(
-            "hic-multiome-unet: %d train windows (%d on this rank, world=%d), "
+            "flexcible: %d train windows (%d on this rank, world=%d), "
             "%d val, %d sym rows, %d motifs, %d cond channels, %d out channels, "
             "%.2fM params",
             N_total, N, world, 0 if vdata is None else vdata["target"].shape[0],

@@ -26,13 +26,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path.home() / "src/pchic-unet"))
 
-from hicmultiome.config import Config
-from hicmultiome.evaluate import scc
-from hicmultiome.matrix import fetch_chrom_matrix
+from flexcible.config import Config
+from flexcible.evaluate import scc
+from flexcible.matrix import fetch_chrom_matrix
 
 
 def score_hic(cfg, chrom, zero_tracks, tmp):
-    from hicmultiome.predict import predict
+    from flexcible.predict import predict
 
     out = tmp / "pred.cool"
     predict(cfg, chrom, str(out), batch=16, zero_tracks=zero_tracks or None)

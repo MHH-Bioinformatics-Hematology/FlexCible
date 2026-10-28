@@ -96,9 +96,9 @@ def stage_seqext():
     f = WORK / "seq_ext.npz"
     if f.exists():
         return
-    from hicmultiome.config import Config
-    from hicmultiome.motifs import cached_motif_tracks
-    from hicmultiome.sequence import cached_sequence_features
+    from flexcible.config import Config
+    from flexcible.motifs import cached_motif_tracks
+    from flexcible.sequence import cached_sequence_features
     cfg = Config.load(mx.best_ckpt(mt.NORM) / "config.yaml")
     ctcf = next(t.motif for t in cfg.data.tracks if t.name == "CTCF")
     sizes = me.chrom_sizes()
@@ -333,8 +333,8 @@ CHANNEL_FRAC = 0.8
 
 
 def motif_pwm():
-    from hicmultiome.config import Config
-    from hicmultiome.motifs import pwm_logodds, read_jaspar
+    from flexcible.config import Config
+    from flexcible.motifs import pwm_logodds, read_jaspar
     cfg = Config.load(mx.best_ckpt(mt.NORM) / "config.yaml")
     mid = next(t.motif for t in cfg.data.tracks if t.name == "CTCF")
     return cfg, pwm_logodds(read_jaspar(Path(cfg.motifs.dir).expanduser() / f"{mid}.jaspar"))
@@ -342,8 +342,8 @@ def motif_pwm():
 
 def sites_chrom(ch):
     """Non-overlapping CTCF motif hits of one chromosome: start, strand, log-odds, fraction of max."""
-    from hicmultiome.motifs import revcomp_pwm, scan_hits
-    from hicmultiome.sequence import read_chrom_codes
+    from flexcible.motifs import revcomp_pwm, scan_hits
+    from flexcible.sequence import read_chrom_codes
     f = WORK / "sites" / f"motif_{ch}.npz"
     if f.exists():
         z = np.load(f)

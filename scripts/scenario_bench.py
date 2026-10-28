@@ -210,8 +210,8 @@ def stage_train(run: str, gpus: str):
     lf = OUT / f"{run}.train.log"
     g = gpus.split(",")
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpus)
-    cmd = ([TORCHRUN, "--standalone", f"--nproc_per_node={len(g)}", "-m", "hicmultiome.train",
-            "--config", cp] if len(g) > 1 else [PY, "-m", "hicmultiome.train", "--config", cp])
+    cmd = ([TORCHRUN, "--standalone", f"--nproc_per_node={len(g)}", "-m", "flexcible.train",
+            "--config", cp] if len(g) > 1 else [PY, "-m", "flexcible.train", "--config", cp])
     OUT.mkdir(parents=True, exist_ok=True)
     with open(lf, "w") as fh:
         rc = subprocess.call([str(c) for c in cmd], stdout=fh, stderr=subprocess.STDOUT,

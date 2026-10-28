@@ -629,7 +629,7 @@ def fetch_stack(path: Path, regions: pd.DataFrame, res: int, local: Path) -> np.
     """(regions, N, N) float32 of a proper O/E cool, zero (unmeasured) -> NaN,
     NaN-padded to N bins."""
     import cooler
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     clr = cooler.Cooler(str(local_copy(path, local)))
     N = nbins(res)
     out = np.full((len(regions), N, N), np.nan, np.float32)
@@ -1492,7 +1492,7 @@ class Panels:
 
     def _wide_cool(self, path: Path) -> np.ndarray:
         import cooler
-        from hicmultiome.genome import match_name
+        from flexcible.genome import match_name
         clr = cooler.Cooler(str(local_copy(path, self.local)))
         nm = match_name(self.chrom, list(clr.chromnames))
         M = np.asarray(clr.matrix(balance=False).fetch(f"{nm}:{self.ws}-{self.we}"), float)

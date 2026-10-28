@@ -4,7 +4,7 @@
     {
       "name": "amp_none_25kb",
       "config": "configs/amp_none_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/amp_none_25kb/pred_even.cool",
@@ -16,7 +16,7 @@
     {
       "name": "amp_bf16_25kb",
       "config": "configs/amp_bf16_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/multiome_25kb",
       "cache_manifest": "cache/multiome_25kb/manifest.json",
       "pred_out": "runs/amp_bf16_25kb/pred_even.cool",

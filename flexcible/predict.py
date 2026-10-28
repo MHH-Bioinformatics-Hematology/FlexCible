@@ -5,7 +5,7 @@ to use (default: the first). A degron sample's zeroed_tracks are applied
 automatically, so predicting the cohesin-degron sample already shows the
 cohesin-free structure the model learned.
 
-CLI:  python -m hicmultiome.predict --config configs/multicell_25kb.yaml \
+CLI:  python -m flexcible.predict --config configs/multicell_25kb.yaml \
           --sample gm12878 --chroms test --out pred.cool
 """
 from __future__ import annotations
@@ -145,7 +145,7 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
     normalisers; `cell` names it (default: the sample name, or the folder
     name with bigwig_dir). Reference-map models read `reference`, else the
     cell's own training reference, else the map embedded in the checkpoint
-    (hicmultiome.reference.resolve_reference), looked up per window."""
+    (flexcible.reference.resolve_reference), looked up per window."""
     set_seed(cfg.train.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = _resolve_ckpt(cfg, checkpoint)

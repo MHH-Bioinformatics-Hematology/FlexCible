@@ -5,14 +5,14 @@ Both inputs are defined on HindIII restriction fragments: every interaction is
 a (bait fragment, other-end fragment, raw count, log(observed/expected)) record
 and every bait is one fragment of the HindIII design. The scores belong to the
 fragment pair, so lifting the two fragment intervals (UCSC hg19ToHg38 chain,
-hicmultiome.liftover) carries the published scores over unchanged. A fragment
+flexcible.liftover) carries the published scores over unchanged. A fragment
 is kept only when both of its ends map to the same hg38 chromosome with a span
 within 10% of the original; an interaction is kept only when both fragments
 are kept and stay on one chromosome. The script then checks that the lifted
 fragment ends sit on hg38 HindIII sites (AAGCTT within 8 bp), which confirms
 that the lifted intervals are the hg38 HindIII fragments.
 
-Outputs (same Mifsud column layout, so hicmultiome.capture.parse_mifsud reads
+Outputs (same Mifsud column layout, so flexcible.capture.parse_mifsud reads
 the hg38 file unchanged):
   <out-dir>/TS5_GM12878_promoter-other_significant_interactions.hg38.txt
   <out-dir>/GM12878_pchic_baits.hg38.bed   (chrom, start, end, bait id, genes)
@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.liftover import LiftOver  # noqa: E402
+from flexcible.liftover import LiftOver  # noqa: E402
 
 RAW = Path("/mnt/processed/wolffjoa/capturehic-to-hic-raw")
 PRIMARY = {f"chr{i}" for i in list(range(1, 23)) + ["X", "Y"]}

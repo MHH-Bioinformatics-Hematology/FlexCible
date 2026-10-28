@@ -133,7 +133,7 @@ def base_table() -> pd.DataFrame:
     f = WORK / "tables" / "base.csv.gz"
     if f.exists():
         return pd.read_csv(f)
-    from hicmultiome.sequence import read_chrom_codes
+    from flexcible.sequence import read_chrom_codes
     parts = []
     for ch in CHROMS:
         z = np.load(S41 / f"motif_{ch}.npz")

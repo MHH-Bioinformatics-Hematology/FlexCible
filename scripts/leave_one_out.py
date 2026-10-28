@@ -9,10 +9,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hicmultiome.config import Config
-from hicmultiome.evaluate import scc
-from hicmultiome.matrix import fetch_chrom_matrix
-from hicmultiome.predict import predict
+from flexcible.config import Config
+from flexcible.evaluate import scc
+from flexcible.matrix import fetch_chrom_matrix
+from flexcible.predict import predict
 
 cfg = Config.load("configs/chip_only_25kb.yaml")
 truth = fetch_chrom_matrix(cfg.get_sample(None).cool_path, "2")

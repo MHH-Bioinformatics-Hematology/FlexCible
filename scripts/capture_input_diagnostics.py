@@ -25,10 +25,10 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                                  # noqa: E402
-from hicmultiome.dataset import split_cond                             # noqa: E402
-from hicmultiome.model import HiCModel, build_backbone, n_cond_channels  # noqa: E402
-from hicmultiome.train import _select_rows, _stack, capture_planes     # noqa: E402
+from flexcible.config import Config                                  # noqa: E402
+from flexcible.dataset import split_cond                             # noqa: E402
+from flexcible.model import HiCModel, build_backbone, n_cond_channels  # noqa: E402
+from flexcible.train import _select_rows, _stack, capture_planes     # noqa: E402
 
 
 def main():

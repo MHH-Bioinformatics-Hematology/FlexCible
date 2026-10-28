@@ -99,7 +99,7 @@ def smoke():
     cp = SMOKE / "smoke.yaml"
     yaml.safe_dump(c, open(cp, "w"), sort_keys=False)
     t0 = time.time()
-    r = sh([PYB, "-m", "hicmultiome.train", "--config", str(cp)], stdout=open(SMOKE / "smoke.log", "w"),
+    r = sh([PYB, "-m", "flexcible.train", "--config", str(cp)], stdout=open(SMOKE / "smoke.log", "w"),
            stderr=subprocess.STDOUT, timeout=1200)
     txt = (SMOKE / "smoke.log").read_text(errors="replace")
     if r.returncode or "done." not in txt:

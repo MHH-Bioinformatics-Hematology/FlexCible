@@ -61,7 +61,7 @@ def smoke(base, res, tag):
                         max_epochs=None, patience_epochs=None)
     cp = S / f"{tag}.yaml"
     yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
-    r = rq.sh([rq.PYB, "-m", "hicmultiome.train", "--config", str(cp)],
+    r = rq.sh([rq.PYB, "-m", "flexcible.train", "--config", str(cp)],
               stdout=open(S / f"{tag}.log", "w"), stderr=subprocess.STDOUT, timeout=1800)
     if r.returncode or "done." not in (S / f"{tag}.log").read_text(errors="replace"):
         return f"smoke failed rc={r.returncode}, log {S / (tag + '.log')}"

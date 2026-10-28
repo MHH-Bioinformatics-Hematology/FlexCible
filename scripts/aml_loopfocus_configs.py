@@ -16,7 +16,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 
 import multicell_expanded as mx  # noqa: E402
-from hicmultiome.config import Config  # noqa: E402
+from flexcible.config import Config  # noqa: E402
 
 
 def main():

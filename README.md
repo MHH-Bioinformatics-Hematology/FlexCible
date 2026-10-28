@@ -1,4 +1,4 @@
-# hic-multiome-unet
+# flexcible
 
 Predict **Hi-C contact matrices** from **protein ChIP tracks + DNA sequence +
 binding motifs**, with **capture Hi-C** as an auxiliary training target, using
@@ -43,29 +43,29 @@ which is why GM12878 is the training cell type.
 conda activate hicdiff          # torch-cu13 + cooler + pyBigWig + pyfaidx + hicrep
 
 # 1) Precompute windows (fits normalisers on train chroms; caches motif scans)
-python -m hicmultiome.precompute --config configs/multiome_25kb.yaml
+python -m flexcible.precompute --config configs/multiome_25kb.yaml
 
 # 2) Train on BOTH GPUs (or drop torchrun for single-GPU)
-torchrun --nproc_per_node=2 -m hicmultiome.train --config configs/multiome_25kb.yaml
+torchrun --nproc_per_node=2 -m flexcible.train --config configs/multiome_25kb.yaml
 
 # 3) Predict held-out chromosomes; also write the capture channel
-python -m hicmultiome.predict --config configs/multiome_25kb.yaml --chroms test \
+python -m flexcible.predict --config configs/multiome_25kb.yaml --chroms test \
     --out runs/multiome_25kb/pred_even.cool \
     --pchic-out runs/multiome_25kb/pred_even_capture.cool
 
 # 4) Global metric: HiCRep SCC
-python -m hicmultiome.evaluate --config configs/multiome_25kb.yaml \
+python -m flexcible.evaluate --config configs/multiome_25kb.yaml \
     --pred runs/multiome_25kb/pred_even.cool --chroms test
 
 # 5) Loop + TAD metrics: E-P contacts vs capture Hi-C, insulation/boundaries
-python -m hicmultiome.loops --config configs/multiome_25kb.yaml \
+python -m flexcible.loops --config configs/multiome_25kb.yaml \
     --pred runs/multiome_25kb/pred_even.cool \
     --pred-capture runs/multiome_25kb/pred_even_capture.cool --chroms test
 
 # 6) Visuals: per-distance Pearson + region plot
-python -m hicmultiome.diagnose --config configs/multiome_25kb.yaml --chrom 2 \
+python -m flexcible.diagnose --config configs/multiome_25kb.yaml --chrom 2 \
     --pred runs/multiome_25kb/pred_even.cool --out-dir runs/multiome_25kb
-python -m hicmultiome.plot --config configs/multiome_25kb.yaml \
+python -m flexcible.plot --config configs/multiome_25kb.yaml \
     --pred runs/multiome_25kb/pred_even.cool \
     --region chr2:18000000-25000000 --out runs/multiome_25kb/chr2.png
 ```

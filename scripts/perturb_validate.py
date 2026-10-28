@@ -43,7 +43,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 import benchmark_metrics as bm                                       # noqa: E402
 import multicell_expanded as mx                                      # noqa: E402
-from hicmultiome import bioscore as bs                               # noqa: E402
+from flexcible import bioscore as bs                               # noqa: E402
 
 DATA = Path(os.environ.get("HICMULTI_DATA", str(Path.home() / "data/hic-multiome")))   # local-home data tree
 HM = Path(os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome"))

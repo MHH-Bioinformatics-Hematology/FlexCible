@@ -21,7 +21,7 @@ def set_seed(seed: int) -> None:
         pass
 
 
-def get_logger(name: str = "hicmultiome") -> logging.Logger:
+def get_logger(name: str = "flexcible") -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         h = logging.StreamHandler()

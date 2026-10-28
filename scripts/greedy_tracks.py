@@ -67,7 +67,7 @@ def _run_candidate(base, cache, max_epochs, patience, out_root, selected, track,
     log_path = out_root / f"cand_{len(selected)}_{track}.log"
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu))
     fh = open(log_path, "w")
-    p = subprocess.Popen([py, "-m", "hicmultiome.train", "--config", str(cfg_path)],
+    p = subprocess.Popen([py, "-m", "flexcible.train", "--config", str(cfg_path)],
                          stdout=fh, stderr=subprocess.STDOUT, env=env)
     p._fh = fh
     return p, log_path

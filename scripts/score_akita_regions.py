@@ -20,15 +20,15 @@ import pandas as pd
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                               # noqa: E402
-from hicmultiome.genome import match_name                           # noqa: E402
-from hicmultiome.matrix import (MatrixNormalizer, fetch_diagonal_window,
+from flexcible.config import Config                               # noqa: E402
+from flexcible.genome import match_name                           # noqa: E402
+from flexcible.matrix import (MatrixNormalizer, fetch_diagonal_window,
                                 open_cool)                          # noqa: E402
-from hicmultiome.model import build_backbone, build_spatial_cond, n_cond_channels  # noqa: E402
-from hicmultiome.precompute import (assemble_chrom, chrom_nbins_of,
+from flexcible.model import build_backbone, build_spatial_cond, n_cond_channels  # noqa: E402
+from flexcible.precompute import (assemble_chrom, chrom_nbins_of,
                                     sample_track_files)             # noqa: E402
-from hicmultiome.tracks import TrackNormalizer                      # noqa: E402
-from hicmultiome.utils import get_logger                            # noqa: E402
+from flexcible.tracks import TrackNormalizer                      # noqa: E402
+from flexcible.utils import get_logger                            # noqa: E402
 
 MAN = Path.home() / "src/Hi-cGAN/manuscript_gigascience/data"
 log = get_logger("score-akita")
@@ -113,7 +113,7 @@ def main():
             with torch.no_grad():
                 out = model(build_spatial_cond(cond, pairs, None, cfg.model.cond_mode))
                 if a.tta:
-                    from hicmultiome.dataset import reverse_cond, split_cond
+                    from flexcible.dataset import reverse_cond, split_cond
                     cr = reverse_cond(cond, offset, n_motifs)
                     sr, pr = split_cond(cr, offset, n_motifs)
                     out_r = model(build_spatial_cond(sr, pr, None, cfg.model.cond_mode))

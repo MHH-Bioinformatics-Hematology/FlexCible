@@ -89,7 +89,7 @@ def precompute(res):
         return
     cp = OUT / f"cascade_{res // 1000}kb.precompute.yaml"
     yaml.safe_dump(cfg, open(cp, "w"), sort_keys=False)
-    if sh([PY, "-m", "hicmultiome.precompute", "--config", cp, "--workers", 8],
+    if sh([PY, "-m", "flexcible.precompute", "--config", cp, "--workers", 8],
           OUT / f"cascade_{res // 1000}kb.precompute.log"):
         raise SystemExit(f"precompute failed at {res}")
 
@@ -106,7 +106,7 @@ def train_fold(res, fold):
     log.write_text("")
     note(f"train {name}")
     env = dict(os.environ, CUDA_VISIBLE_DEVICES="0,1")
-    sh([TORCHRUN, "--standalone", "--nproc_per_node=2", "-m", "hicmultiome.train",
+    sh([TORCHRUN, "--standalone", "--nproc_per_node=2", "-m", "flexcible.train",
         "--config", cp], log, env)
     if not done(log):
         raise SystemExit(f"training failed: {name}")
@@ -123,7 +123,7 @@ def predict_fold(res, fold, cell, gpu):
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.name + ".part.cool")
     part.unlink(missing_ok=True)
-    cmd = [PY, "-m", "hicmultiome.predict", "--config", ck / "config.yaml", "--checkpoint", ck,
+    cmd = [PY, "-m", "flexcible.predict", "--config", ck / "config.yaml", "--checkpoint", ck,
            "--chroms", ",".join(PREDICTS[fold]), "--out", part, "--tta"]
     if cell in mx.TRAIN12:
         cmd += ["--sample", cell]

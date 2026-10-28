@@ -17,7 +17,7 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.model import build_backbone, build_spatial_cond, n_cond_channels
+from flexcible.model import build_backbone, build_spatial_cond, n_cond_channels
 
 
 def bench(kind, n_sym, n_motifs, window, batch, mode, steps=12, channels_last=False):

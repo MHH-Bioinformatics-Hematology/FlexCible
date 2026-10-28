@@ -24,11 +24,11 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                                  # noqa: E402
-from hicmultiome.dataset import split_cond                             # noqa: E402
-from hicmultiome.model import (SeqEncoder, make_model,
+from flexcible.config import Config                                  # noqa: E402
+from flexcible.dataset import split_cond                             # noqa: E402
+from flexcible.model import (SeqEncoder, make_model,
                                n_cond_channels)                        # noqa: E402
-from hicmultiome.train import (_coords, _fasta_map, _select_rows, _stack,
+from flexcible.train import (_coords, _fasta_map, _select_rows, _stack,
                                batch_onehot)                           # noqa: E402
 
 
@@ -75,7 +75,7 @@ def main():
     if a.split == "val":
         data, ds = _stack(cache_dir, "train", 0.0, False, cfg.train.seed,
                           chroms=cfg.train.chroms)
-        from hicmultiome.train import split_val_regions
+        from flexcible.train import split_val_regions
         vi, _ = split_val_regions(_coords(ds), cfg.train.val_regions, ds.window_size,
                                   cfg.train.seed, cfg.train.val_exclude_overlap)
     else:   # every test window (held-out regions, disjoint from all training windows)

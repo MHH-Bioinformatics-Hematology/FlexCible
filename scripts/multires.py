@@ -1,7 +1,7 @@
 """Multi-resolution training (registry section "Multi-resolution training").
 
 A  all12multires: ONE resolution-conditioned residual reference model on the
-   12 training cells at 2, 5, 10 and 25 kb (hicmultiome.train_multires; FiLM
+   12 training cells at 2, 5, 10 and 25 kb (flexcible.train_multires; FiLM
    from a learned resolution embedding; windows of 512 / 384 / 192 / 80
    bins as the dedicated models; one resolution per step, drawn uniformly;
    per-cell leave-one-out consensus as reference, consensus12 for held-out
@@ -83,7 +83,7 @@ def train(max_epochs):
     resume = "checkpoint-latest" in {p.name for p in TRAIN_DIR.glob("*")} and "done." not in t
     if "done." not in t:
         cmd = [TORCHRUN, "--standalone", "--nproc_per_node=2", "-m",
-               "hicmultiome.train_multires", "--configs", *paths, "--out", TRAIN_DIR,
+               "flexcible.train_multires", "--configs", *paths, "--out", TRAIN_DIR,
                "--max-epochs", max_epochs, "--stage-dir", STAGE] + (["--resume"] if resume else [])
         if sh(cmd, LOG, env):
             raise SystemExit("multi-resolution training failed")
@@ -96,7 +96,7 @@ def train(max_epochs):
 
 def stage():
     STAGE.mkdir(parents=True, exist_ok=True)
-    if sh([PY, "-m", "hicmultiome.train_multires", "--configs", *config_paths(),
+    if sh([PY, "-m", "flexcible.train_multires", "--configs", *config_paths(),
            "--out", TRAIN_DIR, "--stage-dir", STAGE, "--stage-only"],
           OUT / f"{RUN}_stage.log"):
         raise SystemExit("staging failed")
@@ -107,7 +107,7 @@ def staged() -> bool:
 
 
 def views():
-    from hicmultiome.train_multires import write_views
+    from flexcible.train_multires import write_views
     write_views(TRAIN_DIR, {r: view(r) for r in mx.MULTIRES})
 
 

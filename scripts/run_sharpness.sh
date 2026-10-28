@@ -1,11 +1,11 @@
 #!/bin/bash
 set -u
-cd ~/src/hic-multiome-unet
+cd ~/src/flexcible
 export CUDA_VISIBLE_DEVICES=1
 PY=~/miniconda3/envs/hicdiff/bin/python
 for n in sharp_grad sharp_hf sharp_ssim; do
   echo "[$(date +%T)] $n train"
-  $PY -m hicmultiome.train --config configs/$n.yaml || exit 1
+  $PY -m flexcible.train --config configs/$n.yaml || exit 1
   echo "[$(date +%T)] $n score (with TTA)"
   $PY scripts/score_like_hicgan.py --config configs/$n.yaml --tta --even-only \
       --out runs/$n/score_tta.csv || exit 1

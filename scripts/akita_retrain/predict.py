@@ -1,7 +1,7 @@
 """Whole-chromosome predictions of a retrained or the released Akita.
 
 Windows of 1 048 576 bp at a stride of 224 bins (half the 448-bin target
-span, the half-window stride of hicmultiome.predict) cover a chromosome; each
+span, the half-window stride of flexcible.predict) cover a chromosome; each
 window is predicted forward and reverse-complemented (averaged), and the
 windows are merged per pixel with a 2-D Hann weight (product of the 1-D Hann
 weights of the two bins). Output: preds/<run>/<chrom>.npy, float16 band

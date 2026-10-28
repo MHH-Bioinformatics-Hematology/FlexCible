@@ -13,8 +13,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config          # noqa: E402
-from hicmultiome.genome import match_name      # noqa: E402
+from flexcible.config import Config          # noqa: E402
+from flexcible.genome import match_name      # noqa: E402
 
 MAN = Path.home() / "src/Hi-cGAN/manuscript_gigascience/data"
 

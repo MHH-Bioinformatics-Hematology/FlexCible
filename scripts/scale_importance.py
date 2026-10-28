@@ -38,11 +38,11 @@ import pandas as pd
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome.config import Config                                  # noqa: E402
-from hicmultiome.dataset import split_cond                             # noqa: E402
-from hicmultiome.model import make_model, n_cond_channels              # noqa: E402
-from hicmultiome.tracks import TrackNormalizer                         # noqa: E402
-from hicmultiome.train import _coords, _select_rows, _stack            # noqa: E402
+from flexcible.config import Config                                  # noqa: E402
+from flexcible.dataset import split_cond                             # noqa: E402
+from flexcible.model import make_model, n_cond_channels              # noqa: E402
+from flexcible.tracks import TrackNormalizer                         # noqa: E402
+from flexcible.train import _coords, _select_rows, _stack            # noqa: E402
 
 GROUPS = {
     "CTCF": ["CTCF"],

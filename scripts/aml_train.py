@@ -45,7 +45,7 @@ Reference map of an AML sample (``samples[].reference_cool``): the mean proper
 O/E of the training patients of the fold, leave-one-out for a training patient
 and the mean of all eight for MOLM-13; the same mean serves the test patients
 and U-937 at inference. The json next to each map lists its cells
-(``amlxu<patient>``, hicmultiome.reference.cell_identity), so a test patient
+(``amlxu<patient>``, flexcible.reference.cell_identity), so a test patient
 is never in its own reference; the non-AML cells keep their consensus_loo.
 
 Hard validation (``train.hard_split``): windows where a training patient
@@ -343,7 +343,7 @@ def stage_hard(fold: int, res: int, per_patient: int = 25, frac: float = 0.2, se
     """Patient-specific hard-validation windows of the training patients."""
     import cooler
     import multicell_expanded as mx
-    from hicmultiome.matrix import fetch_diagonal_window
+    from flexcible.matrix import fetch_diagonal_window
     import aml_primary_explain as ex
     cache = mx.CACHE / (f"mc_all12aml_ref_{res // 1000}kb" + (f"_f{fold}" if fold else ""))
     man = json.loads((cache / "manifest.json").read_text())

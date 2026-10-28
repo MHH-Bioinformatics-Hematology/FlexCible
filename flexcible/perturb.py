@@ -9,7 +9,7 @@ motif channels (--zero-motifs simulates deleting the binding sites from the
 DNA rather than removing the protein).
 
 CLI:
-  python -m hicmultiome.perturb --config configs/multicell_25kb.yaml \
+  python -m flexcible.perturb --config configs/multicell_25kb.yaml \
       --sample gm12878 --region chr2:20000000-22000000 \
       --tracks CTCF,RAD21,SMC3 --out runs/perturb_chr2.png
 """

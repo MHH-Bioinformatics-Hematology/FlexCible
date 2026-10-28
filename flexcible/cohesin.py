@@ -65,7 +65,7 @@ def load_operator(path, device="cpu") -> tuple[DegronOperator, float]:
 
 def fraction_z(f: torch.Tensor | float) -> torch.Tensor | float:
     """Normalised value of the cohesin:fraction row, 0 for f = 1, -1 for f = 0
-    (same as hicmultiome.precompute.fraction_row_value)."""
+    (same as flexcible.precompute.fraction_row_value)."""
     if isinstance(f, torch.Tensor):
         return torch.log1p(f) / math.log(2.0) - 1.0
     return math.log1p(f) / math.log(2.0) - 1.0

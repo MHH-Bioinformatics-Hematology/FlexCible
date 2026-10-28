@@ -95,7 +95,7 @@ def genes_in(tss: pd.DataFrame, chrom: str, start: int, end: int) -> list[str]:
 
 # ---------------------------------------------------------------- measures
 def fetch(clr, chrom, s, e):
-    from hicmultiome.genome import match_name
+    from flexcible.genome import match_name
     nm = match_name(chrom, list(clr.chromnames))
     try:
         return np.asarray(clr.matrix(balance=False).fetch(f"{nm}:{max(0, s)}-{e}"), float)
@@ -105,7 +105,7 @@ def fetch(clr, chrom, s, e):
 
 def loop_strength(clr, chrom, a1, a2, prm) -> float:
     """log2 donut enrichment at the loop pixel (bins of a1, a2)."""
-    from hicmultiome.bioscore import local_enrichment
+    from flexcible.bioscore import local_enrichment
     lo = (min(a1, a2) // RES - 12) * RES
     hi = (max(a1, a2) // RES + 13) * RES
     M = fetch(clr, chrom, lo, hi)
@@ -387,7 +387,7 @@ def win_matrix(clr, chrom, s, e):
 
 
 def enrich_at(M, i, j, prm) -> float:
-    from hicmultiome.bioscore import local_enrichment
+    from flexcible.bioscore import local_enrichment
     e = local_enrichment(np.exp(np.nan_to_num(M)), prm)
     return float(np.log2(e[min(i, j), max(i, j)]))
 

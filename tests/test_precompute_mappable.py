@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from hicmultiome.precompute import load_mappable, mappable_fraction
+from flexcible.precompute import load_mappable, mappable_fraction
 
 
 def test_missing_mask_is_permissive(tmp_path):

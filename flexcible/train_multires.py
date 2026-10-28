@@ -4,7 +4,7 @@ Each resolution has its own config (same tracks, motifs, samples, reference
 mode and model settings; its own data.resolution, window, cache and
 reference maps) and model.resolutions listing all of them. The model is the
 usual HiCModel with a learned resolution embedding that modulates every U-Net
-block by FiLM (hicmultiome.model). Window sizes stay those of the dedicated
+block by FiLM (flexcible.model). Window sizes stay those of the dedicated
 models (e.g. 512 / 384 / 192 / 80 bins at 2 / 5 / 10 / 25 kb): the U-Net is
 fully convolutional, so each step draws one resolution and a batch of its
 windows. Resolutions are drawn uniformly per step (the same draw on every DDP
@@ -19,7 +19,7 @@ epoch: the median per-window Pearson (val_akita_median) per resolution; the
 mean over resolutions drives checkpointing and patience. Per-resolution
 training loss and validation are logged and written to learning_curve.csv.
 
-    torchrun --standalone --nproc_per_node=2 -m hicmultiome.train_multires \
+    torchrun --standalone --nproc_per_node=2 -m flexcible.train_multires \
         --configs res2.yaml res5.yaml res10.yaml res25.yaml --out runs/x
 
 The checkpoint folder holds model.pt, optim.pt, progress.json and, per

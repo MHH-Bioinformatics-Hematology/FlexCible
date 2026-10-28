@@ -12,7 +12,7 @@ hit planes with every site weighted by its own methylation:
 
 A bin holds the sum of the weights of the hits starting in it, so for a cell
 without CpG data the planes equal the unmodified hit counts of
-hicmultiome.motifs.cached_motif_tracks. The sites are the PWM hits at
+flexcible.motifs.cached_motif_tracks. The sites are the PWM hits at
 motifs.score_frac (the channel threshold of the model), taken from
 motifs.cached_motif_positions; the CpG file is the per-chromosome npz written
 by scripts/chip_seq_meth_relationships.py (cpg_build): <chrom>_pos (C position

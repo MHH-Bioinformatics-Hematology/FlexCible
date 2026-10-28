@@ -30,10 +30,10 @@ import torch
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-from hicmultiome.config import Config                                    # noqa: E402
-from hicmultiome.matrix import MatrixNormalizer                          # noqa: E402
-from hicmultiome.predict import build_model                              # noqa: E402
-from hicmultiome.tracks import TrackNormalizer                           # noqa: E402
+from flexcible.config import Config                                    # noqa: E402
+from flexcible.matrix import MatrixNormalizer                          # noqa: E402
+from flexcible.predict import build_model                              # noqa: E402
+from flexcible.tracks import TrackNormalizer                           # noqa: E402
 
 HM = Path("/mnt/processed/wolffjoa/hic-multiome")
 
@@ -89,7 +89,7 @@ def main():
     offset = len(channels["tracks"]) + len(channels["seq_features"])
     sel_rows = None
     if cfg.train.select_tracks is not None or cfg.train.select_motifs is not None:
-        from hicmultiome.train import _select_rows
+        from flexcible.train import _select_rows
         sel_rows, offset, n_motifs, _ = _select_rows(cfg, channels)
     mat = MatrixNormalizer.load(ck / "norm_matrix_hct116.json")
     tn = TrackNormalizer.load(ck / "norm_tracks.json")

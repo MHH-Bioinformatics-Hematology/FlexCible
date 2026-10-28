@@ -3,7 +3,7 @@
 Shows how much contact structure cell types share, the basis of the consensus
 reference. Stratum-adjusted correlation (HiCRep definition, smoothing h 5, 1 Mb band) on
 the O/E target maps crosscell_oe/<cell>_proper_<res>kb.cool, on the held-out
-chromosomes 2, 3, 11, 14 and 17. Uses hicmultiome.evaluate.scc_streaming, which
+chromosomes 2, 3, 11, 14 and 17. Uses flexcible.evaluate.scc_streaming, which
 works per chromosome, because the 4DN and ENCODE maps differ in their
 chromosome sets and the hicrep package requires identical bin tables.
 
@@ -28,7 +28,7 @@ CHROMS = ["2", "3", "11", "14", "17"]
 def one_pair(job: tuple[str, str, int]) -> list[tuple]:
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from hicmultiome.evaluate import scc_streaming
+    from flexcible.evaluate import scc_streaming
     a, b, res = job
     pa, pb = OE / f"{a}_proper_{res}kb.cool", OE / f"{b}_proper_{res}kb.cool"
     band = 1_000_000 // (res * 1000)

@@ -15,13 +15,13 @@ scc            HiCRep stratum-adjusted correlation (Yang et al. 2017): per
                definitions, which is why it is the fair metric wherever a
                competitor's value space differs from the target's.
 per_distance   Pearson per diagonal, pooled over regions by the caller.
-insulation     diamond insulation profile (hicmultiome.loops) of exp(map).
+insulation     diamond insulation profile (flexcible.loops) of exp(map).
 boundary_recall
                recall of reference boundaries (hicFindTADs on the measured
                count map) by the K most prominent insulation minima of a map,
                K = number of reference boundaries in the region; a rank cut,
                so smooth and sharp predictions are compared on placement.
-loop metrics   hicmultiome.bioscore: donut enrichment, rank-matched loop calls
+loop metrics   flexcible.bioscore: donut enrichment, rank-matched loop calls
                (K = number of reference loops, hicDetectLoops on the measured
                count map), APA around the reference anchors, and the anchor
                AUROC against distance-matched control pixels.
@@ -35,8 +35,8 @@ import numpy as np
 from scipy.stats import rankdata
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hicmultiome import bioscore as bs                                # noqa: E402
-from hicmultiome.loops import insulation_profile                      # noqa: E402
+from flexcible import bioscore as bs                                # noqa: E402
+from flexcible.loops import insulation_profile                      # noqa: E402
 
 
 def triu_mask(n: int, k: int = 2, max_d: int | None = None) -> np.ndarray:

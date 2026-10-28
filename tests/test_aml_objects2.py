@@ -16,8 +16,8 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hicmultiome import aml_objects as ao  # noqa: E402
-from hicmultiome.config import Config  # noqa: E402
+from flexcible import aml_objects as ao  # noqa: E402
+from flexcible.config import Config  # noqa: E402
 from test_pipeline import BINSIZE, workdir  # noqa: E402,F401  (fixture)
 from test_aml_objects import _smoke_raw  # noqa: E402
 
@@ -189,7 +189,7 @@ def test_run_config_of_loopfocus2(fold, res):
     assert cfg["train"]["cache_dir"] == old["train"]["cache_dir"]
     assert old["train"]["aml_object_controls"] == ["A_hspc"] and "aml_object_marks_pass" not in old["train"]
     assert cfg["model"]["reference"] == "residual"
-    from hicmultiome.config import Config as C
+    from flexcible.config import Config as C
     C.from_dict(cfg)
 
 
@@ -267,8 +267,8 @@ def _smoke_table_v2(path):
 
 def test_smoke_training_marks_pass(workdir, caplog):
     import logging
-    from hicmultiome import precompute as hprep
-    from hicmultiome import train as htrain
+    from flexcible import precompute as hprep
+    from flexcible import train as htrain
 
     tab = workdir / "objects_smoke2.csv"
     _smoke_table_v2(tab)

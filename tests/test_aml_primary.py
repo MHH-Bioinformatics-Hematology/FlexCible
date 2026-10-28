@@ -35,7 +35,7 @@ def test_quantile_map_ties_get_the_block_mean():
 
 
 def test_aml_consensus_leakage_guard(tmp_path):
-    from hicmultiome.reference import assert_reference_excludes
+    from flexcible.reference import assert_reference_excludes
     import json
     ref = tmp_path / "amlcons_lopo_xu_103_25kb.cool"
     ref.write_text("")

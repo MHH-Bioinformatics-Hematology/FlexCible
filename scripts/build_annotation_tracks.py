@@ -5,7 +5,7 @@ annotation priors: CpG islands (CFP1 -> H3K4me3/me2, Polycomb -> H3K27me3),
 TSSs (H3K4me3), transcribed gene bodies and exons (H3K36me3, H3K79me2,
 H4K20me1), and repeat classes (KRAB-ZNF silencing -> H3K9me3). Each channel
 is written at the model's bin size so the per-bin mean read by
-hicmultiome.tracks equals the stored value:
+flexcible.tracks equals the stored value:
 
     ANN_CGI        fraction of the bin covered by CpG islands (cpgIslandExt)
     ANN_TSS        number of distinct transcript TSSs in the bin (knownGene)

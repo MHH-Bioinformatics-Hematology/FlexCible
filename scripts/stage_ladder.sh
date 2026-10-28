@@ -14,20 +14,20 @@ for name in multiome_10kb multiome_5kb multiome_2kb; do
         continue
     fi
     echo "=== $name precompute $(date +%H:%M:%S) ==="
-    $PY -m hicmultiome.precompute --config "configs/$name.yaml" \
+    $PY -m flexcible.precompute --config "configs/$name.yaml" \
         > "$LOG/$name.precompute.log" 2>&1 || { echo "PRECOMPUTE FAILED $name"; continue; }
     echo "=== $name train $(date +%H:%M:%S) ==="
-    $TR --nproc_per_node=2 -m hicmultiome.train --config "configs/$name.yaml" \
+    $TR --nproc_per_node=2 -m flexcible.train --config "configs/$name.yaml" \
         > "$LOG/$name.train.log" 2>&1 || { echo "TRAIN FAILED $name"; continue; }
     echo "=== $name predict $(date +%H:%M:%S) ==="
-    $PY -m hicmultiome.predict --config "configs/$name.yaml" --chroms test \
+    $PY -m flexcible.predict --config "configs/$name.yaml" --chroms test \
         --out "runs/$name/pred_even.cool" > "$LOG/$name.predict.log" 2>&1 \
         || { echo "PREDICT FAILED $name"; continue; }
-    $PY -m hicmultiome.evaluate --config "configs/$name.yaml" \
+    $PY -m flexcible.evaluate --config "configs/$name.yaml" \
         --pred "runs/$name/pred_even.cool" --chroms test \
         --out "runs/$name/scc.json" > "$LOG/$name.evaluate.log" 2>&1 \
         || echo "EVAL FAILED $name"
-    $PY -m hicmultiome.diagnose --config "configs/$name.yaml" --chrom 2 \
+    $PY -m flexcible.diagnose --config "configs/$name.yaml" --chrom 2 \
         --pred "runs/$name/pred_even.cool" --out-dir "runs/$name" \
         --max-bins 20000 > "$LOG/$name.diagnose.log" 2>&1 || true
 done

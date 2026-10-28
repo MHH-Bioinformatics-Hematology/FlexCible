@@ -18,7 +18,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-import hicmultiome.tracks as pc                                          # noqa: E402
+import flexcible.tracks as pc                                          # noqa: E402
 
 CACHE = Path(os.environ.get("IV_TRACK_CACHE", str(Path.home() / "scratch/mt_tracks")))
 CACHE.mkdir(parents=True, exist_ok=True)

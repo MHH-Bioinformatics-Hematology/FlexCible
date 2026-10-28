@@ -16,7 +16,7 @@ Runs
   insitu7      the seven in situ Hi-C cells only, no indicator
 
 Stages (each skipped when its output exists)
-  precompute  window cache (CPU, python -m hicmultiome.precompute --workers N)
+  precompute  window cache (CPU, python -m flexcible.precompute --workers N)
   train       torchrun on --gpus; a run stopped by the max_epochs cap while
               still improving continues from checkpoint-latest (--max-epochs)
   eval        eval_val_windows --split test per training cell (730 disjoint
@@ -174,7 +174,7 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # the measured consensus for every cell
     "all12reflearn": (TRAIN12, None),
     # one resolution-conditioned residual model for 2, 5, 10 and 25 kb
-    # (hicmultiome.train_multires, scripts/multires.py); all12multires_<k>kb
+    # (flexcible.train_multires, scripts/multires.py); all12multires_<k>kb
     # are its per-resolution views, evaluated like the dedicated runs
     "all12multires": (TRAIN12, None),
     # coarse-to-fine cascade (scripts/cascade.py): the residual reference model
@@ -248,7 +248,7 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # lifted to hg38 (scripts/methylation.py, registry section 35)
     "all12refres_drop_meth_v2": (TRAIN12, None),
     # Meth plus methylation-aware directed CTCF motif planes (motifs.motif_meth,
-    # hicmultiome.motifmeth; registry section 43): CpG.npz of the WGBS cells
+    # flexcible.motifmeth; registry section 43): CpG.npz of the WGBS cells
     # (scripts/motif_meth.py --stage cpg), cell set as all12refres_drop_meth
     "all12refres_drop_motifmeth": (TRAIN12, None),
     # no consensus (honest) with track dropout and Meth, v2 cell set, two training
@@ -464,7 +464,7 @@ for _b in ("all12aml_refin_drop", "all12aml_honest_drop", "all12diff_refres_drop
             RUNS[_n] = (TRAIN12, None)
             HONEST_RUNS.add(_n)
 
-# Registry section 76 (hicmultiome/windowprior.py, scripts/window_prior.py): the positional consensus input
+# Registry section 76 (flexcible/windowprior.py, scripts/window_prior.py): the positional consensus input
 # replaced by the output of the window prior network P (a function of the marks of the window, no
 # coordinates). The runs are the configuration of an existing run with other reference maps:
 #   all12wp_ref_drop   all12diffcells_refres_drop with P(reference marks) as the reference plane and the
@@ -661,10 +661,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
                 smp.pop("lab", None)
     sbase = SEEDED[base][0] if base in SEEDED else base       # a seed copy has its original's recipe
     if sbase in DIFF_FAMILY or sbase in DIFFCELL_FAMILY:
-        # differential mark channels (registry section 66, hicmultiome/diffmarks.py): one rule for
+        # differential mark channels (registry section 66, flexcible/diffmarks.py): one rule for
         # every cell. Reference sets: the 12 training cell lines (a cell line reads the set without
         # itself; a held-out cell all 12), the fold's training patients, the HSPC training donors.
-        from hicmultiome import diffmarks as dmk
+        from flexcible import diffmarks as dmk
         kind, _ = diff_parts(sbase)
         groups = {s_["name"]: ("cell" if s_["name"] in cells[:len(TRAIN12)] else
                                "hspc" if s_["name"].startswith("amlxuhspc") else "aml")
@@ -872,11 +872,11 @@ def train(name, a, gpus):
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
         if cfg["train"].get("stage_dir"):
             # memory-mapped training windows on local disk, written once
-            if sh([PY, "-m", "hicmultiome.train", "--config", cp, "--stage-only"],
+            if sh([PY, "-m", "flexcible.train", "--config", cp, "--stage-only"],
                   O / f"{name}.stage.log"):
                 raise SystemExit(f"staging failed for {name}")
         sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
-            "-m", "hicmultiome.train", "--config", cp], log, env)
+            "-m", "flexcible.train", "--config", cp], log, env)
         if not done(log):
             raise SystemExit(f"training failed for {name}; see {log}")
     # never let the epoch cap stop a run that is still improving
@@ -896,7 +896,7 @@ def train(name, a, gpus):
         n0 = len(STOP_RE.findall(logtext(name)))
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(gpus))
         sh([TORCHRUN, "--standalone", f"--nproc_per_node={len(gpus)}",
-            "-m", "hicmultiome.train", "--config", ccp], O / f"{name}.cont.log", env)
+            "-m", "flexcible.train", "--config", ccp], O / f"{name}.cont.log", env)
         if len(STOP_RE.findall(logtext(name))) <= n0:
             raise SystemExit(f"continuation failed for {name}")
 
@@ -1387,7 +1387,7 @@ def main():
             if missing:
                 raise SystemExit(f"{name}: targets not ready: {missing}")
             print(f"[precompute] {name}", flush=True)
-            if sh([PY, "-m", "hicmultiome.precompute", "--config", cp,
+            if sh([PY, "-m", "flexcible.precompute", "--config", cp,
                    "--workers", a.workers], out_of(name) / f"{name}.precompute.log"):
                 raise SystemExit(f"precompute failed for {name}")
         if a.stage in ("train", "all"):

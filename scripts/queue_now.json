@@ -4,7 +4,7 @@
     {
       "name": "oe_25kb",
       "config": "configs/oe_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/oe_25kb",
       "cache_manifest": "cache/oe_25kb/manifest.json",
       "pred_out": "runs/oe_25kb/pred_even.cool",
@@ -16,7 +16,7 @@
     {
       "name": "best_25kb",
       "config": "configs/best_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/best_25kb",
       "cache_manifest": "cache/best_25kb/manifest.json",
       "pred_out": "runs/best_25kb/pred_even.cool",
@@ -28,7 +28,7 @@
     {
       "name": "meth_25kb",
       "config": "configs/meth_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/meth_25kb",
       "cache_manifest": "cache/meth_25kb/manifest.json",
       "pred_out": "runs/meth_25kb/pred_even.cool",
@@ -40,7 +40,7 @@
     {
       "name": "methonly_25kb",
       "config": "configs/methonly_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/methonly_25kb",
       "cache_manifest": "cache/methonly_25kb/manifest.json",
       "pred_out": "runs/methonly_25kb/pred_even.cool",
@@ -52,7 +52,7 @@
     {
       "name": "methseq_25kb",
       "config": "configs/methseq_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/methseq_25kb",
       "cache_manifest": "cache/methseq_25kb/manifest.json",
       "pred_out": "runs/methseq_25kb/pred_even.cool",
@@ -64,7 +64,7 @@
     {
       "name": "dropout_25kb",
       "config": "configs/dropout_25kb.yaml",
-      "module": "hicmultiome",
+      "module": "flexcible",
       "cache_dir": "cache/dropout_25kb",
       "cache_manifest": "cache/dropout_25kb/manifest.json",
       "pred_out": "runs/dropout_25kb/pred_even.cool",
@@ -153,7 +153,7 @@
       ],
       "cmd": [
         "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
-        "/home/mh-hannover.local/wolffjoa/src/hic-multiome-unet/scripts/minimal_set.py",
+        "/home/mh-hannover.local/wolffjoa/src/flexcible/scripts/minimal_set.py",
         "--config",
         "configs/gm12878_25kb.dropout.yaml",
         "--mode",
@@ -173,7 +173,7 @@
       "cmd": [
         "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
         "-m",
-        "hicmultiome.predict",
+        "flexcible.predict",
         "--config",
         "configs/capin_25kb.yaml",
         "--chroms",
@@ -193,7 +193,7 @@
       "cmd": [
         "/home/mh-hannover.local/wolffjoa/miniconda3/envs/hicdiff/bin/python",
         "-m",
-        "hicmultiome.evaluate",
+        "flexcible.evaluate",
         "--config",
         "configs/capin_25kb.yaml",
         "--pred",

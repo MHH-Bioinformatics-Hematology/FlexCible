@@ -18,14 +18,14 @@ run_one() {
     local name=$1 mins=${2:-}
     echo "=== $name $(date +%H:%M:%S) ==="
     [ -s "cache/$name/manifest.json" ] || \
-        $PY -m hicmultiome.precompute --config "configs/$name.yaml" \
+        $PY -m flexcible.precompute --config "configs/$name.yaml" \
             > "$LOG/$name.precompute.log" 2>&1 || { echo "PRECOMPUTE FAILED $name"; return 1; }
-    $TR --nproc_per_node=2 -m hicmultiome.train --config "configs/$name.yaml" \
+    $TR --nproc_per_node=2 -m flexcible.train --config "configs/$name.yaml" \
         > "$LOG/$name.train.log" 2>&1 || { echo "TRAIN FAILED $name"; return 1; }
-    $PY -m hicmultiome.predict --config "configs/$name.yaml" --chroms test --tta \
+    $PY -m flexcible.predict --config "configs/$name.yaml" --chroms test --tta \
         --out "runs/$name/pred_even.cool" > "$LOG/$name.predict.log" 2>&1 \
         || { echo "PREDICT FAILED $name"; return 1; }
-    $PY -m hicmultiome.evaluate --config "configs/$name.yaml" \
+    $PY -m flexcible.evaluate --config "configs/$name.yaml" \
         --pred "runs/$name/pred_even.cool" --chroms test \
         --out "runs/$name/scc.json" > "$LOG/$name.evaluate.log" 2>&1 \
         || echo "EVAL FAILED $name"

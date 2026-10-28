@@ -394,7 +394,7 @@ def stage_checks_features(devices: list[str]) -> None:
 
     import cooler
     from aml_eval import fetch_region, loop_params, pred_matrix
-    from hicmultiome.bioscore import local_enrichment
+    from flexcible.bioscore import local_enrichment
     prm = loop_params(ax.FEAT_RES)
     HC = cooler.Cooler(str(ax.hspc_consensus_path(ax.FEAT_RES)))
     C12 = cooler.Cooler(str(ap.consensus12(ax.FEAT_RES)))
