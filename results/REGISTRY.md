@@ -693,7 +693,7 @@ recovers the consensus at 0.55 to 0.65, well below the measured consensus
 it approximates. Stage 2 (all12reflearn, the residual model with the
 out-of-fold learned map as reference) is queued after the 2 kb pair.
 
-## 17. Multi-resolution training (PENDING)
+## 17. Multi-resolution training (model A trained; status in section 83)
 
 A. Resolution-conditioned shared U-Net, run all12multires
 (`hicmultiome/train_multires.py`, `scripts/multires.py`): one residual
@@ -4862,7 +4862,7 @@ data do not show how much the network uses the methylation weighting. The
 rest of the recipe fixed; the 25 kb baseline has no Meth track, so that
 difference combines the Meth track and the planes.
 
-## 44. Sparse input sets without the consensus, with and without Meth (PENDING, queued)
+## 44. Sparse input sets without the consensus, with and without Meth (status in section 83)
 
 Question. For a user who has only a few tracks, which input sets give a usable
 prediction without any reference map, and what does the methylation channel add to
@@ -9603,7 +9603,7 @@ Retraining raises the Pearson of C.Origami from 0.45 to 0.72 and of Epiphany fro
 ### Files
 `scripts/competitor_retrain/` (fetch_dnase, prep, train_corigami, train_epiphany, predict_*, finalize, blocks, table, score_workers.sh, vendor), `results/competitor_retrain/{table.md, per_cell.csv, summary.csv, vs_retrained.csv, dnase_picks.tsv, history_*.json}`, `results/hic_measures_chrho/chrho_competitor_retrain_{per_block,summary}.csv`; checkpoints and predictions on the share under `competitor_retrain/` and `runs/benchmark/competitor_oe/`. Hooks: `scripts/hic_measures.py` flags `--chrho-competitor-retrain`, `--chrho-cells`.
 
-## 77b. Equal-data retraining of C.Origami and Epiphany at 2, 5, 10 and 25 kb with the original stopping rules (PENDING; follow-up to section 77, GPU capacity exhausted)
+## 77b. Equal-data retraining of C.Origami and Epiphany at 2, 5, 10 and 25 kb with the original stopping rules (CLOSED 2026-10-28, revision material; status in section 83; follow-up to section 77, GPU capacity exhausted)
 
 Question (author): is the gap of section 77 an artefact of resolution (C.Origami at 8 kb, Epiphany at 10 kb only) or of the shortened C.Origami schedule? Rules: same split, cells, targets and per-method input sets as section 77; original stopping rule of each method; no wall-clock budget; claims only at resolutions at which the retrained model was trained.
 
@@ -9810,3 +9810,34 @@ than every competitor at its lowest (Epiphany 2.6 GB, C.Origami 3.5 GB, Akita 6.
 (both with fewer forward passes: Epiphany non-overlapping, no reverse complement); C.Origami takes an hour per
 chromosome and 45 GB RAM, a cost of the 32 kb window stride and pixel lists of its cool writer rather than of its
 model. Caveats: one chromosome, one run per job, warm file cache; competitor writers are ours, not the authors'.
+
+## 83. Status of all pending sections and of the work of 2026-10-17 to 2026-10-28 (bookkeeping; section 82 was the last number when this was written)
+
+Decision 2026-10-19 (user): the manuscript compares only against released models and released predictions. Retraining of competitors (sections 67, 77, 77b, 79) is revision material and stays out of the manuscript. Decision 2026-10-28 (user): the published model is ONE model for all bin sizes with `--binSize` at prediction time (section 17, model A), not one model per resolution; the per-resolution `_drop` families remain the models behind the current manuscript numbers until that model is retrained.
+
+### Results of 2026-10-17 to 2026-10-28 (not in the manuscript)
+- C.Origami, 8 192 bp native, original stopping rule (patience 12 on validation loss, 80-epoch cap), remote 4090: early stop at epoch 31, best validation Pearson 0.725 at epoch 24 (`competitor_retrain/runs/corigami_8kb_native80`, log `corigami_8kb_native80.log`).
+- C.Origami adapted to 5 kb and 2 kb: continuation runs stopped silently on 2026-10-17 (no traceback; cause not established, memory not excluded; throughput fell from 6.9 to 5.2 samples/s before the stop). Last validated checkpoints: 5 kb step 123 025 (best 0.619 at epoch 24, noisy), 2 kb step 142 709 (plateau 0.40 to 0.46). Not continued.
+- Akita retrained under the original rule (patience 12, no epoch cap; `akita_retrain/runs/akita_orig_*`): 2 kb split A seed 0 stopped at epoch 33 (best validation loss 0.1451), seed 1 at epoch 23 (0.1415), split B at epoch 34 (0.1408); validation Pearson stayed at 0.20 to 0.25, far below the released Akita (0.68 on the same cells), so the reimplementation under the original SGD recipe does not reproduce the released model. 8 kb (SRC 10 kb) did not learn on either split (validation r 0.08 split A, 0.05 split B). 32 kb (SRC 25 kb): split A best validation r 0.43, split B best validation loss 0.2473 at epoch 33. Predictions written for all runs; full-schedule scoring blocks `chrhoakitaFA_*` complete (65 of 65 `measures.csv`), aggregation (`evaluate.py --stage report`) NOT run because it would overwrite `results/akita_retrain/summary_tables.md` of the budget-limited runs. 8 and 32 kb predictions unscored (`evaluate.py` handles the 2 kb grid only). Akita bins are powers of two, so these arms are 8 192 and 32 768 bp, never "10 kb" or "25 kb".
+- Manuscript (not in this repo): prose rewritten to the user's style, figures split to one PDF per panel for the method, Akita and the new region figure (`fig_regions.py`: per-window gains over consensus and competitors; IMR-90 78 % of 520 windows, GM12878 89 % of 758, K562 77 % of 871 windows of 800 kb where ours beats both; Akita regions 96.6 % of 413); references for the Introduction claims added and verified via Crossref; ENCODE counts queried 2026-10-28 (histone ChIP-seq 3 090 experiments / 231 biosamples vs Hi-C 448 / 163).
+
+### Status of sections marked PENDING
+| section | status 2026-10-28 |
+|---|---|
+| 17 multi-resolution model A | trained 2026-09-29 (honest validation 0.758 / 0.860 / 0.923 / 0.951 at 2 / 5 / 10 / 25 kb; +0.006 and +0.005 over the dedicated 25 and 10 kb models on validation). Predates track dropout and the chromosome-held-out split; never promoted. OPEN: retrain with track dropout, reference input, both splits, and a continuous log2(bin size) embedding so any `--binSize` is accepted; then re-run all evaluations with that one model. |
+| 22 track dropout | realised in every `_drop` family (sections 23 onward); superseded. |
+| 24 hard split | the hard-split score is used in later sections (patient-specific windows of the AML analysis); superseded. |
+| 26 gain beyond consensus on new cells | answered by sections 74 (pre-registered new cell types) and the held-out targets; superseded. |
+| 27 mean methylation input | realised in the Meth models (sections 44, 78); superseded. |
+| 28 copy number / SV mask | not pursued; AML same-donor handling (section 72) covers the SV issue; open only as an idea. |
+| 30 structure-aware loss | tested in sections 62 to 70 (loop-centric objectives, negative); superseded. |
+| 32 cohesin-unknown indicator | reported later as "did not help"; closed negative. |
+| 33, 34 recipes at 5 and 2 kb | realised by the 5 kb and 2 kb caches and models used throughout; superseded. |
+| 44 sparse inputs without consensus | evaluated in section 78 and Fig. (variable inputs) via `--variant meth_resid`; closed. |
+| 45 AML-inclusive residual | reported in section 72 tables (AML-inclusive residual rows); closed. |
+| 52 AML CV folds 10 to 12 | completed; feeds sections 62 to 72; closed. |
+| 63, 66, 70 loop-centric and differential channels | 63 and 70 negative (artefact of the HSPC level; criteria2 controls), 66 realised as the difference-track family; closed. Sections 58 to 68 are duplicated in the file (two copies of 63 and 66); kept as is. |
+| 77b competitor retraining at four resolutions | closed as revision material (decision above). |
+| 79b Akita original rule | runs done, see above; scoring aggregation and coarse-bin scoring open as revision material. |
+
+Numbering: section 78 was used twice (methylation proxy and an earlier AML analysis); the Akita retraining is 79. No further renumbering.
