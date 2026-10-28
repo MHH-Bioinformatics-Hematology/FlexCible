@@ -41,7 +41,7 @@ rank (6 global; the single-GPU wrapper doubles it), patience 10 epochs,
 ## Step 1: caches (CPU, local, already started)
 
     HM=/mnt/processed/wolffjoa/hic-multiome
-    cd ~/src/hic-multiome-unet
+    cd ~/src/flexcible
     nice -n 19 python scripts/multicell_expanded.py --runs all12refin_drop_chrho --res 5000 --stage precompute --workers 2
     nice -n 19 python scripts/multicell_expanded.py --runs all12honest_drop_chrho --res 5000 --stage precompute --workers 2
 
@@ -61,7 +61,7 @@ CNN holds the GPU; do not start while it runs).
 
     source ~/hicenv/bin/activate
     HM=/mnt/processed/wolffjoa/hic-multiome
-    cd ~/hic-multiome-unet          # rsync of the local tree, after this commit
+    cd ~/flexcible          # rsync of the local tree, after this commit
     for RUN in all12honest_drop_chrho all12refin_drop_chrho; do   # add all12refres_drop_chrho last if time permits
       NAME=${RUN}_5kb
       python scripts/claim_job.py claim $NAME --done-path $HM/runs/multicell_reference/$NAME/best \
@@ -125,7 +125,7 @@ per-cell test evaluation adds about 10 min.
 ## Step 3: predictions and scoring (CPU; GPU optional)
 
 Prediction on the five held-out chromosomes for GM12878, IMR-90 and K562
-(`hicmultiome.predict --chroms chr2,chr3,chr11,chr14,chr17 --tta`) goes through
+(`flexcible.predict --chroms chr2,chr3,chr11,chr14,chr17 --tta`) goes through
 the existing chrho stage. `scripts/hic_measures.py` does not yet carry 5 kb
 (`RESOLUTIONS = [25000, 10000]`, `WINDOW`, `BEST_OTHER`, `REPLICATE`, the
 insulation width `ins_w` and `benchmark_blocks.params`), so the following is

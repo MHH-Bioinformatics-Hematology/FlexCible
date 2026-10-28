@@ -424,7 +424,7 @@ GM12878 and the held-out K562, HMEC and HUVEC. Options `data.reference_cool`
 (or per sample `samples[].reference_cool`) and `model.reference`: input (one
 extra 2D conditioning plane, A1 "refin") or residual (input plane, and the
 output is reference plus network output, A2 "refres"); default none.
-`hicmultiome/reference.py` rejects any reference whose recorded cells include
+`flexcible/reference.py` rejects any reference whose recorded cells include
 the trained or scored cell (precompute, training, eval_val_windows,
 crosscell_predict, consensus baseline columns).
 
@@ -696,7 +696,7 @@ out-of-fold learned map as reference) is queued after the 2 kb pair.
 ## 17. Multi-resolution training (model A trained; status in section 83)
 
 A. Resolution-conditioned shared U-Net, run all12multires
-(`hicmultiome/train_multires.py`, `scripts/multires.py`): one residual
+(`flexcible/train_multires.py`, `scripts/multires.py`): one residual
 reference model (12 training cells, per-cell leave-one-out consensus,
 consensus12 for held-out cells, honest validation per resolution) trained on
 2, 5, 10 and 25 kb windows together. `model.resolutions` gives every
@@ -744,10 +744,10 @@ the whole 2 kb train split with a 512 x 512 target and a reference (and
 prior) plane in float16 in RAM, about 40 GB per rank, next to other jobs;
 all12honest (no reference plane) fitted. These runs now read their windows
 from memory maps staged once on local disk (`train.stage_dir`,
-`python -m hicmultiome.train --stage-only`), one batch at a time. Test
+`python -m flexcible.train --stage-only`), one batch at a time. Test
 scores follow from the evaluation now running. The training windows were
 staged once as float16 memory maps on local disk
-(`hicmultiome.train_multires --stage-only`); the first start, in which
+(`flexcible.train_multires --stage-only`); the first start, in which
 each rank decompressed its stripe from the network share, was stopped
 after 45 minutes of loading.
 
@@ -1208,7 +1208,7 @@ STAG1-cohesin at CTCF sites after STAG2 loss) and ko_half (enrichment above
 the mean halved). Change = KO map minus WT map (log O/E), predicted change =
 prediction from the KO input minus prediction from the WT input, Pearson per
 region on the shared mask (median over 413 regions). Loops: donut calls on
-the measured WT and KO maps (union, `hicmultiome.bioscore.call_loops` on a 10
+the measured WT and KO maps (union, `flexcible.bioscore.call_loops` on a 10
 kb grid, 60 to 600 kb), strength = log2 donut enrichment; boundaries: minima
 of the WT insulation profile (diamond mean of log O/E, 100 kb). Ceiling: the
 change between independent clone pairs, (KO c1 - WT c1) against (KO c2 - WT
@@ -2357,7 +2357,7 @@ chromatin, since no patient has a replicate CUT&Tag.
 ## 30. Structure-aware learning: TAD, loop and compartment terms (PENDING)
 
 Base: all12refin_drop (input reference, track dropout), the best model on
-new cells at 10 kb. Added to its L1+MSE loss (hicmultiome/losses.py), one at
+new cells at 10 kb. Added to its L1+MSE loss (flexcible/losses.py), one at
 a time: insul (half L1, half 1 - correlation of the insulation profile,
 10-bin square; TADs), donut (L1 of the pixel minus its 2-to-5-bin ring;
 loops) and compart (1 - Pearson between the row-correlation matrices of
@@ -2392,7 +2392,7 @@ GM12878, IMR-90, HepG2 (test regions) with the consensus reference scored
 alike: Pearson, stratified correlation, insulation correlation, boundary F1,
 loop enrichment correlation, APA ratio on the target's top 1 % enrichment
 pixels at least 50 kb off the diagonal, correlation-matrix agreement and
-first-eigenvector agreement (hicmultiome/structure.py;
+first-eigenvector agreement (flexcible/structure.py;
 `results/structure_loss/structure_eval.csv`).
 
 ## 31. Multi-measure evaluation (FINAL)
@@ -2409,7 +2409,7 @@ Script `scripts/hic_measures.py` (stages predict, expected, score, ceilings,
 combine, report, tables; tests `tests/test_hic_measures.py`), outputs
 `runs/hic_measures/`, tables `results/hic_measures/`.
 
-Whole-chromosome maps. `hicmultiome.predict` tiles each model's windows over
+Whole-chromosome maps. `flexcible.predict` tiles each model's windows over
 whole chromosomes (half-window stride, Hann-weighted averaging, test-time
 reverse averaging; 360 maps, 12 models x 15 cells x 2 resolutions). Every map
 reaches only as far as the model window: 2.0 Mb at 25 kb, 1.92 Mb at 10 kb
@@ -2512,7 +2512,7 @@ Pearson pooled over windows), TADs (median insulation correlation, median
 boundary F1, agreement min(r, 1/r) of the pooled boundary counts), loops
 (median donut-enrichment correlation, median APA agreement) and
 compartments (median correlation of the row-correlation matrices, median
-|r| of their first eigenvectors); hicmultiome.structure supplies the window
+|r| of their first eigenvectors); flexcible.structure supplies the window
 measures. It costs 0.011 s per 80-bin and 0.020 s per 192-bin window (13
 and 25 s for 1200 validation windows). The nine count-space measures and
 their regressors are not used there: they need whole chromosomes and
@@ -4730,7 +4730,7 @@ dilutes that signal. Does giving the Hi-C model the methylation of each motif si
 improve the prediction over the Meth track alone.
 
 Input option `motifs.motif_meth` (default off; `motif_meth_id` MA0139.2). Code:
-`hicmultiome/motifmeth.py`, `precompute.assemble_chrom`, `config.py`, `train.py`
+`flexcible/motifmeth.py`, `precompute.assemble_chrom`, `config.py`, `train.py`
 (row selection and dropout coupling), `scripts/crosscell_predict.py` (absent-Meth
 sets), `scripts/motif_meth.py`. Per cell and chromosome, every CTCF hit of the
 model's motif scan (PWM >= 0.8 of the maximum, the channel threshold; start
@@ -5181,7 +5181,7 @@ loops that are shared with HSPC?
   feature enters as min and max. No Hi-C-derived feature of the target pair. No RNA-seq exists in the repo, so no
   expression feature. Methylation of HSPC does not exist (no public WGBS), so methylation has no difference feature.
 - Shared loops are called here, not by Peakachu (the Peakachu calls are not public): local maximum of the 10 kb donut
-  enrichment (hicmultiome.bioscore, same parameters as the AML scripts), log2 enrichment >= 0.6 in the patient map
+  enrichment (flexcible.bioscore, same parameters as the AML scripts), log2 enrichment >= 0.6 in the patient map
   and >= 0.6 (3x3 maximum) in the HSPC consensus, both anchors mappable, not within 2 bins of an AML-specific loop
   of the patient. Median log2 enrichment: positives 0.69 (patient) and 0.18 (HSPC consensus; for the 55 percent of
   positives with a local maximum within 1 bin); negatives 0.83 to 0.88 and 0.71 to 0.73. Negatives are stronger
@@ -5817,7 +5817,7 @@ Fix (all default off). (1) Cohesin-fraction row (`data.cohesin_fraction`, `sampl
 one constant input row, log1p(f)/ln 2 - 1 (1 intact = 0, none = -1), a statement about the biology and not
 about which ChIP was measured (1 for every sample, also those without RAD21/SMC3 ChIP; 0.26 for the 6 h
 auxin sample: RAD21 enrichment above the median in the top 1% untreated bins, auxin over untreated, odd
-chromosomes). (2) Cohesin-loss augmentation (`train.cohesin_aug` p = 0.25, `hicmultiome/cohesin.py`): a
+chromosomes). (2) Cohesin-loss augmentation (`train.cohesin_aug` p = 0.25, `flexcible/cohesin.py`): a
 training window of an intact sample is replaced by a synthetic depleted one with f drawn from
 {0, 0.1, 0.26, 0.5, 0.75}: RAD21/SMC3 contrast scaled to f around the window median, or (share 0.5) set to
 the absent code, the fraction row set to f, and the target moved by (1 - f)/(1 - 0.26) times the change of
@@ -7248,7 +7248,7 @@ Caveats. Ten donors, one seed per model; 10 kb only (25 kb not analysed; the loo
 Question: section 62 shows that the AML-inclusive model predicts a weak gain at AML-specific loops (median +0.06 against +0.40 log2 measured, Spearman 0.28, AUROC 0.62 against matched shared loops, private loops 0.59), carried by the AML reference. The pixel loss is dominated by background; AML-specific loops (about 230 per patient, 7 training patients per fold) and stripes are rare, small-amplitude features, and the patient's own marks add little under that loss (sections 47, 57, 61, 62). The residual-reference model alone (section 45) did not change this. This section adds a loop-centric recipe and tests it on the same ten held-out patients.
 
 ### Implementation (status: implemented, CPU-tested, no GPU run yet)
-Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 25 kb: the residual-reference AML model (`all12aml_refres_drop`: model.reference residual, so the network output is the patient-specific deviation from the AML reference; same cache `mc_all12aml_ref_<k>kb_f<N>`, AML x3 oversampling, patient-hard validation) plus `train.aml_object_*` (`hicmultiome/aml_objects.py`, hooks in `hicmultiome/train.py`, all defaults off, existing runs unchanged):
+Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 25 kb: the residual-reference AML model (`all12aml_refres_drop`: model.reference residual, so the network output is the patient-specific deviation from the AML reference; same cache `mc_all12aml_ref_<k>kb_f<N>`, AML x3 oversampling, patient-hard validation) plus `train.aml_object_*` (`flexcible/aml_objects.py`, hooks in `flexcible/train.py`, all defaults off, existing runs unchanged):
 
 | flag | value | role |
 |---|---|---|
@@ -7258,7 +7258,7 @@ Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 2
 | `train.aml_object_pair_batches` | true | batches of half AML-specific and half control windows, so each batch holds ranking pairs |
 | `train.aml_object_weight` | 1.0 | extra loss on the donut neighbourhood of loops (box of outer+1 bins) and the stripe rectangle with one bin of flank, both objects and controls: L1 between predicted and measured residual (prediction minus reference, target minus reference) plus L1 between the object-level enrichments (loop: maximum of the donut enrichment over the 3 x 3 pixels around the annotated pixel, as the evaluation; stripe: mean over the rectangle) |
 | `train.aml_object_rank` | 0.5 | pairwise logistic ranking softplus(-(s_AML - s_control)/0.05) over every AML-specific and control object of the same kind in the batch, scores on the residual; `aml_object_rank_consistent` keeps pairs whose measured scores are ordered the same way; `aml_object_rank_space` residual or full |
-| `train.aml_object_donut` | [1, 4] at 10 kb, [1, 3] at 25 kb | enrichment ring (inner, outer half-width in bins; the donut of `hicmultiome/losses.py` with the evaluation's 10 kb setting) |
+| `train.aml_object_donut` | [1, 4] at 10 kb, [1, 3] at 25 kb | enrichment ring (inner, outer half-width in bins; the donut of `flexcible/losses.py` with the evaluation's 10 kb setting) |
 
 Reverse-complement augmentation flips the object coordinates with the window (tested against the tensor flip). The loss terms are logged per epoch (`obj_pix`, `obj_enr`, `obj_rank`, `obj_n`). The loss keys are `train.*` because `train.loss` is one spec string.
 
@@ -7291,7 +7291,7 @@ Results: not yet available.
 The ranking and enrichment terms push enrichment at annotated positions up; a model that raises enrichment at every annotated-looking site would also raise the false-positive rate (the matched shared controls and the ranking term are the counterweight; B_rand and A_do controls in `criteria`/`auroc.csv` test this). Only 42 percent of the table objects lie in cached training windows. Weights (1.0, 0.5, temperature 0.05, x5) were not tuned; one seed per fold. The 25 kb variant uses the 10 kb object coordinates mapped to 25 kb bins and a narrower ring, and its loops are only 2 to 60 bins long. The hard-split JSONs of folds 10 to 12 exist only in the remote repo copy.
 
 ### Files
-`hicmultiome/aml_objects.py`, `scripts/aml_objects_table.py`, `scripts/aml_loopfocus_configs.py`, edits in `hicmultiome/train.py`, `hicmultiome/config.py`, `scripts/multicell_expanded.py`, `scripts/aml_train_eval.py`, `scripts/aml_loop_detection.py`; `tests/test_aml_objects.py`; `results/aml_objects/summary.csv`, `results/aml_loopfocus/REMOTE_JOB.md`, `results/aml_loopfocus/configs/`.
+`flexcible/aml_objects.py`, `scripts/aml_objects_table.py`, `scripts/aml_loopfocus_configs.py`, edits in `flexcible/train.py`, `flexcible/config.py`, `scripts/multicell_expanded.py`, `scripts/aml_train_eval.py`, `scripts/aml_loop_detection.py`; `tests/test_aml_objects.py`; `results/aml_objects/summary.csv`, `results/aml_loopfocus/REMOTE_JOB.md`, `results/aml_loopfocus/configs/`.
 
 
 ## 64. Which marks and methylation features go with AML-specific loops and stripes, and can they be boosted? (FINAL; section 63 was the last number when this was written)
@@ -7378,7 +7378,7 @@ Caveats. Eight to sixteen donors; one HSPC RNA sample from another laboratory (C
 Premise: "this chromatin-mark / methylation pattern leads to a loop or a stripe" is cell-type independent biology and AML is only where it shows most clearly. The AML-specific recipe of section 63 gives the model the patient's marks and the AML reference and rewards AML objects only; whatever it learns can be an AML-specific rule. This section implements one rule for the 12 training cell lines, the 5 held-out cells and the AML patients: the network gets the reference's marks and the sample-minus-reference difference of the marks beside the reference Hi-C it already reads, so that residual Hi-C ~ f(delta marks) with one shared f, and the loop-centric sampling and loss act on the cell-specific loops and stripes of every training cell.
 
 ### Implementation (status: implemented and CPU-tested; no window cache built, no GPU run)
-Differential mark channels (`hicmultiome/diffmarks.py`; hooks in `precompute.py`, `train.py`, `predict.py`, `scripts/crosscell_predict.py`; all off by default, existing caches, run configs and 60-step training logs identical to the previous commit):
+Differential mark channels (`flexcible/diffmarks.py`; hooks in `precompute.py`, `train.py`, `predict.py`, `scripts/crosscell_predict.py`; all off by default, existing caches, run configs and 60-step training logs identical to the previous commit):
 
 | flag | default | role |
 |---|---|---|
@@ -7418,7 +7418,7 @@ Results: not yet available.
 The channels carry no new information for a cell whose marks equal the pool mean, and a network that ignores them returns the section 45 residual model: the ablations separate the channels from the objects. The quantile anchoring is a choice (q50 to 0, q99 to 1); sparse tracks (CUT&Tag) have q50 near 0. The cell objects depend on map depth (cap of 400 / 200 per cell) and on the definitions of `crosscell_rule_transfer.py`, which was still being developed when its objects file (2026-10-11 12:24) was converted: the tables must be regenerated (`python scripts/cell_objects_table.py`, then the 10 kb caches are unaffected, only the run configs read the table) if that stage is rerun with other thresholds; unmatched specific objects keep no control (the fallback of section 63 then takes a control of the same cell and kind). The AML patients have three marks, so most difference rows of the 13-mark layout are 0 for them; the cell lines carry 13. One seed per run; regional in-silico knockouts do not touch the difference rows. Another section may already use number 66 when this lands.
 
 ### Files
-`hicmultiome/diffmarks.py`, edits in `hicmultiome/{config,precompute,train,tracks,predict}.py`, `scripts/{cell_objects_table,cell_objects_eval,diff_marks_configs}.py`, edits in `scripts/{multicell_expanded,crosscell_predict,aml_train_eval,aml_loop_detection}.py`; `tests/test_diffmarks.py`; `results/diff_marks/REMOTE_JOB.md`, `results/diff_marks/configs/`, `results/cell_objects/` (tables and counts).
+`flexcible/diffmarks.py`, edits in `flexcible/{config,precompute,train,tracks,predict}.py`, `scripts/{cell_objects_table,cell_objects_eval,diff_marks_configs}.py`, edits in `scripts/{multicell_expanded,crosscell_predict,aml_train_eval,aml_loop_detection}.py`; `tests/test_diffmarks.py`; `results/diff_marks/REMOTE_JOB.md`, `results/diff_marks/configs/`, `results/cell_objects/` (tables and counts).
 
 ## 67. HiC-Reg retrained leak-free on the chromosome split of our models (FINAL; section 66 was the last number when this was written)
 
@@ -8734,7 +8734,7 @@ Caveats. Ten donors, one seed per model; 10 kb only (25 kb not analysed; the loo
 Question: section 62 shows that the AML-inclusive model predicts a weak gain at AML-specific loops (median +0.06 against +0.40 log2 measured, Spearman 0.28, AUROC 0.62 against matched shared loops, private loops 0.59), carried by the AML reference. The pixel loss is dominated by background; AML-specific loops (about 230 per patient, 7 training patients per fold) and stripes are rare, small-amplitude features, and the patient's own marks add little under that loss (sections 47, 57, 61, 62). The residual-reference model alone (section 45) did not change this. This section adds a loop-centric recipe and tests it on the same ten held-out patients.
 
 ### Implementation (status: implemented, CPU-tested, no GPU run yet)
-Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 25 kb: the residual-reference AML model (`all12aml_refres_drop`: model.reference residual, so the network output is the patient-specific deviation from the AML reference; same cache `mc_all12aml_ref_<k>kb_f<N>`, AML x3 oversampling, patient-hard validation) plus `train.aml_object_*` (`hicmultiome/aml_objects.py`, hooks in `hicmultiome/train.py`, all defaults off, existing runs unchanged):
+Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 25 kb: the residual-reference AML model (`all12aml_refres_drop`: model.reference residual, so the network output is the patient-specific deviation from the AML reference; same cache `mc_all12aml_ref_<k>kb_f<N>`, AML x3 oversampling, patient-hard validation) plus `train.aml_object_*` (`flexcible/aml_objects.py`, hooks in `flexcible/train.py`, all defaults off, existing runs unchanged):
 
 | flag | value | role |
 |---|---|---|
@@ -8744,7 +8744,7 @@ Run family `all12aml_loopfocus_refres_drop_f<N>` (N = 10, 11, 12) at 10 kb and 2
 | `train.aml_object_pair_batches` | true | batches of half AML-specific and half control windows, so each batch holds ranking pairs |
 | `train.aml_object_weight` | 1.0 | extra loss on the donut neighbourhood of loops (box of outer+1 bins) and the stripe rectangle with one bin of flank, both objects and controls: L1 between predicted and measured residual (prediction minus reference, target minus reference) plus L1 between the object-level enrichments (loop: maximum of the donut enrichment over the 3 x 3 pixels around the annotated pixel, as the evaluation; stripe: mean over the rectangle) |
 | `train.aml_object_rank` | 0.5 | pairwise logistic ranking softplus(-(s_AML - s_control)/0.05) over every AML-specific and control object of the same kind in the batch, scores on the residual; `aml_object_rank_consistent` keeps pairs whose measured scores are ordered the same way; `aml_object_rank_space` residual or full |
-| `train.aml_object_donut` | [1, 4] at 10 kb, [1, 3] at 25 kb | enrichment ring (inner, outer half-width in bins; the donut of `hicmultiome/losses.py` with the evaluation's 10 kb setting) |
+| `train.aml_object_donut` | [1, 4] at 10 kb, [1, 3] at 25 kb | enrichment ring (inner, outer half-width in bins; the donut of `flexcible/losses.py` with the evaluation's 10 kb setting) |
 
 Reverse-complement augmentation flips the object coordinates with the window (tested against the tensor flip). The loss terms are logged per epoch (`obj_pix`, `obj_enr`, `obj_rank`, `obj_n`). The loss keys are `train.*` because `train.loss` is one spec string.
 
@@ -8775,7 +8775,7 @@ Results: not yet available.
 The ranking and enrichment terms push enrichment at annotated positions up; a model that raises enrichment at every annotated-looking site would also raise the false-positive rate (the matched shared controls and the ranking term are the counterweight; B_rand and A_do controls in `criteria`/`auroc.csv` test this). Only 42 percent of the table objects lie in cached training windows. Weights (1.0, 0.5, temperature 0.05, x5) were not tuned; one seed per fold. The 25 kb variant uses the 10 kb object coordinates mapped to 25 kb bins and a narrower ring, and its loops are only 2 to 60 bins long. The hard-split JSONs of folds 10 to 12 exist only in the remote repo copy.
 
 ### Files
-`hicmultiome/aml_objects.py`, `scripts/aml_objects_table.py`, `scripts/aml_loopfocus_configs.py`, edits in `hicmultiome/train.py`, `hicmultiome/config.py`, `scripts/multicell_expanded.py`, `scripts/aml_train_eval.py`, `scripts/aml_loop_detection.py`; `tests/test_aml_objects.py`; `results/aml_objects/summary.csv`, `results/aml_loopfocus/REMOTE_JOB.md`, `results/aml_loopfocus/configs/`.
+`flexcible/aml_objects.py`, `scripts/aml_objects_table.py`, `scripts/aml_loopfocus_configs.py`, edits in `flexcible/train.py`, `flexcible/config.py`, `scripts/multicell_expanded.py`, `scripts/aml_train_eval.py`, `scripts/aml_loop_detection.py`; `tests/test_aml_objects.py`; `results/aml_objects/summary.csv`, `results/aml_loopfocus/REMOTE_JOB.md`, `results/aml_loopfocus/configs/`.
 
 
 ## 64. Which marks and methylation features go with AML-specific loops and stripes, and can they be boosted? (FINAL; section 63 was the last number when this was written)
@@ -8862,7 +8862,7 @@ Caveats. Eight to sixteen donors; one HSPC RNA sample from another laboratory (C
 Premise: "this chromatin-mark / methylation pattern leads to a loop or a stripe" is cell-type independent biology and AML is only where it shows most clearly. The AML-specific recipe of section 63 gives the model the patient's marks and the AML reference and rewards AML objects only; whatever it learns can be an AML-specific rule. This section implements one rule for the 12 training cell lines, the 5 held-out cells and the AML patients: the network gets the reference's marks and the sample-minus-reference difference of the marks beside the reference Hi-C it already reads, so that residual Hi-C ~ f(delta marks) with one shared f, and the loop-centric sampling and loss act on the cell-specific loops and stripes of every training cell.
 
 ### Implementation (status: implemented and CPU-tested; no window cache built, no GPU run)
-Differential mark channels (`hicmultiome/diffmarks.py`; hooks in `precompute.py`, `train.py`, `predict.py`, `scripts/crosscell_predict.py`; all off by default, existing caches, run configs and 60-step training logs identical to the previous commit):
+Differential mark channels (`flexcible/diffmarks.py`; hooks in `precompute.py`, `train.py`, `predict.py`, `scripts/crosscell_predict.py`; all off by default, existing caches, run configs and 60-step training logs identical to the previous commit):
 
 | flag | default | role |
 |---|---|---|
@@ -8902,7 +8902,7 @@ Results: not yet available.
 The channels carry no new information for a cell whose marks equal the pool mean, and a network that ignores them returns the section 45 residual model: the ablations separate the channels from the objects. The quantile anchoring is a choice (q50 to 0, q99 to 1); sparse tracks (CUT&Tag) have q50 near 0. The cell objects depend on map depth (cap of 400 / 200 per cell) and on the definitions of `crosscell_rule_transfer.py`, which was still being developed when its objects file (2026-10-11 12:24) was converted: the tables must be regenerated (`python scripts/cell_objects_table.py`, then the 10 kb caches are unaffected, only the run configs read the table) if that stage is rerun with other thresholds; unmatched specific objects keep no control (the fallback of section 63 then takes a control of the same cell and kind). The AML patients have three marks, so most difference rows of the 13-mark layout are 0 for them; the cell lines carry 13. One seed per run; regional in-silico knockouts do not touch the difference rows. Another section may already use number 66 when this lands.
 
 ### Files
-`hicmultiome/diffmarks.py`, edits in `hicmultiome/{config,precompute,train,tracks,predict}.py`, `scripts/{cell_objects_table,cell_objects_eval,diff_marks_configs}.py`, edits in `scripts/{multicell_expanded,crosscell_predict,aml_train_eval,aml_loop_detection}.py`; `tests/test_diffmarks.py`; `results/diff_marks/REMOTE_JOB.md`, `results/diff_marks/configs/`, `results/cell_objects/` (tables and counts).
+`flexcible/diffmarks.py`, edits in `flexcible/{config,precompute,train,tracks,predict}.py`, `scripts/{cell_objects_table,cell_objects_eval,diff_marks_configs}.py`, edits in `scripts/{multicell_expanded,crosscell_predict,aml_train_eval,aml_loop_detection}.py`; `tests/test_diffmarks.py`; `results/diff_marks/REMOTE_JOB.md`, `results/diff_marks/configs/`, `results/cell_objects/` (tables and counts).
 
 ## 67. HiC-Reg retrained leak-free on the chromosome split of our models (FINAL; section 66 was the last number when this was written)
 
@@ -9119,7 +9119,7 @@ A_refrand per fold (objects with a control / objects): loops 1591/1591, 1320/132
 The marks term can only push the with-marks pass up; if the marks carry little information beyond the reference (aml_refin C1 is +0.06) the margin cannot be met and the term is a constant penalty (watch `obj_gap`). Object batches train without track dropout (all marks) which shifts their input distribution towards complete marks. Matching uses the leave-one-out reference of the training patient; the reference of a test patient is the mean of all training patients, a slightly different map. Weights (1.0, 0.5, 0.5, 0.02, x5, weak 0.2) are untuned; one seed. Whether random matched controls are also the right negatives for stripes (rectangle means) is untested.
 
 ### Files
-`scripts/refrand_controls.py`, `scripts/cell_objects_refrand.py`, `scripts/aml_objects_table.py`, `scripts/multicell_expanded.py`, `scripts/aml_loop_detection.py`, `scripts/aml_train_eval.py`, `scripts/cell_objects_eval.py`, `hicmultiome/{aml_objects,config,train}.py`, `tests/test_aml_objects2.py`, `results/aml_objects/{refrand_match_quality,summary2}.csv`, `results/aml_loopfocus/{REMOTE_JOB.md,configs2/}`.
+`scripts/refrand_controls.py`, `scripts/cell_objects_refrand.py`, `scripts/aml_objects_table.py`, `scripts/multicell_expanded.py`, `scripts/aml_loop_detection.py`, `scripts/aml_train_eval.py`, `scripts/cell_objects_eval.py`, `flexcible/{aml_objects,config,train}.py`, `tests/test_aml_objects2.py`, `results/aml_objects/{refrand_match_quality,summary2}.csv`, `results/aml_loopfocus/{REMOTE_JOB.md,configs2/}`.
 
 ## 71. Input-information ceiling of the criteria2 loop test (FINAL; section 70 was the last number when this was written)
 
@@ -9517,7 +9517,7 @@ from conserved sequence and chromatin-state composition, and cell-type-specific 
 ### Pre-registration (the file `results/window_prior/PREREGISTRATION.md`, committed before any score of a prior-based model existed; reproduced here)
 Question. The consensus input of the reference models is positional: the mean of the other cells' Hi-C at the same genomic coordinates. It cannot be built for another organism, whose syntenic regions differ. Can the consensus be replaced by a function learned from windows across the genome that maps the content of a window (chromatin marks, no coordinates) to the typical Hi-C of such a window, so that the main model learns from it and the same function transfers to an organism without reference Hi-C?
 
-Window prior network P (hicmultiome/windowprior.py, scripts/window_prior.py). Same U-Net family as the main models, 24 base channels, depth 4, conditioning "full" (mean, product and absolute difference of the mark rows per pixel plus the |i-j|/W plane), no reference or prior plane, no distance bias, no sequence encoder. Input: per mark the reference mark of the window, built as the dref channels of registry 66 (mean over the reference set, without the sample and its cell identity, of the per-sample quantile-anchored track; leave-one-out set of the 11 other cells for a training cell, the 12 training cells for a held-out cell or a new sample; 0 for a mark the sample or the whole reference lacks), 13 marks. Strictly position-free: no coordinate, chromosome id, positional embedding or per-locus table enters; the CTCF motif planes (fwd / rev of the four motifs) are an ablation switch, off in the primary models. Target: the leave-one-out consensus window in log O/E (the map the positional consensus input holds), divided by 2 and clipped to +-1. Loss L1 + MSE, AdamW 1e-3, batch 16, mark dropout (uniform count, probability 0.5), genomic reversal augmentation, honest validation windows (100 per cell, no training window overlapping a validation position in any cell), early stopping on the validation loss (patience 8). Training windows: the train split of the cache of all12diffcells_refres_drop (Akita training regions), all 12 cells.
+Window prior network P (flexcible/windowprior.py, scripts/window_prior.py). Same U-Net family as the main models, 24 base channels, depth 4, conditioning "full" (mean, product and absolute difference of the mark rows per pixel plus the |i-j|/W plane), no reference or prior plane, no distance bias, no sequence encoder. Input: per mark the reference mark of the window, built as the dref channels of registry 66 (mean over the reference set, without the sample and its cell identity, of the per-sample quantile-anchored track; leave-one-out set of the 11 other cells for a training cell, the 12 training cells for a held-out cell or a new sample; 0 for a mark the sample or the whole reference lacks), 13 marks. Strictly position-free: no coordinate, chromosome id, positional embedding or per-locus table enters; the CTCF motif planes (fwd / rev of the four motifs) are an ablation switch, off in the primary models. Target: the leave-one-out consensus window in log O/E (the map the positional consensus input holds), divided by 2 and clipped to +-1. Loss L1 + MSE, AdamW 1e-3, batch 16, mark dropout (uniform count, probability 0.5), genomic reversal augmentation, honest validation windows (100 per cell, no training window overlapping a validation position in any cell), early stopping on the validation loss (patience 8). Training windows: the train split of the cache of all12diffcells_refres_drop (Akita training regions), all 12 cells.
 
 Cross-fitting. A chromosome is predicted by a P that was trained without it (P_odd on odd, P_even on even autosomes, half the windows each), so that no training window receives a prior fitted on its own region and no validation or test window sees a P that was fitted on its chromosome. P_full (all training chromosomes) serves the controls and organisms for which chromosome numbers carry no meaning. Chromosome-held-out variant (chr2, 3, 11, 14, 17 excluded from every P) is implemented (--chrho) and run only for the headline model.
 
@@ -9724,7 +9724,7 @@ Question: how similar are the measured contact maps of different cell types, the
 reference? Stratum-adjusted correlation (HiCRep definition, smoothing h 5, 1 Mb band) between the O/E target maps
 `crosscell_oe/<cell>_proper_<res>kb.cool` of the 12 training cells, K562, HMEC (deep) and HUVEC (deep), all 105
 pairs, on the held-out chromosomes 2, 3, 11, 14 and 17, at 25 and 10 kb; per pair the mean over the five
-chromosomes. `hicmultiome.evaluate.scc_streaming` per chromosome (the hicrep package refuses the pairs because the
+chromosomes. `flexcible.evaluate.scc_streaming` per chromosome (the hicrep package refuses the pairs because the
 4DN and ENCODE maps differ in their chromosome sets). No training, CPU only.
 
 `scripts/pairwise_celltype_scc.py` (hicdiff env, 16 workers, about 15 min); `results/pairwise_celltype_scc/pairs_{25,10}kb.csv`.

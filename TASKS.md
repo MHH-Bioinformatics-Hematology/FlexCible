@@ -46,7 +46,7 @@ matrix. Cache at `cache/akita_native` is built and reusable.
 - Installing packages can drag numpy to 2.x and break torch/pyBigWig. Pin
   `numpy<2`.
 
-## Feature-level score (`hicmultiome/bioscore.py`)
+## Feature-level score (`flexcible/bioscore.py`)
 
 Pixel Pearson is not the score. `bioscore` reports insulation-profile
 correlation, boundary F1, loop F1 and APA separately, plus a combined number,

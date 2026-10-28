@@ -93,7 +93,7 @@ the reproducibility ceiling (section 5).
 - **DONE** Every new metric must be run against a **distance-only** and a
   **region-swap** baseline. This caught three bad numbers in one day.
 
-### 4.2 Feature-level score (`hicmultiome/bioscore.py`)
+### 4.2 Feature-level score (`flexcible/bioscore.py`)
 - **DONE** Insulation correlation, boundary F1, loop F1, APA, loops-invented,
   reported separately. Our margin over Akita is **wider on biology than on
   pixels**: boundary F1 0.582 vs 0.388, loop F1 0.553 vs 0.465.

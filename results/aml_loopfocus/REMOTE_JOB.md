@@ -44,7 +44,7 @@ margin); reviewed copies: results/aml_loopfocus/configs2/ (`python scripts/aml_l
 
 ## Train
 
-    source ~/hicenv/bin/activate ; cd ~/hic-multiome-unet
+    source ~/hicenv/bin/activate ; cd ~/flexcible
     HM=/mnt/processed/wolffjoa/hic-multiome
     RUN=all12aml_loopfocus2_refres_drop_f10 ; RES=10000 ; NAME=${RUN}_$((RES/1000))kb
     python scripts/claim_job.py claim $NAME --done-path $HM/runs/multicell_reference/$NAME/best \
@@ -52,8 +52,8 @@ margin); reviewed copies: results/aml_loopfocus/configs2/ (`python scripts/aml_l
     python scripts/run_single_gpu.py multicell_expanded --runs $RUN --res $RES --stage train --gpus 0 \
         > $HM/runs/multicell_reference/$NAME.remote.out 2>&1 || python scripts/claim_job.py release $NAME
 
-(The same loop over the later runs as in version 1 below.) Sync the repo copy first (new: hicmultiome/aml_objects.py
-changes, scripts/refrand_controls.py, scripts/cell_objects_refrand.py, edits in hicmultiome/train.py, config.py,
+(The same loop over the later runs as in version 1 below.) Sync the repo copy first (new: flexcible/aml_objects.py
+changes, scripts/refrand_controls.py, scripts/cell_objects_refrand.py, edits in flexcible/train.py, config.py,
 scripts/multicell_expanded.py, aml_objects_table.py, aml_train_eval.py, aml_loop_detection.py); the hard-split JSONs
 of folds 10 to 12 must exist in the remote copy (written there by aml_prep.py). 60-step smoke of the pilot: as in
 version 1 with `results/aml_loopfocus/configs2/all12aml_loopfocus2_refres_drop_f10_25kb.yaml`; expected log lines
@@ -97,14 +97,14 @@ Do not start while ~/seqcnn holds the GPU. One 4090: run jobs sequentially.
 
 
 Status: PENDING (implemented and CPU-tested; no GPU run started). Read scripts/remote/REMOTE.md first
-(environment `source ~/hicenv/bin/activate`, `cd ~/hic-multiome-unet`, claims, the GPU shared with
+(environment `source ~/hicenv/bin/activate`, `cd ~/flexcible`, claims, the GPU shared with
 the sequence CNN, batch size wrapper).
 
 ## What runs
 
 Six trainings, one recipe: the residual-reference AML model (`all12aml_refres_drop`, model.reference
 residual, track dropout uniform_count, AML x3 oversampling, patient hard validation) plus
-`train.aml_object_*` (hicmultiome/aml_objects.py):
+`train.aml_object_*` (flexcible/aml_objects.py):
 
 | run name (= claim name) | resolution | cache (exists, shared with all12aml_refres_drop) |
 |---|---|---|
@@ -140,9 +140,9 @@ Recipe flags (written by `scripts/multicell_expanded.py` run_config, `loopfocus_
    `/mnt/processed/wolffjoa/hic-multiome/aml/objects/objects_f{10,11,12}.csv.gz`
    (regenerate: `python scripts/aml_objects_table.py`; it asserts that no test patient or same-donor
    partner is in a table). The generated configs point at these paths, not at the repo.
-3. Code sync: rsync the working tree of ~/src/hic-multiome-unet to the remote repo copy
-   (new: hicmultiome/aml_objects.py, scripts/aml_objects_table.py, edits in hicmultiome/train.py,
-   hicmultiome/config.py, scripts/multicell_expanded.py, scripts/aml_train_eval.py,
+3. Code sync: rsync the working tree of ~/src/flexcible to the remote repo copy
+   (new: flexcible/aml_objects.py, scripts/aml_objects_table.py, edits in flexcible/train.py,
+   flexcible/config.py, scripts/multicell_expanded.py, scripts/aml_train_eval.py,
    scripts/aml_loop_detection.py). Running jobs import the old copy from memory; sync before the first
    loop-centric job starts, not while another job of the remote queue is about to start.
 4. `ls results/aml_train/hard_f1{0,1,2}_{10,25}kb.json` in the remote repo copy (written there by
@@ -160,14 +160,14 @@ Recipe flags (written by `scripts/multicell_expanded.py` run_config, `loopfocus_
                          output_dir=os.path.expanduser("~/scratch/loopfocus_smoke"), save_checkpoints=False)
        yaml.safe_dump(c, open(os.path.expanduser("~/scratch/loopfocus_smoke.yaml"), "w"), sort_keys=False)
        PY
-       torchrun --standalone --nproc_per_node=1 -m hicmultiome.train --config ~/scratch/loopfocus_smoke.yaml
+       torchrun --standalone --nproc_per_node=1 -m flexcible.train --config ~/scratch/loopfocus_smoke.yaml
 
    Expected log lines: `aml objects ...: N objects of 7 samples`, `oversample x5 adds ...`, and per epoch
    `obj_pix= obj_enr= obj_rank= obj_n=`.
 
 ## Train (one job per claim, as in REMOTE.md)
 
-    source ~/hicenv/bin/activate ; cd ~/hic-multiome-unet
+    source ~/hicenv/bin/activate ; cd ~/flexcible
     HM=/mnt/processed/wolffjoa/hic-multiome
     for RES in 10000 25000 ; do for F in 10 11 12 ; do
       RUN=all12aml_loopfocus_refres_drop_f$F ; NAME=${RUN}_$((RES/1000))kb
