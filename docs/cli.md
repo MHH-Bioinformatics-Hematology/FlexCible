@@ -36,7 +36,7 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
 | `--tta` | average the prediction with that of the reverse-complement orientation |
 | `--bigwig-dir`, `--cell` | predict a cell that is not in the configuration from its bigWig folder; the reference is the embedded consensus unless `--reference` names another map |
 | `--zero-tracks` | treat these tracks as absent (the absent-track encoding of track dropout) |
-| `--zero-region` | set one track to its absent value inside a region, repeatable, for in silico deletions of a binding site |
+| `--zero-region` | set one track's signal to zero inside a region (`CTCF:chr8:127730000-127740000`), or remove a motif's sites there (`motif:MA0139.2:chr8:...`); repeatable; for in silico deletions of a binding site |
 | `--renormalize-tracks` | fit the per-track statistics on this sample instead of using the training normalisers; for tracks from another assay such as CUT&Tag |
 | `--checkpoint` | checkpoint folder (default: the `best` of `train.output_dir`) |
 

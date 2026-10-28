@@ -200,11 +200,12 @@ Everything else stays as above. `oe_proper.py` and `consensus_loo.py` accept `--
 
 ## 11. In silico perturbation
 
-A binding site is deleted by setting its track to the absent value inside a region:
+A binding site is deleted by setting its signal to zero inside a region, together with the motif sites there; use the model without consensus (`model.reference: none`) for perturbations, since the consensus carries the wild-type structure:
 
 ```bash
 flexcible predict --config configs/tutorial_25kb.yaml --sample gm12878 --chroms chr8 --tta \
     --zero-region CTCF:chr8:127730000-127740000 --zero-region RAD21:chr8:127730000-127740000 \
+    --zero-region motif:MA0139.2:chr8:127730000-127740000 \
     --out runs/tutorial_25kb/gm12878_chr8_del.cool
 ```
 

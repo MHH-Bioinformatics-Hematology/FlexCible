@@ -50,4 +50,4 @@ The map has to be a log O/E cool on the same bin grid (`scripts/consensus_oe.py`
 
 ## In silico deletion of a binding site
 
-`--zero-region CTCF:chr8:127730000-127740000` sets the CTCF track to its absent value inside the region, repeatable for several sites. The difference between this prediction and the unperturbed one is the predicted effect of losing that site.
+`--zero-region CTCF:chr8:127730000-127740000` sets the CTCF signal to zero inside the region, and `--zero-region motif:MA0139.2:chr8:127730000-127740000` removes the CTCF motif sites there; both repeatable. Zero signal is the state of a region without binding, which differs from the absent-track encoding of `--zero-tracks` (a mark that was not measured). The difference between the perturbed and the unperturbed prediction is the predicted effect of losing that site. Use a model without the consensus for such tests: the consensus carries the wild-type structure of the other cells and damps a local deletion.
