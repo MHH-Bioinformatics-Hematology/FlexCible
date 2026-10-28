@@ -40,7 +40,7 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
 | `--renormalize-tracks` | fit the per-track statistics on this sample instead of using the training normalisers; for tracks from another assay such as CUT&Tag |
 | `--checkpoint` | checkpoint folder (default: the `best` of `train.output_dir`) |
 
-Overlapping windows are merged with a Hann weight into one map per chromosome. The output holds log O/E values on the model's bin grid.
+Overlapping windows are merged with a Hann weight into one map per chromosome. With `window.transform: prescaled` (the released models) the output holds log O/E values on the model's bin grid; with count targets it holds counts.
 
 ## evaluate
 

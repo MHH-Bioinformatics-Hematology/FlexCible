@@ -45,7 +45,7 @@ trains a small U-Net (16 base channels, two levels) for up to 40 epochs with tra
 flexcible predict --config toy/quickstart.yaml --sample cellA --chroms test --out toy/pred_cellA_chr2.cool --tta
 ```
 
-predicts chromosome 2 of cell A, the test chromosome, with test-time augmentation (the prediction is averaged with that of the reverse-complement strand). The output is a cool file with log O/E values.
+predicts chromosome 2 of cell A, the test chromosome, with test-time augmentation (the prediction is averaged with that of the reverse-complement strand). The output is a cool file with log O/E values, since the configuration uses `window.transform: prescaled`.
 
 A cell that is not in the configuration is predicted from its bigWig folder alone; the reference comes from the embedded consensus:
 
