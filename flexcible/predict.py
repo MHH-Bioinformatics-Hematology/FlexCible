@@ -218,8 +218,12 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             renormalize_tracks: bool = False, bigwig_dir: str | None = None,
             cell: str | None = None, reference: str | None = None,
             prior: str | None = None, extra_bigwig_dirs: list[str] | None = None,
-            diff_group: str | None = None, bin_size: int | None = None):
-    """bin_size: predict at this bin size (bp) with a model that has the continuous bin-size
+            diff_group: str | None = None, bin_size: int | None = None,
+            no_reference: bool = False):
+    """no_reference: reference-map models read a zero reference plane (the expected level in
+            the normalised space) instead of the reference map, so the prediction rests on the
+            ChIP tracks alone (the reference map is still opened for its shape).
+    bin_size: predict at this bin size (bp) with a model that has the continuous bin-size
     embedding (the window keeps its genomic span; the reference map must be at this bin size;
     the track and contact normalisers are those of the nearest trained bin size, or refitted
     on the sample with renormalize_tracks). Refused for any other model.
@@ -478,6 +482,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                 ref = torch.from_numpy(np.stack([
                     reference_block(ref_clr, chrom, w.start, size, mat_norm)
                     for w in bw])).to(device)
+                if no_reference:
+                    ref = torch.zeros_like(ref)
             prior_t = None
             if prior_clr is not None:
                 from .reference import prior_block
@@ -579,6 +585,9 @@ def main():
     ap.add_argument("--reference", default=None,
                     help="reference-map models: reference O/E cool (default: "
                          "the cell's training reference, else the embedded map)")
+    ap.add_argument("--no-reference", action="store_true",
+                    help="reference-map models: set the reference plane to 0 in the normalised space "
+                         "(the expected level), so the prediction uses the ChIP tracks alone")
     ap.add_argument("--prior", default=None,
                     help="cascade models: the coarser model's prediction for this cell")
     ap.add_argument("--diff-group", choices=["cell", "aml", "hspc"], default=None,
@@ -609,7 +618,8 @@ def main():
             args.batch_size, args.pchic_out, args.sample, zt, args.capture_input,
             args.tta, args.obs_exp, args.capture_cool, zr or None,
             args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference,
-            args.prior, args.extra_bigwig_dir, args.diff_group, args.bin_size)
+            args.prior, args.extra_bigwig_dir, args.diff_group, args.bin_size,
+            args.no_reference)
 
 
 if __name__ == "__main__":

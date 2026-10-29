@@ -27,7 +27,7 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
                   [--tta] [--batch-size N] [--checkpoint DIR]
                   [--bigwig-dir DIR [--extra-bigwig-dir DIR ...] --cell NAME] [--reference REF.cool]
                   [--zero-tracks A,B] [--zero-region TRACK:chrom:start-end ...] [--renormalize-tracks]
-                  [--bin-size BP]
+                  [--bin-size BP] [--no-reference]
 ```
 
 | option | meaning |
@@ -40,6 +40,7 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
 | `--zero-region` | set one track's signal to zero inside a region (`CTCF:chr8:127730000-127740000`), or remove a motif's sites there (`motif:MA0139.2:chr8:...`); repeatable; for in silico deletions of a binding site |
 | `--renormalize-tracks` | fit the per-track statistics on this sample instead of using the training normalisers; for tracks from another assay such as CUT&Tag |
 | `--bin-size` (alias `--binSize`) | predict at this bin size in bp, for example `--bin-size 4000`; only for the one model trained at several bin sizes (`model.res_embed_mode: continuous`); see below |
+| `--no-reference` | reference-map models: replace the reference plane by 0 in the normalised space (the expected level); the prediction then rests on the ChIP tracks alone. The reference map is still read for its bin grid, so `--reference` or the embedded map must resolve |
 | `--checkpoint` | checkpoint folder (default: the `best` of `train.output_dir`) |
 
 ### Prediction at another bin size
