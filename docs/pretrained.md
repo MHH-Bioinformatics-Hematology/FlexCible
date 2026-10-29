@@ -28,7 +28,18 @@ For CUT&Tag or other assays whose signal scale differs from ENCODE fold change, 
 
 ## Choose the resolution
 
-Released checkpoints exist at 25, 10, 5 and 2 kb (`refin_25kb`, `refin_10kb`, `refin_5kb`, `refin_2kb`), each with its own configuration. A single model for all bin sizes, selected with `--binSize` at prediction time, is in preparation.
+Released checkpoints exist at 25, 10, 5 and 2 kb (`refin_25kb`, `refin_10kb`, `refin_5kb`, `refin_2kb`), each with its own configuration.
+
+The one model trained at 2, 5, 10 and 25 kb together (`all12one`) comes with one configuration per trained bin size (`all12one_2kb`, `_5kb`, `_10kb`, `_25kb`, all sharing the weights) and takes the bin size at prediction time:
+
+```bash
+flexcible predict --config released/all12one_10kb.yaml --checkpoint released/all12one_10kb/checkpoint-best \
+    --bigwig-dir tracks/mycell --cell mycell --chroms all --tta \
+    --bin-size 4000 --reference oe/consensus12_proper_4kb.cool \
+    --out mycell_4kb.cool
+```
+
+`--bin-size` (alias `--binSize`) accepts any bin size in bp. The reference has to be a log O/E cool at the same bin size, built with `scripts/oe_proper.py` and `scripts/consensus_loo.py` from Hi-C maps at that bin size. The window keeps its genomic span; the normalisers are those of the nearest trained bin size, and `--renormalize-tracks` refits the track statistics on your sample. Trained bin sizes are 2, 5, 10 and 25 kb; bin sizes between them are interpolation, and bin sizes below 2 kb or above 25 kb are untested extrapolation. The accuracy at 1, 4, 20 and 50 kb is reported in the registry (section 89). The option is refused for models with a lookup embedding or one resolution.
 
 ## Which model
 

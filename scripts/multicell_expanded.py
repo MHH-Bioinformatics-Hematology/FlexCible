@@ -114,10 +114,14 @@ def target(cell: str, res: int) -> Path:
 
 
 def run_name(base: str, res: int) -> str:
-    return base if res == 2000 else f"{base}_{res // 1000}kb"
+    # all12one: "all12one" is the shared checkpoint folder, so every view
+    # (also 2 kb) carries its resolution
+    return base if res == 2000 and base != "all12one" else f"{base}_{res // 1000}kb"
 
 
 def split_name(name: str) -> tuple[str, int]:
+    if name == "all12one_2kb":
+        return "all12one", 2000
     m = re.fullmatch(r"(.+?)_(5|10|25)kb", name)
     return (m.group(1), int(m.group(2)) * 1000) if m else (name, 2000)
 
@@ -177,6 +181,10 @@ RUNS = {  # name: (cells, assay indicator mode or None)
     # (flexcible.train_multires, scripts/multires.py); all12multires_<k>kb
     # are its per-resolution views, evaluated like the dedicated runs
     "all12multires": (TRAIN12, None),
+    # ONE model for 2, 5, 10 and 25 kb with a continuous log2(bin size)
+    # embedding, reference input, track dropout (registry sections 84, 88);
+    # all12one_<k>kb are its per-resolution views
+    "all12one": (TRAIN12, None),
     # coarse-to-fine cascade (scripts/cascade.py): the residual reference model
     # plus the coarser level's out-of-fold prediction as a prior plane
     "all12casc": (TRAIN12, None),
@@ -305,6 +313,7 @@ DROPOUT_RUNS.update({"all12deg_refres_drop": (0.5, 0.0), "all12deg_honest_drop":
                      "all12cohunk_refres_drop": (0.5, 0.0), "all12cohunk_honest_drop": (0.5, 0.0)})
 DROPOUT_RUNS.update({"all12refin_drop": (0.5, 0.0), "all12refin_drop_ctcfac": (0.5, 0.0),
                      "all12refres_drop_varw": (0.5, 0.0)})
+DROPOUT_RUNS["all12one"] = (0.5, 0.0)
 DROPOUT_RUNS["all12hffcoh_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12cohfix_refres_drop"] = (0.5, 0.0)
 DROPOUT_RUNS["all12cohfixna_refres_drop"] = (0.5, 0.0)
@@ -416,7 +425,7 @@ SAMPLE_IDENT = {"hct116_auxin": "hct116"}
 HARD_SPLIT_DIR = REPO / "results/hard_split"
 STAGE_ROOT = Path(os.environ.get("HICMULTI_STAGE", str(Path.home() / "scratch/hicmx_stage")))      # local disk, not /tmp
 REF_RUNS = {"all12refres": "residual", "all12refin": "input", "all12reflearn": "residual",
-            "all12multires": "residual", "all12casc": "residual",
+            "all12multires": "residual", "all12one": "input", "all12casc": "residual",
             "all12refres_drop": "residual", "all12refres_refdrop": "residual",
             "all12refres_drop_hard": "residual", "all12refres_refdrop_hard": "residual",
             "all12deg_refres_drop": "residual", "all12cohunk_refres_drop": "residual",
@@ -697,6 +706,10 @@ def run_config(name, val_per_cell, patience, max_epochs):
             cfg["model"]["resolutions"] = list(MULTIRES)
             cfg["model"]["res_embed_dim"] = 16
             cfg["train"]["compile"] = False      # four window shapes
+        if base == "all12one":
+            cfg["model"].update({"resolutions": list(MULTIRES), "res_embed_dim": 16,
+                                 "res_embed_mode": "continuous"})
+            cfg["train"]["compile"] = False
     cbase = SEEDED[base][0] if base in SEEDED else base     # a seed copy reads its original's cache
     cache_name = (f"mc_all12aml_{'meth_' if cbase in METH_RUNS else ''}{'ref_' if cbase in REF_RUNS else ''}{res // 1000}kb"
                   f"{'_f' + str(fold) if fold else ''}{'_nolab' if cbase.endswith('_nolab') else ''}"

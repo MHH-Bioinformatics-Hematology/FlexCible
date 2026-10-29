@@ -1914,6 +1914,87 @@ def test_multires_training_and_views(workdir):
         assert cooler.Cooler(p).binsize == res
 
 
+def test_predict_bin_size_option(workdir, monkeypatch):
+    """predict --bin-size: a continuous-embedding multi-resolution model predicts at a bin size it
+    was not trained on (window keeps its genomic span, reference at that bin size required,
+    normalisers of the nearest trained bin size or refitted); lookup and single-resolution
+    models are refused."""
+    import cooler
+
+    from flexcible import precompute as hprep
+    from flexcible import predict as hpred
+    from flexcible.train_multires import train_multires, write_views
+
+    c2 = workdir / "target_2kb.cool"
+    if not c2.exists():
+        cooler.coarsen_cooler(str(workdir / "target.cool"), str(c2), factor=2, chunksize=10**6)
+    c4 = workdir / "target_4kb.cool"
+    if not c4.exists():
+        cooler.coarsen_cooler(str(c2), str(c4), factor=2, chunksize=10**6)
+    cfgs = []
+    for res, cool, W in ((BINSIZE, workdir / "target.cool", 32), (2 * BINSIZE, c2, 16)):
+        raw = _ref_raw(workdir, f"bs{res}", reference="input", ref_cool=False)
+        raw["data"]["resolution"] = res
+        raw["data"]["samples"][0].update(cool_path=str(cool), reference_cool=str(cool))
+        raw["window"].update(size=W, stride=W // 2)
+        raw["model"].update(resolutions=[BINSIZE, 2 * BINSIZE], res_embed_dim=4,
+                            res_embed_mode="continuous")
+        raw["train"].update(cache_dir=str(workdir / f"cache_bs{res}"), val_regions=2,
+                            max_epochs=2, patience_epochs=5, batch_size=2)
+        c = Config.from_dict(raw)
+        hprep.build(c)
+        cfgs.append(c)
+    out = workdir / "run_binsize"
+    train_multires(cfgs, out)
+    view = workdir / "view_bs_1kb"
+    write_views(out, {BINSIZE: view, 2 * BINSIZE: workdir / "view_bs_2kb"})
+    ck = view / "checkpoint-best"
+    vc = Config.load(ck / "config.yaml")
+    assert hpred.scaled_window(vc, 4000) == (8, 4)          # 32 kb span, multiple of 2 ** depth
+    assert hpred.nearest_trained([1000, 2000], 4000) == 2000
+    assert hpred.nearest_trained([2000, 5000, 10000, 25000], 4000) == 5000
+    assert hpred.nearest_trained([2000, 5000, 10000, 25000], 50000) == 25000
+    assert hpred.norm_dir_for(ck, [1000, 2000], 4000) == out / "checkpoint-best" / "res_2000"
+
+    p4 = workdir / "pred_4kb.cool"
+    hpred.predict(vc, "chr1", str(p4), checkpoint=str(ck), batch=4, bin_size=4000,
+                  reference=str(c4))
+    clr = cooler.Cooler(str(p4))
+    assert clr.binsize == 4000 and clr.info["nnz"] > 0
+    assert clr.chromsizes["chr1"] == CHROMS["chr1"] and not list(workdir.glob("pred_4kb.cool.grid*"))
+    assert vc.data.resolution == BINSIZE                   # the loaded config is not modified in place
+    p4r = workdir / "pred_4kb_refit.cool"
+    hpred.predict(Config.load(ck / "config.yaml"), "chr1", str(p4r), checkpoint=str(ck), batch=4,
+                  bin_size=4000, reference=str(c4), renormalize_tracks=True)
+    assert cooler.Cooler(str(p4r)).binsize == 4000
+    # the bin size reaches the network: a different bin size gives a different map
+    m1, m4 = (np.nan_to_num(cooler.Cooler(str(p)).matrix(balance=False).fetch("chr1"))
+              for p in (p4, p4r))
+    assert m1.shape == m4.shape == (24, 24)
+
+    with pytest.raises(ValueError, match="needs --reference"):
+        hpred.predict(Config.load(ck / "config.yaml"), "chr1", str(workdir / "x.cool"),
+                      checkpoint=str(ck), bin_size=4000)
+    lookup = Config.load(ck / "config.yaml")
+    lookup.model.res_embed_mode = "lookup"
+    with pytest.raises(ValueError, match="lookup"):
+        hpred.predict(lookup, "chr1", str(workdir / "x.cool"), checkpoint=str(ck), bin_size=4000,
+                      reference=str(c4))
+    single = Config.from_dict(_ref_raw(workdir, "bs_single", reference="none", ref_cool=False))
+    with pytest.raises(ValueError, match="several bin sizes"):
+        hpred.predict(single, "chr1", str(workdir / "x.cool"), checkpoint=str(ck), bin_size=4000,
+                      reference=str(c4))
+    # command line: --bin-size and its alias --binSize reach predict()
+    seen = {}
+    monkeypatch.setattr(hpred, "predict", lambda *a, **k: seen.update(args=a))
+    vc.save(workdir / "view_bs.yaml")
+    for flag in ("--bin-size", "--binSize"):
+        monkeypatch.setattr(sys, "argv", ["flexcible predict", "--config", str(workdir / "view_bs.yaml"),
+                                          "--out", "o.cool", flag, "4000", "--reference", str(c4)])
+        hpred.main()
+        assert seen["args"][-1] == 4000
+
+
 def test_cascade_prior_plane(workdir):
     """model.prior: a coarser map (2 kb) resampled onto the 1 kb windows as an
     extra input plane; prior_block takes, per fine bin, the coarse bin holding

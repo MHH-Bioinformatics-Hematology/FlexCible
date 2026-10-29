@@ -60,6 +60,85 @@ def _resolve_chroms(spec, available, cfg):
     return [c.strip() for c in spec.split(",") if c.strip()]
 
 
+def scaled_window(cfg: Config, bin_size: int) -> tuple[int, int]:
+    """Window size and stride in bins at `bin_size` that keep the genomic span of
+    the configured window (size * data.resolution); the size is a multiple of
+    2 ** model.depth so that every U-Net pooling divides it."""
+    old = int(cfg.data.resolution)
+    mult = 2 ** int(cfg.model.depth)
+    size = max(mult, int(round(cfg.window.size * old / bin_size / mult)) * mult)
+    stride = max(1, min(size, int(round(cfg.window.stride * old / bin_size))))
+    return size, stride
+
+
+def check_bin_size_model(cfg: Config) -> None:
+    """--bin-size is for models with the continuous bin-size embedding only; a lookup embedding
+    or a single-resolution model knows its trained bin sizes and nothing else."""
+    m = cfg.model
+    if not m.resolutions:
+        raise ValueError("--bin-size needs a model trained at several bin sizes "
+                         "(model.resolutions); this model predicts at "
+                         f"{cfg.data.resolution} bp only")
+    if m.res_embed_mode != "continuous":
+        raise ValueError("--bin-size needs a model with the continuous bin-size embedding "
+                         "(model.res_embed_mode: continuous); this model uses a lookup "
+                         f"embedding and predicts only its trained bin sizes {m.resolutions}")
+    if m.prior:
+        raise ValueError("--bin-size is not available for cascade models (model.prior)")
+
+
+def apply_bin_size(cfg: Config, bin_size: int) -> int:
+    """Switch a bin-size-conditioned model to `bin_size` (bp). Changes cfg.data.resolution and
+    the window (same genomic span). Returns the previous resolution."""
+    check_bin_size_model(cfg)
+    if int(bin_size) < 1:
+        raise ValueError(f"--bin-size must be positive, got {bin_size}")
+    old = int(cfg.data.resolution)
+    cfg.window.size, cfg.window.stride = scaled_window(cfg, int(bin_size))
+    cfg.data.resolution = int(bin_size)
+    return old
+
+
+def nearest_trained(resolutions, bin_size: int) -> int:
+    """The trained bin size closest to `bin_size` on the log scale."""
+    import math
+
+    return min((int(r) for r in resolutions), key=lambda r: abs(math.log2(r / bin_size)))
+
+
+def norm_dir_for(ckpt: Path, resolutions, bin_size: int) -> Path:
+    """Folder with the normalisers of the trained bin size nearest to `bin_size`: the
+    res_<bp> folder of the shared multi-resolution checkpoint that the view `ckpt` points to
+    (multires_source.json beside it); else the checkpoint's own."""
+    near = nearest_trained(resolutions, bin_size)
+    for cand in (ckpt.parent / "multires_source.json", ckpt / "multires_source.json"):
+        if cand.exists():
+            shared = Path(json.loads(cand.read_text())["shared_checkpoint"])
+            d = shared / f"res_{near}"
+            if (d / "norm_tracks.json").exists():
+                log.info("bin size %d bp: normalisers of the nearest trained bin size, %d bp (%s)",
+                         bin_size, near, d)
+                return d
+    if (ckpt / f"res_{near}" / "norm_tracks.json").exists():
+        return ckpt / f"res_{near}"
+    log.warning("bin size %d bp: no normalisers of the nearest trained bin size (%d bp) beside "
+                "%s; using the checkpoint's own", bin_size, near, ckpt)
+    return ckpt
+
+
+def grid_cool_at(template_cool: str, bin_size: int, path: Path) -> str:
+    """A pixel-free cool with the chromosomes of `template_cool` binned at `bin_size`: the
+    prediction grid when the bin size differs from the sample's cool."""
+    import cooler
+    import pandas as pd
+
+    chromsizes = open_cool(template_cool).chromsizes
+    bins = cooler.util.binnify(chromsizes, int(bin_size))
+    one = pd.DataFrame({"bin1_id": [0], "bin2_id": [0], "count": [0.0]})   # cooler needs a pixel table
+    cooler.create_cooler(str(path), bins=bins, pixels=one, dtypes={"count": "float64"})
+    return str(path)
+
+
 def load_norm(ckpt: Path, stem: str, sample_name: str, cls,
               borrow_from: str | None = None):
     """Per-sample normaliser, with an explicit path for UNSEEN cell types.
@@ -139,8 +218,12 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             renormalize_tracks: bool = False, bigwig_dir: str | None = None,
             cell: str | None = None, reference: str | None = None,
             prior: str | None = None, extra_bigwig_dirs: list[str] | None = None,
-            diff_group: str | None = None):
-    """bigwig_dir: predict a cell from this folder of ChIP bigWigs (tracks it
+            diff_group: str | None = None, bin_size: int | None = None):
+    """bin_size: predict at this bin size (bp) with a model that has the continuous bin-size
+    embedding (the window keeps its genomic span; the reference map must be at this bin size;
+    the track and contact normalisers are those of the nearest trained bin size, or refitted
+    on the sample with renormalize_tracks). Refused for any other model.
+    bigwig_dir: predict a cell from this folder of ChIP bigWigs (tracks it
     lacks enter as absent) with the configured sample's bin grid and
     normalisers; `cell` names it (default: the sample name, or the folder
     name with bigwig_dir). Reference-map models read `reference`, else the
@@ -151,6 +234,29 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
     ckpt = _resolve_ckpt(cfg, checkpoint)
     log.info("loading %s", ckpt)
     sample = cfg.get_sample(sample_name)
+    norm_src = ckpt
+    grid_tmp = None
+    if bin_size is not None:
+        check_bin_size_model(cfg)
+    if bin_size is not None and int(bin_size) != int(cfg.data.resolution):
+        import copy
+
+        cfg = copy.deepcopy(cfg)                      # the caller's config stays at its resolution
+        resolutions = list(cfg.model.resolutions or [])
+        old = apply_bin_size(cfg, int(bin_size))      # refuses lookup and single-resolution models
+        if cfg.model.reference != "none" and not reference:
+            raise ValueError(f"--bin-size {bin_size} needs --reference: a reference O/E cool at "
+                             f"{bin_size} bp (the configured and embedded consensus maps are at "
+                             f"{old} bp)")
+        log.info("bin size %d bp (trained %s, config %d bp): window %d bins, stride %d",
+                 bin_size, resolutions, old, cfg.window.size, cfg.window.stride)
+        if int(bin_size) not in resolutions:
+            log.warning("%d bp was not a training bin size (%s): outside the trained range this is "
+                        "extrapolation and untested", bin_size, resolutions)
+        norm_src = norm_dir_for(ckpt, resolutions, int(bin_size))
+        grid_tmp = Path(out_path).with_name(Path(out_path).name + f".grid{bin_size}.cool")
+        sample = type(sample)(**{**sample.__dict__})
+        sample.cool_path = grid_cool_at(sample.cool_path, int(bin_size), grid_tmp)
     if zero_tracks:
         sample = type(sample)(**{**sample.__dict__})
         sample.zeroed_tracks = sorted(set(sample.zeroed_tracks) | set(zero_tracks))
@@ -172,8 +278,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
     cell = cell or sample.name
     use_seq = cfg.sequence.uses_encoder
     fasta = sample.fasta or cfg.sequence.fasta
-    track_norm = TrackNormalizer.load(ckpt / "norm_tracks.json")
-    mat_norm = load_norm(ckpt, "norm_matrix", sample.name, MatrixNormalizer)
+    track_norm = TrackNormalizer.load(norm_src / "norm_tracks.json")
+    mat_norm = load_norm(norm_src, "norm_matrix", sample.name, MatrixNormalizer)
     model, channels = build_model(cfg, ckpt, device)
     ref_clr = None
     if cfg.model.reference != "none":
@@ -380,7 +486,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     prior_block(prior_clr, chrom, w.start, size, cfg.data.resolution, mat_norm)
                     for w in bw])).to(device)
             with torch.no_grad():
-                out = model(cond, pairs, planes, seq_oh, ref, prior=prior_t)
+                out = model(cond, pairs, planes, seq_oh, ref, res=cfg.data.resolution,
+                            prior=prior_t)
                 if tta:
                     from .dataset import reverse_cond, split_cond as _sc
 
@@ -394,7 +501,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     ref_r = torch.flip(ref, dims=[-1, -2]) if ref is not None else None
                     pr_r = (torch.flip(prior_t, dims=[-1, -2])
                             if prior_t is not None else None)
-                    out_r = model(sym_r, pairs_r, planes_r, seq_r, ref_r, prior=pr_r)
+                    out_r = model(sym_r, pairs_r, planes_r, seq_r, ref_r,
+                                  res=cfg.data.resolution, prior=pr_r)
                     out = 0.5 * (out + torch.flip(out_r, dims=[-1, -2]))
                 imgs = out.float().cpu().numpy()
             for w, img in zip(bw, imgs):
@@ -421,6 +529,8 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
     ints = cfg.predict.integer_counts and not obs_exp_out
     write_cool(out_path, sample.cool_path, chrom_pixels, integer=ints)
     log.info("wrote %s", out_path)
+    if grid_tmp is not None:
+        grid_tmp.unlink(missing_ok=True)
     if pchic_out and chrom_pixels_cap:
         write_cool(pchic_out, sample.cool_path, chrom_pixels_cap)
         log.info("wrote %s (capture channel)", pchic_out)
@@ -474,6 +584,14 @@ def main():
     ap.add_argument("--diff-group", choices=["cell", "aml", "hspc"], default=None,
                     help="diff-marks models with --bigwig-dir: group of the cell, which picks its "
                          "reference set (default cell)")
+    ap.add_argument("--bin-size", "--binSize", dest="bin_size", type=int, default=None,
+                    help="bin size in bp (for example 4000) for the one model trained at several bin "
+                         "sizes (continuous bin-size embedding). Keeps the genomic span of the "
+                         "window, bins the bigWigs at this size and needs --reference at this bin "
+                         "size. Uses the track and contact normalisers of the nearest trained bin "
+                         "size unless --renormalize-tracks is given. Trained: 2000 to 25000; other "
+                         "sizes are untested extrapolation. Refused for models with a lookup "
+                         "embedding or a single resolution")
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--batch-size", type=int, default=8)
     args = ap.parse_args()
@@ -491,7 +609,7 @@ def main():
             args.batch_size, args.pchic_out, args.sample, zt, args.capture_input,
             args.tta, args.obs_exp, args.capture_cool, zr or None,
             args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference,
-            args.prior, args.extra_bigwig_dir, args.diff_group)
+            args.prior, args.extra_bigwig_dir, args.diff_group, args.bin_size)
 
 
 if __name__ == "__main__":

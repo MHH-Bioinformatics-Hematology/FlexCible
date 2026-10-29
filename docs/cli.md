@@ -27,6 +27,7 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
                   [--tta] [--batch-size N] [--checkpoint DIR]
                   [--bigwig-dir DIR [--extra-bigwig-dir DIR ...] --cell NAME] [--reference REF.cool]
                   [--zero-tracks A,B] [--zero-region TRACK:chrom:start-end ...] [--renormalize-tracks]
+                  [--bin-size BP]
 ```
 
 | option | meaning |
@@ -38,7 +39,19 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
 | `--zero-tracks` | treat these tracks as absent (the absent-track encoding of track dropout) |
 | `--zero-region` | set one track's signal to zero inside a region (`CTCF:chr8:127730000-127740000`), or remove a motif's sites there (`motif:MA0139.2:chr8:...`); repeatable; for in silico deletions of a binding site |
 | `--renormalize-tracks` | fit the per-track statistics on this sample instead of using the training normalisers; for tracks from another assay such as CUT&Tag |
+| `--bin-size` (alias `--binSize`) | predict at this bin size in bp, for example `--bin-size 4000`; only for the one model trained at several bin sizes (`model.res_embed_mode: continuous`); see below |
 | `--checkpoint` | checkpoint folder (default: the `best` of `train.output_dir`) |
+
+### Prediction at another bin size
+
+`--bin-size BP` sets the bin size of the prediction. The model reads the bin size as log2(bin size / 1 kb) in every U-Net block, so it accepts any value; it was trained at 2, 5, 10 and 25 kb. The option changes the following:
+
+- the window keeps its genomic span, so its size in bins is scaled to the new bin size (rounded to a multiple of 2^depth, 16 for the released models);
+- the bigWigs are binned at the new size and the output cool has this bin size;
+- `--reference` is required and has to be a log O/E cool at the same bin size (the embedded consensus is at the trained bin sizes);
+- the track and contact normalisers are those of the trained bin size nearest on the log scale (the view's `multires_source.json` points to them); `--renormalize-tracks` fits the track statistics on the sample at the new bin size instead.
+
+Bin sizes between 2 and 25 kb are interpolation; below 2 kb and above 25 kb they are untested extrapolation (registry section 89). A model with a lookup embedding (`model.res_embed_mode: lookup`) or with one resolution is refused with an error that names its trained bin sizes.
 
 Overlapping windows are merged with a Hann weight into one map per chromosome. With `window.transform: prescaled` (the released models) the output holds log O/E values on the model's bin grid; with count targets it holds counts.
 
