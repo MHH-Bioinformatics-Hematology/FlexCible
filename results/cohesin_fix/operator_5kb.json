@@ -1,0 +1,38 @@
+{
+  "model": {
+    "pearson": 0.7659661168095748,
+    "pearson_highpass": 0.5849373286636668,
+    "sd_pred": 0.28956666588783264,
+    "sd_meas": 0.39149078726768494,
+    "mean_pred": 0.0039029314648360014,
+    "mean_meas": 0.002057112054899335,
+    "sd_highpass_pred": 0.065010666847229,
+    "sd_highpass_meas": 0.11089012771844864
+  },
+  "baseline_distance_mean": {
+    "pearson": -0.08182361705676655,
+    "pearson_highpass": -0.00017945315180026395,
+    "sd_pred": 0.005765418987721205,
+    "sd_meas": 0.39149078726768494,
+    "mean_pred": -0.002792578423395753,
+    "mean_meas": 0.002057112054899335,
+    "sd_highpass_pred": 0.0004016491584479809,
+    "sd_highpass_meas": 0.11089012771844864
+  },
+  "baseline_linear_highpass": {
+    "pearson": 0.32728726456142443,
+    "pearson_highpass": 0.5728024956629972,
+    "sd_pred": 0.11919629573822021,
+    "sd_meas": 0.39149078726768494,
+    "mean_pred": -1.288017665501684e-05,
+    "mean_meas": 0.002057112054899335,
+    "sd_highpass_pred": 0.09424514323472977,
+    "sd_highpass_meas": 0.11089012771844864,
+    "alpha": -1.6998364925384521
+  },
+  "n_train": 753,
+  "n_test_even": 184,
+  "epochs": 30,
+  "fraction_ref": 0.26,
+  "resolution": 5000
+}
