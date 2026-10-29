@@ -87,7 +87,7 @@ def evaluate(pred: np.ndarray, meas: np.ndarray) -> dict:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--res", type=int, required=True, help="bin size: 10000 or 25000")
+    ap.add_argument("--res", type=int, required=True, help="bin size: 2000, 5000, 10000 or 25000")
     ap.add_argument("--cache", default=None,
                     help="degron cache (default cache_expanded/mc_all12deg_refres_drop_<k>kb)")
     ap.add_argument("--fraction", type=float, default=AUX_FRACTION,
@@ -99,9 +99,12 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--device", default="cpu", help="cpu or cuda:N (the 512-bin windows of 2 kb "
+                                                     "take hours on the CPU)")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     torch.manual_seed(a.seed)
+    dev = torch.device(a.device)
     k = a.res // 1000
     cache = Path(a.cache) if a.cache else HM / f"cache_expanded/mc_all12deg_refres_drop_{k}kb"
     out = Path(a.out) if a.out else REPO / f"results/cohesin_fix/operator_{k}kb.pt"
@@ -111,16 +114,17 @@ def main():
     m = torch.from_numpy(upper_mask(n))
     print(f"{k} kb: {len(Xtr)} odd-chromosome training pairs, {len(Xte)} even-chromosome test "
           f"pairs, window {n}", flush=True)
-    op = DegronOperator(a.width)
+    op = DegronOperator(a.width).to(dev)
     opt = torch.optim.Adam(op.parameters(), a.lr)
     Xt, Dt = torch.from_numpy(Xtr), torch.from_numpy(Ytr - Xtr)
+    m = m.to(dev)
     t0 = time.time()
     for ep in range(a.epochs):
         perm = torch.randperm(len(Xt))
         tot = nb = 0
         for b in range(0, len(Xt) - a.batch + 1, a.batch):
             i = perm[b:b + a.batch]
-            x, d = Xt[i], Dt[i]
+            x, d = Xt[i].to(dev), Dt[i].to(dev)
             if ep % 2:                                   # genomic reversal
                 x, d = torch.flip(x, [-1, -2]), torch.flip(d, [-1, -2])
             loss = ((op(x) - d) ** 2)[:, m].mean()
@@ -133,7 +137,9 @@ def main():
             print(f"  epoch {ep + 1}  train mse {tot / nb:.5f}  {time.time() - t0:.0f}s", flush=True)
     op.eval()
     with torch.no_grad():
-        pred = op(torch.from_numpy(Xte)).numpy()
+        pred = np.concatenate([op(torch.from_numpy(Xte[b:b + a.batch]).to(dev)).cpu().numpy()
+                               for b in range(0, len(Xte), a.batch)])
+    op.cpu()
     meas = Yte - Xte
     res = {"model": evaluate(pred, meas)}
     dist = np.abs(np.arange(n)[:, None] - np.arange(n)[None, :])

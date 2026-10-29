@@ -216,3 +216,41 @@ def test_precompute_shares_scale_and_trains_with_augmentation(workdir, tmp_path,
     msgs = [m.getMessage() for m in caplog.records]
     assert any("cohesin_aug: p=0.50" in m for m in msgs)
     assert any("cohesin-augmented windows" in m and not m.endswith("windows 0") for m in msgs)
+
+
+def test_multires_training_with_augmentation(workdir, tmp_path, caplog):
+    """train_multires with train.cohesin_aug: one operator per resolution,
+    augmented windows counted per resolution in the learning curve."""
+    import cooler
+
+    from flexcible import precompute as hprep
+    from flexcible.train_multires import train_multires
+
+    c2 = workdir / "target_2kb.cool"
+    if not c2.exists():
+        cooler.coarsen_cooler(str(workdir / "target.cool"), str(c2), factor=2, chunksize=10**6)
+    cfgs = []
+    for res, cool, W in ((BINSIZE, workdir / "target.cool", 32), (2 * BINSIZE, c2, 16)):
+        op = DegronOperator(width=4, dilations=(1, 2))
+        save_operator(tmp_path / f"op_{res}.pt", op, 0.26, res)
+        raw = _cohfix_raw(workdir, f"mrcoh{res}", aug=True, op_path=tmp_path / f"op_{res}.pt")
+        raw["data"]["resolution"] = res
+        for s in raw["data"]["samples"]:
+            s.update(cool_path=str(cool))
+        raw["window"].update(size=W, stride=W // 2)
+        raw["model"].update(resolutions=[BINSIZE, 2 * BINSIZE], res_embed_dim=4)
+        raw["train"].update(cache_dir=str(workdir / f"cache_mrcoh{res}"), val_regions=1,
+                            max_epochs=2, patience_epochs=5, batch_size=2)
+        c = Config.from_dict(raw)
+        hprep.build(c)
+        cfgs.append(c)
+    out = workdir / "run_multires_coh"
+    with caplog.at_level(logging.INFO):
+        train_multires(cfgs, out)
+    lc = list(open(out / "learning_curve.csv"))
+    assert len(lc) == 3 and f"aug_{BINSIZE}" in lc[0] and f"aug_{2 * BINSIZE}" in lc[0]
+    hdr = lc[0].strip().split(",")
+    vals = lc[1].strip().split(",")
+    assert sum(int(vals[hdr.index(f"aug_{r}")]) for r in (BINSIZE, 2 * BINSIZE)) > 0
+    msgs = [m.getMessage() for m in caplog.records]
+    assert sum("cohesin_aug: p=0.50" in m for m in msgs) == 2

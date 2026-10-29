@@ -14,7 +14,10 @@ steps as one pass over all training windows of all resolutions.
 Per resolution: the honest validation split of train.split_val_regions (the
 same windows eval_val_windows reproduces from the per-resolution config),
 the reference leakage guard, rank stripes of the training windows kept in
-CPU memory (float16) and moved to the GPU per batch. Validation after every
+CPU memory (float16) and moved to the GPU per batch. Track dropout and the
+cohesin-loss augmentation (train.cohesin_aug, one degron operator per
+resolution) act per batch exactly as in flexcible.train: augmentation first,
+then dropout. Validation after every
 epoch: the median per-window Pearson (val_akita_median) per resolution; the
 mean over resolutions drives checkpointing and patience. Per-resolution
 training loss and validation are logged and written to learning_curve.csv.
@@ -157,6 +160,44 @@ def res_dir(res: int) -> str:
     return f"res_{int(res)}"
 
 
+def build_cohesin_aug(c: Config, ds: WindowDataset, chip_rows, offset: int, device, is_main: bool):
+    """CohesinAugmenter of one resolution (train.cohesin_aug of its config) and
+    the contact scale of every window of its cache, in the dataset's index
+    order (the order of the staged arrays and of `_coords`)."""
+    from .cohesin import CohesinAugmenter, load_operator
+    from .precompute import COHESIN_TRACKS, FRACTION_ROW
+    from .tracks import TrackNormalizer
+
+    cache = Path(c.train.cache_dir)
+    seqf = ds.channels["seq_features"]
+    if FRACTION_ROW not in seqf:
+        raise RuntimeError(f"{cache}: train.cohesin_aug but no cohesin_fraction row; "
+                           "set data.cohesin_fraction and re-run flexcible.precompute")
+    tracks_all = ds.channels["tracks"]
+    tn = TrackNormalizer.load(cache / "norm_tracks.json")
+    absent_all = tn.absent_values()
+    keep = [t for t in COHESIN_TRACKS if t in tracks_all and tracks_all.index(t) in chip_rows]
+    if not keep:
+        raise ValueError("train.cohesin_aug needs RAD21 or SMC3 among the model tracks")
+    rows = [chip_rows.index(tracks_all.index(t)) for t in keep]
+    op, f_ref = load_operator(c.train.cohesin_aug_operator, device)
+    aug = CohesinAugmenter(
+        op, f_ref, c.train.cohesin_aug, c.train.cohesin_aug_fractions, c.train.cohesin_aug_absent,
+        rows, [tn.mean[tracks_all.index(t)] for t in keep], [tn.std[tracks_all.index(t)] for t in keep],
+        [float(absent_all[tracks_all.index(t)]) for t in keep],
+        offset - len(seqf) + seqf.index(FRACTION_ROW), device)
+    names = _coords(ds)[2]
+    scale_of = {n: float(json.loads((cache / f"norm_matrix_{n}.json").read_text())["scale"])
+                for n in set(names)}
+    scale = torch.tensor([scale_of[n] for n in names], dtype=torch.float32)
+    if is_main:
+        log.info("resolution %d cohesin_aug: p=%.2f fractions %s absent-track share %.2f, operator %s "
+                 "(fitted at cohesin fraction %.2f), tracks %s", c.data.resolution, c.train.cohesin_aug,
+                 c.train.cohesin_aug_fractions, c.train.cohesin_aug_absent, c.train.cohesin_aug_operator,
+                 f_ref, keep)
+    return aug, scale
+
+
 def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
                    max_epochs: int | None = None, stage_dir: Path | None = None):
     rank, world, local_rank = ddp_env()
@@ -212,18 +253,24 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
             log_val_split(co, vi, ti, c.train.val_exclude_overlap)
         rows, offset, n_motifs, n_sym = _select_rows(c, ds.channels)
         absent_t, n_chip = None, 0
+        from .train import dropout_chip_rows
+
+        chip_rows = dropout_chip_rows(c, ds.channels)
         if drop_p > 0:
             from .tracks import TrackNormalizer
-            from .train import dropout_chip_rows
 
-            chip_rows = dropout_chip_rows(c, ds.channels)
             n_chip = len(chip_rows)
             tn = TrackNormalizer.load(Path(c.train.cache_dir) / "norm_tracks.json")
             absent_t = torch.from_numpy(tn.absent_values()[chip_rows]).to(device)
+        aug, scale = None, None
+        if c.train.cohesin_aug > 0:
+            aug, scale = build_cohesin_aug(c, ds, chip_rows, offset, device, is_main)
         stripe = ti[rank::world]
         if stage_dir is not None:
             src = open_stage(stage_dir, c, len(ds), rows)
             data[r] = {"src": src, "rows": np.asarray(stripe)}
+            if scale is not None:
+                scale = scale.to(device)            # indexed by the global row
             if is_main:
                 vs = np.sort(vi)
                 v = {k: torch.from_numpy(np.ascontiguousarray(a[vs])) for k, a in src.items()}
@@ -233,6 +280,8 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
             d = load_rows(ds, stripe)
             d["cond"] = d["cond"][:, rows, :]
             data[r] = {"src": d, "rows": np.arange(len(stripe))}
+            if scale is not None:
+                scale = scale[torch.as_tensor(stripe)].to(device)   # indexed within the stripe
             if is_main:
                 v = load_rows(ds, vi)
                 v["cond"] = v["cond"][:, rows, :]
@@ -245,7 +294,7 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
         info[r] = {"offset": offset, "n_motifs": n_motifs, "n_train": len(ti),
                    "n_stripe": len(stripe), "batch": c.train.batch_size,
                    "cache": c.train.cache_dir, "W": ds.window_size,
-                   "absent": absent_t, "n_chip": n_chip}
+                   "absent": absent_t, "n_chip": n_chip, "aug": aug, "scale": scale}
     model = make_model(base, in_ch, 1).to(device)
     if is_ddp:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
@@ -316,6 +365,7 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
         prng = np.random.default_rng(base.train.seed * 7919 + epoch * 31 + rank)
         loss_sum = {r: 0.0 for r in reslist}
         loss_n = {r: 0 for r in reslist}
+        n_aug = {r: 0 for r in reslist}
         model.train()
         for r in seq:
             r = int(r)
@@ -337,6 +387,10 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
                     tgt = torch.where(m[:, None, None], torch.flip(tgt, dims=[-1, -2]), tgt)
                     if ref is not None:
                         ref = torch.where(m[:, None, None], torch.flip(ref, dims=[-1, -2]), ref)
+            if info[r]["aug"] is not None:
+                cond, tgt4, n_a = info[r]["aug"](cond, tgt[:, None], info[r]["scale"][torch.as_tensor(idx)])
+                tgt = tgt4[:, 0]
+                n_aug[r] += n_a
             absent_t, n_chip = info[r]["absent"], info[r]["n_chip"]
             if absent_t is not None and n_chip > 0:
                 if drop_mode == "uniform_count":
@@ -369,6 +423,8 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
         for r in reslist:
             row[f"loss_{r}"] = loss_sum[r] / max(1, loss_n[r])
             row[f"steps_{r}"] = loss_n[r]
+            if info[r]["aug"] is not None:
+                row[f"aug_{r}"] = n_aug[r]
         save("checkpoint-latest")
         if is_main:
             vs = []
