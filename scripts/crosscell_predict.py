@@ -143,6 +143,9 @@ def main():
                          "its reference set (cell lines: the 12-cell consensus; aml: the training "
                          "patients or the HSPC donors per data.diff_reference; hspc: the training "
                          "HSPC donors); the cell itself never enters it")
+    ap.add_argument("--set-batch", type=int, default=1,
+                    help="keep sets run through the model together, this many per forward pass "
+                         "(same outputs, fewer launches; not with --prior)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out-dir", default=os.environ.get("HICMULTI_HM", "/mnt/processed/wolffjoa/hic-multiome") + "/runs/crosscell")
     a = ap.parse_args()
@@ -345,6 +348,7 @@ def main():
                 from flexcible.reference import reference_block
                 ref = torch.from_numpy(
                     reference_block(ref_clr, chrom, st, size, mat_norm)[None]).to(device)
+            ref_full = ref
             prior = None
             if prior_clr is not None:
                 from flexcible.reference import prior_block
@@ -373,7 +377,43 @@ def main():
                     m2 = np.isfinite(x) & np.isfinite(y) & (x != 0) & (y != 0)
                     if m2.sum() > 100 and x[m2].std() > 0 and y[m2].std() > 0:
                         base_rec[f"base_{oc}"] = float(pearsonr(x[m2], y[m2]).statistic)
+            ref_zero = (torch.zeros_like(ref) if ref is not None else None)
+            outs = {}
+            if a.set_batch > 1:
+                assert prior is None, "--set-batch does not support --prior"
+                from flexcible.dataset import reverse_cond, split_cond
+                keys = list(sym_sets)
+                for b0 in range(0, len(keys), a.set_batch):
+                    kb = keys[b0:b0 + a.set_batch]
+                    cts = []
+                    for k_ in kb:
+                        ct = sym_sets[k_][:, st:st + size]
+                        if ct.shape[1] < size:
+                            ct = np.concatenate([ct, np.zeros((ct.shape[0], size - ct.shape[1]),
+                                                              np.float32)], 1)
+                        cts.append(ct)
+                    cond = torch.from_numpy(np.stack(cts)).to(device)
+                    nb_ = cond.shape[0]
+                    rb = (torch.cat([ref_full if not k_.endswith("_noref") else ref_zero for k_ in kb])
+                          if ref_full is not None else None)
+                    sb = seq.expand(nb_, -1, -1) if seq is not None else None
+                    pairs = (cond[:, offset:offset + 2 * n_motifs].reshape(nb_, n_motifs, 2, size)
+                             if n_motifs else None)
+                    with torch.no_grad():
+                        o = model(cond, pairs, None, sb, rb)
+                        if a.tta:
+                            cr = reverse_cond(cond, offset, n_motifs)
+                            srr, prr = split_cond(cr, offset, n_motifs)
+                            refr = torch.flip(rb, dims=[-1, -2]) if rb is not None else None
+                            sbr = seqr.expand(nb_, -1, -1) if seqr is not None else None
+                            o = 0.5 * (o + torch.flip(model(srr, prr, None, sbr, refr),
+                                                      dims=[-1, -2]))
+                    for j, k_ in enumerate(kb):
+                        outs[k_] = o[j:j + 1]
             for skey, sym_set in sym_sets.items():
+                # a keep set whose name ends in _noref gets the reference plane at 0 (the
+                # expected level, as in scripts/scale_importance.py): consensus absent
+                ref = ref_full if not skey.endswith("_noref") else ref_zero
                 ct = sym_set[:, st:st + size]
                 if ct.shape[1] < size:
                     ct = np.concatenate([ct, np.zeros((ct.shape[0], size - ct.shape[1]),
@@ -382,8 +422,11 @@ def main():
                 pairs = (cond[:, offset:offset + 2 * n_motifs].reshape(1, n_motifs, 2, size)
                          if n_motifs else None)
                 with torch.no_grad():
-                    o = model(cond, pairs, None, seq, ref, prior=prior)
-                    if a.tta:
+                    if skey in outs:
+                        o = outs[skey]
+                    else:
+                        o = model(cond, pairs, None, seq, ref, prior=prior)
+                    if a.tta and skey not in outs:
                         from flexcible.dataset import reverse_cond, split_cond
                         cr = reverse_cond(cond, offset, n_motifs)
                         srr, prr = split_cond(cr, offset, n_motifs)
