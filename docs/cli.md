@@ -51,7 +51,7 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
 - `--reference` is required and has to be a log O/E cool at the same bin size (the embedded consensus is at the trained bin sizes);
 - the track and contact normalisers are those of the trained bin size nearest on the log scale (the view's `multires_source.json` points to them); `--renormalize-tracks` fits the track statistics on the sample at the new bin size instead.
 
-Bin sizes between 2 and 25 kb are interpolation; below 2 kb and above 25 kb they are untested extrapolation (registry section 89). A model with a lookup embedding (`model.res_embed_mode: lookup`) or with one resolution is refused with an error that names its trained bin sizes.
+Bin sizes between 2 and 25 kb are interpolation; below 2 kb and above 25 kb they are untested extrapolation (`results/zero_shot_binsize/RESULTS.md`). A model with a lookup embedding (`model.res_embed_mode: lookup`) or with one resolution is refused with an error that names its trained bin sizes.
 
 Overlapping windows are merged with a Hann weight into one map per chromosome. With `window.transform: prescaled` (the released models) the output holds log O/E values on the model's bin grid; with count targets it holds counts.
 
