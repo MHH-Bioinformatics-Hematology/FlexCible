@@ -634,14 +634,21 @@ def combined_score(maps, res: int) -> float:
 # ===================================================================== #
 # sources
 # ===================================================================== #
+# model name -> run folder name, for variants that read the same checkpoint as another model
+RUN_ALIAS = {"all12one_chrho_noref": "all12one_chrho"}
+NO_REFERENCE = {"all12one_chrho_noref"}     # predicted with the reference plane at 0 (predict --no-reference)
+
+
 def run_dir(model: str, res: int) -> Path:
-    return MR / f"{model}_{res // 1000}kb"
+    return MR / f"{RUN_ALIAS.get(model, model)}_{res // 1000}kb"
+
+
+def run_config(model: str, res: int) -> Path:
+    return MR / f"{RUN_ALIAS.get(model, model)}_{res // 1000}kb.yaml"
 
 
 def model_available(model: str, res: int) -> bool:
-    r = run_dir(model, res)
-    return (r / "checkpoint-best" / "model.pt").exists() and (
-        MR / f"{model}_{res // 1000}kb.yaml").exists()
+    return (run_dir(model, res) / "checkpoint-best" / "model.pt").exists() and run_config(model, res).exists()
 
 
 def target_cool(cell: str, res: int) -> Path:
@@ -777,7 +784,7 @@ def predict_one(model: str, res: int, cell: str, threads: int, gpu: str = "") ->
 
 def sample_cells_of(model: str, res: int) -> set[str]:
     import yaml
-    cfg = yaml.safe_load((MR / f"{model}_{res // 1000}kb.yaml").read_text())
+    cfg = yaml.safe_load(run_config(model, res).read_text())
     return {s["name"] for s in cfg["data"]["samples"]}
 
 
@@ -1985,6 +1992,10 @@ CHRHO_TABLES = REPO / "results/hic_measures_chrho"
 CHRHO_MODELS = ["all12refin_drop_chrho", "all12honest_drop_chrho", "all12refres_drop_chrho"]
 CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 REFERENCE_FREE |= {"all12honest_drop_chrho"}
+# the one model with held-out chromosomes (registry 91): one checkpoint, scored with the consensus
+# as reference input and, from the same checkpoint, with the reference plane at 0 (ChIP only)
+CHRHO_ONE_MODELS = ["all12one_chrho", "all12one_chrho_noref"]
+CHRHO_ONE = False             # --chrho-models: score these models; blocks and tables get their own names
 CHRHO_CELLS = ["gm12878", "imr90", "k562"]
 
 
@@ -1997,6 +2008,17 @@ CHRHO_CO_DENOVO = False       # --chrho-corigami-denovo: C.Origami IMR-90 model 
 
 
 def chrho_blocks() -> list[dict]:
+    """The blocks of _chrho_blocks; with --chrho-models they get the suffix "__onemodel", so the blocks
+    of the models scored earlier stay untouched and the new blocks hold the same pixels for all
+    models they list."""
+    bl = _chrho_blocks()
+    if CHRHO_ONE:
+        for b in bl:
+            b["id"] += "__onemodel"
+    return bl
+
+
+def _chrho_blocks() -> list[dict]:
     """(set, cell, res, chrom, band bins or None for the model window, competitors).
     Every block holds the chromosomes the competitor left out of its training;
     the band is cut to the competitor's reach where it is shorter than our
@@ -2123,10 +2145,12 @@ def chrho_predict_one(model: str, res: int, cell: str, threads: int, gpu: str = 
     if out.exists() or not claim(out):
         return
     try:
-        cfg = MR / f"{model}_{res // 1000}kb.yaml"
+        cfg = run_config(model, res)
         ck = run_dir(model, res) / "checkpoint-best"
         cmd = [PY, "-m", "flexcible.predict", "--config", str(cfg), "--checkpoint", str(ck),
                "--chroms", ",".join(CHRHO_HELD), "--tta", "--out", str(out) + ".tmp"]
+        if model in NO_REFERENCE:
+            cmd.append("--no-reference")
         if cell in HELDOUT:
             cmd += ["--sample", "gm12878", "--bigwig-dir", str(BIGWIG[cell]), "--cell", cell]
         else:
@@ -2226,6 +2250,8 @@ def chrho_report() -> None:
     elif CHRHO_25KB_COMPS:                     # the 25 kb grid, all competitors, own files
         D = D[D.res == 25000]
         tag = "chrho_25kb"
+    if CHRHO_ONE:
+        tag += "_onemodel"
     CHRHO_TABLES.mkdir(parents=True, exist_ok=True)
     D.to_csv(CHRHO_TABLES / f"{tag}_per_block.csv", index=False, float_format="%.4f")
     g = (D.groupby(["set", "cell", "res", "source", "flag"], dropna=False)[cols].mean()
@@ -2266,10 +2292,19 @@ def main():
                     help="chrho_score/chrho_report: the released IMR-90 C.Origami on GM12878 with the authors' "
                          "GM12878 tracks, chr2 and chr3, 25/10/5 kb (chrho_corigami_denovo_*.csv; registry 81)")
     ap.add_argument("--chrho-cells", nargs="*", default=None, help="chrho_predict: cells (default gm12878 imr90 k562)")
+    ap.add_argument("--chrho-models", nargs="+", default=None,
+                    help="chrho_predict/chrho_score/chrho_report: these models only (for example the one "
+                         "model: all12one_chrho all12one_chrho_noref, and the older models whose blocks "
+                         "are to share their pixels); blocks are written as <id>__onemodel and the tables "
+                         "as *_onemodel_*.csv, the existing blocks and tables are not touched")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
     global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE, CHRHO_COMPRT, CHRHO_CELLS_ARG, CHRHO_CO_DENOVO
+    global CHRHO_MODELS, CHRHO_ONE
+    if a.chrho_models:
+        CHRHO_MODELS = list(a.chrho_models)
+        CHRHO_ONE = True
     CHRHO_COMPRT = a.chrho_competitor_retrain
     CHRHO_CO_DENOVO = a.chrho_corigami_denovo
     if a.chrho_corigami_denovo:          # registers the de novo C.Origami competitor

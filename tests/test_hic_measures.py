@@ -214,3 +214,20 @@ def test_rank_score_prefers_better_models():
     assert np.isnan(s["consensus"])            # baselines are not ranked
     o = hm.oriented(pd.DataFrame({"apa_ratio": [0.5, 2.0, np.nan]}), "apa_agreement")
     assert np.allclose(o.values[:2], [0.5, 0.5]) and np.isnan(o.values[2])
+
+
+def test_noref_variant_shares_the_checkpoint_of_the_one_model(tmp_path, monkeypatch):
+    """all12one_chrho_noref reads the run folder and config of all12one_chrho, predicts with
+    --no-reference, and the --chrho-models blocks carry their own ids."""
+    monkeypatch.setattr(hm, "MR", tmp_path)
+    (tmp_path / "all12one_chrho_10kb" / "checkpoint-best").mkdir(parents=True)
+    (tmp_path / "all12one_chrho_10kb" / "checkpoint-best" / "model.pt").write_bytes(b"x")
+    (tmp_path / "all12one_chrho_10kb.yaml").write_text("{}")
+    assert hm.run_dir("all12one_chrho_noref", 10000) == hm.run_dir("all12one_chrho", 10000)
+    assert hm.model_available("all12one_chrho_noref", 10000)
+    assert not hm.model_available("all12one_chrho_noref", 25000)
+    assert "all12one_chrho_noref" in hm.NO_REFERENCE and "all12one_chrho" not in hm.NO_REFERENCE
+    plain = {b["id"] for b in hm.chrho_blocks()}
+    monkeypatch.setattr(hm, "CHRHO_ONE", True)
+    one = {b["id"] for b in hm.chrho_blocks()}
+    assert one == {i + "__onemodel" for i in plain} and not (one & plain)
