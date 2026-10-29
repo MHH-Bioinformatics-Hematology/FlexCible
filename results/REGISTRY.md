@@ -9859,23 +9859,25 @@ Data: 4DN GRCh38 capture Hi-C of HAP1 wild type and 19 CTCF-site deletion clones
 
 Results (`results/perturb_hap1/`, scripts `scripts/perturb_hap1/`, cools and tracks `/mnt/processed/wolffjoa/hic-multiome/perturb/hap1_insilico/`): all 12 loops anchored at deleted sites lose contact in the prediction at 10 kb and at 5 kb, as in the measurement (measured -0.4 to -1.9 log2, predicted -0.07 to -0.56); insulation across the site changes in the measured direction in 15 of 16 site windows at 10 kb (miss: E fwd); the control deletion changes the loops by at most 0.011; whole-region change-map Pearson 0.0 to 0.23 against clone-to-clone ceilings 0.26 to 0.54 (measured change maps are counting noise outside the loops). Caveats: CTCF track not from ENCODE; no cohesin input; hicDetectLoops found no loops in the capture maps, hence the published HiCCUPS loops; one WT map only. Manuscript: Results subsection "Removing CTCF from the input reproduces the measured response to its loss" with Fig. (perturb) and Supplementary Table S19; the degron part of that section is section 84.
 
-## 86. One model with the cohesin response: all12one_cohfix (set up 2026-10-29; section 85 was the last number when this was written)
+## 86. One model with the cohesin response and methylation: all12one_full (set up 2026-10-29; section 85 was the last number when this was written)
 
 The one-model run all12one (section 84) uses the 12 cohesin-intact cells only and therefore reproduces the
 CTCF degron but not the RAD21 degron, like every model without cohesin loss in training (sections 21, 84).
 The cohesin-fraction variant of section 55 reproduced the RAD21 degron and the washout time course at 10 and
-25 kb. all12one_cohfix is that protocol on the one model: configs `runs/multicell_reference/all12one_cohfix_{2,5,10,25}kb.yaml`
-= all12one_<k>kb plus hct116 ChIP from the degron batch (`perturb_chip/untreated`), the 13th sample hct116_auxin
+25 kb. all12one_full is that protocol on the one model, plus DNA methylation as the 14th input track (the released model
+has to be the one model for every input the paper uses): configs `runs/multicell_reference/all12one_full_{2,5,10,25}kb.yaml`
+= all12one_<k>kb plus `Meth` (type methylation; `extra_bigwig_dirs` meth/<cell>; absent for NHEK and PC-9; the auxin
+sample reads the untreated HCT116 methylation), hct116 ChIP from the degron batch (`perturb_chip/untreated`), the 13th sample hct116_auxin
 (odd chromosomes, cohesin_fraction 0.26, norm_like hct116), `data.cohesin_fraction: true`, and
 `train.cohesin_aug 0.25` (fractions 0 / 0.1 / 0.26 / 0.5 / 0.75, absent-track share 0.5) with one operator per
-resolution; reference `input` as in all12one (section 55 used residual). Caches: the section 55 caches at 10
-and 25 kb (identical window and data settings), new `mc_all12cohfix_one_{2,5}kb` (precompute started 08:49).
+resolution; reference `input` as in all12one (section 55 used residual). Caches: `mc_all12one_full_{2,5,10,25}kb`, all four new because of the methylation row (precompute started
+09:40; a first version without methylation, all12one_cohfix, was stopped after an hour and its files removed).
 Operators at 2 and 5 kb fitted by `scripts/cohesin_operator.py --res 2000|5000 --device cuda:N` on the
 section 25 degron caches (`cohesin_fix/operator_{2,5}kb.pt`, results in `results/cohesin_fix/operator_{2,5}kb.json`).
 Code: `flexcible.train_multires` now applies the augmentation per resolution before track dropout
 (`build_cohesin_aug`; learning_curve.csv column `aug_<res>` counts the augmented windows per epoch;
 test `tests/test_cohesin_fix.py::test_multires_training_with_augmentation`). The run is queued behind
-all12one_chrho (claim `all12one_cohfix`, staged in `~/scratch/stage_all12one_cohfix`). Evaluation plan: the
+all12one_chrho (claim `all12one_full`, staged in `~/scratch/stage_all12one_full`). Evaluation plan: the
 section 55 scripts (`perturb_validate.py`, `washout.py`, `aml_eval.py perturb`) on the per-resolution views,
 plus the intact benchmarks of the one model, so that one checkpoint can be released for intact and
 cohesin-depleted cells.
