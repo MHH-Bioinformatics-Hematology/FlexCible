@@ -66,6 +66,8 @@ RESULTS = REPO / "results/zero_shot_binsize"
 ENC = HM / "encode_hic"
 ORIG = HM.parent / "restart_of_prediction_project/originalData/4Dnucleosome"
 
+REMOTE = os.environ.get("HICMULTI_REMOTE", "wolffjoa@172.17.42.159")      # idle RTX 4090 host
+REMOTE_ROOT = "scratch/zeroshot"                                            # under the remote home
 BINS = [1000, 4000, 20000, 50000]
 TRAINED = [2000, 5000, 10000, 25000]
 CHROMS = ["chr2", "chr3", "chr10"]
@@ -359,8 +361,10 @@ def score_dir(b, cell, variant):
     return ZS / "scores" / kb(b) / variant / cell
 
 
-def stage_score(bins, variants, gpu):
-    env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu)
+def score_jobs(bins, variants):
+    """(bin size, cell, variant, command words) of every scoring run that is still missing;
+    paths are local, remote runs map them with remote_path."""
+    jobs = []
     for b in bins:
         chroms = chroms_of(b)
         (ZS / "regions").mkdir(parents=True, exist_ok=True)
@@ -373,13 +377,103 @@ def stage_score(bins, variants, gpu):
                     continue
                 ck = variant_ckpt(b, cell, variant)
                 tag = "consensus_loo" if cell in train_cells(b) else "consensus"
-                out.parent.mkdir(parents=True, exist_ok=True)
-                run([PY, "scripts/crosscell_predict.py", "--config", zs_cfg_path(b),
-                     "--checkpoint", ck, "--cell", cell, "--bigwig-dir", BW[cell],
-                     "--target", oe_path(cell, b), "--tta", "--binsize", b,
-                     "--reference", consensus_cool(cell, b), "--regions", reg,
-                     "--out-dir", out, "--others", f"{tag}={consensus_cool(cell, b)}"],
-                    out.parent / f"{cell}_{variant}.log", env)
+                jobs.append((b, cell, variant, [
+                    "scripts/crosscell_predict.py", "--config", zs_cfg_path(b),
+                    "--checkpoint", ck, "--cell", cell, "--bigwig-dir", BW[cell],
+                    "--target", oe_path(cell, b), "--tta", "--binsize", b,
+                    "--reference", consensus_cool(cell, b), "--regions", reg,
+                    "--out-dir", out, "--others", f"{tag}={consensus_cool(cell, b)}"]))
+    return jobs
+
+
+def stage_score(bins, variants, gpu):
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES=gpu)
+    for b, cell, variant, words in score_jobs(bins, variants):
+        out = score_dir(b, cell, variant)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        run([PY, *words], out.parent / f"{cell}_{variant}.log", env)
+
+
+def ssh(cmd, check=True):
+    log(f"[ssh] {cmd[:200]}")
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", REMOTE, cmd])
+    if check and r.returncode:
+        raise SystemExit(f"remote command failed ({r.returncode}): {cmd[:200]}")
+    return r.returncode
+
+
+def stage_score_remote(bins, variants):
+    """Scoring on the remote GPU host, whose disk does not see the share: the inputs of the
+    missing runs (view checkpoints without model.pt copies, bigWigs, restricted O/E and
+    consensus cools, regions) are staged under ~/scratch/zeroshot, the runs executed there and the
+    score tables copied back. Refuses to start while a process holds the remote GPU."""
+    home = subprocess.run(["ssh", "-o", "BatchMode=yes", REMOTE, "echo $HOME"], capture_output=True,
+                          text=True).stdout.strip()
+    root = f"{home}/{REMOTE_ROOT}"
+    jobs = score_jobs(bins, variants)
+    if not jobs:
+        log("score remote: nothing to do")
+        return
+    busy = subprocess.run(["ssh", "-o", "BatchMode=yes", REMOTE,
+                           "nvidia-smi --query-compute-apps=pid --format=csv,noheader"],
+                          capture_output=True, text=True).stdout.strip()
+    if busy:
+        raise SystemExit(f"remote GPU is in use (pids {busy}); not starting")
+    lh = str(Path.home())
+    mounts = [(str(ZS), f"{root}/zs"), (str(LOCAL), f"{root}/local"), (str(HM / "hg38_k562"), f"{root}/hg38_k562"),
+              (str(REGIONS), f"{root}/regions.tsv"), (str(REFOUT), f"{root}/refout"), (lh, home)]
+
+    def rp(x):
+        x = str(x)
+        if "=" in x and not x.startswith(("/", "-")):          # key=path words (--others)
+            k, v = x.split("=", 1)
+            return k + "=" + rp(v)
+        for a_, b_ in mounts:
+            if x.startswith(a_):
+                return b_ + x[len(a_):]
+        return x
+
+    ssh(f"mkdir -p {root}/zs/oe {root}/zs/configs {root}/zs/regions {root}/local/ckpt")
+    subprocess.run(["rsync", "-a", "--exclude", ".git", "--exclude", "results/", "--exclude", "REMOTE.md",
+                    "--exclude", "remote_queue*", f"{REPO}/", f"{REMOTE}:{home}/hic-multiome-unet/"], check=True)
+    need_b = sorted({j[0] for j in jobs})
+    for b in need_b:
+        txt = zs_cfg_path(b).read_text()
+        for a_, b_ in mounts:
+            txt = txt.replace(a_, b_)
+        tmp = LOCAL / f"remote_{kb(b)}.yaml"
+        tmp.write_text(txt)
+        subprocess.run(["rsync", "-a", str(tmp), f"{REMOTE}:{root}/zs/configs/zeroshot_{kb(b)}.yaml"], check=True)
+        for cell in CELLS:
+            for f in (oe_path(cell, b), consensus_cool(cell, b)):
+                subprocess.run(["rsync", "-a", "--partial", str(f), f"{REMOTE}:{root}/zs/oe/"], check=True)
+    subprocess.run(["rsync", "-a", f"{ZS}/regions/", f"{REMOTE}:{root}/zs/regions/"], check=True)
+    for cell in CELLS:
+        if cell == "k562":
+            subprocess.run(["rsync", "-a", "--partial", f"{HM / 'hg38_k562'}/", f"{REMOTE}:{root}/hg38_k562/"],
+                           check=True)
+    ssh(f"mkdir -p {root}/refout && ls {root}/refout/model_* >/dev/null 2>&1 || true")
+    script = ["set -e", f"cd {home}/hic-multiome-unet", "source ~/hicenv/bin/activate"]
+    sent_model = set()
+    for b, cell, variant, words in jobs:
+        ck = variant_ckpt(b, cell, variant)
+        rck = rp(ck)
+        subprocess.run(["rsync", "-aL", "--exclude", "model.pt", f"{ck}/", f"{REMOTE}:{rck}/"], check=True)
+        real = (ck / "model.pt").resolve()
+        rm = f"{root}/refout/model_{kb(NEAREST[b])}.pt"
+        if rm not in sent_model:
+            subprocess.run(["rsync", "-a", "--partial", str(real), f"{REMOTE}:{rm}"], check=True)
+            sent_model.add(rm)
+        script.append(f"ln -sfn {rm} {rck}/model.pt")
+        out = rp(score_dir(b, cell, variant))
+        script.append(f"mkdir -p {out}")
+        script.append("CUDA_VISIBLE_DEVICES=0 python " + " ".join(rp(w) for w in map(str, words))
+                      + f" > {out}.log 2>&1")
+    sh_local = LOCAL / "remote_score.sh"
+    sh_local.write_text("\n".join(script) + "\n")
+    subprocess.run(["rsync", "-a", str(sh_local), f"{REMOTE}:{root}/remote_score.sh"], check=True)
+    ssh(f"bash {root}/remote_score.sh")
+    subprocess.run(["rsync", "-a", f"{REMOTE}:{root}/zs/scores/", f"{ZS}/scores/"], check=False)
 
 
 # --------------------------------------------------------------- stage: summary
@@ -449,6 +543,8 @@ def main():
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--variants", nargs="*", default=["nearest", "refit_tracks", "refit_all"])
     ap.add_argument("--gpu", default="0")
+    ap.add_argument("--remote", action="store_true",
+                    help="score: run on the remote 4090 host (inputs staged to ~/scratch/zeroshot there)")
     a = ap.parse_args()
     ZS.mkdir(parents=True, exist_ok=True)
     LOCAL.mkdir(parents=True, exist_ok=True)
@@ -462,7 +558,10 @@ def main():
     if st in ("precompute", "all"):
         stage_precompute(a.bins, a.workers)
     if st in ("score", "all"):
-        stage_score(a.bins, a.variants, a.gpu)
+        if a.remote:
+            stage_score_remote(a.bins, a.variants)
+        else:
+            stage_score(a.bins, a.variants, a.gpu)
     if st in ("summary", "all"):
         stage_summary()
     print("ZERO_SHOT_DONE", flush=True)
