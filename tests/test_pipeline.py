@@ -1914,6 +1914,49 @@ def test_multires_training_and_views(workdir):
         assert cooler.Cooler(p).binsize == res
 
 
+def test_multires_reference_dropout(workdir):
+    """train_multires with train.reference_dropout: the reference plane of a share of the
+    training windows is set to 0 (counted per resolution in the learning curve), and the
+    validation is also reported with the plane at 0 (valnoref_<res>, valnoref_mean) while the
+    checkpoint selection stays on the validation with the reference."""
+    import csv
+
+    import cooler
+
+    from flexcible import precompute as hprep
+    from flexcible.train_multires import train_multires
+
+    c2 = workdir / "target_2kb.cool"
+    if not c2.exists():
+        cooler.coarsen_cooler(str(workdir / "target.cool"), str(c2), factor=2, chunksize=10**6)
+    cfgs = []
+    for res, cool, W in ((BINSIZE, workdir / "target.cool", 32), (2 * BINSIZE, c2, 16)):
+        raw = _ref_raw(workdir, f"mrrd{res}", reference="input", ref_cool=False)
+        raw["data"]["resolution"] = res
+        raw["data"]["samples"][0].update(cool_path=str(cool), reference_cool=str(cool))
+        raw["window"].update(size=W, stride=W // 2)
+        raw["model"]["resolutions"] = [BINSIZE, 2 * BINSIZE]
+        raw["model"]["res_embed_dim"] = 4
+        raw["train"].update(cache_dir=str(workdir / f"cache_mrrd{res}"), val_regions=2,
+                            max_epochs=2, patience_epochs=5, batch_size=2, reference_dropout=1.0)
+        c = Config.from_dict(raw)
+        hprep.build(c)
+        cfgs.append(c)
+    out = workdir / "run_multires_refdrop"
+    train_multires(cfgs, out)
+    lc = list(csv.DictReader(open(out / "learning_curve.csv")))
+    assert len(lc) == 2
+    for k in (f"refdrop_{BINSIZE}", f"refdrop_{2 * BINSIZE}", f"valnoref_{BINSIZE}",
+              f"valnoref_{2 * BINSIZE}", "valnoref_mean"):
+        assert k in lc[0]
+    # with the plane withheld in every window, at least one window per step is counted
+    assert all(int(r[f"refdrop_{BINSIZE}"]) + int(r[f"refdrop_{2 * BINSIZE}"])
+               >= int(r[f"steps_{BINSIZE}"]) + int(r[f"steps_{2 * BINSIZE}"]) > 0 for r in lc)
+    assert all(np.isfinite(float(r["valnoref_mean"])) for r in lc)
+    best = json.loads((out / "checkpoint-best" / "progress.json").read_text())["best"]
+    assert best == max(float(r["val_mean"]) for r in lc)
+
+
 def test_predict_bin_size_option(workdir, monkeypatch):
     """predict --bin-size: a continuous-embedding multi-resolution model predicts at a bin size it
     was not trained on (window keeps its genomic span, reference at that bin size required,

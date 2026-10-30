@@ -90,6 +90,7 @@ train:
   augment_reverse: true             # reverse-complement augmentation
   track_dropout: 0.5                # > 0 switches track dropout on
   track_dropout_mode: uniform_count # per window keep k ~ Uniform{1..T} tracks
+  reference_dropout: 0.0            # reference-map models: share of windows trained with the reference plane at 0
   max_epochs: 500
   patience_epochs: 10               # stop after this many epochs without validation improvement
   max_minutes: null                 # optional wall-clock limit
@@ -102,6 +103,8 @@ train:
 predict:
   merge: hann                       # weight of overlapping windows
 ```
+
+`reference_dropout` matters for a model that should also serve without a reference map: a reference-map model trained with the plane always present does not predict from the tracks alone (`predict --no-reference` gives a far lower accuracy than a model trained without a reference), while a model trained with the plane withheld in a share of the windows does. The learning curve of such a run carries `valnoref_<bin size>` columns, the validation with the plane at 0; model selection uses the validation with the reference.
 
 `val_exclude_overlap: true` keeps the validation windows disjoint from every training window of every cell. Leave it on; a validation set that overlaps the training windows reports an optimistic score.
 

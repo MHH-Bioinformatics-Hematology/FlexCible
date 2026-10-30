@@ -223,9 +223,15 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
     if sorted(reslist) != sorted(base.model.resolutions):
         raise ValueError(f"configs cover {reslist}, model.resolutions {base.model.resolutions}")
 
-    if any(c.train.reference_dropout > 0 or c.train.hard_split or c.train.sv_mask for c in cfgs):
-        raise NotImplementedError("reference dropout, hard split and SV masks are not supported in "
+    if any(c.train.hard_split or c.train.sv_mask for c in cfgs):
+        raise NotImplementedError("hard split and SV masks are not supported in "
                                   "multi-resolution training")
+    # reference dropout (train.reference_dropout of the first config): the reference plane of
+    # that share of the training windows is set to 0 (its expected level), as in flexcible.train,
+    # so that one checkpoint also predicts from the tracks alone (predict --no-reference)
+    ref_p = float(base.train.reference_dropout)
+    if ref_p > 0 and base.model.reference == "none":
+        raise ValueError("train.reference_dropout needs a model.reference model")
     if any(c.data.cohesin_unknown or c.data.diff_marks or c.motifs.motif_meth for c in cfgs):
         raise NotImplementedError("track dropout with cohesin_unknown, diff_marks or motif_meth is "
                                   "not supported in multi-resolution training")
@@ -366,6 +372,7 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
         loss_sum = {r: 0.0 for r in reslist}
         loss_n = {r: 0 for r in reslist}
         n_aug = {r: 0 for r in reslist}
+        n_refdrop = {r: 0 for r in reslist}
         model.train()
         for r in seq:
             r = int(r)
@@ -379,6 +386,10 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
             cond = _take(d["src"], "cond", idx, device)
             tgt = _take(d["src"], "target", idx, device)
             ref = _take(d["src"], "ref", idx, device) if use_ref else None
+            if ref is not None and ref_p > 0:
+                keep = torch.rand(ref.shape[0], device=device) >= ref_p
+                ref = ref * keep[:, None, None].to(ref.dtype)
+                n_refdrop[r] += int(ref.shape[0] - keep.sum().item())
             off, nm = info[r]["offset"], info[r]["n_motifs"]
             if base.train.augment_reverse:
                 m = torch.rand(bs, device=device) < 0.5
@@ -425,23 +436,38 @@ def train_multires(cfgs: list[Config], out_dir: Path, resume: bool = False,
             row[f"steps_{r}"] = loss_n[r]
             if info[r]["aug"] is not None:
                 row[f"aug_{r}"] = n_aug[r]
+            if ref_p > 0:
+                row[f"refdrop_{r}"] = n_refdrop[r]
         save("checkpoint-latest")
         if is_main:
-            vs = []
+            vs, vs0 = [], []
             for c in cfgs:
                 r = int(c.data.resolution)
-                v = val_akita_median(_AtRes(model, r), vdata[r], device,
-                                     max(1, min(info[r]["batch"], vdata[r]["target"].shape[0])),
+                vb = max(1, min(info[r]["batch"], vdata[r]["target"].shape[0]))
+                v = val_akita_median(_AtRes(model, r), vdata[r], device, vb,
                                      info[r]["offset"], info[r]["n_motifs"],
                                      cond_mode=c.model.cond_mode, use_ref=use_ref)
                 row[f"val_{r}"] = v
                 vs.append(v)
+                if ref_p > 0:
+                    # the same windows with the reference plane at 0: what the checkpoint gives
+                    # from the tracks alone; logged, not used for model selection
+                    v0 = val_akita_median(_AtRes(model, r),
+                                          {**vdata[r], "ref": torch.zeros_like(vdata[r]["ref"])},
+                                          device, vb, info[r]["offset"], info[r]["n_motifs"],
+                                          cond_mode=c.model.cond_mode, use_ref=use_ref)
+                    row[f"valnoref_{r}"] = v0
+                    vs0.append(v0)
             row["val_mean"] = float(np.mean(vs))
+            if ref_p > 0:
+                row["valnoref_mean"] = float(np.mean(vs0))
             imp = row["val_mean"] > best
             log.info("epoch %d done: " + "  ".join(f"{r // 1000}kb loss %.4f val %.4f"
-                                                  for r in reslist) + "  mean %.4f%s",
+                                                  for r in reslist) + "  mean %.4f%s%s",
                      epoch, *[x for r in reslist for x in (row[f"loss_{r}"], row[f"val_{r}"])],
-                     row["val_mean"], "  <- best" if imp else "")
+                     row["val_mean"],
+                     f"  (no reference {row['valnoref_mean']:.4f})" if ref_p > 0 else "",
+                     "  <- best" if imp else "")
             if imp:
                 best = row["val_mean"]
                 no_imp = 0
