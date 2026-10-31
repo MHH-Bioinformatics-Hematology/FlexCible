@@ -1,9 +1,9 @@
 import sys, os; sys.path.insert(0, os.path.dirname(__file__))
 import pandas as pd
-from common import RES
-M = pd.concat([pd.read_csv(RES / f"region{i}_map_scores.csv") for i in (1, 2, 3)])
-L = pd.concat([pd.read_csv(RES / f"region{i}_loop_scores.csv") for i in (1, 2, 3)])
-I = pd.concat([pd.read_csv(RES / f"region{i}_insulation_scores.csv") for i in (1, 2, 3)])
+from common import RES, PFX
+M = pd.concat([pd.read_csv(RES / f"{PFX}region{i}_map_scores.csv") for i in (1, 2, 3)])
+L = pd.concat([pd.read_csv(RES / f"{PFX}region{i}_loop_scores.csv") for i in (1, 2, 3)])
+I = pd.concat([pd.read_csv(RES / f"{PFX}region{i}_insulation_scores.csv") for i in (1, 2, 3)])
 rows = []
 for (rl, rn, dn), g in M.groupby(["model", "region", "deletion"], sort=False):
     mc = g[g.unit == "mean_of_clones"].iloc[0]
@@ -19,5 +19,5 @@ for (rl, rn, dn), g in M.groupby(["model", "region", "deletion"], sort=False):
                      insulation100kb_sites=len(i), insulation100kb_sign_agree=int(i.sign_agree.sum()),
                      insulation100kb_meas_change_mean=i.meas_change.mean(), insulation100kb_pred_change_mean=i.pred_change.mean(),
                      insulation100kb_control_pred_change_mean=i.ctrl_pred_change.mean()))
-S = pd.DataFrame(rows); S.to_csv(RES / "summary.csv", index=False, float_format="%.3f")
+S = pd.DataFrame(rows); S.to_csv(RES / f"{PFX}summary.csv", index=False, float_format="%.3f")
 pd.set_option("display.width", 300); pd.set_option("display.max_columns", 30); print(S.round(2).to_string(index=False))

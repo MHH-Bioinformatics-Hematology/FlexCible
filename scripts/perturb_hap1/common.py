@@ -5,7 +5,17 @@ MCOOL = SHARE / "hap1_ctcf_site_deletions_sanborn2015"
 OUT = SHARE / "hap1_insilico"
 RES = Path.home() / "src/hic-multiome-unet/results/perturb_hap1"
 RUNS = Path("/mnt/processed/wolffjoa/hic-multiome/runs/multicell_reference")
-MODELS = {"10kb": RUNS / "all12honest_drop_10kb.yaml", "5kb": RUNS / "all12honest_drop_5kb.yaml"}
+import os
+# HAP1_TAG selects the release checkpoint: all12one_fullrd_consensus (embedded consensus plane) or all12one_fullrd_noref
+# (--no-reference). Unset: the original ChIP-only dedicated models without consensus (section 85).
+TAG = os.environ.get("HAP1_TAG", "")
+if TAG:
+    MODELS = {"10kb": RUNS / "all12one_fullrd_10kb.yaml", "5kb": RUNS / "all12one_fullrd_5kb.yaml"}
+else:
+    MODELS = {"10kb": RUNS / "all12honest_drop_10kb.yaml", "5kb": RUNS / "all12honest_drop_5kb.yaml"}
+COOLS = OUT / (f"cools_{TAG}" if TAG else "cools")
+PFX = f"{TAG}_" if TAG else ""
+NOREF = TAG.endswith("_noref")
 RESOLUTION = {"10kb": 10000, "5kb": 5000}
 
 # captured regions, GRCh38 (cis-coverage of the WT map; 2 Mb each, see README)

@@ -41,13 +41,13 @@ def main(models):
         for rl in models:
             res = RESOLUTION[rl]; n = (reg["end"] - reg["start"]) // res
             z = np.load(RES / "maps" / f"measured_{rn}_{rl}.npz"); wt = z[WT_SET]
-            wt_pred = pred_region(OUT / "cools" / rl / f"wt_{rn}.cool", reg["chrom"], reg["start"], reg["end"], res)
+            wt_pred = pred_region(COOLS / rl / f"wt_{rn}.cool", reg["chrom"], reg["start"], reg["end"], res)
             I, J = pixel_mask(n, 2)
             I1, J1 = pixel_mask(n, 2, int(1_000_000 // res))
             for dn, d in DELETIONS.items():
                 if d["region"] != rn: continue
-                pdel = pred_region(OUT / "cools" / rl / f"del_{dn}.cool", reg["chrom"], reg["start"], reg["end"], res)
-                pctl = pred_region(OUT / "cools" / rl / f"ctrl_{dn}.cool", reg["chrom"], reg["start"], reg["end"], res)
+                pdel = pred_region(COOLS / rl / f"del_{dn}.cool", reg["chrom"], reg["start"], reg["end"], res)
+                pctl = pred_region(COOLS / rl / f"ctrl_{dn}.cool", reg["chrom"], reg["start"], reg["end"], res)
                 pchg, cchg = pdel - wt_pred, pctl - wt_pred
                 units = {f"clone:{s}": z[s] for s in d["sets"]}
                 units["mean_of_clones"] = None
@@ -70,7 +70,7 @@ def main(models):
                 # specificity: this deletion's measured change vs the prediction for the other deletions of the region
                 for dn2, d2 in DELETIONS.items():
                     if d2["region"] == rn and dn2 != dn:
-                        p2 = pred_region(OUT / "cools" / rl / f"del_{dn2}.cool", reg["chrom"], reg["start"], reg["end"], res) - wt_pred
+                        p2 = pred_region(COOLS / rl / f"del_{dn2}.cool", reg["chrom"], reg["start"], reg["end"], res) - wt_pred
                         mrows.append(dict(model=rl, region=rn, deletion=dn, unit=f"mean_of_clones_vs_prediction_of:{dn2}",
                                           pearson_pred_vs_meas=pearson(p2, chg["mean_of_clones"], I, J),
                                           pearson_le1Mb=pearson(p2, chg["mean_of_clones"], I1, J1)))
@@ -108,9 +108,9 @@ def main(models):
                                               meas_wt=mw, meas_del=mdel, meas_change=mdel - mw,
                                               pred_wt=pw_, pred_del=pd2, pred_change=pd2 - pw_, ctrl_pred_change=pc2 - pw_,
                                               sign_agree=bool(np.sign(mdel - mw) == np.sign(pd2 - pw_))))
-        pd.DataFrame(mrows).to_csv(RES / f"{rn}_map_scores.csv", index=False, float_format="%.4f")
-        pd.DataFrame(lrows).to_csv(RES / f"{rn}_loop_scores.csv", index=False, float_format="%.4f")
-        pd.DataFrame(irows).to_csv(RES / f"{rn}_insulation_scores.csv", index=False, float_format="%.4f")
+        pd.DataFrame(mrows).to_csv(RES / f"{PFX}{rn}_map_scores.csv", index=False, float_format="%.4f")
+        pd.DataFrame(lrows).to_csv(RES / f"{PFX}{rn}_loop_scores.csv", index=False, float_format="%.4f")
+        pd.DataFrame(irows).to_csv(RES / f"{PFX}{rn}_insulation_scores.csv", index=False, float_format="%.4f")
         print("wrote", rn, len(mrows), len(lrows), len(irows))
 
 
