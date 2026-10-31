@@ -1536,16 +1536,21 @@ def test_reference_cached_trained_and_scored(workdir):
         htrain.train(cm)
         run = Path(cm.train.output_dir)
         assert (run / "best").exists()
-        for extra in ([], ["--reference-only"]):
-            out = run / f"eval{len(extra)}.json"
+        for extra in ([], ["--reference-only"], ["--no-reference"]):
+            out = run / f"eval{len(extra)}{extra[0] if extra else ''}.json"
             subprocess.run([sys.executable, str(repo / "scripts/eval_val_windows.py"),
                             "--run", str(run), "--split", "test", "--out", str(out),
                             *extra], check=True, cwd=repo, capture_output=True)
             r = json.loads(out.read_text())
             assert r["n"] > 0
             if extra:   # reference == target: a perfect prediction
-                assert r["prediction"] == "reference map"
-                assert r["oe_median_r"] > 0.999
+                if extra == ["--reference-only"]:
+                    assert r["prediction"] == "reference map"
+                    assert r["oe_median_r"] > 0.999
+                else:
+                    assert r["prediction"] == "model, reference plane 0"
+                    base = json.loads((run / "eval0.json").read_text())["oe_median_r"]
+                    assert r["oe_median_r"] != base
 
     # a cache without reference windows is rejected by a reference model
     import dataclasses

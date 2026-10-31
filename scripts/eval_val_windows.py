@@ -65,7 +65,14 @@ def main():
     ap.add_argument("--reference-only", action="store_true",
                     help="score the cached reference map (data.reference_cool) "
                          "itself as the prediction, on the same windows and pixels")
+    ap.add_argument("--no-reference", action="store_true",
+                    help="reference-input models: set the reference plane to 0 (the expected "
+                         "level in the normalised space), so the model predicts from the ChIP "
+                         "tracks alone (as predict --no-reference); default output name "
+                         "noref_<split>_eval[_<sample>].json")
     a = ap.parse_args()
+    if a.no_reference and a.reference_only:
+        raise SystemExit("--no-reference and --reference-only exclude each other")
     run = Path(a.run)
     ck = run / (run / a.ckpt).read_text().strip()
     cfg = Config.load(ck / "config.yaml")
@@ -83,6 +90,8 @@ def main():
                           chroms=cfg.train.chroms)
         vi = np.arange(data["target"].shape[0])
     use_ref = cfg.model.reference != "none"
+    if a.no_reference and not use_ref:
+        raise SystemExit("--no-reference needs a model with a reference map")
     if (use_ref or a.reference_only) and "ref" not in data:
         raise SystemExit(f"{cache_dir} holds no reference windows")
     if use_ref or a.reference_only:
@@ -125,6 +134,8 @@ def main():
                 oh = (batch_onehot(vcoords, list(range(i, i + n)), [False] * n, W,
                                    int(cfg.data.resolution), fm, device) if use_seq else None)
                 rb = ref[i:i + n].to(device).float() if use_ref else None
+                if a.no_reference:
+                    rb = torch.zeros_like(rb)
                 pb = prior[i:i + n].to(device).float() if prior is not None else None
                 preds.append(model(sym, pairs, None, oh, rb, prior=pb)[:, 0].float().cpu().numpy())
         pred = np.concatenate(preds)
@@ -149,15 +160,17 @@ def main():
         r_dist.append(region_r(decay, t_oe + decay))
     res = {"run": str(run), "ckpt": str(ck), "split": a.split, "n": len(vi),
            "oe_median_r": float(np.nanmedian(r_oe)), "cache_dir": str(cache_dir),
-           "prediction": "reference map" if a.reference_only else "model"}
+           "prediction": ("reference map" if a.reference_only else
+                          "model, reference plane 0" if a.no_reference else "model")}
     if a.sample is not None:
         res["sample"] = a.sample
     if E is not None:
         res["logobs_median_r_decay_inflated"] = float(np.nanmedian(r_lo))
         res["distance_only_logobs_median_r"] = float(np.nanmedian(r_dist))
     print(json.dumps(res, indent=1))
-    Path(a.out or run / (f"{a.split}_eval.json" if a.sample is None
-                         else f"{a.split}_eval_{a.sample}.json")).write_text(json.dumps(res, indent=1))
+    stem = ("noref_" if a.no_reference else "") + f"{a.split}_eval"
+    Path(a.out or run / (f"{stem}.json" if a.sample is None
+                         else f"{stem}_{a.sample}.json")).write_text(json.dumps(res, indent=1))
 
 
 if __name__ == "__main__":
