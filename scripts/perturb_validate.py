@@ -81,6 +81,12 @@ def has_fraction(model: str) -> bool:
     return "cohfix" in model or "one_full" in model
 
 
+def is_noref(model: str) -> bool:
+    """ChIP-only use of a one-model view (registry section 99): every keep set carries the suffix _noref,
+    so crosscell_predict sets the consensus plane to 0; the files are <set>_noref.npz."""
+    return "_noref_" in model
+
+
 def is_view(model: str) -> bool:
     """A per-resolution view of the shared one-model checkpoint (flexcible.train_multires.write_views)."""
     return "one_full" in model
@@ -99,6 +105,8 @@ def perts_of(model: str) -> dict:
         d = {"full": None, "minus_RAD21": [x for x in t if x != "RAD21"],
              "minus_CTCF": [x for x in t if x != "CTCF"],
              "minus_H3K36me3": [x for x in t if x != "H3K36me3"]}
+        if is_noref(model):
+            return {k: d[k] for k in ("full", "minus_CTCF", "minus_H3K36me3")}
         return {**d, "minus_RAD21_f0": d["minus_RAD21"], "minus_RAD21_f0.5": d["minus_RAD21"]}
     return {**PERTS, **FRACTION_PERTS} if has_fraction(model) else PERTS
 
@@ -167,6 +175,9 @@ for _res, _bases in ((5000, ("all12refres_drop", "all12honest_drop", "all12deg_r
 for _b in ("all12one_full", "all12one_fullrd"):
     for _k in (10, 25):
         MODELS[f"{_b}_{_k}kb"] = (mx.REF_OUT / f"{_b}_{_k}kb", _k * 1000, _b)
+# the ChIP-only use of the release checkpoint (registry section 99): same view, consensus plane at 0
+for _k in (10, 25):
+    MODELS[f"all12one_fullrd_noref_{_k}kb"] = (mx.REF_OUT / f"all12one_fullrd_{_k}kb", _k * 1000, "all12one_fullrd")
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # measured ChIP of the degron cells (4DN GRCh38 fold change: RAD21 and CTCF from
 # Kim et al. 2024, eight histone marks from Rao et al. 2017, untreated and 6 h
@@ -229,7 +240,7 @@ def stage_oe():
 
 
 def pred_file(model: str, pert: str) -> Path:
-    return OUT / "pred" / model / f"{pert}.npz"
+    return OUT / "pred" / model / f"{pert}{'_noref' if is_noref(model) else ''}.npz"
 
 
 def unfinished(model: str, run: Path, res: int) -> bool:
@@ -257,7 +268,7 @@ def stage_predict():
         if all(pred_file(model, p).exists() for p in perts_of(model)):
             continue
         od = pred_file(model, "x").parent
-        extra = ["--keep-sets", *[f"{p}={','.join(keep or all_tracks(model))}"
+        extra = ["--keep-sets", *[f"{p}{'_noref' if is_noref(model) else ''}={','.join(keep or all_tracks(model))}"
                                   for p, keep in perts_of(model).items()]]
         if ref:
             extra += ["--reference", ref_of(model, ref, res)]
