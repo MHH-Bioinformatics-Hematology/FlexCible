@@ -45,6 +45,15 @@ Stages:
   python scripts/attribute.py report                    # tables.md (completeness, coordinates, enrichments)
 Environment as in flexible_inputs.py: HICMULTI_HM (data root), FLEX_REGIONS (regions TSV) for hosts
 without the share. Outputs in results/attribution/.
+
+Other checkpoints (release candidate with methylation and the cohesin-fraction row):
+  python scripts/attribute.py locus --model all12one_fullrd --meth 1 --regions ...  (also glob, report)
+--model names the run whose 10 kb view runs/multicell_reference/<model>_10kb is used; --meth 1 gives
+K562 its methylation track "Meth" (an attributed row, baseline = absent value), --meth 0 sets Meth absent
+in the input (its row is held at the absent value, attribution 0). The cohesin:fraction row is a context
+row (K562 intact, 1.0): it is held at its input value in the baseline, so it receives no attribution and the
+path changes only the tracks. Outputs: results/attribution/<model>/ (--meth 1) and
+results/attribution/<model>/nometh/ (--meth 0); the default model all12one writes results/attribution/.
 """
 from __future__ import annotations
 
@@ -84,6 +93,18 @@ SETTINGS = ("cons", "nocons")
 INS = 5                       # insulation square side, bins
 GC_ROWS = ("seq:gc", "seq:cpg")
 FLEX = REPO / "results/flexible_inputs/per_region.csv"
+
+
+MODEL, METH = "all12one", True
+HELD_ROWS = ("cohesin:fraction",)       # context rows: baseline = input (no attribution)
+
+
+def configure(model, meth):
+    global MODEL, METH, OUT, CKPT
+    MODEL, METH = model, bool(meth)
+    CKPT = HM / f"runs/multicell_reference/{model}_{KB}kb/checkpoint-best"
+    if model != "all12one":
+        OUT = REPO / "results/attribution" / model / ("" if METH else "nometh")
 
 
 def parse_region(s):
@@ -213,8 +234,11 @@ class Ctx:
         self.absent = self.track_norm.absent_values()
         sample = cfg.get_sample(None)
         sample.bigwig_dir = str(BIGWIG)
-        sample.extra_bigwig_dirs = []
-        sample.missing_tracks = []
+        has_meth_row = "Meth" in ch["tracks"]
+        sample.extra_bigwig_dirs = [str(HM / "meth" / CELL)] if (has_meth_row and METH) else []
+        sample.missing_tracks = ["Meth"] if (has_meth_row and not METH) else []
+        self.held = [k for k, nm in enumerate(self.rows)
+                     if nm in HELD_ROWS or (nm == "Meth" and not METH)]
         self.sample = sample
         self.files = sample_track_files(cfg, sample)
         self.tgt = cooler.Cooler(str(TARGET))
@@ -290,6 +314,8 @@ def integrated_gradients(ctx, w, fns, consensus, steps=STEPS, chunk=10):
     dev = ctx.device
     x = torch.from_numpy(w["cond"]).to(dev)
     b = torch.from_numpy(ctx.baseline_row[:, None].repeat(x.shape[1], 1)).to(dev)
+    for k in ctx.held:                          # context rows: baseline = input
+        b[k] = x[k]
     r = torch.from_numpy(w["ref"]).to(dev) if consensus else torch.zeros(x.shape[1], x.shape[1], device=dev)
     acc = {k: [torch.zeros_like(x), torch.zeros_like(r)] for k in fns}
     alphas = (torch.arange(steps, device=dev, dtype=torch.float32) + 0.5) / steps
@@ -493,6 +519,8 @@ def main():
     s.add_argument("--steps", type=int, default=STEPS)
     s.add_argument("--out", default=None, help="output folder (default results/attribution)")
     s.add_argument("--device", default="cuda")
+    s.add_argument("--model", default="all12one")
+    s.add_argument("--meth", type=int, choices=[0, 1], default=1)
     s.set_defaults(f=locus)
     s = sp.add_parser("glob")
     s.add_argument("--n", type=int, default=40)
@@ -500,10 +528,15 @@ def main():
     s.add_argument("--steps", type=int, default=STEPS)
     s.add_argument("--out", default=None, help="output folder (default results/attribution)")
     s.add_argument("--device", default="cuda")
+    s.add_argument("--model", default="all12one")
+    s.add_argument("--meth", type=int, choices=[0, 1], default=1)
     s.set_defaults(f=glob)
     s = sp.add_parser("report")
+    s.add_argument("--model", default="all12one")
+    s.add_argument("--meth", type=int, choices=[0, 1], default=1)
     s.set_defaults(f=report)
     a = ap.parse_args()
+    configure(getattr(a, "model", "all12one"), getattr(a, "meth", 1))
     a.f(a)
 
 
