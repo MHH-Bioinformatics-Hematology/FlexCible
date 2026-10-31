@@ -50,6 +50,7 @@ GROUPS = {
     "active": ["H3K27ac", "H3K4me1", "H3K4me2", "H3K4me3", "H3K9ac"],
     "gene body": ["H3K36me3", "H3K79me2", "H4K20me1"],
     "repressive": ["H3K27me3", "H3K9me3"],
+    "methylation": ["Meth"],            # models with a methylation track only (empty groups are skipped)
 }
 BANDS = [("<100 kb", 0, 100_000), ("100-500 kb", 100_000, 500_000),
          (">500 kb", 500_000, 10**12)]
@@ -97,17 +98,20 @@ def predict(model, cond, ref, offset, n_motifs, device, res, batch=8):
     return np.concatenate(out)
 
 
-def run(views, out: Path, n_attr: int, device):
+def run(views, out: Path, n_attr: int, device, exclude=()):
     out.mkdir(parents=True, exist_ok=True)
     drop_rows, cell_rows, attr_rows = [], [], []
     for view in views:
         cfg, data, ds, rows, offset, n_motifs, names, model, absent = load(Path(view), device)
         res = int(cfg.data.resolution)
         W = ds.window_size
-        cond = data["cond"][:, rows, :]
-        tgt = data["target"][:, 0].float().numpy()
-        ref = data.get("ref")
         cells = np.array(_coords(ds)[2])
+        keep = torch.from_numpy(~np.isin(cells, list(exclude)))      # e.g. the depleted hct116_auxin sample
+        cond = data["cond"][:, rows, :][keep]
+        tgt = data["target"][:, 0].float().numpy()[keep.numpy()]
+        ref = data.get("ref")
+        ref = ref[keep] if ref is not None else None
+        cells = cells[keep.numpy()]
         groups = group_rows(names)
         conds = {"all inputs": None, **{k: k for k in groups}}
         if ref is not None:
@@ -241,12 +245,14 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--attr-per-cell", type=int, default=20)
     ap.add_argument("--figure-only", action="store_true")
+    ap.add_argument("--exclude-cells", nargs="*", default=[],
+                    help="samples left out of the test windows (the all12one_full family: hct116_auxin)")
     a = ap.parse_args()
     if a.figure_only:
         figure(Path(a.out))
         return
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    run(a.views, Path(a.out), a.attr_per_cell, device)
+    run(a.views, Path(a.out), a.attr_per_cell, device, a.exclude_cells)
     (Path(a.out) / "views.json").write_text(json.dumps(a.views, indent=1))
     print("SCALE_IMPORTANCE_DONE", flush=True)
 
