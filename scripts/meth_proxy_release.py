@@ -204,6 +204,72 @@ def stage_summary(a) -> None:
     log("summary written")
 
 
+# --------------------------------------------------------------------------- single marks
+VIEWS = {"minus": ("m1_", "mark removed from the full set"), "alone": ("o1_", "mark alone")}
+SINGLE_METRICS = ["pearson", "insulation", "boundary_f1", "loop_enrichment", "compartment", "scc"]
+
+
+def load_single(kinds: list[str]) -> pd.DataFrame:
+    """Per-region scores of the single-mark sets plus the reference sets 'full' (and 'full+meth') of the
+    group pass; set names are '<prefix><mark>' and 'full'."""
+    cols = {v: k for k, v in mp.METRICS.items()}
+    parts = []
+    for k in RES:
+        for noref in (False, True):
+            for cell in CELLS:
+                names = [("full", "full"), ("full+meth", "full+meth")]
+                for kind in kinds:
+                    pre = VIEWS[kind][0]
+                    names += [(f"{pre}{m}", f"{pre}{m}") for m in MARKS]
+                    names += [(f"{pre}{m}+meth", f"{pre}{m}+meth") for m in MARKS]
+                for st, _ in names:
+                    f = pred_csv(k, noref, st, cell)
+                    if not f.exists():
+                        continue
+                    d = pd.read_csv(f)
+                    d = d[["region"] + [c for c in cols if c in d]].rename(columns=cols)
+                    d.insert(0, "meth", st.endswith("+meth"))
+                    d.insert(0, "set", st.removesuffix("+meth"))
+                    d.insert(0, "cell", cell)
+                    d.insert(0, "model", model_name(k, noref))
+                    parts.append(d)
+    return pd.concat(parts, ignore_index=True)
+
+
+def stage_summary_single(a) -> None:
+    kinds = [k for k in a.sets if k in VIEWS] or list(VIEWS)
+    R = load_single(kinds)
+    log(f"single-mark regions table {R.shape}")
+    models = {model_name(k, nr): dict(family="plane at 0" if nr else "consensus", res=k, planes=False, seed=0)
+              for k in RES for nr in (False, True) if (R.model == model_name(k, nr)).any()}
+    groups = ["training WGBS", "training RRBS", "held-out", "training all"]
+    rows, crows = [], []
+    for kind in kinds:
+        pre = VIEWS[kind][0]
+        sets = [f"{pre}{m}" for m in MARKS]
+        # 'full' is the reference of both views; the group pass wrote it under the same name
+        C, P = mp.analyse(R, models, lambda m: CELLS, mp.cell_groups, groups, SINGLE_METRICS, sets,
+                          noise_of_model, nb=a.nboot)
+        for df, out in ((C, crows), (P, rows)):
+            df.insert(1, "view", kind)
+            df.insert(2, "res_kb", df.model.map(lambda m: models[m]["res"]))
+            df.insert(3, "use", df.model.map(lambda m: "plane at 0" if models[m]["family"] == "plane at 0"
+                                             else "consensus plane"))
+            df["mark"] = df["set"].str.removeprefix(pre)
+            out.append(df)
+    P, C = pd.concat(rows, ignore_index=True), pd.concat(crows, ignore_index=True)
+    C.to_csv(REPO / "results/one_model/METH_PROXY_PER_MARK_by_cell.csv", index=False, float_format="%.5f")
+    P.to_csv(REPO / "results/one_model/METH_PROXY_PER_MARK_all_metrics.csv", index=False, float_format="%.5f")
+    main = P[P.metric == "pearson"].rename(columns={"cell_group": "cell_group", "mean_loss": "loss",
+                                                    "mean_gain": "gain"})
+    main = main.rename(columns={"gain_lo": "gain_lo", "gain_hi": "gain_hi"})
+    # P has both loss_lo/hi and gain_lo/hi already; the order below is the one the figure scripts read
+    cols = ["res_kb", "use", "cell_group", "mark", "loss", "loss_lo", "loss_hi", "gain", "gain_lo", "gain_hi",
+            "rf", "rf_lo", "rf_hi", "n_cells", "view", "noise", "n_cells_rf_defined"]
+    main[cols].to_csv(REPO / "results/one_model/METH_PROXY_PER_MARK.csv", index=False, float_format="%.5f")
+    log("single-mark summary written")
+
+
 def main() -> None:
     np.seterr(divide="ignore", invalid="ignore")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
