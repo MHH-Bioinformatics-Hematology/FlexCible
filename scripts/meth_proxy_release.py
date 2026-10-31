@@ -21,6 +21,17 @@ that bin size (results/meth_proxy/seed_noise.csv).
 
     python scripts/meth_proxy_release.py --stage predict --gpu 1
     python scripts/meth_proxy_release.py --stage summary
+
+Single marks (registry section 97; option --sets): the question for which individual mark methylation
+can act as a proxy. The sets are
+
+  minus <mark>   m1_<mark>: all 13 ChIP tracks except that mark, with and without Meth
+  alone <mark>   o1_<mark>: only that mark, with and without Meth
+  each with the consensus plane and with the plane at 0 (suffix _noref); the reference sets "full" and
+  "full+meth" come from the group pass above. RF = gain from Meth / loss against the full set, as above.
+
+    python scripts/meth_proxy_release.py --sets minus alone --stage predict --gpu 1 --set-batch 8
+    python scripts/meth_proxy_release.py --sets minus alone --stage summary_single
 """
 from __future__ import annotations
 
@@ -49,6 +60,7 @@ BASE = "all12one_fullrd"
 RES = [10, 25]
 CELLS = mp.WGBS_TRAIN + mp.RRBS_TRAIN + mp.HELD
 CONSENSUS_NOISE = mp.SEC51_CONSENSUS_NOISE
+SET_BATCH = 1
 
 
 def view(res_kb: int) -> Path:
@@ -59,10 +71,39 @@ def model_name(res_kb: int, noref: bool) -> str:
     return f"{BASE}_noref_{res_kb}kb" if noref else f"{BASE}_{res_kb}kb"
 
 
-def sets_all() -> dict[str, list[str]]:
-    """Keep sets of one pass: the 13 group sets with and without Meth, plane present and plane at 0."""
-    base = mp.keep_sets()
+MARKS = list(mx.ALL13)
+SINGLE_ORDER = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K4me1", "H3K4me2", "H3K4me3", "H3K9ac", "H3K36me3",
+                "H3K79me2", "H4K20me1", "H3K27me3", "H3K9me3"]
+SELECT = ["groups"]                     # set families of this call (--sets)
+
+
+def single_base(kind: str) -> dict[str, list[str]]:
+    """Single-mark keep sets without Meth: m1_<mark> (that mark removed), o1_<mark> (that mark alone)."""
+    if kind == "minus":
+        return {f"m1_{m}": [x for x in MARKS if x != m] for m in MARKS}
+    return {f"o1_{m}": [m] for m in MARKS}
+
+
+def family_sets(kind: str) -> dict[str, list[str]]:
+    """Keep sets of one family with and without Meth (consensus plane)."""
+    base = mp.keep_sets() if kind == "groups" else single_base(kind)
+    if kind != "groups":
+        base = {**base, **{f"{k}+meth": v + [me.TRACK] for k, v in base.items()}}
+    return base
+
+
+def sets_of(kind: str) -> dict[str, list[str]]:
+    base = family_sets(kind)
     return {**base, **{f"{k}_noref": v for k, v in base.items()}}
+
+
+def sets_all() -> dict[str, list[str]]:
+    """Keep sets of one pass: the 13 group sets with and without Meth, plane present and plane at 0
+    (--sets groups, default), or the single-mark sets of the chosen families (--sets minus alone)."""
+    out: dict[str, list[str]] = {}
+    for k in SELECT:
+        out.update(sets_of(k))
+    return out
 
 
 def pred_csv(res_kb: int, noref: bool, st: str, cell: str) -> Path:
@@ -79,7 +120,8 @@ def log(msg: str) -> None:
 
 
 def done(res_kb: int, cell: str) -> bool:
-    return all(pred_csv(res_kb, nr, st, cell).exists() for nr in (False, True) for st in mp.keep_sets())
+    return all(pred_csv(res_kb, nr, st, cell).exists() for nr in (False, True)
+               for k in SELECT for st in family_sets(k))
 
 
 def command(res_kb: int, cell: str) -> list:
@@ -91,7 +133,7 @@ def command(res_kb: int, cell: str) -> list:
     cmd = [PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml", "--checkpoint", ck,
            "--cell", cell, "--bigwig-dir", bw, "--target", mx.target(cell, res), "--tta", "--assay", assay,
            "--binsize", res, "--device", "cuda", "--out-dir", OUT / f"{BASE}_{res_kb}kb", "--structure",
-           "--keep-sets", *[f"{s}={','.join(t)}" for s, t in sets_all().items()],
+           "--set-batch", SET_BATCH, "--keep-sets", *[f"{s}={','.join(t)}" for s, t in sets_all().items()],
            "--reference", ref, "--others", f"{tag}={ref}"]
     if me.has_meth(cell, True):
         cmd += ["--extra-bigwig-dir", me.meth_dir(cell, True)]
@@ -165,10 +207,16 @@ def stage_summary(a) -> None:
 def main() -> None:
     np.seterr(divide="ignore", invalid="ignore")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage", nargs="+", required=True, choices=["predict", "summary"])
+    ap.add_argument("--stage", nargs="+", required=True, choices=["predict", "summary", "summary_single"])
+    ap.add_argument("--sets", nargs="+", default=["groups"], choices=["groups", "minus", "alone"],
+                    help="keep-set families: the 13 group sets of section 95 (default) or the single marks")
+    ap.add_argument("--set-batch", type=int, default=1, help="keep sets per forward pass (outputs equal to 1e-4)")
     ap.add_argument("--gpu", default="1")
     ap.add_argument("--nboot", type=int, default=500)
     a = ap.parse_args()
+    global SET_BATCH
+    SELECT[:] = a.sets
+    SET_BATCH = a.set_batch
     for st in a.stage:
         globals()[f"stage_{st}"](a)
 
