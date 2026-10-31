@@ -1,0 +1,97 @@
+res_kb,band,group,share,n_windows
+25,<100 kb,CTCF,0.053,240
+25,<100 kb,cohesin,0.0548,240
+25,<100 kb,active,0.1667,240
+25,<100 kb,gene body,0.0751,240
+25,<100 kb,repressive,0.0593,240
+25,<100 kb,motifs,0.0214,240
+25,<100 kb,sequence,0.2044,240
+25,<100 kb,reference map,0.3654,240
+25,100-500 kb,CTCF,0.054,240
+25,100-500 kb,cohesin,0.0569,240
+25,100-500 kb,active,0.177,240
+25,100-500 kb,gene body,0.076,240
+25,100-500 kb,repressive,0.0548,240
+25,100-500 kb,motifs,0.0175,240
+25,100-500 kb,sequence,0.1649,240
+25,100-500 kb,reference map,0.3988,240
+25,>500 kb,CTCF,0.0498,240
+25,>500 kb,cohesin,0.0558,240
+25,>500 kb,active,0.1749,240
+25,>500 kb,gene body,0.0693,240
+25,>500 kb,repressive,0.053,240
+25,>500 kb,motifs,0.0154,240
+25,>500 kb,sequence,0.1513,240
+25,>500 kb,reference map,0.4305,240
+10,<100 kb,CTCF,0.0537,240
+10,<100 kb,cohesin,0.0534,240
+10,<100 kb,active,0.1637,240
+10,<100 kb,gene body,0.0748,240
+10,<100 kb,repressive,0.0535,240
+10,<100 kb,motifs,0.0117,240
+10,<100 kb,sequence,0.201,240
+10,<100 kb,reference map,0.3881,240
+10,100-500 kb,CTCF,0.0507,240
+10,100-500 kb,cohesin,0.0564,240
+10,100-500 kb,active,0.1606,240
+10,100-500 kb,gene body,0.0704,240
+10,100-500 kb,repressive,0.0506,240
+10,100-500 kb,motifs,0.0098,240
+10,100-500 kb,sequence,0.1667,240
+10,100-500 kb,reference map,0.4348,240
+10,>500 kb,CTCF,0.0487,240
+10,>500 kb,cohesin,0.0551,240
+10,>500 kb,active,0.1621,240
+10,>500 kb,gene body,0.0656,240
+10,>500 kb,repressive,0.0503,240
+10,>500 kb,motifs,0.0089,240
+10,>500 kb,sequence,0.168,240
+10,>500 kb,reference map,0.4413,240
+5,<100 kb,CTCF,0.0499,240
+5,<100 kb,cohesin,0.0506,240
+5,<100 kb,active,0.159,240
+5,<100 kb,gene body,0.0708,240
+5,<100 kb,repressive,0.0492,240
+5,<100 kb,motifs,0.0085,240
+5,<100 kb,sequence,0.2091,240
+5,<100 kb,reference map,0.403,240
+5,100-500 kb,CTCF,0.049,240
+5,100-500 kb,cohesin,0.0532,240
+5,100-500 kb,active,0.1519,240
+5,100-500 kb,gene body,0.0663,240
+5,100-500 kb,repressive,0.048,240
+5,100-500 kb,motifs,0.0074,240
+5,100-500 kb,sequence,0.1748,240
+5,100-500 kb,reference map,0.4496,240
+5,>500 kb,CTCF,0.0488,240
+5,>500 kb,cohesin,0.0516,240
+5,>500 kb,active,0.1556,240
+5,>500 kb,gene body,0.0629,240
+5,>500 kb,repressive,0.0484,240
+5,>500 kb,motifs,0.0067,240
+5,>500 kb,sequence,0.1973,240
+5,>500 kb,reference map,0.4287,240
+2,<100 kb,CTCF,0.0479,240
+2,<100 kb,cohesin,0.0458,240
+2,<100 kb,active,0.1587,240
+2,<100 kb,gene body,0.0661,240
+2,<100 kb,repressive,0.0486,240
+2,<100 kb,motifs,0.0066,240
+2,<100 kb,sequence,0.2375,240
+2,<100 kb,reference map,0.3889,240
+2,100-500 kb,CTCF,0.0508,240
+2,100-500 kb,cohesin,0.0477,240
+2,100-500 kb,active,0.1527,240
+2,100-500 kb,gene body,0.0629,240
+2,100-500 kb,repressive,0.0477,240
+2,100-500 kb,motifs,0.0059,240
+2,100-500 kb,sequence,0.2209,240
+2,100-500 kb,reference map,0.4114,240
+2,>500 kb,CTCF,0.0523,240
+2,>500 kb,cohesin,0.042,240
+2,>500 kb,active,0.1483,240
+2,>500 kb,gene body,0.0597,240
+2,>500 kb,repressive,0.0486,240
+2,>500 kb,motifs,0.0058,240
+2,>500 kb,sequence,0.2611,240
+2,>500 kb,reference map,0.3821,240
