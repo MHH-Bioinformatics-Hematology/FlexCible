@@ -29,6 +29,15 @@ Stages (resumable: a chunk of sets whose output files all exist is skipped):
 Options: --chunk N sets per crosscell_predict call (default 60), --set-batch (sets per forward
 pass), env HICMULTI_HM (data root) and FLEX_REGIONS (regions TSV) for hosts without the share, --dry prints the plan only.
 Raw per-set csvs: $HICMULTI_HM/runs/flexible_inputs/<cell>_<k>kb/<chunk>/<set>/predict_<cell>.csv
+
+Other checkpoints (release candidate, 14 tracks with methylation): `--model all12one_fullrd` and
+`--meth 1` (every set also gets the cell's methylation track "Meth", read from $HICMULTI_HM/meth/<cell>
+or the share; the marks of a set are the 13 ChIP marks as before, so the subsets, the draws and the
+scoring are unchanged) or `--meth 0` (Meth absent, the 13-mark design of all12one). Results go to
+results/flexible_inputs/<model>/ (--meth 1) and results/flexible_inputs/<model>/nometh/ (--meth 0),
+raw csvs to runs/flexible_inputs/<model>/{meth,nometh}/<cell>_<k>kb/. A cell without a methylation
+track (huvec) is run with Meth absent in both variants. The default (--model all12one) writes where
+section 87 wrote.
 """
 from __future__ import annotations
 
@@ -50,6 +59,24 @@ RUNS = HM / "runs/multicell_reference"
 RAW = HM / "runs/flexible_inputs"
 OUT = REPO / "results/flexible_inputs"
 PY = os.environ.get("HICMULTI_PY", sys.executable)
+MODEL = "all12one"
+METH = False
+
+
+def set_model(model, meth):
+    """point the module at another checkpoint family; meth: True/False, None = not applicable"""
+    global MODEL, METH, RAW, OUT
+    MODEL, METH = model, bool(meth)
+    if model != "all12one":
+        RAW = HM / "runs/flexible_inputs" / model / ("meth" if METH else "nometh")
+        OUT = REPO / "results/flexible_inputs" / model / ("" if METH else "nometh")
+
+
+def meth_dir(cell):
+    for d in (HM / "meth" / cell, Path("/mnt/processed/wolffjoa/hic-multiome/meth") / cell):
+        if (d / "Meth.bigwig").exists():
+            return d
+    return None
 
 MARKS = ["CTCF", "RAD21", "SMC3", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1", "H3K4me2",
          "H3K4me3", "H3K79me2", "H3K9ac", "H3K9me3", "H4K20me1"]
@@ -147,7 +174,7 @@ def predict(a):
     for cell, k in programme():
         if (a.cells and cell not in a.cells) or (a.res and k not in a.res):
             continue
-        view = RUNS / f"all12one_{k}kb"
+        view = RUNS / f"{MODEL}_{k}kb"
         ck = view / "checkpoint-best"
         base = RAW / f"{cell}_{k}kb"
         for ci, ch in enumerate(chunks(sets_for(k), a.chunk)):
@@ -158,10 +185,14 @@ def predict(a):
             if a.dry:
                 continue
             out.mkdir(parents=True, exist_ok=True)
+            md_ = meth_dir(cell)
+            extra = ["--extra-bigwig-dir", str(md_)] if md_ is not None else []
+            if METH and md_ is not None:
+                ch = [(nm, (m + ",Meth") if m else "Meth") for nm, m in ch]
             cmd = [PY, "scripts/crosscell_predict.py", "--config", str(ck / "config.yaml"),
                    "--checkpoint", str(ck), "--cell", cell, "--bigwig-dir", str(bigwig_dir(cell)),
                    "--target", str(target(cell, k)), "--tta", "--assay", "hic",
-                   "--binsize", str(k * 1000), "--out-dir", str(out),
+                   "--binsize", str(k * 1000), "--out-dir", str(out), *extra,
                    "--reference", str(reference(cell, k)),
                    "--others", f"consensus={reference(cell, k)}",
                    "--device", "cuda", "--set-batch", str(a.set_batch),
@@ -190,7 +221,7 @@ def score(a):
                 q = r.quantile([0.25, 0.75]) if len(r) else pd.Series([np.nan, np.nan], index=[0.25, 0.75])
                 rows.append({"cell": cell, "res": k, "set_kind": kind, "set_name": nm,
                              "marks_present": "+".join(given), "n_marks": len(marks),
-                             "n_present": len(given), "with_reference": wr, "n_regions": len(r),
+                             "n_present": len(given), "meth_given": int(METH and meth_dir(cell) is not None), "with_reference": wr, "n_regions": len(r),
                              "median_r": r.median(), "q25": q[0.25], "q75": q[0.75],
                              "mean_r": r.mean(), "consensus_median_r": cons.median()})
                 x = d[["region", "model"]].dropna().assign(cell=cell, res=k, set_kind=kind,
@@ -274,7 +305,11 @@ def main():
     ap.add_argument("--chunk", type=int, default=60)
     ap.add_argument("--set-batch", type=int, default=20, help="sets per forward pass")
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--model", default="all12one", help="checkpoint family, views runs/multicell_reference/<model>_<k>kb")
+    ap.add_argument("--meth", type=int, choices=[0, 1], default=0,
+                    help="1: give the cell's methylation track in every set (models with a Meth track)")
     a = ap.parse_args()
+    set_model(a.model, a.meth)
     OUT.mkdir(parents=True, exist_ok=True)
     load_subsets()
     {"predict": predict, "score": score, "summary": summary}[a.stage](a)
