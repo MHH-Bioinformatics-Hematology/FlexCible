@@ -333,7 +333,13 @@ for _b in ("all12refin_drop_struct3",):          # chosen structure weights, 25 
     for _k in (10, 25):
         MODELS[f"{_b}_{_k}kb"] = (_k * 1000, RUNS / f"multicell_reference/{_b}_{_k}kb.yaml",
                                   RUNS / f"multicell_reference/{_b}_{_k}kb", _b, "consensus12")
-_DROP = {"all12refres_drop", "all12honest_drop", "all12refres_refdrop",
+# the one model (registry section 95): per-resolution views of the shared checkpoint (config, norm files and
+# model.pt in checkpoint-best), consensus plane as input; trained with the fraction row and the augmentation
+for _b in ("all12one_full", "all12one_fullrd"):
+    for _k in (10, 25):
+        _v = RUNS / f"multicell_reference/{_b}_{_k}kb"
+        MODELS[f"{_b}_{_k}kb"] = (_k * 1000, _v / "checkpoint-best/config.yaml", _v, _b, "consensus12")
+_DROP = {"all12one_full", "all12one_fullrd", "all12refres_drop", "all12honest_drop", "all12refres_refdrop",
          "all12refres_drop_hard", "all12honest_drop_hard",
          "all12deg_refres_drop", "all12deg_honest_drop", "all12hffcoh_refres_drop",
          "all12cohunk_refres_drop", "all12cohunk_honest_drop", "all12refin_drop",
@@ -342,7 +348,8 @@ COHUNK_FAMILIES = {"all12cohunk_refres_drop", "all12cohunk_honest_drop"}
 # models with the cohesin-fraction row: the knockout is also asked as a fraction
 # (keep-set name suffix _f<value>, read by crosscell_predict): cohesin absent and the
 # fraction at 0 or 0.5, and the unchanged wild-type ChIP with the fraction at 0.5 or 0.75
-COHFIX_FAMILIES = {"all12cohfix_refres_drop", "all12cohfixna_refres_drop"}
+COHFIX_FAMILIES = {"all12cohfix_refres_drop", "all12cohfixna_refres_drop",
+                   "all12one_full", "all12one_fullrd"}
 
 # input sets: ChIP folder and, for the perturbation, the keep sets
 INPUTS = {
@@ -411,6 +418,9 @@ def predict_one(model: str, inp: str, cell: str, threads: int, extra_sets=None) 
         cmd += ["--save-pred", str(done) + ".tmp.npz"]
     env = dict(os.environ, OMP_NUM_THREADS=str(threads), MKL_NUM_THREADS=str(threads),
                OPENBLAS_NUM_THREADS=str(threads), CUDA_VISIBLE_DEVICES="")
+    if os.environ.get("AML_EVAL_GPU") is not None:     # one GPU of a shared machine (default: CPU)
+        env["CUDA_VISIBLE_DEVICES"] = os.environ["AML_EVAL_GPU"]
+        cmd[cmd.index("--device") + 1] = "cuda"
     logf = out / f"{inp}.log"
     log(f"[predict] {model} {inp}")
     with open(logf, "w") as fh:
@@ -806,7 +816,7 @@ def insulation_log(L: np.ndarray, w: int) -> np.ndarray:
     return prof
 
 
-def perturb(res_list: list[int]) -> None:
+def perturb(res_list: list[int], only: list[str] | None = None, tag: str | None = None) -> None:
     """Predicted versus measured WT -> STAG2-KO change in U-937."""
     import cooler
     import benchmark_metrics as bm
@@ -823,7 +833,7 @@ def perturb(res_list: list[int]) -> None:
         reps = {lab: cooler.Cooler(str(map_path(lab, res))) for pair in DELTA_REP
                 for d in pair for lab in d if map_path(lab, res) is not None}
         models = [m for m, s in MODELS.items() if s[0] == res
-                  and pred_file(m, "u937").exists()]
+                  and pred_file(m, "u937").exists() and (not only or m in only)]
         preds = {m: {v: dict(np.load(pred_file(m, v))) for v in ["u937"] + KO_VARIANTS
                      if pred_file(m, v).exists()} for m in models}
         prm = loop_params(res)
@@ -907,7 +917,8 @@ def perturb(res_list: list[int]) -> None:
                             A["ins"].append(np.stack([iw[s], ik[s], ipw[s], ipk[s]]))
     RES_DIR.mkdir(parents=True, exist_ok=True)
     # one part per resolution, merged with the parts of earlier runs
-    parts = WORK / "perturb_parts"
+    sfx = f"_{tag}" if tag else ""             # a tag keeps the tables of earlier models untouched
+    parts = WORK / f"perturb_parts{sfx}"
     parts.mkdir(parents=True, exist_ok=True)
     tag = "_".join(str(r // 1000) for r in res_list)
     for name, rows_ in (("regions", region_rows), ("loops", loop_rows), ("boundaries", bnd_rows)):
@@ -926,13 +937,13 @@ def perturb(res_list: list[int]) -> None:
             D = D.drop_duplicates()
         return D
     R, Lp, Bp = merged("regions"), merged("loops"), merged("boundaries")
-    R.to_csv(WORK / "perturb_regions.csv.gz", index=False)
-    Lp.to_csv(WORK / "perturb_loops.csv.gz", index=False)
-    Bp.to_csv(WORK / "perturb_boundaries.csv.gz", index=False)
+    R.to_csv(WORK / f"perturb_regions{sfx}.csv.gz", index=False)
+    Lp.to_csv(WORK / f"perturb_loops{sfx}.csv.gz", index=False)
+    Bp.to_csv(WORK / f"perturb_boundaries{sfx}.csv.gz", index=False)
     agg_all = {}
     for f in sorted(parts.glob("aggregates_*kb.npz")):
         agg_all.update(dict(np.load(f)))
-    np.savez_compressed(WORK / "perturb_aggregates.npz", **agg_all)
+    np.savez_compressed(WORK / f"perturb_aggregates{sfx}.npz", **agg_all)
     out = []
     for (k, m), g in R.groupby(["res_kb", "method"]):
         rec = {"res_kb": k, "method": m, "n_regions": len(g),
@@ -959,8 +970,8 @@ def perturb(res_list: list[int]) -> None:
                     rec[f"loops_{lab}_meas_mean_change"] = dm[sel].mean()
                     rec[f"loops_{lab}_pred_mean_change"] = dp[sel].mean()
         out.append(rec)
-    pd.DataFrame(out).to_csv(RES_DIR / "perturb_summary.csv", index=False)
-    log("[perturb] wrote perturb_summary.csv")
+    pd.DataFrame(out).to_csv(RES_DIR / f"perturb_summary{sfx}.csv", index=False)
+    log(f"[perturb] wrote perturb_summary{sfx}.csv")
 
 
 # ---------------------------------------------------------------- figures
@@ -1156,6 +1167,9 @@ def main():
     ap.add_argument("--jobs", type=int, default=3)
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--models", nargs="*", default=list(MODELS))
+    ap.add_argument("--tag", default=None,
+                    help="stage perturb: score only --models and write perturb_summary_<tag>.csv "
+                         "(the tables of earlier models stay untouched)")
     a = ap.parse_args()
     if "targets" in a.stage:
         targets(a.maps, a.res)
@@ -1166,7 +1180,7 @@ def main():
     if "score" in a.stage:
         score(a.res)
     if "perturb" in a.stage:
-        perturb(a.res)
+        perturb(a.res, a.models if a.tag else None, a.tag)
     if "figures" in a.stage:
         figures()
 

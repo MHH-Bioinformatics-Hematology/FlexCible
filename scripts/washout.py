@@ -117,15 +117,18 @@ CHIP = DATA / "perturb_chip"
 FAMILIES = ["all12refres_drop", "all12honest_drop", "all12deg_refres_drop",
             "all12deg_honest_drop", "all12hffcoh_refres_drop", "all12refres", "all12honest",
             "all12cohunk_refres_drop", "all12cohunk_honest_drop",
-            "all12cohfix_refres_drop", "all12cohfixna_refres_drop"]       # section 55: cohesin:fraction row follows f
+            "all12cohfix_refres_drop", "all12cohfixna_refres_drop",       # section 55: cohesin:fraction row follows f
+            "all12one_full", "all12one_fullrd"]                           # section 95: per-resolution views of the one model
 
 
 def _trained(fam, res):
+    if fam.startswith("all12one_full"):          # a finished view of the shared checkpoint
+        return (mx.REF_OUT / mx.run_name(fam, res) / "best").exists()
     si = mx.stop_info(mx.run_name(fam, res), 10)
     return bool(si and si[2] == "patience")
 
 
-def stage_predict():
+def stage_predict(families=None):
     """Per model and resolution: HCT116 on the 413 Akita test regions from the
     untreated degron ChIP with RAD21 = (1 - f) * auxin + f * untreated (raw
     signal), for f in F_GRID; loop strength (max log O/E within +/- 1 bin) at
@@ -151,6 +154,8 @@ def stage_predict():
             log(f"predict {res}: measured maps missing, skipped")
             continue
         for fam in FAMILIES:
+            if families and fam not in families:
+                continue
             if not _trained(fam, res):
                 continue
             out = OUT / "pred" / f"{fam}_{res // 1000}kb.csv.gz"
@@ -173,6 +178,9 @@ def stage_predict():
                 smp = type(smp)(**{**smp.__dict__})
                 smp.bigwig_dir = str(CHIP / cond)
                 have = {q.stem.upper() for q in (CHIP / cond).glob("*.bigwig")}
+                # tracks of the sample's extra folders (the Meth track of the one model: the
+                # methylation of untreated HCT116, as in its training sample hct116_auxin)
+                have |= {q.stem.upper() for d in smp.extra_bigwig_dirs for q in Path(d).glob("*.bigwig")}
                 smp.missing_tracks = [t for t in tracks if t.upper() not in have]
                 files[cond] = (smp, sample_track_files(cfg, smp))
             ri = tracks.index("RAD21")
@@ -228,7 +236,7 @@ def stage_predict():
             log(f"predict {fam} {res}: {sum(len(x) for x in rows)} loops")
 
 
-def stage_score():
+def stage_score(families=None, tag=None):
     """Measured recovery at each time point, rec_t = median(S_t - S_aux) /
     median(S_untreated - S_aux) over the loops; predicted recovery for each f,
     rec_f = median(P_f - P_0) / median(P_1 - P_0); f matching each time point
@@ -241,6 +249,8 @@ def stage_score():
     rows = []
     for f in sorted((OUT / "pred").glob("*.csv.gz")):
         fam, k = f.name.replace(".csv.gz", "").rsplit("_", 1)
+        if families and fam not in families:
+            continue
         D = pd.read_csv(f)
         num = pd.to_numeric(D.chrom.str.replace("chr", "", regex=False), errors="coerce")
         for subset, d in (("all", D), ("even_chromosomes", D[num % 2 == 0])):
@@ -268,18 +278,27 @@ def stage_score():
                                             if ok.sum() > 1 and np.all(np.diff(ys[ok]) > 0) else np.nan)
             rows.append(rec)
     S = pd.DataFrame(rows).round(4)
-    S.to_csv(OUT / "washout_summary.csv", index=False)
+    pre = f"{tag}_" if tag else ""
+    S.to_csv(OUT / f"{pre}washout_summary.csv", index=False)
     (mx.REPO / "results/washout").mkdir(parents=True, exist_ok=True)
-    S.to_csv(mx.REPO / "results/washout/washout_summary.csv", index=False)
+    S.to_csv(mx.REPO / f"results/washout/{pre}washout_summary.csv", index=False)
     print(S.to_string(), flush=True)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stage", nargs="+", required=True)
+    ap.add_argument("--families", nargs="*", default=None,
+                    help="restrict predict and score to these model families")
+    ap.add_argument("--tag", default=None, help="prefix of the stage-score result files")
     a = ap.parse_args()
     for st in a.stage:
-        globals()[f"stage_{st}"]()
+        if st == "predict":
+            stage_predict(a.families)
+        elif st == "score":
+            stage_score(a.families, a.tag)
+        else:
+            globals()[f"stage_{st}"]()
 
 
 if __name__ == "__main__":

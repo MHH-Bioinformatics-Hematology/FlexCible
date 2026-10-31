@@ -75,14 +75,63 @@ PERTS = {"full": None,
 FRACTION_PERTS = {"minus_RAD21_f0": PERTS["minus_RAD21"], "minus_RAD21_f0.5": PERTS["minus_RAD21"]}
 
 
+def has_fraction(model: str) -> bool:
+    """Models with the cohesin:fraction row: the section 55 runs and the one model
+    (all12one_full, all12one_fullrd; registry sections 86, 92, 95)."""
+    return "cohfix" in model or "one_full" in model
+
+
+def is_view(model: str) -> bool:
+    """A per-resolution view of the shared one-model checkpoint (flexcible.train_multires.write_views)."""
+    return "one_full" in model
+
+
+def all_tracks(model: str) -> list[str]:
+    """The tracks of the model's input set: the 13 ChIP tracks, and Meth for the one model."""
+    return mx.ALL13 + (["Meth"] if is_view(model) else [])
+
+
 def perts_of(model: str) -> dict:
-    return {**PERTS, **FRACTION_PERTS} if "cohfix" in model else PERTS
+    """Perturbation name -> tracks kept (None = all). The one model keeps Meth in every set
+    (the methylation of HCT116 is not perturbed by a degron)."""
+    if is_view(model):
+        t = all_tracks(model)
+        d = {"full": None, "minus_RAD21": [x for x in t if x != "RAD21"],
+             "minus_CTCF": [x for x in t if x != "CTCF"],
+             "minus_H3K36me3": [x for x in t if x != "H3K36me3"]}
+        return {**d, "minus_RAD21_f0": d["minus_RAD21"], "minus_RAD21_f0.5": d["minus_RAD21"]}
+    return {**PERTS, **FRACTION_PERTS} if has_fraction(model) else PERTS
+
+
+def meth_args(model: str) -> list:
+    """crosscell_predict arguments for the HCT116 methylation track of a model that has the Meth input."""
+    if not is_view(model):
+        return []
+    import methylation as me
+    return ["--extra-bigwig-dir", str(me.meth_dir("hct116", True))]
+
+
+def pred_device() -> tuple[str, dict]:
+    """(--device, environment) of the prediction calls: the CPU as in sections 21 and 55, or the one
+    GPU named by PERT_GPU (the model of the release candidate is large; a shared machine gets one job)."""
+    g = os.environ.get("PERT_GPU")
+    if g is None:
+        return "cpu", cpu_env()
+    return "cuda", dict(cpu_env(), CUDA_VISIBLE_DEVICES=g)
+
+
+def ref_of(model: str, ref, res: int):
+    """Consensus reference of HCT116 (leave-one-out, as in training) or None."""
+    if ref is None:
+        return None
+    return str(mx.consensus_loo("hct116", res)) if is_view(model) \
+        else mx.reference_of(mx.run_name(ref, res), "hct116")
 
 
 def aux_fraction(model: str) -> list[str]:
     """crosscell_predict arguments for the measured auxin ChIP of a model that has
     the cohesin:fraction row: the fraction of the auxin sample the model trained on."""
-    return ["--cohesin-fraction", str(mx.COHFIX_AUX_FRACTION)] if "cohfix" in model else []
+    return ["--cohesin-fraction", str(mx.COHFIX_AUX_FRACTION)] if has_fraction(model) else []
 
 
 MODELS = {  # name -> (run dir, res, reference run name or None)
@@ -112,6 +161,12 @@ for _res, _bases in ((5000, ("all12refres_drop", "all12honest_drop", "all12deg_r
     for _b in _bases:
         _n = mx.run_name(_b, _res)
         MODELS[_n] = (mx.REF_OUT / _n, _res, None if "honest" in _b else _b)
+# the one model (registry section 95): per-resolution views of the shared checkpoint; the consensus
+# plane is an input of the model (reference "all12one_fullrd" marks it, the reference map is the
+# leave-one-out consensus of HCT116)
+for _b in ("all12one_full", "all12one_fullrd"):
+    for _k in (10, 25):
+        MODELS[f"{_b}_{_k}kb"] = (mx.REF_OUT / f"{_b}_{_k}kb", _k * 1000, _b)
 EXP_PERT = {"rad21": "minus_RAD21", "ctcf": "minus_CTCF"}
 # measured ChIP of the degron cells (4DN GRCh38 fold change: RAD21 and CTCF from
 # Kim et al. 2024, eight histone marks from Rao et al. 2017, untreated and 6 h
@@ -180,14 +235,21 @@ def pred_file(model: str, pert: str) -> Path:
 def unfinished(model: str, run: Path, res: int) -> bool:
     """A 5 or 2 kb or cohesin-unknown run still training (its `best` pointer
     exists from the first checkpoint on): never predicted before it stopped."""
+    if is_view(model):
+        return False                 # a finished view of the shared checkpoint
     if res in (5000, 2000) or "cohunk" in model or "cohfix" in model:
         si = mx.stop_info(run.name, 10)
         return not (si and si[2] == "patience")
     return False
 
 
+_ONLY: set = set()       # --models: restrict the predict stages to these models
+
+
 def stage_predict():
     for model, (run, res, ref) in MODELS.items():
+        if _ONLY and model not in _ONLY:
+            continue
         if not (run / "best").exists() or unfinished(model, run, res):   # not trained yet
             continue
         ck = run / (run / "best").read_text().strip()
@@ -195,20 +257,23 @@ def stage_predict():
         if all(pred_file(model, p).exists() for p in perts_of(model)):
             continue
         od = pred_file(model, "x").parent
-        extra = ["--keep-sets", *[f"{p}={','.join(keep or mx.ALL13)}"
+        extra = ["--keep-sets", *[f"{p}={','.join(keep or all_tracks(model))}"
                                   for p, keep in perts_of(model).items()]]
         if ref:
-            extra += ["--reference", mx.reference_of(mx.run_name(ref, res), "hct116")]
+            extra += ["--reference", ref_of(model, ref, res)]
+        dev, env = pred_device()
         rc = sh([PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml",
                  "--checkpoint", ck, "--cell", "hct116", "--bigwig-dir", bw,
                  "--target", mx.target("hct116", res), "--tta", "--assay", assay,
-                 "--binsize", res, "--device", "cpu", "--out-dir", od, *extra,
-                 "--save-pred", str(od / "{set}.npz")], od / "predict.log", cpu_env())
+                 "--binsize", res, "--device", dev, "--out-dir", od, *extra, *meth_args(model),
+                 "--save-pred", str(od / "{set}.npz")], od / "predict.log", env)
         log(f"predict {model} rc={rc}")
 
 
 def stage_predict_chip():
     for model, (run, res, ref) in MODELS.items():
+        if _ONLY and model not in _ONLY:
+            continue
         if not (run / "best").exists() or unfinished(model, run, res):   # not trained yet
             continue
         ck = run / (run / "best").read_text().strip()
@@ -220,12 +285,13 @@ def stage_predict_chip():
             od = f.parent / name
             extra = aux_fraction(model) if name == "chip_auxin6h" else []
             if ref:
-                extra += ["--reference", mx.reference_of(mx.run_name(ref, res), "hct116")]
+                extra += ["--reference", ref_of(model, ref, res)]
+            dev, env = pred_device()
             rc = sh([PY, "scripts/crosscell_predict.py", "--config", ck / "config.yaml",
                      "--checkpoint", ck, "--cell", "hct116", "--bigwig-dir", bw,
                      "--target", mx.target("hct116", res), "--tta", "--assay", assay,
-                     "--binsize", res, "--device", "cpu", "--out-dir", od, *extra,
-                     "--save-pred", f], od / "predict.log", cpu_env())
+                     "--binsize", res, "--device", dev, "--out-dir", od, *extra, *meth_args(model),
+                     "--save-pred", f], od / "predict.log", env)
             log(f"predict {model} {name} rc={rc}")
 
 
@@ -289,13 +355,17 @@ def strength(M: np.ndarray, ij: np.ndarray, tol: int = 1) -> np.ndarray:
     return out
 
 
-def stage_score():
+def stage_score(models=None, tag=None):
+    """models: score only these (default all); tag: prefix of the result files, so that the
+    tables of earlier models are not rewritten (registry section 95)."""
     RES_OUT.mkdir(parents=True, exist_ok=True)
     R = regions()
     rows, loops_rows, bnd_rows, pdist = [], [], [], {}
     apa = {}
     for exp in EXPERIMENTS:
         for model, (run, res, _) in MODELS.items():
+            if models and model not in models:
+                continue
             u_p, t_p = oe_path(exp, "untreated", res), oe_path(exp, "treated", res)
             if not (u_p.exists() and t_p.exists()):
                 continue
@@ -369,11 +439,12 @@ def stage_score():
                                              "pred_full": i0[b], "pred_pert": i1[b]})
             log(f"scored {exp} {model}")
     D = pd.DataFrame(rows)
-    D.to_csv(RES_OUT / "change_per_region.csv.gz", index=False, float_format="%.5f")
+    pre = f"{tag}_" if tag else ""
+    D.to_csv(RES_OUT / f"{pre}change_per_region.csv.gz", index=False, float_format="%.5f")
     L = pd.DataFrame(loops_rows)
-    L.to_csv(RES_OUT / "loops_per_anchor.csv.gz", index=False, float_format="%.5f")
+    L.to_csv(RES_OUT / f"{pre}loops_per_anchor.csv.gz", index=False, float_format="%.5f")
     Bn = pd.DataFrame(bnd_rows)
-    Bn.to_csv(RES_OUT / "boundaries_per_bin.csv.gz", index=False, float_format="%.5f")
+    Bn.to_csv(RES_OUT / f"{pre}boundaries_per_bin.csv.gz", index=False, float_format="%.5f")
     pdr = []
     for (exp, model, pert, dbp), lst in pdist.items():
         a = np.concatenate([x for x, _ in lst]); b = np.concatenate([y for _, y in lst])
@@ -382,7 +453,7 @@ def stage_score():
                         "distance_bp": dbp, "pearson": float(np.corrcoef(a, b)[0, 1]),
                         "n": int(a.size)})
     PD = pd.DataFrame(pdr)
-    PD.to_csv(RES_OUT / "change_per_distance.csv", index=False, float_format="%.5f")
+    PD.to_csv(RES_OUT / f"{pre}change_per_distance.csv", index=False, float_format="%.5f")
     # summary: every region, and the even chromosomes only (the degron-trained
     # models saw the auxin condition on the odd chromosomes; every model is
     # also summarised on the even subset so they compare on identical regions)
@@ -396,7 +467,7 @@ def stage_score():
         BB = Bn if subset == "all" or not len(Bn) else even(Bn)
         summ += _summ_rows(DD, LL, BB, apa if subset == "all" else {}, subset)
     S = pd.DataFrame(summ)
-    S.to_csv(RES_OUT / "perturb_summary.csv", index=False, float_format="%.4f")
+    S.to_csv(RES_OUT / f"{pre}perturb_summary.csv", index=False, float_format="%.4f")
     log(f"summary {len(S)} rows")
 
 
@@ -529,9 +600,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True)
+    ap.add_argument("--models", nargs="*", default=None,
+                    help="restrict the stages predict, predict_chip and score to these models")
+    ap.add_argument("--tag", default=None,
+                    help="prefix of the stage-score result files (default: none, the shared tables)")
     a = ap.parse_args()
+    _ONLY.update(a.models or [])
     for st in a.stage:
-        globals()[f"stage_{st}"]()
+        if st == "score":
+            stage_score(a.models, a.tag)
+        else:
+            globals()[f"stage_{st}"]()
 
 
 if __name__ == "__main__":
