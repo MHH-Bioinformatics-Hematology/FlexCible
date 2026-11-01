@@ -1,0 +1,7 @@
+measure,n,max_abs_diff,mean_abs_diff
+pearson,59,0.0567,0.0154
+scc,59,0.0604,0.0157
+hicrep,59,0.0871,0.0189
+insulation_r,59,0.1125,0.0161
+boundary_recall,59,0.0338,0.0068
+loop_recall,59,0.0146,0.0024

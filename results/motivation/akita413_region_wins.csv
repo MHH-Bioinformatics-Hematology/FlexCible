@@ -1,0 +1,15 @@
+target,source,regions,share_regions_above_akita
+gm12878,consensus_other4,411,0.6399
+gm12878,hicgan,408,0.0956
+gm12878,other_gm12878,0,
+gm12878,other_h1,411,0.3358
+gm12878,other_hct116,411,0.2311
+gm12878,other_hff,411,0.3406
+gm12878,other_imr90,411,0.2871
+hff,consensus_other4,413,0.7966
+hff,hicgan,0,
+hff,other_gm12878,413,0.2688
+hff,other_h1,413,0.3705
+hff,other_hct116,413,0.2494
+hff,other_hff,0,
+hff,other_imr90,413,0.4576
