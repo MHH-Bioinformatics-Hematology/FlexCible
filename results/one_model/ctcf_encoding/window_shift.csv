@@ -1,0 +1,4 @@
+shift_bins,pipeline,median_pearson,q25,q75,n_regions
+0,crosscell all12one_fullrd_enc_noref_10kb minus_CTCF,0.380,0.200,0.497,411
+-40,crosscell --window-shift -40,0.375,0.214,0.493,411
+40,crosscell --window-shift 40,0.382,0.222,0.500,411
