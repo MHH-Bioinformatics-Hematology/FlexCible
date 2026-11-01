@@ -1,6 +1,6 @@
 """Run flexcible predict (new-cell mode, ChIP only, no consensus) for WT, each deletion and each control site.
 Every command is appended to results/perturb_hap1/commands_predict.sh."""
-import sys, os, subprocess, shlex; sys.path.insert(0, os.path.dirname(__file__))
+import sys, os, subprocess, shlex, shutil; sys.path.insert(0, os.path.dirname(__file__))
 from common import *
 MODELS_TO_RUN = sys.argv[1].split(",") if len(sys.argv) > 1 else ["10kb", "5kb"]
 PY = str(Path.home() / "miniconda3/envs/hicdiff/bin/flexcible")
@@ -26,10 +26,10 @@ for rl in MODELS_TO_RUN:
         base = ["--config", str(MODELS[rl]), "--bigwig-dir", str(OUT / "tracks"), "--cell", "hap1", "--chroms", r["chrom"], "--tta",
                 "--zero-tracks", ",".join(MISSING), "--batch-size", "4"] + (["--no-reference"] if NOREF else []) + ["--reference", str(CONS12[rl])]
         od = COOLS / rl; od.mkdir(parents=True, exist_ok=True)
-        if SIGONLY:      # the unperturbed prediction is that of the base tag: link it
+        if SIGONLY:      # the unperturbed prediction is that of the base tag: copy it
             src = OUT / f"cools_{TAG[:-len('_sigzero')]}" / rl / f"wt_{rn}.cool"
             if not (od / src.name).exists():
-                (od / src.name).symlink_to(src)
+                shutil.copy2(src, od / src.name)     # the share has no symbolic links
         jobs.append((od / f"wt_{rn}.cool", base, []))
         for dn, d in DELETIONS.items():
             if d["region"] != rn: continue

@@ -78,7 +78,11 @@ NO_REFERENCE = {"all12one_fullrd_noref_10kb"}
 # with the consensus (leave-one-out map of HCT116, the checkpoint's reference for the cell).
 ENC_PERTS = ["full", "zero_CTCF", "zero_CTCF_motif", "zero_motif", "absent_CTCF", "absent_CTCF_motif",
              "zero_H3K36me3", "absent_H3K36me3"]
-ENC_MODELS = {f"all12one_fullrd_{u}_{k}kb": (k * 1000, ENC_PERTS) for k in (10, 25) for u in ("noref", "cons")}
+# the track-absent input equals the raw-zero input (TrackNormalizer.absent_values is the normalised value of a raw-zero
+# track), checked bit for bit at 10 kb without consensus; the absent_* runs are made there only
+ENC_MODELS = {f"all12one_fullrd_{u}_{k}kb": (k * 1000, ENC_PERTS if (u, k) == ("noref", 10) else
+                                             [p for p in ENC_PERTS if not p.startswith("absent_")])
+              for k in (10, 25) for u in ("noref", "cons")}
 ENC_VIEW = {m: f"all12one_fullrd_{m.rsplit('_', 1)[1]}" for m in ENC_MODELS}
 ENC_NOREF = {m for m in ENC_MODELS if "_noref_" in m}
 EXPS = ("ctcf", "rad21")
