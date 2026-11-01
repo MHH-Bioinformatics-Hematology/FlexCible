@@ -60,7 +60,9 @@ PERTS = {"full": [],
          "zero_motif": [("motif", "MA0139.2")],
          "absent_CTCF": [("absent", "CTCF")],
          "absent_H3K36me3": [("absent", "H3K36me3")],
-         "absent_CTCF_motif": [("absent", "CTCF"), ("motif", "MA0139.2")]}
+         "absent_CTCF_motif": [("absent", "CTCF"), ("motif", "MA0139.2")],
+         # cohesin follow-up of section 100: CTCF and RAD21 signal zero (SMC3 is absent in this ChIP set)
+         "zero_CTCF_RAD21": [("CTCF",), ("RAD21",)]}
 MODELS = {  # name -> (resolution, perturbations)
     "all12honest_drop_10kb": (10000, list(PERTS)),
     "all12honest_drop_25kb": (25000, list(PERTS)),
@@ -77,7 +79,7 @@ NO_REFERENCE = {"all12one_fullrd_noref_10kb"}
 # Encodings of CTCF removal (registry section 100): the release views at 10 and 25 kb without (plane at 0) and
 # with the consensus (leave-one-out map of HCT116, the checkpoint's reference for the cell).
 ENC_PERTS = ["full", "zero_CTCF", "zero_CTCF_motif", "zero_motif", "absent_CTCF", "absent_CTCF_motif",
-             "zero_H3K36me3", "absent_H3K36me3"]
+             "zero_H3K36me3", "absent_H3K36me3", "zero_CTCF_RAD21", "zero_RAD21"]
 # the track-absent input equals the raw-zero input (TrackNormalizer.absent_values is the normalised value of a raw-zero
 # track), checked bit for bit at 10 kb without consensus; the absent_* runs are made there only
 ENC_MODELS = {f"all12one_fullrd_{u}_{k}kb": (k * 1000, ENC_PERTS if (u, k) == ("noref", 10) else
