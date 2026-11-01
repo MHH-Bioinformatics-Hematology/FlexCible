@@ -1268,6 +1268,9 @@ def run_repqc(truth_px: Path, preds_px: dict[str, Path], chrom: str, res: int, n
     return d
 
 
+NATIVE_ONLY = False     # score_block stops after the native measures (scripts/motivation_other_cells.py --native-only)
+
+
 def score_block(b: dict, jobs: int) -> Path:
     """All measures of every source of a block -> blocks/<id>/measures.csv."""
     bd = OUT / "blocks" / b["id"]
@@ -1400,6 +1403,13 @@ def score_block(b: dict, jobs: int) -> Path:
     nat = pd.DataFrame(rows)
     log(f"[score] {b['id']}: native measures for {len(src)} sources "
         f"({time.time() - t0:.0f} s)")
+    if NATIVE_ONLY:                      # registry 103: the native measures only, no count-space tools
+        for k, v in (("set", b["set"]), ("cell", cell), ("res", res), ("chrom", chrom),
+                     ("band_bins", D), ("block", b["id"]), ("n_pixels", int(mask.sum()))):
+            nat[k] = v
+        bd.mkdir(parents=True, exist_ok=True)
+        nat.to_csv(outf, index=False)
+        return outf
 
     # ---------------- count space ----------------
     exp_b, off, scale = E["expected"], E["offset"], float(E["scale"])
