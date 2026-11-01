@@ -4,9 +4,13 @@ Writes results/perturb_hap1/all12one_fullrd_comparison.csv and prints markdown t
 import sys, os; sys.path.insert(0, os.path.dirname(__file__))
 import numpy as np, pandas as pd
 from common import RES
-V = {"dedicated (section 85)": "", "release, consensus": "all12one_fullrd_consensus_", "release, no reference": "all12one_fullrd_noref_"}
+V = {"dedicated (section 85)": "", "release, consensus": "all12one_fullrd_consensus_", "release, no reference": "all12one_fullrd_noref_",
+     "release, consensus, CTCF signal zero only": "all12one_fullrd_consensus_sigzero_",
+     "release, no reference, CTCF signal zero only": "all12one_fullrd_noref_sigzero_"}
 rows = []
 for name, pf in V.items():
+    if not (RES / f"{pf}region1_map_scores.csv").exists():
+        continue
     M = pd.concat([pd.read_csv(RES / f"{pf}region{i}_map_scores.csv") for i in (1, 2, 3)])
     L = pd.concat([pd.read_csv(RES / f"{pf}region{i}_loop_scores.csv") for i in (1, 2, 3)])
     I = pd.concat([pd.read_csv(RES / f"{pf}region{i}_insulation_scores.csv") for i in (1, 2, 3)])

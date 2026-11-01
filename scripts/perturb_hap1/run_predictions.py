@@ -15,7 +15,7 @@ for l in list(open(RES / "control_sites.tsv"))[1:]:
 
 def zr(ch, s, e, rad21=False):
     a, b = max(0, s - PAD), e + PAD
-    z = [f"CTCF:{ch}:{a}-{b}", f"motif:MA0139.2:{ch}:{a}-{b}"]
+    z = [f"CTCF:{ch}:{a}-{b}"] + ([] if SIGONLY else [f"motif:MA0139.2:{ch}:{a}-{b}"])
     if "RAD21" in HAVE: z.append(f"RAD21:{ch}:{a}-{b}")
     if "SMC3" in HAVE: z.append(f"SMC3:{ch}:{a}-{b}")
     return z
@@ -26,6 +26,10 @@ for rl in MODELS_TO_RUN:
         base = ["--config", str(MODELS[rl]), "--bigwig-dir", str(OUT / "tracks"), "--cell", "hap1", "--chroms", r["chrom"], "--tta",
                 "--zero-tracks", ",".join(MISSING), "--batch-size", "4"] + (["--no-reference"] if NOREF else []) + ["--reference", str(CONS12[rl])]
         od = COOLS / rl; od.mkdir(parents=True, exist_ok=True)
+        if SIGONLY:      # the unperturbed prediction is that of the base tag: link it
+            src = OUT / f"cools_{TAG[:-len('_sigzero')]}" / rl / f"wt_{rn}.cool"
+            if not (od / src.name).exists():
+                (od / src.name).symlink_to(src)
         jobs.append((od / f"wt_{rn}.cool", base, []))
         for dn, d in DELETIONS.items():
             if d["region"] != rn: continue

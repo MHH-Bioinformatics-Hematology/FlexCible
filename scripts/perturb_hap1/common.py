@@ -15,7 +15,10 @@ else:
     MODELS = {"10kb": RUNS / "all12honest_drop_10kb.yaml", "5kb": RUNS / "all12honest_drop_5kb.yaml"}
 COOLS = OUT / (f"cools_{TAG}" if TAG else "cools")
 PFX = f"{TAG}_" if TAG else ""
-NOREF = TAG.endswith("_noref")
+NOREF = "_noref" in TAG
+# TAG suffix _sigzero (registry section 100): the deleted site loses the CTCF signal only, the motif rows stay;
+# the default of the release tags zeroes CTCF signal and the motif rows MA0139.2 (fwd, rev) at the site +-1 kb
+SIGONLY = TAG.endswith("_sigzero")
 RESOLUTION = {"10kb": 10000, "5kb": 5000}
 
 # captured regions, GRCh38 (cis-coverage of the WT map; 2 Mb each, see README)
