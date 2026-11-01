@@ -17,7 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 import perturb_validate as pv                                        # noqa: E402
 
-MODELS = [f"all12one_fullrd_{e}_{u}_{k}kb" for e in ("enc", "encu") for k in (10, 25) for u in ("noref", "cons")]
+MODELS = [f"all12one_fullrd_{e}_{u}_{k}kb" for e in ("enc", "encu", "enck", "encc", "encd") for k in (10, 25) for u in ("noref", "cons")]
 
 
 def main():

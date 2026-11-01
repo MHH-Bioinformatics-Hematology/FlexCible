@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -100,9 +101,15 @@ def all_tracks(model: str) -> list[str]:
 def perts_of(model: str) -> dict:
     """Perturbation name -> tracks kept (None = all). The one model keeps Meth in every set
     (the methylation of HCT116 is not perturbed by a degron)."""
-    if "_enc_" in model or "_encu_" in model:
+    if re.search(r"_enc[a-z]?_", model):
         t = all_tracks(model)
         no_ctcf = [x for x in t if x != "CTCF"]
+        if re.search(r"_enc[kcd]_", model):
+            return {"full": None, "minus_CTCF": no_ctcf, "minus_H3K36me3": [x for x in t if x != "H3K36me3"]}
+        if "_encu_" in model:      # cohesin controls (follow-up): f = CTCF, RAD21 and SMC3 absent, g = RAD21 and SMC3 absent
+            return {"full": None, "minus_CTCF": no_ctcf, "minus_CTCF_nomotif": no_ctcf + ["NOMOTIF:MA0139.2"],
+                    "minus_nomotif": t + ["NOMOTIF:MA0139.2"], "minus_H3K36me3": [x for x in t if x != "H3K36me3"],
+                    "minus_CTCF_RAD21": [x for x in no_ctcf if x != "RAD21"], "minus_RAD21": [x for x in t if x != "RAD21"]}
         return {"full": None, "minus_CTCF": no_ctcf, "minus_CTCF_nomotif": no_ctcf + ["NOMOTIF:MA0139.2"],
                 "minus_nomotif": t + ["NOMOTIF:MA0139.2"],
                 "minus_H3K36me3": [x for x in t if x != "H3K36me3"]}
@@ -188,7 +195,9 @@ for _k in (10, 25):
 # window centred on each region): enc_noref = consensus plane at 0, enc_cons = leave-one-out consensus
 # encu = the same with the ChIP of the untreated degron cells (perturb_chip/untreated, the input of the release config's
 # hct116 sample and of scripts/perturb_degron_zero.py), enc = the ENCODE ChIP set of sections 21, 95 and 99 (hg38_hct116)
-for _e in ("enc", "encu"):
+# enck = ENCODE set with the RAD21 track of the degron cells, encc = ENCODE set with the degron-cell CTCF track, encd = degron-cell
+# set with the ENCODE CTCF track (registry section 100, follow-up; folders of links under DATA/perturb_chip_swaps)
+for _e in ("enc", "encu", "enck", "encc", "encd"):
     for _u in ("noref", "cons"):
         for _k in (10, 25):
             MODELS[f"all12one_fullrd_{_e}_{_u}_{_k}kb"] = (mx.REF_OUT / f"all12one_fullrd_{_k}kb", _k * 1000, "all12one_fullrd")
@@ -281,6 +290,9 @@ def stage_predict():
         _, bw, assay, _ = mx.CELLS["hct116"]
         if "_encu_" in model:
             bw = str(DATA / "perturb_chip/untreated")
+        for _e in ("enck", "encc", "encd"):
+            if f"_{_e}_" in model:
+                bw = str(DATA / "perturb_chip_swaps" / _e)
         if all(pred_file(model, p).exists() for p in perts_of(model)):
             continue
         od = pred_file(model, "x").parent
