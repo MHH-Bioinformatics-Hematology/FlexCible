@@ -100,6 +100,8 @@ def resolve(spec, cell, res, chrom):
         return PRED / k / "all12refin_drop_chrho" / f"{cell}.cool", "hg38"
     if kind == "chip":
         return PRED / k / "all12honest_drop_chrho" / f"{cell}.cool", "hg38"
+    if kind.startswith("all12"):          # any model by its run name (release twin, registry 101)
+        return PRED / k / kind / f"{cell}.cool", "hg38"
     if kind == "consensus":
         f = "consensus12" if cell == "k562" else f"consensus_loo_{cell}"
         return OE / f"{f}_proper_{k}.cool", "hg38"

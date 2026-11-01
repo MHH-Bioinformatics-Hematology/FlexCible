@@ -35,6 +35,8 @@ CELLS = ("imr90", "gm12878")
 
 def src_path(kind, cell):
     k = "10kb"
+    if kind.startswith("all12"):          # any model by its run name (release twin, registry 101)
+        return PRED / k / kind / f"{cell}.cool"
     return {"measured": OE / f"{cell}_proper_{k}.cool",
             "ours": PRED / k / "all12refin_drop_chrho" / f"{cell}.cool",
             "chip": PRED / k / "all12honest_drop_chrho" / f"{cell}.cool",

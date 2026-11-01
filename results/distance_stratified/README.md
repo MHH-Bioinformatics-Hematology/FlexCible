@@ -59,3 +59,6 @@ Pearson r between a source map and the measured map (distance-normalised log O/E
 | k562 | core | chip | 0.691 | 0.672 | 0.707 |
 | k562 | core | consensus | 0.822 | 0.794 | 0.788 |
 | k562 | core | ours | 0.845 | 0.846 | 0.845 |
+
+## Release twin (registry 101)
+Rows with `source` = `all12one_fullrd_chrho` (consensus input) and `all12one_fullrd_chrho_noref` (ChIP only) were appended to every `<cell>_<k>kb.csv` and `headline_10kb.csv` by `scripts/one_model_chrho_release_followup.py --stage distance`: every set was rerun with the twin as extra source, the old sources reproduce their stored rows (largest |dr| 1.1e-16) on the same pixel counts, the old rows are unchanged. Model: `runs/hic_measures_chrho/pred/<k>kb/<model>/<cell>.cool`.

@@ -647,7 +647,9 @@ def aml_eval_tables():
 # --------------------------------------------------------------------------- #
 # stage chrho
 # --------------------------------------------------------------------------- #
-CH_OURS = ["all12refin_drop_chrho", "all12refres_drop_chrho", "all12honest_drop_chrho"]
+CH_OURS = ["all12refin_drop_chrho", "all12refres_drop_chrho", "all12honest_drop_chrho",
+           "all12one_fullrd_chrho", "all12one_fullrd_chrho_noref"]       # last two: release twin (registry 101)
+CH_SKIP = {"all12one_chrho", "all12one_chrho_noref"}                      # in the per-block tables since 91, not in this table
 CH_REF = ["consensus", "best_other_map", "cascfold", "replicate"]
 CH_COLS = ["oe_pearson", "oe_scc", "insulation_r", "bnd_recall", "bnd_precision", "TAD Fraction",
            "TAD Score MSE", "loop_recall_rank", "apa_ratio", "loop_f1_call", "comp_pref_r"]
@@ -659,7 +661,7 @@ def stage_chrho():
         d = pd.read_csv(REPO / "results/hic_measures_chrho" / f)
         frames.append(d)
     D = pd.concat(frames, ignore_index=True).drop_duplicates(["block", "source"])
-    D = D[D.set.isin(["chrho_corigami", "chrho_epiphany", "chrho_hicgan"])]
+    D = D[D.set.isin(["chrho_corigami", "chrho_epiphany", "chrho_hicgan"]) & ~D.source.isin(CH_SKIP)]
     D["bnd_f1"] = 2 * D.bnd_recall * D.bnd_precision / (D.bnd_recall + D.bnd_precision)
     cols = CH_COLS + ["bnd_f1"]
     g = D.groupby(["set", "cell", "res", "source"])
@@ -792,7 +794,9 @@ def stage_report():
              ("TAD Score MSE", "TAD score MSE"), ("loop_recall_rank", "loop recall"), ("apa_ratio", "APA ratio"),
              ("comp_pref_r", "compart. r")]
     short = {"all12refres_drop_chrho": "ours, consensus as residual (refres)", "all12refin_drop_chrho": "ours, consensus as input (refin)",
-             "all12honest_drop_chrho": "ours, ChIP only (honest)", "consensus": "consensus of other cells",
+             "all12honest_drop_chrho": "ours, ChIP only (honest)",
+             "all12one_fullrd_chrho": "release twin, consensus input", "all12one_fullrd_chrho_noref": "release twin, ChIP only",
+             "consensus": "consensus of other cells",
              "measured_balanced": "measured map, balanced (ceiling)"}
     setname = {"chrho_corigami": "C.Origami", "chrho_epiphany": "Epiphany", "chrho_hicgan": "Hi-cGAN"}
     for res in (10000, 25000):
@@ -804,7 +808,7 @@ def stage_report():
             comp = [u for u in g.source if u not in short and u not in ("best_other_map", "cascfold", "replicate")
                     and not u.startswith("hicgan_imr90") and not u.startswith("hicgan_gm12878_on_imr90")]
             rows = [u for u in ["all12refres_drop_chrho", "all12refin_drop_chrho", "all12honest_drop_chrho",
-                                "consensus"] + comp + ["measured_balanced"] if u in set(g.source)]
+                                "all12one_fullrd_chrho", "all12one_fullrd_chrho_noref", "consensus"] + comp + ["measured_balanced"] if u in set(g.source)]
             for u in rows:
                 r = g[g.source == u].iloc[0]
                 lab = short.get(u, u + " (competitor)")
