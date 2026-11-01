@@ -54,7 +54,13 @@ PERTS = {"full": [],
          "zero_CTCF": [("CTCF",)],
          "zero_RAD21": [("RAD21",)],
          "zero_H3K36me3": [("H3K36me3",)],
-         "zero_CTCF_motif": [("CTCF",), ("motif", "MA0139.2")]}
+         "zero_CTCF_motif": [("CTCF",), ("motif", "MA0139.2")],
+         # encodings of registry section 100 (release checkpoint): the track declared absent
+         # (not measured, --absent-track) and the CTCF motif rows (MA0139.2 fwd and rev) zero
+         "zero_motif": [("motif", "MA0139.2")],
+         "absent_CTCF": [("absent", "CTCF")],
+         "absent_H3K36me3": [("absent", "H3K36me3")],
+         "absent_CTCF_motif": [("absent", "CTCF"), ("motif", "MA0139.2")]}
 MODELS = {  # name -> (resolution, perturbations)
     "all12honest_drop_10kb": (10000, list(PERTS)),
     "all12honest_drop_25kb": (25000, list(PERTS)),
@@ -68,6 +74,14 @@ EXP_MATCH = {"ctcf": "zero_CTCF", "rad21": "zero_RAD21"}
 RELEASE_MODELS = {"all12one_fullrd_noref_10kb": (10000, ["full", "zero_CTCF", "zero_H3K36me3"])}
 VIEW_OF = {"all12one_fullrd_noref_10kb": "all12one_fullrd_10kb"}
 NO_REFERENCE = {"all12one_fullrd_noref_10kb"}
+# Encodings of CTCF removal (registry section 100): the release views at 10 and 25 kb without (plane at 0) and
+# with the consensus (leave-one-out map of HCT116, the checkpoint's reference for the cell).
+ENC_PERTS = ["full", "zero_CTCF", "zero_CTCF_motif", "zero_motif", "absent_CTCF", "absent_CTCF_motif",
+             "zero_H3K36me3", "absent_H3K36me3"]
+ENC_MODELS = {f"all12one_fullrd_{u}_{k}kb": (k * 1000, ENC_PERTS) for k in (10, 25) for u in ("noref", "cons")}
+ENC_VIEW = {m: f"all12one_fullrd_{m.rsplit('_', 1)[1]}" for m in ENC_MODELS}
+ENC_NOREF = {m for m in ENC_MODELS if "_noref_" in m}
+EXPS = ("ctcf", "rad21")
 
 
 def oe_path(exp, cond, res):
@@ -98,6 +112,9 @@ def stage_predict():
             out.parent.mkdir(parents=True, exist_ok=True)
             zr = []
             for spec in PERTS[pert]:
+                if spec[0] == "absent":
+                    zr += ["--absent-track", spec[1]]           # genome-wide, declared not measured
+                    continue
                 for c in chroms:
                     prefix = ":".join(spec)                     # TRACK or motif:ID
                     zr += ["--zero-region", f"{prefix}:{c}:0-{int(sizes[c])}"]
@@ -126,6 +143,8 @@ def stage_score():
     R = pv.regions()
     rows, loops_rows, bnd_rows, pdist, apa = [], [], [], {}, {}
     for exp, e in pv.EXPERIMENTS.items():
+        if exp not in EXPS:
+            continue
         for model, (res, perts) in MODELS.items():
             u_p, t_p = oe_path(exp, "untreated", res), oe_path(exp, "treated", res)
             have = [p for p in perts if cool_path(model, p).exists()]
@@ -263,13 +282,18 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True)
-    ap.add_argument("--set", choices=["dedicated", "release"], default="dedicated")
+    ap.add_argument("--set", choices=["dedicated", "release", "encodings"], default="dedicated")
     a = ap.parse_args()
+    global MODELS, RES_OUT, SCORE
     if a.set == "release":
-        global MODELS, RES_OUT, SCORE
         MODELS = RELEASE_MODELS
         RES_OUT = REPO / "results/perturb_degron_zero/all12one_fullrd_noref"
         SCORE = D / "score_all12one_fullrd_noref"
+    if a.set == "encodings":
+        global VIEW_OF, NO_REFERENCE, EXPS
+        MODELS, VIEW_OF, NO_REFERENCE, EXPS = ENC_MODELS, ENC_VIEW, ENC_NOREF, ("ctcf",)
+        RES_OUT = REPO / "results/one_model/ctcf_encoding"
+        SCORE = D / "score_encodings"
     for st in a.stage:
         globals()[f"stage_{st}"]()
 
