@@ -63,8 +63,8 @@ def crosscell_cmd(model, k, cell, args, tracks):
     a = [x.replace(f"/all12one_{k}kb/", f"/{view.name}/") for x in args]
     i = a.index("--others")
     extra = []
-    if me.has_meth(cell):
-        extra = ["--extra-bigwig-dir", str(me.meth_dir(cell))]
+    if me.has_meth(cell, v2=True):          # WGBS cells and the lifted RRBS of HCT116, MCF-7, HFF
+        extra = ["--extra-bigwig-dir", str(me.meth_dir(cell, v2=True))]
     j = a.index("--out-dir")
     a[j + 1] = str(view / "crosscell_sets")
     t = ",".join(tracks)
