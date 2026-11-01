@@ -84,6 +84,9 @@ def main():
     ap.add_argument("--target", required=True, help="this cell's measured O/E cool (2kb)")
     ap.add_argument("--others", nargs="*", default=[], help="cell=cool of OTHER cells")
     ap.add_argument("--binsize", type=int, default=2000)
+    ap.add_argument("--window-shift", type=int, default=0,
+                    help="shift the window against the region centre by this many bins (a region off the window "
+                         "centre; default 0 = centred)")
     ap.add_argument("--tta", action="store_true")
     ap.add_argument("--assay", choices=["hic", "intact", "microc"], default=None,
                     help="contact assay of this cell's map, for models trained "
@@ -190,6 +193,7 @@ def main():
     # keep sets: extra tracks set to their absent value on top of the cell's own gaps
     sets = {"": []}
     nomm_sets = set()          # keep sets naming the pseudo track NOMM: methylation of the motif planes removed
+    nomotif_sets = {}          # keep sets naming NOMOTIF:<ID>: the rows motif:<ID>:fwd and :rev at the raw-zero level
     if a.keep_sets:
         sets = {}
         for item in a.keep_sets:
@@ -198,6 +202,10 @@ def main():
             sets[nm] = [t for t in channels["tracks"] if t not in missing and t.upper() not in kp]
             if "NOMM" in kp:
                 nomm_sets.add(nm)
+            ids = [t[len("NOMOTIF:"):] for t in kp if t.startswith("NOMOTIF:")]
+            if ids:
+                nomotif_sets[nm] = [i for i, r_ in enumerate(channels["sym_rows"])
+                                    if any(r_.upper().startswith(f"MOTIF:{x}:") for x in ids)]
         if a.save_pred and "{set}" not in a.save_pred:
             raise SystemExit("--keep-sets with --save-pred needs a {set} placeholder")
     imp_files = {}
@@ -306,7 +314,9 @@ def main():
             imp_z[var] = (marks_, z)
         for k, drop in sets.items():
             sy = sym_full.copy() if (drop or coh_i is not None or frac_i is not None
-                                     or k in nomm_sets or k in imp_drop) else sym_full
+                                     or k in nomm_sets or k in imp_drop or k in nomotif_sets) else sym_full
+            if k in nomotif_sets:       # binding sites removed from the DNA: the raw-zero value, as an absent track
+                sy[nomotif_sets[k]] = absent[nomotif_sets[k]][:, None]
             if frac_i is not None:
                 mf = re.search(r"_f(\d+(?:\.\d+)?)$", k)
                 sy[frac_i] = frac_z(float(mf.group(1)) if mf else a.cohesin_fraction)
@@ -341,7 +351,7 @@ def main():
             except Exception:
                 continue
             n_out = T.shape[0]
-            centre = (int(r.start) + int(r.end)) // 2 // res
+            centre = (int(r.start) + int(r.end)) // 2 // res + a.window_shift
             st = max(0, min(nb - size, centre - size // 2))
             ref = None
             if ref_clr is not None:
