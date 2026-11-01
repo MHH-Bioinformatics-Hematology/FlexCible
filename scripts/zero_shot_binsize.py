@@ -34,6 +34,12 @@ order, or --stage all):
 
     python scripts/zero_shot_binsize.py --stage all
     python scripts/zero_shot_binsize.py --stage cools --bins 4000 --workers 3
+
+``--model all12one_fullrd`` (registry section 102) repeats the protocol with the release candidate
+(13 marks plus Meth, consensus reference): the maps and consensus cools of the shared folder are
+reused, config, cache, normalisers and scores get a tag of the model name
+(``scores_<model>``, ``zeroshot_<model>_<k>kb``), Meth is given to every cell that has a
+methylation folder and the summary is written to ``results/zero_shot_binsize/<model>/``.
 """
 from __future__ import annotations
 
@@ -63,6 +69,8 @@ LOCAL = Path(os.environ.get("HICMULTI_ZS_LOCAL", str(Path.home() / "scratch/zero
 CACHE = HM / "cache_expanded"
 REFOUT = HM / "runs/multicell_reference"
 RESULTS = REPO / "results/zero_shot_binsize"
+MODEL = "all12one"                                  # set by --model
+TAG = ""                                            # "" for all12one, "_<model>" otherwise
 ENC = HM / "encode_hic"
 ORIG = HM.parent / "restart_of_prediction_project/originalData/4Dnucleosome"
 
@@ -255,15 +263,23 @@ def consensus_cool(cell, b):
 
 # ---------------------------------------------------------------- stage: config
 def view_dir(res):
-    return REFOUT / f"all12one_{kb(res)}"
+    return REFOUT / f"{MODEL}_{kb(res)}"
 
 
 def zs_cfg_path(b):
-    return ZS / "configs" / f"zeroshot_{kb(b)}.yaml"
+    return ZS / "configs" / f"zeroshot{TAG}_{kb(b)}.yaml"
+
+
+def meth_dirs(cell):
+    """Methylation folder(s) of a cell for models with a Meth track (lifted RRBS included)."""
+    import methylation as me
+    if MODEL == "all12one" or not me.has_meth(cell, v2=True):
+        return []
+    return [str(me.meth_dir(cell, v2=True))]
 
 
 def cache_dir(b):
-    return CACHE / f"zeroshot_{kb(b)}"
+    return CACHE / f"zeroshot{TAG}_{kb(b)}"
 
 
 def stage_config(bins):
@@ -286,10 +302,12 @@ def stage_config(bins):
                 s["missing_tracks"] = json.loads(
                     (BW[cell] / "missing.json").read_text()) if (BW[cell] / "missing.json").exists() else []
             s.pop("train_chroms", None)
+            if MODEL != "all12one":
+                s["extra_bigwig_dirs"] = meth_dirs(cell)
             samples.append(s)
         cfg["data"]["samples"] = samples
         cfg["train"].update({"cache_dir": str(cache_dir(b)),
-                             "output_dir": str(ZS / "runs" / f"zeroshot_{kb(b)}"),
+                             "output_dir": str(ZS / "runs" / f"zeroshot{TAG}_{kb(b)}"),
                              "resume": False, "val_regions": 0})
         yaml.safe_dump(cfg, open(zs_cfg_path(b), "w"), sort_keys=False)
         log(f"config {kb(b)}: window {size}/{stride}, nearest trained view {kb(near)} -> {zs_cfg_path(b)}")
@@ -316,7 +334,7 @@ def variant_ckpt(b, cell, variant):
     """Checkpoint folder (local, symlinked model.pt) with the normalisers of a variant."""
     near = NEAREST[b]
     src = view_dir(near) / "checkpoint-best"
-    d = LOCAL / "ckpt" / f"{kb(b)}_{cell}_{variant}"
+    d = LOCAL / "ckpt" / f"{kb(b)}{TAG}_{cell}_{variant}"
     if (d / "norm_tracks.json").exists():
         return d
     d.mkdir(parents=True, exist_ok=True)
@@ -358,7 +376,7 @@ def refit_tracks(b, cell, d):
 
 
 def score_dir(b, cell, variant):
-    return ZS / "scores" / kb(b) / variant / cell
+    return ZS / f"scores{TAG}" / kb(b) / variant / cell
 
 
 def score_jobs(bins, variants):
@@ -377,11 +395,12 @@ def score_jobs(bins, variants):
                     continue
                 ck = variant_ckpt(b, cell, variant)
                 tag = "consensus_loo" if cell in train_cells(b) else "consensus"
+                xb = ["--extra-bigwig-dir", meth_dirs(cell)[0]] if meth_dirs(cell) else []
                 jobs.append((b, cell, variant, [
                     "scripts/crosscell_predict.py", "--config", zs_cfg_path(b),
                     "--checkpoint", ck, "--cell", cell, "--bigwig-dir", BW[cell],
                     "--target", oe_path(cell, b), "--tta", "--binsize", b,
-                    "--reference", consensus_cool(cell, b), "--regions", reg,
+                    "--reference", consensus_cool(cell, b), "--regions", reg, *xb,
                     "--out-dir", out, "--others", f"{tag}={consensus_cool(cell, b)}"]))
     return jobs
 
@@ -491,7 +510,8 @@ def trained_rows(cell, res, regs):
 
 
 def stage_summary():
-    RESULTS.mkdir(parents=True, exist_ok=True)
+    out_dir = RESULTS if MODEL == "all12one" else RESULTS / MODEL
+    out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     for b in sorted(set(BINS + TRAINED)):
         chroms = chroms_of(b if b in BINS else 1000) if b in BINS else CHROMS
@@ -529,8 +549,8 @@ def stage_summary():
                                  nearest_trained_median_r=q(nm, 50), n_consensus_cells=ref_cells,
                                  trained_bin_size=False))
     df = pd.DataFrame(rows).round(4)
-    df.to_csv(RESULTS / "summary.csv", index=False)
-    log(f"wrote {RESULTS / 'summary.csv'} ({len(df)} rows)")
+    df.to_csv(out_dir / "summary.csv", index=False)
+    log(f"wrote {out_dir / 'summary.csv'} ({len(df)} rows)")
     return df
 
 
@@ -543,9 +563,14 @@ def main():
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--variants", nargs="*", default=["nearest", "refit_tracks", "refit_all"])
     ap.add_argument("--gpu", default="0")
+    ap.add_argument("--model", default="all12one",
+                    help="shared checkpoint whose views <model>_<k>kb are scored (default all12one)")
     ap.add_argument("--remote", action="store_true",
                     help="score: run on the remote 4090 host (inputs staged to ~/scratch/zeroshot there)")
     a = ap.parse_args()
+    global MODEL, TAG
+    MODEL = a.model
+    TAG = "" if MODEL == "all12one" else f"_{MODEL}"
     ZS.mkdir(parents=True, exist_ok=True)
     LOCAL.mkdir(parents=True, exist_ok=True)
     st = a.stage
