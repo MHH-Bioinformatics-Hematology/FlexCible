@@ -61,6 +61,13 @@ MODELS = {  # name -> (resolution, perturbations)
     "all12refin_drop_10kb": (10000, ["full", "zero_CTCF"]),
 }
 EXP_MATCH = {"ctcf": "zero_CTCF", "rad21": "zero_RAD21"}
+# Release checkpoint in its no-consensus use (registry section 99/100): the per-resolution view
+# all12one_fullrd_<k>kb of the one checkpoint, `flexcible predict --no-reference` (consensus plane at 0).
+# `--set release` selects it; results go to results/perturb_degron_zero/all12one_fullrd_noref and the
+# cool files to <D>/cool/all12one_fullrd_noref_<k>kb. The default set is the dedicated models above.
+RELEASE_MODELS = {"all12one_fullrd_noref_10kb": (10000, ["full", "zero_CTCF", "zero_H3K36me3"])}
+VIEW_OF = {"all12one_fullrd_noref_10kb": "all12one_fullrd_10kb"}
+NO_REFERENCE = {"all12one_fullrd_noref_10kb"}
 
 
 def oe_path(exp, cond, res):
@@ -80,8 +87,9 @@ def test_chroms():
 def stage_predict():
     chroms = test_chroms()
     for model, (res, perts) in MODELS.items():
-        cfg = RUNS / f"{model}.yaml"
-        ck = RUNS / model / (RUNS / model / "best").read_text().strip()
+        run = VIEW_OF.get(model, model)
+        cfg = RUNS / f"{run}.yaml"
+        ck = RUNS / run / (RUNS / run / "best").read_text().strip()
         sizes = cooler.Cooler(str(pv.mx.target("hct116", res))).chromsizes
         for pert in perts:
             out = cool_path(model, pert)
@@ -95,7 +103,8 @@ def stage_predict():
                     zr += ["--zero-region", f"{prefix}:{c}:0-{int(sizes[c])}"]
             cmd = [PY, "-m", "flexcible.cli", "predict", "--config", cfg, "--checkpoint", ck,
                    "--sample", "hct116", "--chroms", ",".join(chroms), "--tta",
-                   "--batch-size", BATCH, *zr, "--out", out]
+                   "--batch-size", BATCH, *zr, *(["--no-reference"] if model in NO_REFERENCE else []),
+                   "--out", out]
             env = dict(os.environ, CUDA_VISIBLE_DEVICES="1", OMP_NUM_THREADS=str(THREADS),
                        MKL_NUM_THREADS=str(THREADS), OPENBLAS_NUM_THREADS=str(THREADS))
             logf = D / "logs" / f"{model}_{pert}.log"
@@ -103,7 +112,7 @@ def stage_predict():
             with open(logf, "w") as fh:
                 fh.write("[cmd] " + " ".join(map(str, cmd)) + "\n")
                 fh.flush()
-                rc = subprocess.call([str(c) for c in cmd], stdout=fh, stderr=subprocess.STDOUT,
+                rc = subprocess.call(["nice", "-n", "10"] + [str(c) for c in cmd], stdout=fh, stderr=subprocess.STDOUT,
                                      cwd=REPO, env=env)
             print(f"predict {model} {pert} rc={rc}", flush=True)
             if rc != 0 and out.exists():
@@ -254,7 +263,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", nargs="+", required=True)
-    for st in ap.parse_args().stage:
+    ap.add_argument("--set", choices=["dedicated", "release"], default="dedicated")
+    a = ap.parse_args()
+    if a.set == "release":
+        global MODELS, RES_OUT, SCORE
+        MODELS = RELEASE_MODELS
+        RES_OUT = REPO / "results/perturb_degron_zero/all12one_fullrd_noref"
+        SCORE = D / "score_all12one_fullrd_noref"
+    for st in a.stage:
         globals()[f"stage_{st}"]()
 
 
