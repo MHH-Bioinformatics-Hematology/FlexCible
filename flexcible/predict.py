@@ -219,8 +219,12 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
             cell: str | None = None, reference: str | None = None,
             prior: str | None = None, extra_bigwig_dirs: list[str] | None = None,
             diff_group: str | None = None, bin_size: int | None = None,
-            no_reference: bool = False):
-    """no_reference: reference-map models read a zero reference plane (the expected level in
+            no_reference: bool = False,
+            absent_tracks: list[str] | None = None):
+    """absent_tracks: tracks declared NOT MEASURED genome-wide (the normalised row is set to the
+            track's absent value, the encoding of track dropout in training), unlike zero_tracks
+            and zero_regions, which set the raw signal to 0 (measured, no binding).
+    no_reference: reference-map models read a zero reference plane (the expected level in
             the normalised space) instead of the reference map, so the prediction rests on the
             ChIP tracks alone (the reference map is still opened for its shape).
     bin_size: predict at this bin size (bp) with a model that has the continuous bin-size
@@ -421,6 +425,11 @@ def predict(cfg: Config, chroms_spec, out_path, checkpoint=None, batch=8,
                     for r in rows:
                         raw[r, lo:hi] = 0.0
         sym_full = track_norm.apply(raw)
+        if absent_tracks:
+            absent_v = track_norm.absent_values()
+            for t in absent_tracks:
+                k = cfg.track_names.index(t)
+                sym_full[k] = absent_v[k]
         if missing_new:
             absent = track_norm.absent_values()
             for t in missing_new:
@@ -554,6 +563,9 @@ def main():
     ap.add_argument("--zero-tracks", default=None,
                     help="comma-separated tracks to zero at inference "
                          "(genome-wide in-silico deletion)")
+    ap.add_argument("--absent-track", action="append", default=[],
+                    help="track declared absent (not measured) genome-wide, as in track dropout "
+                         "(repeatable); --zero-tracks and --zero-region set the raw signal to 0 instead")
     ap.add_argument("--capture-input", action="store_true",
                     help="feed the sample's capture Hi-C as conditioning "
                          "(optional; without it the model runs tracks-only)")
@@ -619,7 +631,7 @@ def main():
             args.tta, args.obs_exp, args.capture_cool, zr or None,
             args.renormalize_tracks, args.bigwig_dir, args.cell, args.reference,
             args.prior, args.extra_bigwig_dir, args.diff_group, args.bin_size,
-            args.no_reference)
+            args.no_reference, args.absent_track or None)
 
 
 if __name__ == "__main__":
