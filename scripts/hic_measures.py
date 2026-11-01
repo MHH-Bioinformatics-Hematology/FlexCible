@@ -635,8 +635,9 @@ def combined_score(maps, res: int) -> float:
 # sources
 # ===================================================================== #
 # model name -> run folder name, for variants that read the same checkpoint as another model
-RUN_ALIAS = {"all12one_chrho_noref": "all12one_chrho"}
-NO_REFERENCE = {"all12one_chrho_noref"}     # predicted with the reference plane at 0 (predict --no-reference)
+RUN_ALIAS = {"all12one_chrho_noref": "all12one_chrho",
+             "all12one_fullrd_chrho_noref": "all12one_fullrd_chrho"}
+NO_REFERENCE = {"all12one_chrho_noref", "all12one_fullrd_chrho_noref"}     # predicted with the reference plane at 0 (predict --no-reference)
 
 
 def run_dir(model: str, res: int) -> Path:
@@ -1994,7 +1995,10 @@ CHRHO_HELD = ["chr2", "chr3", "chr11", "chr14", "chr17"]
 REFERENCE_FREE |= {"all12honest_drop_chrho"}
 # the one model with held-out chromosomes (registry 91): one checkpoint, scored with the consensus
 # as reference input and, from the same checkpoint, with the reference plane at 0 (ChIP only)
-CHRHO_ONE_MODELS = ["all12one_chrho", "all12one_chrho_noref"]
+# and the release twin all12one_fullrd_chrho (registry 94 and 101): 13 marks + Meth, reference dropout 0.3
+CHRHO_ONE_MODELS = ["all12one_chrho", "all12one_chrho_noref",
+                    "all12one_fullrd_chrho", "all12one_fullrd_chrho_noref"]
+CHRHO_TAG = "onemodel"        # --chrho-tag: suffix of the block ids ("__<tag>") and of the table names ("_<tag>")
 CHRHO_ONE = False             # --chrho-models: score these models; blocks and tables get their own names
 CHRHO_CELLS = ["gm12878", "imr90", "k562"]
 
@@ -2014,7 +2018,7 @@ def chrho_blocks() -> list[dict]:
     bl = _chrho_blocks()
     if CHRHO_ONE:
         for b in bl:
-            b["id"] += "__onemodel"
+            b["id"] += "__" + CHRHO_TAG
     return bl
 
 
@@ -2153,6 +2157,11 @@ def chrho_predict_one(model: str, res: int, cell: str, threads: int, gpu: str = 
             cmd.append("--no-reference")
         if cell in HELDOUT:
             cmd += ["--sample", "gm12878", "--bigwig-dir", str(BIGWIG[cell]), "--cell", cell]
+            # models with a methylation input (release twin): the held-out cell's own Meth track
+            # (a bigwig-dir call drops the config's extra folders of the stand-in sample)
+            meth = HM / "meth" / cell
+            if "Meth" in cfg.read_text() and (meth / "Meth.bigwig").exists():
+                cmd += ["--extra-bigwig-dir", str(meth)]
         else:
             cmd += ["--sample", cell]
         if model not in REFERENCE_FREE:
@@ -2251,7 +2260,7 @@ def chrho_report() -> None:
         D = D[D.res == 25000]
         tag = "chrho_25kb"
     if CHRHO_ONE:
-        tag += "_onemodel"
+        tag += "_" + CHRHO_TAG
     CHRHO_TABLES.mkdir(parents=True, exist_ok=True)
     D.to_csv(CHRHO_TABLES / f"{tag}_per_block.csv", index=False, float_format="%.4f")
     g = (D.groupby(["set", "cell", "res", "source", "flag"], dropna=False)[cols].mean()
@@ -2294,14 +2303,19 @@ def main():
     ap.add_argument("--chrho-cells", nargs="*", default=None, help="chrho_predict: cells (default gm12878 imr90 k562)")
     ap.add_argument("--chrho-models", nargs="+", default=None,
                     help="chrho_predict/chrho_score/chrho_report: these models only (for example the one "
-                         "model: all12one_chrho all12one_chrho_noref, and the older models whose blocks "
+                         "model: all12one_chrho all12one_chrho_noref all12one_fullrd_chrho "
+                         "all12one_fullrd_chrho_noref, and the older models whose blocks "
                          "are to share their pixels); blocks are written as <id>__onemodel and the tables "
                          "as *_onemodel_*.csv, the existing blocks and tables are not touched")
+    ap.add_argument("--chrho-tag", default="onemodel", choices=["onemodel", "release"],
+                    help="with --chrho-models: suffix of the block ids and table names (default onemodel, "
+                         "registry 91; release = the blocks of registry 101 with the release twin)")
     ap.add_argument("--wait", action="store_true",
                     help="score: wait for missing predictions instead of stopping")
     a = ap.parse_args()
     global CHRHO_25KB_COMPS, CHRHO_RES, CHRHO_HICREG_RE, CHRHO_COMPRT, CHRHO_CELLS_ARG, CHRHO_CO_DENOVO
-    global CHRHO_MODELS, CHRHO_ONE
+    global CHRHO_MODELS, CHRHO_ONE, CHRHO_TAG
+    CHRHO_TAG = a.chrho_tag
     if a.chrho_models:
         CHRHO_MODELS = list(a.chrho_models)
         CHRHO_ONE = True

@@ -39,7 +39,7 @@ SHORT = {"oe_pearson": "Pearson", "oe_pearson_tile_median": "tile median", "oe_s
          "loop_recall_rank": "loop recall", "apa_ratio": "APA ratio",
          "comp_pref_r": "compartment r", "HiCRep": "HiCRep"}
 OURS = ["all12refin_drop_chrho", "all12honest_drop_chrho", "all12refres_drop_chrho",
-        "all12one_chrho", "all12one_chrho_noref"]
+        "all12one_chrho", "all12one_chrho_noref", "all12one_fullrd_chrho", "all12one_fullrd_chrho_noref"]
 BASE = ["consensus", "best_other_map", "replicate", "cascfold"]
 IGNORE = {"measured_balanced"}
 LEVEL = 0.01
