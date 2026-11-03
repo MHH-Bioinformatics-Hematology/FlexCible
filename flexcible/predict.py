@@ -114,6 +114,8 @@ def norm_dir_for(ckpt: Path, resolutions, bin_size: int) -> Path:
     for cand in (ckpt.parent / "multires_source.json", ckpt / "multires_source.json"):
         if cand.exists():
             shared = Path(json.loads(cand.read_text())["shared_checkpoint"])
+            if not shared.is_absolute():   # relative to the json (released checkpoints)
+                shared = (cand.parent / shared).resolve()
             d = shared / f"res_{near}"
             if (d / "norm_tracks.json").exists():
                 log.info("bin size %d bp: normalisers of the nearest trained bin size, %d bp (%s)",
