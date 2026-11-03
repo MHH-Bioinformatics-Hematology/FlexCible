@@ -122,6 +122,7 @@ train:
   compile: true
   track_dropout: 0.5
   track_dropout_mode: uniform_count
+  reference_dropout: 0.3        # 30% of the windows train with the consensus plane at zero
   patience_epochs: 10
   num_workers: 4
 ```
@@ -159,11 +160,11 @@ The test chromosomes of a training cell:
 flexcible predict --config configs/tutorial_25kb.yaml --sample gm12878 --chroms test --tta --out runs/tutorial_25kb/gm12878_even.cool
 ```
 
-A new cell from its marks, with the embedded consensus as reference. Here HCT116, for which SMC3 is not available:
+A new cell from its marks, with the embedded consensus as reference. Here HCT116, for which SMC3 is not available; `--no-reference` would predict it from the marks alone, and `--reference` names another log O/E map on the same bin grid, for example the consensus of other patients of a cohort:
 
 ```bash
 flexcible predict --config configs/tutorial_25kb.yaml --bigwig-dir data/tracks/hct116 --cell hct116 --chroms all --tta \
-    --zero-tracks SMC3 --out runs/tutorial_25kb/hct116_25kb.cool
+    --absent-track SMC3 --out runs/tutorial_25kb/hct116_25kb.cool
 ```
 
 The output is a cool file at 25 kb with log O/E values within 2 Mb of the diagonal.
@@ -209,4 +210,4 @@ flexcible predict --config configs/tutorial_25kb.yaml --sample gm12878 --chroms 
     --out runs/tutorial_25kb/gm12878_chr8_del.cool
 ```
 
-The difference between this map and the unperturbed prediction is the predicted effect of losing the site. The same mechanism with `--zero-tracks` removes a whole mark.
+The difference between this map and the unperturbed prediction is the predicted effect of losing the site. `--zero-tracks CTCF` removes the protein genome-wide, as in a degron; add `--no-reference` so that the consensus does not carry the wild-type structure into the prediction. `--absent-track` is different: it declares a mark as not measured.

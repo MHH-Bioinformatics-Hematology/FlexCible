@@ -1,6 +1,6 @@
 # Predicting with the released models
 
-The released checkpoints predict a human cell from its bigWig tracks. Each checkpoint carries the consensus of the 12 training cell lines as `embedded_reference.cool`, so no Hi-C data of the target cell are needed.
+The released checkpoint is one model for every bin size from 25 to 2 kb and for any subset of the marks. It predicts a human cell from its bigWig tracks and carries the consensus of the 12 training cell lines as `embedded_reference.cool`, so no Hi-C data of the target cell are needed. A second checkpoint, trained with chromosomes 2, 3, 11, 14 and 17 held out, exists only for benchmarks on those chromosomes.
 
 !!! note
     The checkpoints, the consensus maps and the split files are deposited with the manuscript (Zenodo record to be announced). Until the deposit is public, this page describes the procedure.
@@ -9,16 +9,17 @@ The released checkpoints predict a human cell from its bigWig tracks. Each check
 
 - the bigWig tracks of your cell, one file per mark, named as in the configuration (`CTCF.bigwig`, `RAD21.bigwig`, `SMC3.bigwig`, `H3K27ac.bigwig`, `H3K27me3.bigwig`, `H3K36me3.bigwig`, `H3K4me1.bigwig`, `H3K4me2.bigwig`, `H3K4me3.bigwig`, `H3K79me2.bigwig`, `H3K9ac.bigwig`, `H3K9me3.bigwig`, `H4K20me1.bigwig`, optionally `Meth.bigwig`), in hg38, as fold-change-over-control signal or a comparable scale;
 - the hg38 FASTA and the four JASPAR motif files (downloaded once, see the [tutorial](tutorial.md#motifs));
-- a released checkpoint folder and its configuration file.
+- the released checkpoint folder and the configuration file of the bin size you predict at (`flexcible_25kb.yaml`, `flexcible_10kb.yaml`, `flexcible_5kb.yaml`, `flexcible_2kb.yaml`, all sharing the weights).
 
-Any subset of the marks is enough. Marks you do not have are listed with `--zero-tracks`.
+Any subset of the marks is enough. Marks you do not have are left out of the folder or declared with `--absent-track`.
 
 ## Predict a whole genome
 
 ```bash
-flexcible predict --config released/refin_10kb.yaml --checkpoint released/refin_10kb/checkpoint-best \
+flexcible predict --config released/flexcible_10kb.yaml --checkpoint released/flexcible/checkpoint-best \
     --bigwig-dir tracks/mycell --cell mycell --chroms all --tta \
-    --zero-tracks RAD21,SMC3,H3K4me2,H3K79me2,H3K9ac,H4K20me1 \
+    --absent-track RAD21 --absent-track SMC3 --absent-track H3K4me2 \
+    --absent-track H3K79me2 --absent-track H3K9ac --absent-track H4K20me1 \
     --out mycell_10kb.cool
 ```
 
@@ -28,12 +29,10 @@ For CUT&Tag or other assays whose signal scale differs from ENCODE fold change, 
 
 ## Choose the resolution
 
-Released checkpoints exist at 25, 10, 5 and 2 kb (`refin_25kb`, `refin_10kb`, `refin_5kb`, `refin_2kb`), each with its own configuration.
-
-The one model trained at 2, 5, 10 and 25 kb together (`all12one`) comes with one configuration per trained bin size (`all12one_2kb`, `_5kb`, `_10kb`, `_25kb`, all sharing the weights) and takes the bin size at prediction time:
+The released model was trained at 2, 5, 10 and 25 kb together and comes with one configuration per trained bin size (`flexcible_2kb.yaml`, `_5kb`, `_10kb`, `_25kb`, all sharing the weights). Pick the configuration of the bin size you want; any other bin size is given at prediction time:
 
 ```bash
-flexcible predict --config released/all12one_10kb.yaml --checkpoint released/all12one_10kb/checkpoint-best \
+flexcible predict --config released/flexcible_10kb.yaml --checkpoint released/flexcible/checkpoint-best \
     --bigwig-dir tracks/mycell --cell mycell --chroms all --tta \
     --bin-size 4000 --reference oe/consensus12_proper_4kb.cool \
     --out mycell_4kb.cool
@@ -41,13 +40,13 @@ flexcible predict --config released/all12one_10kb.yaml --checkpoint released/all
 
 `--bin-size` (alias `--binSize`) accepts any bin size in bp. The reference has to be a log O/E cool at the same bin size, built with `scripts/oe_proper.py` and `scripts/consensus_loo.py` from Hi-C maps at that bin size. The window keeps its genomic span; the normalisers are those of the nearest trained bin size, and `--renormalize-tracks` refits the track statistics on your sample. Trained bin sizes are 2, 5, 10 and 25 kb; bin sizes between them are interpolation, and bin sizes below 2 kb or above 25 kb are untested extrapolation. The accuracy at 1, 4, 20 and 50 kb is reported in `results/zero_shot_binsize/RESULTS.md`. The option is refused for models with a lookup embedding or one resolution.
 
-## Which model
+## With or without the consensus
 
-| model | reads | use |
-|---|---|---|
-| `refin_*` (reference input) | marks and the consensus | the default |
-| `refres_*` (reference residual) | marks; adds its prediction to the consensus | the same accuracy; its output minus the consensus is the predicted cell-specific difference |
-| `honest_*` (ChIP only) | marks only | when no consensus should enter, for example to test what the marks alone predict |
+The released model reads the marks and the consensus. `--no-reference` sets the consensus plane to zero, so the prediction rests on the marks alone; use it to see what the marks carry by themselves and for in silico perturbations. The prediction minus the consensus is the predicted cell-specific difference.
+
+```bash
+flexcible predict ... --no-reference --out mycell_10kb_marks_alone.cool
+```
 
 ## Use your own reference
 
@@ -61,4 +60,4 @@ The map has to be a log O/E cool on the same bin grid (`scripts/consensus_oe.py`
 
 ## In silico deletion of a binding site
 
-`--zero-region CTCF:chr8:127730000-127740000` sets the CTCF signal to zero inside the region, and `--zero-region motif:MA0139.2:chr8:127730000-127740000` removes the CTCF motif sites there; both repeatable. Zero signal is the state of a region without binding, which differs from the absent-track encoding of `--zero-tracks` (a mark that was not measured). The difference between the perturbed and the unperturbed prediction is the predicted effect of losing that site. Use a model without the consensus for such tests: the consensus carries the wild-type structure of the other cells and damps a local deletion.
+`--zero-region CTCF:chr8:127730000-127740000` sets the CTCF signal to zero inside the region, and `--zero-region motif:MA0139.2:chr8:127730000-127740000` removes the CTCF motif sites there; both repeatable. Zero signal is the state of a region without binding; `--zero-tracks CTCF` removes the protein genome-wide, as in a degron, and `--absent-track` declares a mark as not measured. The difference between the perturbed and the unperturbed prediction is the predicted effect of losing that site. Add `--no-reference` for such tests: the consensus carries the wild-type structure of the other cells and damps a local deletion.

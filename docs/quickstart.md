@@ -51,10 +51,10 @@ A cell that is not in the configuration is predicted from its bigWig folder alon
 
 ```bash
 flexcible predict --config toy/quickstart.yaml --bigwig-dir toy/cellB --cell newcell --chroms test \
-    --zero-tracks H3K27ac --out toy/pred_newcell_ctcf_only_chr2.cool
+    --absent-track H3K27ac --out toy/pred_newcell_ctcf_only_chr2.cool
 ```
 
-`--zero-tracks H3K27ac` marks that track as absent, so this prediction uses CTCF only. The same mechanism serves a real cell for which only some marks were measured.
+`--absent-track H3K27ac` declares that mark as not measured, so this prediction uses CTCF only. The same mechanism serves a real cell for which only some marks were measured; a mark whose bigWig is missing from the folder is treated the same way.
 
 ## 5. Evaluate and plot
 

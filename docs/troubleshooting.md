@@ -10,7 +10,7 @@
 
 **`torch.compile` errors or very long first steps.** Set `train.compile: false`. Compilation is skipped automatically for multi-resolution models.
 
-**Prediction of a new cell is poor although its marks look fine.** Check that the bigWigs are fold-change-over-control signal (or a comparable scale) and that the files are named exactly `<MARK>.bigwig` as in the configuration. For CUT&Tag or other assays, add `--renormalize-tracks`. Marks that were not measured are given with `--zero-tracks`, never as empty files.
+**Prediction of a new cell is poor although its marks look fine.** Check that the bigWigs are fold-change-over-control signal (or a comparable scale) and that the files are named exactly `<MARK>.bigwig` as in the configuration. For CUT&Tag or other assays, add `--renormalize-tracks`. Marks that were not measured are left out of the folder or given with `--absent-track`, never as empty files.
 
 **The predicted map stops 2 Mb from the diagonal.** The band of the target maps is 2 Mb; pixels beyond it are not predicted.
 

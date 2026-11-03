@@ -17,5 +17,5 @@ flexcible plot --config "$CFG" --pred "$ROOT/pred_cellA_chr2.cool" --region chr2
     --out "$ROOT/pred_cellA_chr2.png"
 # a "new" cell: only its bigWigs are given; the reference comes from the embedded consensus
 flexcible predict --config "$CFG" --bigwig-dir "$ROOT/cellB" --cell newcell --chroms test \
-    --zero-tracks H3K27ac --out "$ROOT/pred_newcell_ctcf_only_chr2.cool"
+    --absent-track H3K27ac --out "$ROOT/pred_newcell_ctcf_only_chr2.cool"
 echo "done: $ROOT"

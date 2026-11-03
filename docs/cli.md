@@ -26,7 +26,8 @@ Trains until `train.patience_epochs` epochs without improvement of the validatio
 flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|train|all|chr1,chr2]
                   [--tta] [--batch-size N] [--checkpoint DIR]
                   [--bigwig-dir DIR [--extra-bigwig-dir DIR ...] --cell NAME] [--reference REF.cool]
-                  [--zero-tracks A,B] [--zero-region TRACK:chrom:start-end ...] [--renormalize-tracks]
+                  [--absent-track NAME ...] [--zero-tracks A,B] [--zero-region TRACK:chrom:start-end ...]
+                  [--renormalize-tracks]
                   [--bin-size BP] [--no-reference]
 ```
 
@@ -36,7 +37,8 @@ flexcible predict --config CONFIG --out OUT.cool [--sample NAME] [--chroms test|
 | `--chroms` | `test` or `train` by the configured split, `all`, or a comma-separated list |
 | `--tta` | average the prediction with that of the reverse-complement orientation |
 | `--bigwig-dir`, `--cell` | predict a cell that is not in the configuration from its bigWig folder; the reference is the embedded consensus unless `--reference` names another map |
-| `--zero-tracks` | treat these tracks as absent (the absent-track encoding of track dropout) |
+| `--absent-track` | declare a mark not measured, genome-wide (the absent-track encoding of track dropout); repeatable. A mark whose bigWig is missing from `--bigwig-dir` is treated the same way without the option |
+| `--zero-tracks` | set the raw signal of these tracks to zero genome-wide: the state of a cell without the protein, as in a degron; the motif sites stay. In the released model the encoding equals that of an absent track, so the two options differ in meaning, not in the input |
 | `--zero-region` | set one track's signal to zero inside a region (`CTCF:chr8:127730000-127740000`), or remove a motif's sites there (`motif:MA0139.2:chr8:...`); repeatable; for in silico deletions of a binding site |
 | `--renormalize-tracks` | fit the per-track statistics on this sample instead of using the training normalisers; for tracks from another assay such as CUT&Tag |
 | `--bin-size` (alias `--binSize`) | predict at this bin size in bp, for example `--bin-size 4000`; only for the one model trained at several bin sizes (`model.res_embed_mode: continuous`); see below |
