@@ -3,7 +3,7 @@
 The released checkpoint is one model for every bin size from 25 to 2 kb and for any subset of the marks. It predicts a human cell from its bigWig tracks and carries the consensus of the 12 training cell lines as `embedded_reference.cool`, so no Hi-C data of the target cell are needed. A second checkpoint, trained with chromosomes 2, 3, 11, 14 and 17 held out, exists only for benchmarks on those chromosomes.
 
 !!! note
-    The checkpoints, the consensus maps and the split files are deposited with the manuscript (Zenodo record to be announced). Until the deposit is public, this page describes the procedure.
+    The checkpoints, the consensus maps and the split files are deposited with the manuscript in the Zenodo record [10.5281/zenodo.23922797](https://doi.org/10.5281/zenodo.23922797).
 
 ## Files you need
 
