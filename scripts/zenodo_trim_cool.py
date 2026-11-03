@@ -2,7 +2,8 @@
 
 The source files are never modified. A copy is written with the pixels whose diagonal offset
 (bin2_id - bin1_id) is at most --max-diag (default: keep all) and with byte-shuffle + gzip 9 in
-larger chunks, which is what makes the copy smaller. Values are copied unchanged (float32).
+larger chunks, which is what makes the copy smaller. Values are copied unchanged, in the dtype of
+the source (float32 for the O/E maps, float64 for the Akita-grid consensus).
 The sidecar <name>.cool.json (cells of a consensus) is copied next to the output.
 
 The band cut is lossless for the model when --max-diag >= window size - 1 at that bin size
@@ -70,9 +71,11 @@ def repack_pixels(tmp: str, out: str):
 def trim(inp: str, out: str, max_diag: int | None):
     src = cooler.Cooler(inp)
     bins = src.bins()[:]
+    with src.open("r") as h:
+        count_dtype = h["pixels"]["count"].dtype
     t0 = time.time()
     tmp = out + ".part"
-    cooler.create_cooler(tmp, bins, pixel_chunks(src, max_diag), dtypes={"count": np.float32},
+    cooler.create_cooler(tmp, bins, pixel_chunks(src, max_diag), dtypes={"count": count_dtype},
                          ordered=True, symmetric_upper=True, h5opts=H5OPTS, assembly=src.info.get("genome-assembly"),
                          metadata=dict(src.info.get("metadata") or {}, zenodo_copy_of=Path(inp).name,
                                        max_diag=max_diag if max_diag is not None else "all"))
