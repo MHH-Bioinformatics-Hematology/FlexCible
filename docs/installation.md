@@ -7,8 +7,8 @@ FlexCible is a Python package (3.10 or later) built on PyTorch. It needs cooler,
 ```bash
 mamba create -n flexcible -c conda-forge -c bioconda python=3.11 pytorch cooler pybigwig pyfaidx numpy scipy pyyaml tqdm matplotlib
 mamba activate flexcible
-git clone https://github.com/joachimwolff/hic-multiome-unet.git
-cd hic-multiome-unet
+git clone https://github.com/MHH-Bioinformatics-Hematology/FlexCible.git
+cd FlexCible
 pip install -e .
 ```
 

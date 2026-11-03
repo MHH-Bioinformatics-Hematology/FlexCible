@@ -315,7 +315,7 @@ def main():
             "creators": [{"name": "Wolff, Joachim", "affiliation": "Department of Hematology, Hemostasis, Oncology and Cell Therapy, Hannover Medical School", "orcid": "ORCID_TO_FILL"}],
             "license": "cc-by-4.0", "access_right": "open", "doi": DOI,
             "keywords": ["Hi-C", "chromatin architecture", "deep learning", "model checkpoints", "consensus contact map"],
-            "related_identifiers": [{"identifier": "REPOSITORY_URL_TO_FILL", "relation": "isSupplementTo", "scheme": "url", "resource_type": "software"}],
+            "related_identifiers": [{"identifier": "https://github.com/MHH-Bioinformatics-Hematology/FlexCible", "relation": "isSupplementTo", "scheme": "url", "resource_type": "software"}],
             "version": "1.0.0", "language": "eng"}}
         (out / "metadata.json").write_text(json.dumps(meta, indent=2) + "\n")
 
