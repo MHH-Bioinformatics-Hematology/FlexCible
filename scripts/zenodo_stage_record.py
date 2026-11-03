@@ -259,6 +259,11 @@ def main():
     bundle(out, "models_dedicated_honest", fam("all12honest_drop"), [], "dedicated per-bin-size models, marks alone (incl. chrho and seeds)", dry)
     bundle(out, "models_akita_grid", fam("akita_native"), [], "GM12878 models of the Akita comparison (Akita grid and targets)", dry)
     seeds = [f"all12aml_refin_drop_f{f}_s{s}_10kb" for f in (10, 11, 12) for s in (1, 2)]
+    # fold 10 has two seeds only (an empty run directory was left behind, never trained)
+    missing = [r for r in seeds if not (RUNS / r / "checkpoint-best" / "model.pt").exists()]
+    if missing:
+        print("  seed runs without checkpoint, skipped:", " ".join(missing))
+    seeds = [r for r in seeds if r not in missing]
     bundle(out, "models_aml", sorted(old2.glob("*.tar")), seeds, "AML fold models and seed runs", dry)
 
     # --- maps
