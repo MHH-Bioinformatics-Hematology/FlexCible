@@ -202,8 +202,10 @@ marks and a consensus matrix" (Joachim Wolff, Hannover Medical School). Code: th
 * `flexcible_release.tar`: the released model, one network for 2, 5, 10 and 25 kb and for any subset of the
   13 chromatin marks and DNA methylation. Unpacks to `flexcible_release/checkpoint-best/` (shared weights
   `model.pt`, no optimiser state) and four views `all12one_fullrd_<k>kb/` with the configuration, the
-  normalisers and `multires_source.json` pointing to the shared weights. Predict with the view of the bin
-  size you want:
+  normalisers and `multires_source.json` pointing to the shared weights. The `model.pt` of each view is a
+  hard link to the shared `model.pt` inside the tar (identical weights, stored once; `tar -xf` restores
+  them, Python's `tarfile` too). `checkpoint-best/res_<bp>/` hold the normalisers of each trained bin size,
+  used when `--bin-size` is not a trained one. Predict with the view of the bin size you want:
 
       tar xf flexcible_release.tar
       flexcible predict --config flexcible_release/all12one_fullrd_10kb.yaml \\
