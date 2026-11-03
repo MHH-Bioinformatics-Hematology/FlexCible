@@ -166,6 +166,8 @@ def copy(out: Path, src: Path, rel: str, desc: str, dry: bool):
         return
     dst = out / rel
     dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists() and dst.stat().st_size == src.stat().st_size and dst.stat().st_mtime >= src.stat().st_mtime:
+        return   # --update: an earlier staging already copied this file
     shutil.copyfile(src, dst)
 
 
@@ -257,14 +259,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=str(HM / "zenodo_record_v1"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--update", action="store_true",
+                    help="out dir may exist: plain copies of the same size are kept, tars and manifest are rebuilt")
     a = ap.parse_args()
     out = Path(a.out)
     dry = a.dry_run
     if not dry:
-        if out.exists():
-            raise SystemExit(f"{out} exists; remove it first")
+        if out.exists() and not a.update:
+            raise SystemExit(f"{out} exists; remove it first or pass --update")
         for d in ("checkpoints", "maps", "tables"):
-            (out / d).mkdir(parents=True)
+            (out / d).mkdir(parents=True, exist_ok=True)
 
     # --- checkpoints
     release_tar(out, "flexcible_release", "all12one_fullrd", dry)
