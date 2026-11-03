@@ -32,6 +32,7 @@ ${HICMULTI_DATA} as in the earlier staging.
 from __future__ import annotations
 
 import argparse
+import filecmp
 import hashlib
 import io
 import json
@@ -75,10 +76,24 @@ def add_file(tar: tarfile.TarFile, src: Path, arcname: str, text_subst: bool = F
         tar.add(src, arcname=arcname, recursive=False)
 
 
-def add_checkpoint_dir(tar: tarfile.TarFile, ckpt: Path, arc: str):
-    """checkpoint-best without optim.pt; yaml/json with path substitution."""
+def add_checkpoint_dir(tar: tarfile.TarFile, ckpt: Path, arc: str, link_weights_to: str | None = None):
+    """checkpoint-best without optim.pt; yaml/json with path substitution; the res_<bp>
+    normaliser folders of a shared multi-resolution checkpoint are included. With
+    link_weights_to, model.pt is stored as a hard link to that archive member (identical
+    weights of a view and its shared checkpoint are stored once)."""
     for f in sorted(ckpt.iterdir()):
-        if f.name == "optim.pt" or f.is_dir():
+        if f.name == "optim.pt":
+            continue
+        if f.is_dir():
+            if f.name.startswith("res_"):
+                add_checkpoint_dir(tar, f, f"{arc}/{f.name}")
+            continue
+        if f.name == "model.pt" and link_weights_to:
+            ti = tarfile.TarInfo(f"{arc}/{f.name}")
+            ti.type = tarfile.LNKTYPE
+            ti.linkname = link_weights_to
+            ti.mtime = int(f.stat().st_mtime)
+            tar.addfile(ti)
             continue
         add_file(tar, f, f"{arc}/{f.name}", text_subst=f.suffix in (".yaml", ".json"))
 
@@ -97,7 +112,10 @@ def release_tar(out: Path, name: str, run: str, dry: bool):
                 add_file(tar, shared / extra, f"{name}/{extra}")
         for k in BINS:
             view = RUNS / f"{run}_{k}kb"
-            add_checkpoint_dir(tar, view / "checkpoint-best", f"{name}/{run}_{k}kb/checkpoint-best")
+            same = filecmp.cmp(view / "checkpoint-best" / "model.pt", shared / "checkpoint-best" / "model.pt", shallow=False)
+            assert same, f"{view}: view weights differ from the shared checkpoint"
+            add_checkpoint_dir(tar, view / "checkpoint-best", f"{name}/{run}_{k}kb/checkpoint-best",
+                               link_weights_to=f"{name}/checkpoint-best/model.pt")
             src_json = {"shared_checkpoint": f"../checkpoint-best", "resolution": int(k) * 1000}
             data = json.dumps(src_json, indent=1).encode()
             ti = tarfile.TarInfo(f"{name}/{run}_{k}kb/multires_source.json")
