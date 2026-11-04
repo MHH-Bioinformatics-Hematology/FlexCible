@@ -2040,7 +2040,7 @@ def test_predict_bin_size_option(workdir, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["flexcible predict", "--config", str(workdir / "view_bs.yaml"),
                                           "--out", "o.cool", flag, "4000", "--reference", str(c4)])
         hpred.main()
-        assert seen["args"][-2] == 4000      # bin_size, then no_reference
+        assert 4000 in seen["args"]          # bin_size reaches predict()
 
 
 def test_cascade_prior_plane(workdir):

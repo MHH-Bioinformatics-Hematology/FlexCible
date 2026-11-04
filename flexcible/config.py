@@ -10,6 +10,7 @@ evaluate) loads the same config so runs are reproducible.
 from __future__ import annotations
 
 import dataclasses
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -840,7 +841,9 @@ class Config:
     # ---- (de)serialisation ----
     @classmethod
     def load(cls, path: str | Path) -> "Config":
-        raw = yaml.safe_load(Path(path).read_text())
+        # ${VAR} in paths is expanded from the environment (released configurations
+        # use ${FLEXCIBLE_GENOME}, ${FLEXCIBLE_MOTIFS}, ${FLEXCIBLE_CACHE}, ${FLEXCIBLE_MAPS}).
+        raw = yaml.safe_load(os.path.expandvars(Path(path).read_text()))
         return cls.from_dict(raw)
 
     @classmethod

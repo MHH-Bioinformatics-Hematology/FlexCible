@@ -188,7 +188,16 @@ def build_model(cfg: Config, ckpt: Path, device):
     from .model import make_model
     model = make_model(cfg, n_cond_channels(n_sym + emb, n_motifs, n_planes, mode),
                        n_out, encoder).to(device)
-    sd = torch.load(ckpt / "model.pt", map_location=device)
+    weights = ckpt / "model.pt"
+    if not weights.exists():   # a view of a multi-resolution checkpoint: weights in the shared folder
+        for cand in (ckpt.parent / "multires_source.json", ckpt / "multires_source.json"):
+            if cand.exists():
+                shared = Path(json.loads(cand.read_text())["shared_checkpoint"])
+                if not shared.is_absolute():
+                    shared = (cand.parent / shared).resolve()
+                weights = shared / "model.pt"
+                break
+    sd = torch.load(weights, map_location=device)
     # older bare-backbone checkpoints have no "backbone." prefix
     if not any(k.startswith("backbone.") for k in sd):
         sd = {f"backbone.{k}": v for k, v in sd.items()}
