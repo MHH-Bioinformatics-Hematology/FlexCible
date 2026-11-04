@@ -211,7 +211,7 @@ marks and a consensus matrix" (Joachim Wolff, Hannover Medical School). Code: th
       flexcible predict --config flexcible_release/all12one_fullrd_10kb.yaml \\
           --checkpoint flexcible_release/all12one_fullrd_10kb/checkpoint-best \\
           --bigwig-dir <bigwigs of your cell> --cell <name> --chroms all --tta \\
-          --reference consensus12_proper_10kb.cool --out prediction_10kb.cool
+          --reference consensus12/consensus12_proper_10kb.cool --out prediction_10kb.cool
 
   Marks you do not have are left out of the bigWig folder or declared with `--absent-track`;
   `--no-reference` predicts from the marks alone; `--bin-size` predicts at other bin sizes (needs a
@@ -234,10 +234,12 @@ track dropout; `chrho` chromosomes held out; `s1`, `s2` seeds; `aml` AML-inclusi
 ## maps/
 
 Distance-normalised log O/E maps (cool format, hg38) as used by the models: consensus of the 12 training
-cell lines (`consensus12_proper_<k>kb.cool`), the leave-one-out consensus read by each training cell
-(`consensus_loo_<cell>_proper_<k>kb.cool`, 25, 10 and 5 kb bundled per bin size), the four-cell consensus
-of the Akita comparison on Akita's grid, the AML fold references (mean of the training patients of a fold)
-and the HSPC reference, and the mouse leave-one-out maps. The 25, 10 and 5 kb maps hold the 2 Mb band
+cell lines (`consensus12.tar`: 25, 10, 5 and 2 kb), the leave-one-out consensus read by each training cell
+(`consensus_loo_<k>kb.tar` for 25, 10 and 5 kb; at 2 kb one file per cell,
+`consensus_loo_<cell>_proper_2kb.cool`, with the cell lists in `consensus_loo_2kb_cells.tar`), the four-cell
+consensus of the Akita comparison on Akita's grid (`akita_consensus4_2048bp.cool`), the AML fold references
+(mean of the training patients of a fold) and the HSPC reference (`aml_hspc_references.tar`), and the mouse
+leave-one-out maps (`mouse_consensus_loo.tar`). The 25, 10 and 5 kb maps hold the 2 Mb band
 from the diagonal. The 2 kb maps and the Akita-grid map hold a 1 Mb band (pixels up to 511 bins from the
 diagonal), which is the whole span of the 512-bin window the model reads at these bin sizes; every value in
 the band is identical to the original 2 Mb-band map (`scripts/zenodo_trim_cool.py --check`). A `.json`
@@ -291,24 +293,27 @@ def main():
     bundle(out, "models_aml", sorted(old2.glob("*.tar")), seeds, "AML fold models and seed runs", dry)
 
     # --- maps
+    items = []
     for k in ("25", "10", "5"):
-        copy(out, OE / f"consensus12_proper_{k}kb.cool", f"maps/consensus12_proper_{k}kb.cool", f"12-cell consensus, {k} kb, 2 Mb band", dry)
-        copy(out, OE / f"consensus12_proper_{k}kb.cool.json", f"maps/consensus12_proper_{k}kb.cool.json", "cells of the consensus", dry)
+        items.append((OE / f"consensus12_proper_{k}kb.cool", f"consensus12/consensus12_proper_{k}kb.cool"))
+        items.append((OE / f"consensus12_proper_{k}kb.cool.json", f"consensus12/consensus12_proper_{k}kb.cool.json"))
+    items.append((TRIM / "consensus12_proper_2kb.cool", "consensus12/consensus12_proper_2kb.cool"))
+    items.append((TRIM / "consensus12_proper_2kb.cool.json", "consensus12/consensus12_proper_2kb.cool.json"))
+    tar_of(out, "maps/consensus12.tar", items, "12-cell consensus at 25, 10, 5 kb (2 Mb band) and 2 kb (1 Mb band), with the cell lists", dry)
+    for k in ("25", "10", "5"):
         items = []
         for c in CELLS:
             items.append((OE / f"consensus_loo_{c}_proper_{k}kb.cool", f"consensus_loo_{k}kb/consensus_loo_{c}_proper_{k}kb.cool"))
             items.append((OE / f"consensus_loo_{c}_proper_{k}kb.cool.json", f"consensus_loo_{k}kb/consensus_loo_{c}_proper_{k}kb.cool.json"))
         tar_of(out, f"maps/consensus_loo_{k}kb.tar", items, f"12 leave-one-out consensus maps, {k} kb, 2 Mb band", dry)
-    copy(out, TRIM / "consensus12_proper_2kb.cool", "maps/consensus12_proper_2kb.cool", "12-cell consensus, 2 kb, 1 Mb band", dry)
-    copy(out, TRIM / "consensus12_proper_2kb.cool.json", "maps/consensus12_proper_2kb.cool.json", "cells of the consensus", dry)
-    for c in CELLS:
+    for c in CELLS:   # 2 kb maps stay single files (2.2 GB each); their cell lists are bundled below
         copy(out, TRIM / f"consensus_loo_{c}_proper_2kb.cool", f"maps/consensus_loo_{c}_proper_2kb.cool", f"leave-one-out consensus for {c}, 2 kb, 1 Mb band", dry)
-        copy(out, TRIM / f"consensus_loo_{c}_proper_2kb.cool.json", f"maps/consensus_loo_{c}_proper_2kb.cool.json", "cells of the consensus", dry)
+    items = [(TRIM / f"consensus_loo_{c}_proper_2kb.cool.json", f"consensus_loo_2kb_cells/consensus_loo_{c}_proper_2kb.cool.json") for c in CELLS]
+    tar_of(out, "maps/consensus_loo_2kb_cells.tar", items, "cell lists of the 12 leave-one-out consensus maps at 2 kb", dry)
     copy(out, TRIM / "akita_consensus4_2048bp.cool", "maps/akita_consensus4_2048bp.cool", "four-cell consensus on Akita's 2,048 bp grid, 1 Mb band", dry)
     old3 = OLD / "record3_maps/maps"
-    for f in sorted(old3.iterdir()):
-        if f.name.startswith(("amltrain_", "hspccons_")):
-            copy(out, f, f"maps/{f.name}", "AML fold reference (mean of the training patients) or HSPC reference" if f.suffix == ".cool" else "cells of the map", dry)
+    items = [(f, f"aml_hspc_references/{f.name}") for f in sorted(old3.iterdir()) if f.name.startswith(("amltrain_", "hspccons_"))]
+    tar_of(out, "maps/aml_hspc_references.tar", items, "AML fold references (mean of the training patients of a fold) and the HSPC reference, 25 and 10 kb, with the sample lists", dry)
     items = []
     for c in ("mesc", "ch12", "heart"):
         for k in ("10", "25"):
@@ -358,6 +363,11 @@ def main():
         total += size
         rows.append(f'{rel},{size},{sha256(p)},"{desc}"')
     if not dry:
+        keep = {out / rel for rel, _ in MANIFEST} | {out / "manifest.csv"}
+        for p in sorted(out.rglob("*")):
+            if p.is_file() and p not in keep:
+                print("  removing file of an earlier staging:", p.relative_to(out))
+                p.unlink()
         (out / "manifest.csv").write_text("path,size_bytes,sha256,description\n" + "\n".join(rows) + "\n")
         n = len(rows) + 1
         print(f"{n} files, {total / 1e9:.2f} GB; Zenodo default limits {ZENODO_FILES} files, {ZENODO_GB} GB -> "
