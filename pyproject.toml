@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flexcible"
 version = "0.1.0"
-description = "Predict Hi-C contact matrices from protein tracks, DNA sequence, binding motifs, and capture Hi-C supervision with a spatial-conditioning U-Net"
+description = "Flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
