@@ -18,10 +18,13 @@ pip install -e .
 
 ## Predicting with the released model
 
-The released checkpoint, the consensus maps and the split files are deposited on Zenodo (doi:10.5281/zenodo.23922797). A human cell is predicted from its bigWig tracks in hg38; marks that were not measured are left out or declared with `--absent-track`:
+The released checkpoint, the consensus maps and the split files are deposited on Zenodo (doi:10.5281/zenodo.23922797). Unpack `flexcible_released_model.zip` and `consensus12_maps.zip`, point four environment variables at the genome, the motifs, a cache folder and the consensus maps, and predict a human cell from its bigWig tracks in hg38; marks that were not measured are left out or declared with `--absent-track`:
 
 ```bash
-flexcible predict --config released/flexcible_10kb.yaml --checkpoint released/flexcible/checkpoint-best \
+export FLEXCIBLE_GENOME=data/genome/hg38.fa FLEXCIBLE_MOTIFS=data/motifs \
+       FLEXCIBLE_CACHE=cache FLEXCIBLE_MAPS=consensus12
+flexcible predict --config flexcible_release/flexcible_10kb.yaml \
+    --checkpoint flexcible_release/flexcible_10kb/checkpoint-best \
     --bigwig-dir tracks/mycell --cell mycell --chroms all --tta \
     --absent-track RAD21 --absent-track SMC3 \
     --out mycell_10kb.cool

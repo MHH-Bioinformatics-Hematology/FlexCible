@@ -1,6 +1,6 @@
 # Predicting with the released models
 
-The released checkpoint is one model for every bin size from 25 to 2 kb and for any subset of the marks. It predicts a human cell from its bigWig tracks and carries the consensus of the 12 training cell lines as `embedded_reference.cool`, so no Hi-C data of the target cell are needed. A second checkpoint, trained with chromosomes 2, 3, 11, 14 and 17 held out, exists only for benchmarks on those chromosomes.
+The released checkpoint is one model for every bin size from 25 to 2 kb and for any subset of the marks. It predicts a human cell from its bigWig tracks, with the consensus of the 12 training cell lines as reference, so no Hi-C data of the target cell are needed. A second checkpoint, trained with chromosomes 2, 3, 11, 14 and 17 held out, exists only for benchmarks on those chromosomes.
 
 !!! note
     The checkpoints, the consensus maps and the split files are deposited with the manuscript in the Zenodo record [10.5281/zenodo.23922797](https://doi.org/10.5281/zenodo.23922797).
@@ -9,14 +9,24 @@ The released checkpoint is one model for every bin size from 25 to 2 kb and for 
 
 - the bigWig tracks of your cell, one file per mark, named as in the configuration (`CTCF.bigwig`, `RAD21.bigwig`, `SMC3.bigwig`, `H3K27ac.bigwig`, `H3K27me3.bigwig`, `H3K36me3.bigwig`, `H3K4me1.bigwig`, `H3K4me2.bigwig`, `H3K4me3.bigwig`, `H3K79me2.bigwig`, `H3K9ac.bigwig`, `H3K9me3.bigwig`, `H4K20me1.bigwig`, optionally `Meth.bigwig`), in hg38, as fold-change-over-control signal or a comparable scale;
 - the hg38 FASTA and the four JASPAR motif files (downloaded once, see the [tutorial](tutorial.md#motifs));
-- the released checkpoint folder and the configuration file of the bin size you predict at (`flexcible_25kb.yaml`, `flexcible_10kb.yaml`, `flexcible_5kb.yaml`, `flexcible_2kb.yaml`, all sharing the weights).
+- `flexcible_released_model.zip` and `consensus12_maps.zip` from the Zenodo record, unpacked. The first holds the shared weights (`flexcible_release/flexcible/checkpoint-best/`), one view per bin size (`flexcible_release/flexcible_<k>kb/checkpoint-best/`, k = 25, 10, 5, 2) and one prediction configuration per bin size (`flexcible_release/flexcible_<k>kb.yaml`); the second the 12-cell consensus at the four bin sizes.
 
 Any subset of the marks is enough. Marks you do not have are left out of the folder or declared with `--absent-track`.
+
+The prediction configurations contain no local paths. They take four folders from the environment:
+
+```bash
+export FLEXCIBLE_GENOME=data/genome/hg38.fa     # the hg38 FASTA
+export FLEXCIBLE_MOTIFS=data/motifs             # folder with the four .jaspar files
+export FLEXCIBLE_CACHE=cache                    # any writable folder; genome features are cached here once
+export FLEXCIBLE_MAPS=consensus12               # the folder unpacked from consensus12_maps.zip
+```
 
 ## Predict a whole genome
 
 ```bash
-flexcible predict --config released/flexcible_10kb.yaml --checkpoint released/flexcible/checkpoint-best \
+flexcible predict --config flexcible_release/flexcible_10kb.yaml \
+    --checkpoint flexcible_release/flexcible_10kb/checkpoint-best \
     --bigwig-dir tracks/mycell --cell mycell --chroms all --tta \
     --absent-track RAD21 --absent-track SMC3 --absent-track H3K4me2 \
     --absent-track H3K79me2 --absent-track H3K9ac --absent-track H4K20me1 \
@@ -29,10 +39,11 @@ For CUT&Tag or other assays whose signal scale differs from ENCODE fold change, 
 
 ## Choose the resolution
 
-The released model was trained at 2, 5, 10 and 25 kb together and comes with one configuration per trained bin size (`flexcible_2kb.yaml`, `_5kb`, `_10kb`, `_25kb`, all sharing the weights). Pick the configuration of the bin size you want; any other bin size is given at prediction time:
+The released model was trained at 2, 5, 10 and 25 kb together and comes with one configuration and one view per trained bin size, all sharing the weights. Pick the configuration and the view of the bin size you want; any other bin size is given at prediction time:
 
 ```bash
-flexcible predict --config released/flexcible_10kb.yaml --checkpoint released/flexcible/checkpoint-best \
+flexcible predict --config flexcible_release/flexcible_10kb.yaml \
+    --checkpoint flexcible_release/flexcible_10kb/checkpoint-best \
     --bigwig-dir tracks/mycell --cell mycell --chroms all --tta \
     --bin-size 4000 --reference oe/consensus12_proper_4kb.cool \
     --out mycell_4kb.cool
@@ -50,7 +61,7 @@ flexcible predict ... --no-reference --out mycell_10kb_marks_alone.cool
 
 ## Use your own reference
 
-A consensus of cells closer to yours (for example other patients of a cohort) replaces the embedded one:
+A consensus of cells closer to yours (for example other patients of a cohort) replaces the 12-cell consensus:
 
 ```bash
 flexcible predict ... --reference oe/consensus_other_patients_10kb.cool
