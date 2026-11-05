@@ -14,7 +14,7 @@ cd FlexCible
 pip install -e .
 ```
 
-`flexcible --help` lists the commands. Details and alternatives are in `docs/installation.md`.
+`flexcible --help` lists the commands. Details and alternatives are in the [installation guide](https://flexcible.readthedocs.io/en/latest/installation/).
 
 ## Predicting with the released model
 
@@ -30,7 +30,7 @@ flexcible predict --config flexcible_release/flexcible_10kb.yaml \
     --out mycell_10kb.cool
 ```
 
-The output holds log observed/expected values within 2 Mb of the diagonal and opens in HiGlass, HiCExplorer and cooltools. `--no-reference` predicts from the marks alone, `--bin-size` sets another bin size, and `--renormalize-tracks` fits the track statistics on a sample whose signal scale differs from ENCODE fold change. See `docs/pretrained.md`.
+The output holds log observed/expected values within 2 Mb of the diagonal and opens in HiGlass, HiCExplorer and cooltools. `--no-reference` predicts from the marks alone, `--bin-size` sets another bin size, and `--renormalize-tracks` fits the track statistics on a sample whose signal scale differs from ENCODE fold change. See the [released model page](https://flexcible.readthedocs.io/en/latest/pretrained/).
 
 ## Training a model
 
@@ -41,7 +41,7 @@ flexcible predict --config my_model.yaml --sample mycell --chroms test --out pre
 flexcible evaluate --config my_model.yaml --pred pred.cool --chroms test
 ```
 
-The Hi-C targets are distance-normalised log observed/expected maps made with `scripts/oe_proper.py`, and the consensus of the other cells with `scripts/consensus_loo.py`. `docs/tutorial.md` walks through a complete training from download to evaluation, and `docs/configuration.md` documents every field of the configuration file.
+The Hi-C targets are distance-normalised log observed/expected maps made with `scripts/oe_proper.py`, and the consensus of the other cells with `scripts/consensus_loo.py`. The [tutorial](https://flexcible.readthedocs.io/en/latest/tutorial/) walks through a complete training from download to evaluation, and the [configuration reference](https://flexcible.readthedocs.io/en/latest/configuration/) documents every field of the configuration file.
 
 ## Quickstart on toy data
 
@@ -53,7 +53,7 @@ runs precompute, training, prediction and evaluation on a synthetic genome in a 
 
 ## Documentation
 
-The documentation in `docs/` is built with MkDocs (`mkdocs serve`): overview, installation, quickstart, tutorial, released models, configuration reference, command line and troubleshooting.
+The documentation is at https://flexcible.readthedocs.io: overview, installation, quickstart, tutorial, released models, configuration reference, command line and troubleshooting. It is built from `docs/` with MkDocs (`mkdocs serve` for a local copy).
 
 ## Tests
 

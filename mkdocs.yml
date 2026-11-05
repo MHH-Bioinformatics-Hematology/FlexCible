@@ -1,6 +1,7 @@
 site_name: FlexCible
 site_description: Flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix
 repo_url: https://github.com/MHH-Bioinformatics-Hematology/FlexCible
+site_url: https://flexcible.readthedocs.io/
 docs_dir: docs
 theme:
   name: material
