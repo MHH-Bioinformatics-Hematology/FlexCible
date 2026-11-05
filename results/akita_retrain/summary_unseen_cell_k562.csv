@@ -1,6 +1,0 @@
-group,n_cells,chroms,oe_pearson_tile_median,oe_scc,insulation_r,bnd_recall,loop_recall_rank,apa_ratio,anchor_auroc,oe_pearson,HiCRep,loop_recall_call
-best other measured map,1,"2, 3, 11, 14, 17",0.8015,0.7318,0.6340,0.5231,0.3488,0.6232,0.9522,0.7419,0.7435,0.1866
-consensus of the other cells,1,"2, 3, 11, 14, 17",0.8518,0.8081,0.8258,0.6192,0.4495,0.8292,0.9670,0.8050,0.8340,0.3902
-ours honest_drop_chrho (ChIP only),1,"2, 3, 11, 14, 17",0.7385,0.7057,0.7120,0.4730,0.1956,0.2475,0.8996,0.7078,0.7235,0.0714
-ours refin_drop_chrho,1,"2, 3, 11, 14, 17",0.8886,0.8558,0.8429,0.6065,0.4506,0.5615,0.9665,0.8579,0.8772,0.2394
-replicate map (ceiling),1,"2, 3, 11, 14, 17",0.9120,0.8608,0.7863,0.6633,0.3699,1.2972,0.9675,0.8705,0.8904,0.5651

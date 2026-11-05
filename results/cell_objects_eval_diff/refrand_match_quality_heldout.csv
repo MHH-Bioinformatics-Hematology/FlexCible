@@ -1,7 +1,0 @@
-cell,kind,n_pos,n_matched,mean_pos_ref,mean_ctl_ref,max_abs_diff_ref
-hmec_deep,loop,1000,1000,0.1408,0.1409,0.0429
-hmec_deep,stripe,563,563,0.4508,0.4501,0.1246
-huvec_deep,loop,1000,1000,0.2024,0.2020,0.1358
-huvec_deep,stripe,1000,999,0.6007,0.5994,0.1458
-k562,loop,1000,1000,0.1487,0.1486,0.0865
-k562,stripe,1000,1000,0.3829,0.3827,0.1119

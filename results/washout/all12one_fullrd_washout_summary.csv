@@ -1,5 +1,0 @@
-model,res_kb,subset,loops,meas_frac_weaker_auxin,pred_frac_weaker_rad21_auxin,meas_median_change_auxin,pred_median_change_rad21_auxin,pred_recovery_f0.0,pred_recovery_f0.25,pred_recovery_f0.5,pred_recovery_f0.75,pred_recovery_f1.0,meas_recovery_20min,matching_f_20min,meas_recovery_40min,matching_f_40min,meas_recovery_60min,matching_f_60min,meas_recovery_180min,matching_f_180min
-all12one_fullrd,10,all,536,0.9944,1.0,-0.7541,-0.6817,0.0,0.281,0.6426,0.8915,1.0,0.1848,0.1644,0.4824,0.3892,0.6561,0.5135,1.1198,1.0
-all12one_fullrd,10,even_chromosomes,255,0.9882,1.0,-0.7256,-0.6748,0.0,0.284,0.6495,0.8957,1.0,0.1848,0.1627,0.4961,0.3951,0.6567,0.5073,1.1224,1.0
-all12one_fullrd,25,all,549,0.9945,1.0,-0.4808,-0.4191,0.0,0.2358,0.5671,0.8343,1.0,0.1466,0.1554,0.4059,0.3783,0.6044,0.5349,1.008,1.0
-all12one_fullrd,25,even_chromosomes,260,0.9885,1.0,-0.4774,-0.4367,0.0,0.2503,0.5852,0.854,1.0,0.1512,0.151,0.4167,0.3743,0.6075,0.5208,1.005,1.0

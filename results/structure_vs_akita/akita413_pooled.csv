@@ -1,7 +1,0 @@
-method,label,n_regions,n_ref_boundaries_own,n_ref_hft_boundaries,n_ref_loops,bnd_recall_pooled,bnd_recall_pooled_lo,bnd_recall_pooled_hi,bnd_precision_pooled,bnd_precision_pooled_lo,bnd_precision_pooled_hi,bnd_f1_pooled,bnd_f1_pooled_lo,bnd_f1_pooled_hi,hft_bnd_recall,hft_bnd_recall_lo,hft_bnd_recall_hi,loop_recall,loop_recall_lo,loop_recall_hi,apa_ratio,apa_ratio_lo,apa_ratio_hi,anchor_auroc
-akita,Akita (GM12878 head),413,2638,1699,708,0.3480,0.3213,0.3770,0.5828,0.5596,0.6080,0.4358,0.4115,0.4617,0.4938,0.4711,0.5187,0.3136,0.2799,0.3463,0.2641,0.2427,0.2856,0.9160
-hicgan,Hi-cGAN (submitted),408,2605,1673,693,0.2058,0.1867,0.2277,0.2973,0.2762,0.3211,0.2432,0.2247,0.2633,0.3210,0.2983,0.3444,0.1371,0.1114,0.1620,0.1790,0.1460,0.2150,0.7752
-akita_native_honest,"ours, ChIP only",413,2638,1699,708,0.3863,0.3539,0.4226,0.6573,0.6312,0.6831,0.4866,0.4572,0.5185,0.5480,0.5225,0.5731,0.3828,0.3447,0.4199,0.3808,0.3563,0.4085,0.9328
-akita_native_refres,"ours, with consensus",413,2638,1699,708,0.4704,0.4362,0.5104,0.7403,0.7175,0.7622,0.5753,0.5454,0.6085,0.6469,0.6213,0.6718,0.5706,0.5367,0.6028,0.8446,0.8141,0.8779,0.9768
-consensus4,consensus of 4 measured cells,413,2638,1699,708,0.5027,0.4744,0.5341,0.5668,0.5446,0.5900,0.5328,0.5114,0.5565,0.5886,0.5636,0.6148,0.5141,0.4794,0.5490,1.0253,0.9721,1.0763,0.9668
-map_hff,HFF measured map,413,2638,1699,708,0.5186,0.4947,0.5457,0.4614,0.4398,0.4838,0.4883,0.4695,0.5092,0.5221,0.4972,0.5483,0.4181,0.3842,0.4507,1.5518,1.4530,1.6538,0.9464

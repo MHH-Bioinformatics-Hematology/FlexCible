@@ -1,6 +1,0 @@
-run,stopped_at_epoch,best_val,stopped_by,all_stops
-all12,106,0.7201,patience,epoch 106 patience
-insitu7,148,0.7183,patience,epoch 148 patience
-all12_5kb,114,0.8389,patience,epoch 114 patience
-all12_10kb,107,0.9005,patience,epoch 107 patience
-all12_25kb,127,0.9301,patience,epoch 127 patience

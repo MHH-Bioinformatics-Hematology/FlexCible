@@ -48,3 +48,12 @@ tmp/
 *.tiff
 *.mp4
 *.parquet
+
+# development record, kept locally and in the history, not tracked
+results/
+TASKS.md
+IDEAS.md
+webapp/
+design/
+tests/test_webapp.py
+site/

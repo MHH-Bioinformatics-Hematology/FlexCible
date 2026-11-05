@@ -1,5 +1,0 @@
-combo,n_tracks,val,tracks
-one_per_cluster_8,8,0.6168,CTCF+H3K27ac+H3K27me3+H3K36me3+H3K79me2+H3K9me3+H4K20me1+RAD21
-swap_5,5,0.6059,CTCF+H3K27me3+H3K36me3+H3K4me1+SMC3
-compact_5,5,0.6002,CTCF+H3K27ac+H3K27me3+H3K36me3+RAD21
-minimal_4,4,0.5887,CTCF+H3K27ac+H3K27me3+RAD21

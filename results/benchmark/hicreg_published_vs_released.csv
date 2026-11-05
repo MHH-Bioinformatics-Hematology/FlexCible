@@ -1,5 +1,0 @@
-chrom,released,pixels,log_pearson,distance_centred_pearson
-chr14,hicregwindowcv,135589,0.9918,0.9704
-chr14,hicregmulticellcv,135589,0.9910,0.9699
-chr14,hicregwindowcrosschrom,135589,0.9304,0.6652
-chr14,hicregmulticellcrosschrom,135589,0.9327,0.6781

@@ -1,5 +1,0 @@
-{
- "regions": 413,
- "max_abs_diff_vs_published_test_cool": 0.0,
- "note": "all-fold GM12878 map vs the section 1 test-fold cool, on the central 448 bins of the 413 test windows; differences can only come from pixels also covered by valid or train windows"
-}

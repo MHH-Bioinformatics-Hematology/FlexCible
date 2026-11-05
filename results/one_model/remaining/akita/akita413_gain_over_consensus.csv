@@ -1,4 +1,0 @@
-model,regions,share_ahead_of_akita_and_consensus4,regions_ahead_of_akita,median_gain_over_consensus4,region_p90,r_vs_measured_p90,r_consensus_p90,r_difference_maps_p90
-akita_native_refres,413,0.9661,401,0.0976,chr20:47613952-48662528,0.8020,0.5985,0.6874
-all12one_fullrd_cons,413,0.6126,308,0.0331,chr5:76333056-77381632,0.6635,0.5278,0.6534
-all12one_fullrd_cons_nometh,413,0.5956,305,0.0287,chr6:69451776-70500352,0.8923,0.7899,0.6565

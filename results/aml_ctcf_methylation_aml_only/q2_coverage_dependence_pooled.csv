@@ -1,8 +1,0 @@
-precision,sensitivity,p_lost_no_gain,rel_risk,filter,patients,gain_lost,gain_kept,nogain_lost,nogain_kept
-0.4350,0.0670,0.2045,2.1272,ref reads >= 10 (primary),8,204,265,2839,11045
-0.4819,0.0556,0.1914,2.5174,ref reads >= 20,8,40,43,680,2872
-0.8333,0.0943,0.1920,4.3403,ref reads >= 40,8,5,1,48,202
-0.4875,0.0585,0.1948,2.5019,patient motif bins >= 2,8,78,82,1256,5190
-0.4434,0.0677,0.2027,2.1874,patient flank bins >= median,8,196,246,2698,10611
-0.2963,0.0541,0.2469,1.2000,patient flank bins < median,8,8,19,140,427
-0.4772,0.2112,0.2356,2.0258,patient motif value neither 0 nor 1,8,178,195,665,2158

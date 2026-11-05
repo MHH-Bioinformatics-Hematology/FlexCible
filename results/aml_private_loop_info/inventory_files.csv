@@ -1,9 +1,0 @@
-kind,series,assay,n_files,total_gb,median_mb
-bigWig,GSE152134,ATAC-seq,16,2.523,152.255
-peaks,GSE152134,ATAC-seq,16,0.013,0.788
-gene counts/TPM,GSE152096,RNA-seq (RSEM genes),22,0.072,3.277
-bigWig,GSE152099,WGBS,20,4.188,210.516
-bigWig,GSE152132,CUT&Tag,33,6.052,177.572
-peaks,GSE152132,CUT&Tag,33,0.017,0.417
-mcool,GSE152135,Hi-C,32,26.637,870.081
-pairs,GSE152135,Hi-C,32,181.284,6412.100
