@@ -16,4 +16,3 @@
 
 **`hicrep` not installed.** `flexcible evaluate` falls back to its own implementation of the stratum-adjusted correlation coefficient, which agrees with the package to the third decimal.
 
-**Old scripts import `hicmultiome`.** The package was renamed to `flexcible`; `hicmultiome` remains as an alias and resolves to the same modules.

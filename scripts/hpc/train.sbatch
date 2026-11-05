@@ -13,7 +13,7 @@
 #   HICMU_MAX_MINUTES=1200 sbatch scripts/hpc/train.sbatch configs/multiome_25kb.yaml
 set -euo pipefail
 CFG="${1:?usage: sbatch train.sbatch <config.yaml>}"
-ENV="${HICMU_ENV:-hicmultiome}"
+ENV="${FLEXCIBLE_ENV:-flexcible}"
 cd "${HICMU_ROOT:-$SLURM_SUBMIT_DIR}"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -35,7 +35,7 @@ fi
 NGPU="${SLURM_GPUS_ON_NODE:-$(nvidia-smi -L | wc -l)}"
 echo "training on $NGPU GPU(s), config $RUN_CFG"
 if [ "$NGPU" -gt 1 ]; then
-    torchrun --standalone --nproc_per_node="$NGPU" -m hicmultiome.train --config "$RUN_CFG"
+    torchrun --standalone --nproc_per_node="$NGPU" -m flexcible.train --config "$RUN_CFG"
 else
-    python -m hicmultiome.train --config "$RUN_CFG"
+    python -m flexcible.train --config "$RUN_CFG"
 fi

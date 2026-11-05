@@ -10,9 +10,9 @@
 # Env overrides: HICMU_ENV (conda env), HICMU_ROOT (repo dir).
 set -euo pipefail
 CFG="${1:?usage: sbatch precompute.sbatch <config.yaml>}"
-ENV="${HICMU_ENV:-hicmultiome}"
+ENV="${FLEXCIBLE_ENV:-flexcible}"
 cd "${HICMU_ROOT:-$SLURM_SUBMIT_DIR}"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV"
-python -m hicmultiome.precompute --config "$CFG"
+python -m flexcible.precompute --config "$CFG"

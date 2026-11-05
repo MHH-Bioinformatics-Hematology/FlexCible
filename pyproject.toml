@@ -25,4 +25,4 @@ dependencies = [
 flexcible = "flexcible.cli:main"
 
 [tool.setuptools]
-packages = ["flexcible", "hicmultiome"]
+packages = ["flexcible"]
