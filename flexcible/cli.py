@@ -7,6 +7,8 @@ precompute, plot, loops, evaluate, diagnose, train); ``flexcible predict
 import importlib
 import sys
 
+from flexcible import __version__
+
 COMMANDS = ("predict", "precompute", "plot", "loops", "evaluate", "diagnose", "train", "train_multires")
 
 
@@ -14,6 +16,9 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print("usage: flexcible <command> [options]\ncommands: " + ", ".join(COMMANDS))
+        return 0
+    if argv[0] in ("-V", "--version"):
+        print(f"flexcible {__version__}")
         return 0
     cmd = argv[0]
     if cmd not in COMMANDS:

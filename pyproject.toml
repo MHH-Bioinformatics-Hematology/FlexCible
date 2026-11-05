@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flexcible"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
@@ -26,3 +26,6 @@ flexcible = "flexcible.cli:main"
 
 [tool.setuptools]
 packages = ["flexcible"]
+
+[tool.setuptools.dynamic]
+version = {attr = "flexcible.__version__"}
