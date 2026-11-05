@@ -67,4 +67,4 @@ Wolff J. FlexCible: flexible-input prediction of chromatin architecture from chr
 
 ## Licence
 
-To be stated with the release.
+MIT, see `LICENSE`.

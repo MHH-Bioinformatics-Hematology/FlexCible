@@ -32,4 +32,4 @@ The model is a U-Net with 32 million parameters. It predicts a chromosome in sec
 
 ## Citation
 
-Wolff J. FlexCible: flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix. Manuscript in preparation. Code: this repository. The licence will be stated with the release.
+Wolff J. FlexCible: flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix. Submitted. The code is released under the MIT licence.

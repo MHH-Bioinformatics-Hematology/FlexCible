@@ -7,6 +7,8 @@ name = "flexcible"
 version = "0.1.0"
 description = "Flexible-input prediction of chromatin architecture from chromatin marks and a consensus matrix"
 requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "Joachim Wolff"}]
 dependencies = [
     "numpy",
     "pyyaml",
