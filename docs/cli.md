@@ -1,6 +1,6 @@
 # Command line
 
-`flexcible <command> --help` prints the options of each command. Every command is also available as `python -m flexcible.<command>`.
+`flexcible <command> --help` prints the options of each command, and `flexcible --version` the installed version. Every command is also available as `python -m flexcible.<command>`.
 
 ## precompute
 
