@@ -39,6 +39,11 @@ For CUT&Tag or other assays whose signal scale differs from ENCODE fold change, 
 
 ## Choose the resolution
 
+![Median Pearson correlation of one model and of dedicated models at 2, 5, 10 and 25 kb](img/binsize.png){ width="420" }
+
+*One released model at every bin size reaches the accuracy of a model trained for that bin size alone, on training and on held-out cells.*
+
+
 The released model was trained at 2, 5, 10 and 25 kb together and comes with one configuration and one view per trained bin size, all sharing the weights. Pick the configuration and the view of the bin size you want; any other bin size is given at prediction time:
 
 ```bash

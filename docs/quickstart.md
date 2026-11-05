@@ -63,7 +63,11 @@ flexcible evaluate --config toy/quickstart.yaml --sample cellA --pred toy/pred_c
 flexcible plot --config toy/quickstart.yaml --pred toy/pred_cellA_chr2.cool --region chr2:0-100000 --out toy/pred_cellA_chr2.png
 ```
 
-`evaluate` prints the Pearson and Spearman correlation and the stratum-adjusted correlation coefficient between prediction and measured map on the test chromosome. `plot` draws the predicted map above the measured map with the first track below.
+`evaluate` prints the Pearson and Spearman correlation and the stratum-adjusted correlation coefficient between prediction and measured map on the test chromosome. `plot` draws the measured and the predicted map with the first track above.
+
+![Toy quickstart: CTCF track, measured and predicted map of chr2](img/quickstart_toy.png)
+
+*Output of the plot command for the toy run. The toy model trains for a few minutes on a CPU, so the prediction is coarse; the three domains between the CTCF peaks are visible.*
 
 ## What changes on real data
 

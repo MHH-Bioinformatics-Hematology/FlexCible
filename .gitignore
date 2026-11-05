@@ -57,3 +57,4 @@ webapp/
 design/
 tests/test_webapp.py
 site/
+!docs/img/*.png
