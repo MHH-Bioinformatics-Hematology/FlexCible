@@ -28,4 +28,4 @@ flexcible = "flexcible.cli:main"
 packages = ["flexcible"]
 
 [tool.setuptools.dynamic]
-version = {attr = "flexcible.__version__"}
+version = {attr = "flexcible._version.__version__"}
